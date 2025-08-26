@@ -1,0 +1,13 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "e:\\uproject\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\private\\mmdviewpanel_clean.cpp",
+        "ProvidedModule": "",
+        "PCH": "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
+        "Includes": [
+            "e:\\uproject\\mmd\\plugins\\ue5mmdtools\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\ue5mmdtools\\definitions.ue5mmdtools.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}

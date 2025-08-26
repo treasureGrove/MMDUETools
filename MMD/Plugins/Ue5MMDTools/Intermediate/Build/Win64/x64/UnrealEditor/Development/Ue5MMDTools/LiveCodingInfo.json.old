@@ -1,0 +1,18 @@
+{
+	"RemapUnityFiles": 
+	{
+		"Module.Ue5MMDTools.cpp.obj": [
+			"PerModuleInline.gen.cpp.obj",
+			"MMDActor.cpp.obj",
+			"MMDAnimationConverter.cpp.obj",
+			"MMDImportSetting.cpp.obj",
+			"MMDModelImporter.cpp.obj",
+			"MMDPhysicsSystem.cpp.obj",
+			"MMDViewPanel.cpp.obj",
+			"MMDViewPanel_New.cpp.obj",
+			"Ue5MMDTools.cpp.obj",
+			"Ue5MMDToolsCommands.cpp.obj",
+			"Ue5MMDToolsStyle.cpp.obj"
+		]
+	}
+}

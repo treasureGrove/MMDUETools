@@ -1,0 +1,21 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdfunctionlibrary.gen.cpp",
+        "ProvidedModule": "",
+        "PCH": "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
+        "Includes": [
+            "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\mmd\\definitions.mmd.h",
+            "e:\\uproject\\mmd\\source\\mmd\\mmdfunctionlibrary.h",
+            "d:\\epic\\engine\\ue_5.5\\engine\\source\\editor\\blutility\\public\\editorutilitylibrary.h",
+            "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\engine\\classes\\kismet\\blueprintasyncactionbase.h",
+            "d:\\epic\\engine\\ue_5.5\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\engine\\uht\\blueprintasyncactionbase.generated.h",
+            "d:\\epic\\engine\\ue_5.5\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\blutility\\uht\\editorutilitylibrary.generated.h",
+            "e:\\uproject\\mmd\\source\\mmd\\mmdfactory.h",
+            "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdfactory.generated.h",
+            "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdfunctionlibrary.generated.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}

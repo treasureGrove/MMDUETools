@@ -1,0 +1,14 @@
+{
+	"Targets": [
+		{
+			"Name": "MMD",
+			"Path": "..\\Source\\MMD.Target.cs",
+			"Type": "Game"
+		},
+		{
+			"Name": "MMDEditor",
+			"Path": "..\\Source\\MMDEditor.Target.cs",
+			"Type": "Editor"
+		}
+	]
+}

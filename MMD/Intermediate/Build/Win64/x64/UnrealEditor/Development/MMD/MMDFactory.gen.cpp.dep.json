@@ -1,0 +1,15 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdfactory.gen.cpp",
+        "ProvidedModule": "",
+        "PCH": "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
+        "Includes": [
+            "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\mmd\\definitions.mmd.h",
+            "e:\\uproject\\mmd\\source\\mmd\\mmdfactory.h",
+            "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdfactory.generated.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}
