@@ -84,5 +84,5 @@
 /DPROJECT_COPYRIGHT_STRING="Fill out your copyright notice in the Description page of Project Settings."
 /DPROJECT_PRODUCT_NAME="Third Person Game Template"
 /DPROJECT_PRODUCT_IDENTIFIER=MMD
-/fo "E:\Uproject\MMD\Intermediate\Build\Win64\x64\UnrealEditor\Development\MMD\Default.rc2.res"
+/fo "E:\Uproject\MMDUETools\MMD\Intermediate\Build\Win64\x64\UnrealEditor\Development\MMD\Default.rc2.res"
 "..\Build\Windows\Resources\Default.rc2"

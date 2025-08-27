@@ -11,6 +11,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/Paths.h"
+#include "TPMXParser.h"
 
 void MMDImportSetting::Construct(const FArguments &InArgs)
 {
@@ -86,6 +87,15 @@ void MMDImportSetting::ImportMMDModel()
             {
                 ViewPanel->LoadMMDModel(SelectedFile);
                 ShowImportProgress(FString::Printf(TEXT("正在加载模型: %s"), *FileName));
+                TPMXParser Parser;
+                if (Parser.ParsePMXFile(SelectedFile))
+                {
+                    ShowImportProgress(TEXT("PMX文件解析成功"));
+                }
+                else
+                {
+                    ShowImportProgress(TEXT("PMX文件解析失败"));
+                }
             }
             else
             {

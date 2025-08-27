@@ -1,18 +1,18 @@
 {
     "Version": "1.2",
     "Data": {
-        "Source": "e:\\uproject\\mmd\\source\\mmd\\mmdgamemode.cpp",
+        "Source": "e:\\uproject\\mmduetools\\mmd\\source\\mmd\\mmdgamemode.cpp",
         "ProvidedModule": "",
-        "PCH": "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
+        "PCH": "e:\\uproject\\mmduetools\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
         "Includes": [
-            "e:\\uproject\\mmd\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\mmd\\definitions.mmd.h",
-            "e:\\uproject\\mmd\\source\\mmd\\mmdgamemode.h",
+            "e:\\uproject\\mmduetools\\mmd\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\mmd\\definitions.mmd.h",
+            "e:\\uproject\\mmduetools\\mmd\\source\\mmd\\mmdgamemode.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\engine\\classes\\gameframework\\gamemodebase.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\engine\\classes\\engine\\serverstatreplicator.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\engine\\uht\\serverstatreplicator.generated.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\engine\\uht\\gamemodebase.generated.h",
-            "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdgamemode.generated.h",
-            "e:\\uproject\\mmd\\source\\mmd\\mmdcharacter.h",
+            "e:\\uproject\\mmduetools\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdgamemode.generated.h",
+            "e:\\uproject\\mmduetools\\mmd\\source\\mmd\\mmdcharacter.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\engine\\classes\\gameframework\\character.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\engine\\classes\\gameframework\\charactermovementreplication.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\net\\core\\public\\net\\core\\nettoken\\nettokenexportcontext.h",
@@ -22,7 +22,7 @@
             "d:\\epic\\engine\\ue_5.5\\engine\\source\\runtime\\engine\\classes\\gameframework\\rootmotionsource.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\engine\\uht\\rootmotionsource.generated.h",
             "d:\\epic\\engine\\ue_5.5\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\engine\\uht\\character.generated.h",
-            "e:\\uproject\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdcharacter.generated.h"
+            "e:\\uproject\\mmduetools\\mmd\\intermediate\\build\\win64\\unrealeditor\\inc\\mmd\\uht\\mmdcharacter.generated.h"
         ],
         "ImportedModules": [],
         "ImportedHeaderUnits": []

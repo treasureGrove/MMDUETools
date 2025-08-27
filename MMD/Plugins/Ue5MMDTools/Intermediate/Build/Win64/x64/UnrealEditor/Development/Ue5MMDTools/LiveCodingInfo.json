@@ -4,14 +4,14 @@
 		"Module.Ue5MMDTools.cpp.obj": [
 			"PerModuleInline.gen.cpp.obj",
 			"MMDActor.cpp.obj",
-			"MMDImportSetting.cpp.obj",
 			"MMDModelImporter.cpp.obj",
 			"MMDPhysicsSystem.cpp.obj",
 			"MMDViewPanel.cpp.obj",
-			"TPMXParser.cpp.obj",
 			"Ue5MMDTools.cpp.obj",
 			"Ue5MMDToolsCommands.cpp.obj",
-			"Ue5MMDToolsStyle.cpp.obj"
+			"Ue5MMDToolsStyle.cpp.obj",
+			"MMDImportSetting.cpp.obj",
+			"TPMXParser.cpp.obj"
 		]
 	}
 }

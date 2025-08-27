@@ -7,7 +7,7 @@
             "cppStandard": "c++20",
             "intelliSenseMode": "msvc-x64",
             "compileCommands": [
-                "E:\\Uproject\\MMD\\.vscode\\compileCommands_MMD.json"
+                "E:\\Uproject\\MMDUETools\\MMD\\.vscode\\compileCommands_MMD.json"
             ]
         },
         {
@@ -17,7 +17,7 @@
             "cppStandard": "c++20",
             "intelliSenseMode": "msvc-x64",
             "compileCommands": [
-                "E:\\Uproject\\MMD\\.vscode\\compileCommands_Default.json"
+                "E:\\Uproject\\MMDUETools\\MMD\\.vscode\\compileCommands_Default.json"
             ]
         }
     ],
