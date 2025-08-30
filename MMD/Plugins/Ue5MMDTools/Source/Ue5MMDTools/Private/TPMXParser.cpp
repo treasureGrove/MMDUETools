@@ -1,13 +1,15 @@
 #include "TPMXParser.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/MemoryReader.h"
-bool ReadString(FMemoryReader &Reader, FString &OutString);
+bool ReadString(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo);
 bool ReadPMXGlobals(FMemoryReader &Reader, TPMXGlobals &OutGlobals);
+bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
     PMXInfo = PMXDatas{};
     // pmx版本号
-    TPMXGlobals Globals;
     if (FilePath.IsEmpty()) // 如果路径为空就返回false
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: FilePath is empty"));
@@ -36,7 +38,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     PMXReader << PMXInfo.Version;
     UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: File Version: %f"), PMXInfo.Version);
 
-    if (ReadPMXGlobals(PMXReader, Globals))
+    if (ReadPMXGlobals(PMXReader, PMXInfo.PMXGlobals))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX globals"));
     }
@@ -45,7 +47,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX globals"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelNameJP))
+    if (ReadString(PMXReader, PMXInfo.ModelNameJP, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Name: %s"), *PMXInfo.ModelNameJP);
     }
@@ -54,7 +56,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Name"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelNameEN))
+    if (ReadString(PMXReader, PMXInfo.ModelNameEN, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Name EN: %s"), *PMXInfo.ModelNameEN);
     }
@@ -63,7 +65,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Name EN"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelCommentJP))
+    if (ReadString(PMXReader, PMXInfo.ModelCommentJP, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Comment: %s"), *PMXInfo.ModelCommentJP);
     }
@@ -72,7 +74,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Comment"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelCommentEN))
+    if (ReadString(PMXReader, PMXInfo.ModelCommentEN, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Comment EN: %s"), *PMXInfo.ModelCommentEN);
     }
@@ -80,38 +82,83 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Comment EN"));
     }
+
+    PMXReader << PMXInfo.ModelVertexCount;
+    UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Vertex Count: %d"), PMXInfo.ModelVertexCount);
+    if (ReadPMXVertex(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX vertex"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX vertex"));
+    }
+    UE_LOG(LogTemp, Warning, TEXT("ExtraUV count: %d"), PMXInfo.PMXGlobals.ExtraUV);
+
+    if (ReadPMXIndices(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX indices"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX indices"));
+    }
+
     return true;
 }
-bool ReadString(FMemoryReader &Reader, FString &OutString)
+bool ReadString(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
 {
     int32 StringLength;
     Reader << StringLength;
-    if (StringLength < 0)
-    {
+    if (StringLength < 0 || Reader.TotalSize() - Reader.Tell() < StringLength)
         return false;
-    }
-
-    if (Reader.TotalSize() - Reader.Tell() < StringLength)
-    {
-        return false;
-    }
 
     TArray<uint8> StringData;
     StringData.SetNumUninitialized(StringLength);
     Reader.Serialize(StringData.GetData(), StringLength);
 
-    if (StringLength % 2 != 0)
+    if (PMXInfo.PMXGlobals.TextEncoding == 0) // UTF-16LE
     {
-        UE_LOG(LogTemp, Warning, TEXT("ReadString: UTF-16 string length must be even"));
+        if (StringLength % 2 != 0)
+            UE_LOG(LogTemp, Warning, TEXT("ReadString: UTF-16 string length must be even"));
+        TArray<uint16> UTF16Data;
+        UTF16Data.SetNumUninitialized(StringLength / 2 + 1);
+        FMemory::Memcpy(UTF16Data.GetData(), StringData.GetData(), StringLength);
+        UTF16Data[StringLength / 2] = 0;
+        OutString = FString(reinterpret_cast<const TCHAR *>(UTF16Data.GetData()));
     }
-    TArray<uint16> UTF16Data;
-    UTF16Data.SetNumUninitialized(StringLength / 2 + 1);
-    FMemory::Memcpy(UTF16Data.GetData(), StringData.GetData(), StringLength);
-    UTF16Data[StringLength / 2] = 0; // null terminator
-    OutString = FString(reinterpret_cast<const TCHAR *>(UTF16Data.GetData()));
+    else // UTF-8
+    {
+        OutString = FString(UTF8_TO_TCHAR(StringData.GetData()));
+    }
     return true;
 }
-
+int32 ReadGlobalIndex(FMemoryReader &Reader, uint8 IndexSize)
+{
+    switch (IndexSize)
+    {
+    case 1:
+    {
+        int8 v;
+        Reader << v;
+        return v;
+    }
+    case 2:
+    {
+        int16 v;
+        Reader << v;
+        return v;
+    }
+    case 4:
+    {
+        int32 v;
+        Reader << v;
+        return v;
+    }
+    default:
+        return -1; // Invalid index size
+    }
+}
 bool ReadPMXGlobals(FMemoryReader &Reader, TPMXGlobals &OutGlobals)
 {
     uint8 GlobalsCount;
@@ -135,7 +182,148 @@ bool ReadPMXGlobals(FMemoryReader &Reader, TPMXGlobals &OutGlobals)
            << OutGlobals.RigidBodyIndexSize;
     return true;
 }
+bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
+{
+    if (PMXInfo.ModelVertexCount < 10)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ReadPMXVertex: ModelVertexCount is suspiciously low: %d"), PMXInfo.ModelVertexCount);
+        return false;
+    }
+    PMXInfo.ModelVertices.SetNumUninitialized(PMXInfo.ModelVertexCount);
+    for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
+    {
+        float px, py, pz;
+        Reader << px << py << pz;
+        PMXInfo.ModelVertices[i].Position = FVector(px, py, pz);
+        float nx, ny, nz;
+        Reader << nx << ny << nz;
+        PMXInfo.ModelVertices[i].Normal = FVector(nx, ny, nz);
+        float u, v;
+        Reader << u << v;
+        PMXInfo.ModelVertices[i].UV = FVector2D(u, v);
+        PMXInfo.ModelVertices[i].AdditionalUVs.SetNum(PMXInfo.PMXGlobals.ExtraUV);
+        for (int32 uvIndex = 0; uvIndex < PMXInfo.PMXGlobals.ExtraUV; uvIndex++)
+        {
+            float ux, uy, uz, uw;
+            Reader << ux << uy << uz << uw;
+            PMXInfo.ModelVertices[i].AdditionalUVs[uvIndex] = FVector4(ux, uy, uz, uw);
+        }
+        Reader << PMXInfo.ModelVertices[i].Weight.WeightDeformType;
 
+        switch (PMXInfo.ModelVertices[i].Weight.WeightDeformType)
+        {
+        case 0:
+            PMXInfo.ModelVertices[i].Weight.BoneIndices[0] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            PMXInfo.ModelVertices[i].Weight.Weights[0] = 1.0f;
+            break;
+        case 1:
+            PMXInfo.ModelVertices[i].Weight.BoneIndices[0] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            PMXInfo.ModelVertices[i].Weight.BoneIndices[1] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            Reader << PMXInfo.ModelVertices[i].Weight.Weights[0];
+            PMXInfo.ModelVertices[i].Weight.Weights[1] = 1.0f - PMXInfo.ModelVertices[i].Weight.Weights[0];
+            break;
+        case 2:
+            for (int j = 0; j < 4; j++)
+            {
+                PMXInfo.ModelVertices[i].Weight.BoneIndices[j] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            }
+            for (int j = 0; j < 4; j++)
+            {
+                Reader << PMXInfo.ModelVertices[i].Weight.Weights[j];
+            }
+            break;
+        case 3:
+            PMXInfo.ModelVertices[i].Weight.BoneIndices[0] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            PMXInfo.ModelVertices[i].Weight.BoneIndices[1] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            Reader << PMXInfo.ModelVertices[i].Weight.Weights[0];
+            PMXInfo.ModelVertices[i].Weight.Weights[1] = 1.0f - PMXInfo.ModelVertices[i].Weight.Weights[0];
+            float cx, cy, cz;
+            Reader << cx << cy << cz;
+            PMXInfo.ModelVertices[i].Weight.SDEF_C = FVector(cx, cy, cz);
+
+            float r0x, r0y, r0z;
+            Reader << r0x << r0y << r0z;
+            PMXInfo.ModelVertices[i].Weight.SDEF_R0 = FVector(r0x, r0y, r0z);
+
+            float r1x, r1y, r1z;
+            Reader << r1x << r1y << r1z;
+            PMXInfo.ModelVertices[i].Weight.SDEF_R1 = FVector(r1x, r1y, r1z);
+            break;
+        case 4: // QDEF (PMX 2.1)
+            for (int j = 0; j < 4; j++)
+            {
+                PMXInfo.ModelVertices[i].Weight.BoneIndices[j] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            }
+            for (int j = 0; j < 4; j++)
+            {
+                Reader << PMXInfo.ModelVertices[i].Weight.Weights[j];
+            }
+            break;
+        }
+        Reader << PMXInfo.ModelVertices[i].Weight.EdgeScale;
+        if (i < 5)
+        {
+            FString ExtraUVStr;
+            for (int32 uvIndex = 0; uvIndex < PMXInfo.ModelVertices[i].AdditionalUVs.Num(); uvIndex++)
+            {
+                const FVector4 &uv = PMXInfo.ModelVertices[i].AdditionalUVs[uvIndex];
+                ExtraUVStr += FString::Printf(TEXT("UV%d=(%.4f,%.4f,%.4f,%.4f) "), uvIndex, uv.X, uv.Y, uv.Z, uv.W);
+            }
+
+            FString WeightStr;
+            for (int j = 0; j < 4; j++)
+            {
+                WeightStr += FString::Printf(TEXT("Bone%d=%d W%.4f; "), j, PMXInfo.ModelVertices[i].Weight.BoneIndices[j], PMXInfo.ModelVertices[i].Weight.Weights[j]);
+            }
+
+            FString SDEFStr = TEXT("");
+            if (PMXInfo.ModelVertices[i].Weight.WeightDeformType == 3)
+            {
+                SDEFStr = FString::Printf(TEXT("SDEF_C=(%.4f,%.4f,%.4f) SDEF_R0=(%.4f,%.4f,%.4f) SDEF_R1=(%.4f,%.4f,%.4f)"),
+                                          PMXInfo.ModelVertices[i].Weight.SDEF_C.X, PMXInfo.ModelVertices[i].Weight.SDEF_C.Y, PMXInfo.ModelVertices[i].Weight.SDEF_C.Z,
+                                          PMXInfo.ModelVertices[i].Weight.SDEF_R0.X, PMXInfo.ModelVertices[i].Weight.SDEF_R0.Y, PMXInfo.ModelVertices[i].Weight.SDEF_R0.Z,
+                                          PMXInfo.ModelVertices[i].Weight.SDEF_R1.X, PMXInfo.ModelVertices[i].Weight.SDEF_R1.Y, PMXInfo.ModelVertices[i].Weight.SDEF_R1.Z);
+            }
+
+            float EdgeScale = PMXInfo.ModelVertices[i].Weight.EdgeScale;
+
+            UE_LOG(LogTemp, Warning, TEXT("Vertex[%d]: Pos=(%.4f,%.4f,%.4f) Normal=(%.4f,%.4f,%.4f) UV=(%.4f,%.4f) %s WeightType=%d %s %s EdgeScale=%.4f"),
+                   i,
+                   PMXInfo.ModelVertices[i].Position.X, PMXInfo.ModelVertices[i].Position.Y, PMXInfo.ModelVertices[i].Position.Z,
+                   PMXInfo.ModelVertices[i].Normal.X, PMXInfo.ModelVertices[i].Normal.Y, PMXInfo.ModelVertices[i].Normal.Z,
+                   PMXInfo.ModelVertices[i].UV.X, PMXInfo.ModelVertices[i].UV.Y,
+                   *ExtraUVStr,
+                   PMXInfo.ModelVertices[i].Weight.WeightDeformType,
+                   *WeightStr,
+                   *SDEFStr,
+                   EdgeScale);
+        }
+    }
+
+    return true;
+}
+bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo)
+{
+    Reader << PMXInfo.ModelIndicesCount;
+    UE_LOG(LogTemp, Log, TEXT("ReadPMXIndices: Count: %d"), PMXInfo.ModelIndicesCount);
+    PMXInfo.ModelIndices.Empty(PMXInfo.ModelIndicesCount);
+    for (int32 i = 0; i < PMXInfo.ModelIndicesCount; i++)
+    {
+        int32 Index = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+        PMXInfo.ModelIndices.Add(Index);
+        if (i < 5)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Index[%d]: %d"), i, Index);
+        }
+    }
+
+    return true;
+}
+
+bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
+{
+    return true;
+}
 // =============================================
 // PMX文件解析格式
 // =============================================

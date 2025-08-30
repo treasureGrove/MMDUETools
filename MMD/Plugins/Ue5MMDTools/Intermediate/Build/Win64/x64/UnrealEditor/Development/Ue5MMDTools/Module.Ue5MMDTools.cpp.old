@@ -5,6 +5,7 @@
 #include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDModelImporter.cpp"
 #include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDPhysicsSystem.cpp"
 #include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDViewPanel.cpp"
+#include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/TPMXParser.cpp"
 #include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Ue5MMDTools.cpp"
 #include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Ue5MMDToolsCommands.cpp"
 #include "E:/Uproject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Ue5MMDToolsStyle.cpp"
