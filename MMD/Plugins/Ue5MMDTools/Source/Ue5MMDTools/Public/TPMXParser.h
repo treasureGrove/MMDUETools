@@ -38,6 +38,17 @@ struct PMXVertex
     TArray<FVector4> AdditionalUVs;
     PMXVertexWeight Weight;
 };
+struct PMXMaterial
+{
+    FString Name;
+    FString TexturePath;
+    FLinearColor DiffuseColor;
+    FLinearColor SpecularColor;
+    FLinearColor AmbientColor;
+    float Shininess;
+    float Opacity;
+    bool bTwoSided;
+};
 struct PMXDatas
 {
     float Version;
@@ -56,6 +67,11 @@ struct PMXDatas
     // 三角面数据
     int32 ModelIndicesCount;
     TArray<int32> ModelIndices;
+
+    int32 ModelTextureCount;
+    TArray<FString> ModelTexturePaths;
+
+    int32 ModelMaterialCount;
 };
 
 class UE5MMDTOOLS_API TPMXParser

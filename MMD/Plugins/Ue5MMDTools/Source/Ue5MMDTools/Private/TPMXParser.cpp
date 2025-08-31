@@ -1,7 +1,7 @@
 #include "TPMXParser.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/MemoryReader.h"
-bool ReadString(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo);
+bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo);
 bool ReadPMXGlobals(FMemoryReader &Reader, TPMXGlobals &OutGlobals);
 bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo);
@@ -47,7 +47,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX globals"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelNameJP, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelNameJP, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Name: %s"), *PMXInfo.ModelNameJP);
     }
@@ -56,7 +56,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Name"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelNameEN, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelNameEN, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Name EN: %s"), *PMXInfo.ModelNameEN);
     }
@@ -65,7 +65,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Name EN"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelCommentJP, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelCommentJP, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Comment: %s"), *PMXInfo.ModelCommentJP);
     }
@@ -74,7 +74,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Comment"));
     }
 
-    if (ReadString(PMXReader, PMXInfo.ModelCommentEN, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelCommentEN, PMXInfo))
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Comment EN: %s"), *PMXInfo.ModelCommentEN);
     }
@@ -103,34 +103,60 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX indices"));
     }
+    if (ReadPMXTexturePath(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX texture paths"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX texture paths"));
+        // LogTemp: Texture[0]: tex/body00_Miku.png
+    }
 
     return true;
 }
-bool ReadString(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
+bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
 {
-    int32 StringLength;
+    int32 StringLength = 0;
     Reader << StringLength;
-    if (StringLength < 0 || Reader.TotalSize() - Reader.Tell() < StringLength)
-        return false;
 
+    const int64 Remaining = Reader.TotalSize() - Reader.Tell();
+    if (StringLength < 0 || Remaining < StringLength)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: invalid length=%d remaining=%lld"), StringLength, Remaining);
+        return false;
+    }
+
+    if (StringLength == 0)
+    {
+        OutString.Empty();
+        return true;
+    }
+
+    // allocate +1 for null terminator
     TArray<uint8> StringData;
-    StringData.SetNumUninitialized(StringLength);
+    StringData.SetNumUninitialized(StringLength + 1);
     Reader.Serialize(StringData.GetData(), StringLength);
+    StringData[StringLength] = 0; // ensure null-terminated
 
     if (PMXInfo.PMXGlobals.TextEncoding == 0) // UTF-16LE
     {
         if (StringLength % 2 != 0)
-            UE_LOG(LogTemp, Warning, TEXT("ReadString: UTF-16 string length must be even"));
+            UE_LOG(LogTemp, Warning, TEXT("ReadCharArray: UTF-16 string length must be even: %d"), StringLength);
+
+        int32 NumChars = StringLength / 2;
         TArray<uint16> UTF16Data;
-        UTF16Data.SetNumUninitialized(StringLength / 2 + 1);
+        UTF16Data.SetNumUninitialized(NumChars + 1);
         FMemory::Memcpy(UTF16Data.GetData(), StringData.GetData(), StringLength);
-        UTF16Data[StringLength / 2] = 0;
+        UTF16Data[NumChars] = 0;
         OutString = FString(reinterpret_cast<const TCHAR *>(UTF16Data.GetData()));
     }
     else // UTF-8
     {
-        OutString = FString(UTF8_TO_TCHAR(StringData.GetData()));
+        const char *UTF8Ptr = reinterpret_cast<const char *>(StringData.GetData());
+        OutString = FString(UTF8_TO_TCHAR(UTF8Ptr));
     }
+
     return true;
 }
 int32 ReadGlobalIndex(FMemoryReader &Reader, uint8 IndexSize)
@@ -322,6 +348,45 @@ bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
 bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
+    // 先确保还有 4 字节可读（textureCount）
+    const int64 remain0 = (int64)Reader.TotalSize() - (int64)Reader.Tell();
+    if (remain0 < (int64)sizeof(int32))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Textures: not enough bytes for count. remain=%lld"), remain0);
+        return false;
+    }
+
+    Reader << PMXInfo.ModelTextureCount;
+    UE_LOG(LogTemp, Log, TEXT("Textures: count=%d at offset=%lld"), PMXInfo.ModelTextureCount, (int64)Reader.Tell());
+    // 合理性校验：允许 0，过大直接判错（防止上游错位导致巨值）
+    if (PMXInfo.ModelTextureCount < 0 || PMXInfo.ModelTextureCount > 10000)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Textures: invalid count=%d (tell=%lld)"), PMXInfo.ModelTextureCount, (int64)Reader.Tell());
+        return false;
+    }
+
+    PMXInfo.ModelTextureCount = PMXInfo.ModelTextureCount;
+    PMXInfo.ModelTexturePaths.SetNum(PMXInfo.ModelTextureCount);
+
+    for (int32 i = 0; i < PMXInfo.ModelTextureCount; ++i)
+    {
+        const int64 before = (int64)Reader.Tell();
+        if (!ReadCharArray(Reader, PMXInfo.ModelTexturePaths[i], PMXInfo))
+        {
+            const int64 remain = (int64)Reader.TotalSize() - before;
+            UE_LOG(LogTemp, Error, TEXT("Textures: read path %d failed at offset=%lld (remain=%lld)"), i, before, remain);
+            return false;
+        }
+
+        // 可选：统一路径分隔符
+        PMXInfo.ModelTexturePaths[i].ReplaceInline(TEXT("\\"), TEXT("/"));
+
+        // 可选：打印少量样本
+        if (i < 3)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Texture[%d]: %s"), i, *PMXInfo.ModelTexturePaths[i]);
+        }
+    }
     return true;
 }
 // =============================================
