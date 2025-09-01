@@ -38,16 +38,46 @@ struct PMXVertex
     TArray<FVector4> AdditionalUVs;
     PMXVertexWeight Weight;
 };
+// - repeat materialCount:
+// - nameJP (string)
+// - nameEN (string)
+// - float4 diffuse // RGBA
+// - float3 specular // RGB
+// - float specularPower
+// - float3 ambient
+// - uint8 drawFlags // bitfield: 0x01 DoubleSided, 0x02 GroundShadow, 0x04 CastShadow,
+// // 0x08 ReceiveShadow, 0x10 Edge, 0x20 VertexColor, 0x40 PointDraw, 0x80 LineDraw
+// - float4 edgeColor // RGBA
+// - float edgeSize
+// - textureIndex (textureIndexSize) // main texture, -1 if none
+// - sphereTextureIndex (textureIndexSize) // -1 if none
+// - uint8 sphereMode // 0=Off, 1=Mul, 2=Add, 3=SubTex
+// - uint8 useSharedToon // 0=use common toonXX, 1=use texture index
+// if useSharedToon==0:
+// - uint8 toonNumber // 0..9 -> toon01..toon10 (engine-side mapping)
+// else:
+// - toonTextureIndex (textureIndexSize)
+// - string memo // material note
+// - int32 faceIndexCount // number of indices this material covers (submesh size)
 struct PMXMaterial
 {
-    FString Name;
-    FString TexturePath;
-    FLinearColor DiffuseColor;
-    FLinearColor SpecularColor;
-    FLinearColor AmbientColor;
-    float Shininess;
-    float Opacity;
-    bool bTwoSided;
+    FString NameJP;
+    FString NameEN;
+    FVector4 DiffuseColor;
+    FVector4 SpecularColor;
+    float SpecularPower;
+    FVector AmbientColor;
+    uint8 DrawFlags;
+    FVector4 EdgeColor;
+    float EdgeSize;
+    int32 TextureIndex;
+    int32 SphereTextureIndex;
+    uint8 SphereMode;
+    uint8 UseSharedToon;
+    uint8 ToonNumber;
+    int32 ToonTextureIndex;
+    FString Memo;
+    int32 FaceIndexCount;
 };
 struct PMXDatas
 {
@@ -72,6 +102,7 @@ struct PMXDatas
     TArray<FString> ModelTexturePaths;
 
     int32 ModelMaterialCount;
+    TArray<PMXMaterial> ModelMaterials;
 };
 
 class UE5MMDTOOLS_API TPMXParser

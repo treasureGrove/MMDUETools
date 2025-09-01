@@ -6,6 +6,8 @@ bool ReadPMXGlobals(FMemoryReader &Reader, TPMXGlobals &OutGlobals);
 bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo);
+
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
     PMXInfo = PMXDatas{};
@@ -111,6 +113,15 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX texture paths"));
         // LogTemp: Texture[0]: tex/body00_Miku.png
+    }
+
+    if (ReadPMXMaterial(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX materials"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX materials"));
     }
 
     return true;
@@ -345,7 +356,6 @@ bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
     return true;
 }
-
 bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     // 先确保还有 4 字节可读（textureCount）
@@ -389,6 +399,67 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
     }
     return true;
 }
+bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
+{
+    Reader << PMXInfo.ModelMaterialCount;
+    PMXInfo.ModelMaterials.SetNum(PMXInfo.ModelMaterialCount);
+    for (int32 i = 0; i < PMXInfo.ModelMaterialCount; i++)
+    {
+        ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameEN, PMXInfo);
+
+        float dr, dg, db, da;
+        Reader << dr << dg << db << da;
+        PMXInfo.ModelMaterials[i].DiffuseColor = FVector4(dr, dg, db, da);
+
+        float sr, sg, sb;
+        Reader << sr << sg << sb;
+        PMXInfo.ModelMaterials[i].SpecularColor = FVector(sr, sg, sb);
+
+        Reader << PMXInfo.ModelMaterials[i].SpecularPower;
+        float ar, ag, ab;
+        Reader << ar << ag << ab;
+        PMXInfo.ModelMaterials[i].AmbientColor = FVector(ar, ag, ab);
+
+        Reader << PMXInfo.ModelMaterials[i].DrawFlags;
+        float er, eg, eb, ea;
+        Reader << er << eg << eb << ea;
+        PMXInfo.ModelMaterials[i].EdgeColor = FVector4(er, eg, eb, ea);
+
+        Reader << PMXInfo.ModelMaterials[i].EdgeSize;
+        PMXInfo.ModelMaterials[i].TextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
+
+        PMXInfo.ModelMaterials[i].SphereTextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
+        Reader << PMXInfo.ModelMaterials[i].SphereMode;
+
+        Reader << PMXInfo.ModelMaterials[i].UseSharedToon;
+
+        if (PMXInfo.ModelMaterials[i].UseSharedToon == 0)
+        {
+            Reader << PMXInfo.ModelMaterials[i].ToonNumber;
+        }
+        else
+        {
+            PMXInfo.ModelMaterials[i].ToonTextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
+        }
+        ReadCharArray(Reader, PMXInfo.ModelMaterials[i].Memo, PMXInfo);
+        Reader << PMXInfo.ModelMaterials[i].FaceIndexCount;
+        if (i < 5)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Material[%d]: Name=%s TexIdx=%d SphereIdx=%d SphereMode=%d SharedToon=%d ToonNum=%d FaceCount=%d"),
+                   i,
+                   *PMXInfo.ModelMaterials[i].NameJP,
+                   PMXInfo.ModelMaterials[i].TextureIndex,
+                   PMXInfo.ModelMaterials[i].SphereTextureIndex,
+                   PMXInfo.ModelMaterials[i].SphereMode,
+                   PMXInfo.ModelMaterials[i].UseSharedToon,
+                   PMXInfo.ModelMaterials[i].ToonNumber,
+                   PMXInfo.ModelMaterials[i].FaceIndexCount);
+        }
+    }
+    return true;
+}
+
 // =============================================
 // PMX文件解析格式
 // =============================================
