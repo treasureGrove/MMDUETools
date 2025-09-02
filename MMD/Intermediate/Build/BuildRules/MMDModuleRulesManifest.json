@@ -1,9 +1,0 @@
-{
-	"SourceFiles": [
-		"E:\\Uproject\\MMDUETools\\MMD\\Source\\MMD\\MMD.Build.cs",
-		"E:\\Uproject\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Ue5MMDTools.Build.cs",
-		"E:\\Uproject\\MMDUETools\\MMD\\Source\\MMD.Target.cs",
-		"E:\\Uproject\\MMDUETools\\MMD\\Source\\MMDEditor.Target.cs"
-	],
-	"EngineVersion": "5.5.4"
-}

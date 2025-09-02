@@ -79,6 +79,59 @@ struct PMXMaterial
     FString Memo;
     int32 FaceIndexCount;
 };
+// 7) Bones
+// - int32 boneCount
+// - repeat boneCount:
+// - nameJP (string)
+// - nameEN (string)
+// - float3 position
+// - parentBoneIndex (boneIndexSize) // -1 if no parent
+// - int32 deformLayer // display/transform order layer
+// - uint16 flags // bitfield:
+// // 0x0001 ConnectionToChildIsBoneIndex (tail by index)
+// // 0x0002 CanRotate
+// // 0x0004 CanTranslate
+// // 0x0008 Visible
+// // 0x0010 Enabled
+// // 0x0020 IK
+// // 0x0100 InheritRotate
+// // 0x0200 InheritTranslate
+// // 0x0400 FixedAxis
+// // 0x0800 LocalAxis
+// // 0x2000 ExternalParent
+// - if (flags & 0x0001) then:
+// - tailBoneIndex (boneIndexSize)
+// else:
+// - float3 tailOffset
+// - if (flags & (0x0100 | 0x0200)) then: // inherit rot/pos
+// - inheritParentIndex (boneIndexSize)
+// - float inheritInfluence // 0..1
+// - if (flags & 0x0400) then: // fixed axis
+// - float3 axis
+// - if (flags & 0x0800) then: // local axis
+// - float3 localAxisX
+// - float3 localAxisZ
+// - if (flags & 0x2000) then: // external parent
+// - int32 externalParentKey
+// - if (flags & 0x0020) then: // IK block
+// - ikTargetBoneIndex (boneIndexSize)
+// - int32 ikLoopCount
+// - float ikLimitAngle // radians
+// - int32 ikLinkCount
+// - repeat ikLinkCount:
+// - linkBoneIndex (boneIndexSize)
+// - uint8 hasLimit
+// - if hasLimit != 0:
+// - float3 lowerLimit // per-axis radians
+// - float3 upperLimit
+struct PMXBone
+{
+    FString NameJP;
+    FString NameEN;
+    FVector Position = FVector::ZeroVector;
+    int32 ParentBoneIndex = -1;
+    int32 DeformLayer = 0;
+};
 struct PMXDatas
 {
     float Version;
@@ -103,6 +156,9 @@ struct PMXDatas
 
     int32 ModelMaterialCount;
     TArray<PMXMaterial> ModelMaterials;
+
+    int32 ModelBoneCount;
+    TArray<PMXBone> ModelBones;
 };
 
 class UE5MMDTOOLS_API TPMXParser
