@@ -129,8 +129,28 @@ struct PMXBone
     FString NameJP;
     FString NameEN;
     FVector Position = FVector::ZeroVector;
-    int32 ParentBoneIndex = -1;
-    int32 DeformLayer = 0;
+    int32 ParentBoneIndex;
+    int32 DeformLayer;
+    uint16 Flags;
+
+    int32 TailBoneIndex = -1;
+    FVector TailOffset = FVector::ZeroVector;
+
+    int32 InheritParentIndex = -1;
+    float InheritInfluence = 0.0f;
+
+    FVector FixedAxis = FVector::ZeroVector;
+
+    FVector LocalAxisX = FVector::ZeroVector;
+    FVector LocalAxisZ = FVector::ZeroVector;
+
+    int32 ExternalParentKey = -1;
+
+    int32 IKTargetBoneIndex = -1;
+    int32 IKLoopCount = 0;
+    float IKLimitAngle = 0.0f;
+    int32 IKLinkCount = 0;
+    TArray<int32> IKLinkIndices;
 };
 struct PMXDatas
 {
