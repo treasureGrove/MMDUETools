@@ -7,6 +7,7 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo);
 
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
@@ -122,6 +123,14 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX materials"));
+    }
+    if (ReadPMXBones(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX bones"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX bones"));
     }
 
     return true;
@@ -455,6 +464,87 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
                    PMXInfo.ModelMaterials[i].UseSharedToon,
                    PMXInfo.ModelMaterials[i].ToonNumber,
                    PMXInfo.ModelMaterials[i].FaceIndexCount);
+        }
+    }
+    return true;
+}
+bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
+{
+    Reader << PMXInfo.ModelBoneCount;
+    PMXInfo.ModelBones.SetNumUninitialized(PMXInfo.ModelBoneCount);
+    for (int32 i = 0; i < PMXInfo.ModelBoneCount; i++)
+    {
+        ReadCharArray(Reader, PMXInfo.ModelBones[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelBones[i].NameEN, PMXInfo);
+        float px, py, pz;
+        Reader << px << py << pz;
+        PMXInfo.ModelBones[i].Position = FVector(px, py, pz);
+        PMXInfo.ModelBones[i].ParentBoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+
+        Reader << PMXInfo.ModelBones[i].DeformLayer;
+        Reader << PMXInfo.ModelBones[i].Flags;
+        if (PMXInfo.ModelBones[i].Flags & 0x0001) // ConnectionToChildIsBoneIndex
+        {
+            PMXInfo.ModelBones[i].TailBoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+        }
+        else
+        {
+            float tx, ty, tz;
+            Reader << tx << ty << tz;
+            PMXInfo.ModelBones[i].TailOffset = FVector(tx, ty, tz);
+        }
+        if (PMXInfo.ModelBones[i].Flags & (0x0100 | 0x0200)) // InheritRotate or InheritTranslate
+        {
+            PMXInfo.ModelBones[i].InheritParentIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            Reader << PMXInfo.ModelBones[i].InheritInfluence;
+        }
+        if (PMXInfo.ModelBones[i].Flags & 0x0400) // FixedAxis
+        {
+            float ax, ay, az;
+            Reader << ax << ay << az;
+            PMXInfo.ModelBones[i].Axis = FVector(ax, ay, az);
+        }
+        if (PMXInfo.ModelBones[i].Flags & 0x0800) // LocalAxis
+        {
+            float x1, x2, x3, y1, y2, y3;
+            Reader << x1 << x2 << x3 << y1 << y2 << y3;
+            PMXInfo.ModelBones[i].LocalAxisX = FVector(x1, x2, x3);
+            PMXInfo.ModelBones[i].LocalAxisZ = FVector(y1, y2, y3);
+        }
+        if (PMXInfo.ModelBones[i].Flags & 0x2000) // ExternalParent
+        {
+            Reader << PMXInfo.ModelBones[i].ExternalParentKey;
+        }
+        if (PMXInfo.ModelBones[i].Flags & 0x0020) // IK
+        {
+            Reader << PMXInfo.ModelBones[i].IKTargetBoneIndex;
+            Reader << PMXInfo.ModelBones[i].IKLoopCount;
+            Reader << PMXInfo.ModelBones[i].IKLimitAngle;
+            Reader << PMXInfo.ModelBones[i].IKLinkCount;
+            PMXInfo.ModelBones[i].IKLinks.SetNumUninitialized(PMXInfo.ModelBones[i].IKLinkCount);
+
+            for (int32 j = 0; j < PMXInfo.ModelBones[i].IKLinkCount; j++)
+            {
+                PMXInfo.ModelBones[i].IKLinks[j].LinkBoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+                Reader << PMXInfo.ModelBones[i].IKLinks[j].HasLimit;
+                if (PMXInfo.ModelBones[i].IKLinks[j].HasLimit)
+                {
+                    float lx, ly, lz, ux, uy, uz;
+                    Reader << lx << ly << lz << ux << uy << uz;
+                    PMXInfo.ModelBones[i].IKLinks[j].LowerLimit = FVector(lx, ly, lz);
+                    PMXInfo.ModelBones[i].IKLinks[j].UpperLimit = FVector(ux, uy, uz);
+                }
+            }
+        }
+        if (i < 5)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Bone[%d]: Name=%s Pos=(%.4f,%.4f,%.4f) Parent=%d Layer=%d Flags=0x%04X"),
+                   i,
+                   *PMXInfo.ModelBones[i].NameJP,
+                   PMXInfo.ModelBones[i].Position.X, PMXInfo.ModelBones[i].Position.Y, PMXInfo.ModelBones[i].Position.Z,
+                   PMXInfo.ModelBones[i].ParentBoneIndex,
+                   PMXInfo.ModelBones[i].DeformLayer,
+                   PMXInfo.ModelBones[i].Flags);
         }
     }
     return true;

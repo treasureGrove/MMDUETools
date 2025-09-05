@@ -139,7 +139,7 @@ struct PMXBone
     int32 InheritParentIndex = -1;
     float InheritInfluence = 0.0f;
 
-    FVector FixedAxis = FVector::ZeroVector;
+    FVector Axis = FVector::ZeroVector;
 
     FVector LocalAxisX = FVector::ZeroVector;
     FVector LocalAxisZ = FVector::ZeroVector;
@@ -150,7 +150,14 @@ struct PMXBone
     int32 IKLoopCount = 0;
     float IKLimitAngle = 0.0f;
     int32 IKLinkCount = 0;
-    TArray<int32> IKLinkIndices;
+    struct PMXIKLink
+    {
+        int32 LinkBoneIndex = -1;
+        uint8 HasLimit = 0;
+        FVector LowerLimit = FVector::ZeroVector;
+        FVector UpperLimit = FVector::ZeroVector;
+    };
+    TArray<PMXIKLink> IKLinks;
 };
 struct PMXDatas
 {
