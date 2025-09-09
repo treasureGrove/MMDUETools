@@ -8,10 +8,15 @@ bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo);
-
+bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
-    PMXInfo = PMXDatas{};
+    // 简单重置 - 不使用复杂的赋值操作
+    PMXInfo.Version = 0.0f;
+    FMemory::Memzero(PMXInfo.Sig, 4);
+    
+    UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: 开始解析"));
+    
     // pmx版本号
     if (FilePath.IsEmpty()) // 如果路径为空就返回false
     {
@@ -132,50 +137,132 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX bones"));
     }
-
+    if (ReadPMXMorphs(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX morphs"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX morphs"));
+    }
+    UE_LOG(LogTemp, Log, TEXT("=== PMX Parse Summary ==="));
+    UE_LOG(LogTemp, Log, TEXT("Vertices: %d"), PMXInfo.ModelVertexCount);
+    UE_LOG(LogTemp, Log, TEXT("Indices: %d"), PMXInfo.ModelIndicesCount);
+    UE_LOG(LogTemp, Log, TEXT("Textures: %d"), PMXInfo.ModelTextureCount);
+    UE_LOG(LogTemp, Log, TEXT("Materials: %d"), PMXInfo.ModelMaterialCount);
+    UE_LOG(LogTemp, Log, TEXT("Bones: %d"), PMXInfo.ModelBoneCount);
+    UE_LOG(LogTemp, Log, TEXT("Morphs: %d"), PMXInfo.ModelMorphCount);
     return true;
 }
 bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
 {
+    // 记录当前位置用于调试
+    int64 StartPos = Reader.Tell();
+
     int32 StringLength = 0;
     Reader << StringLength;
 
     const int64 Remaining = Reader.TotalSize() - Reader.Tell();
-    if (StringLength < 0 || Remaining < StringLength)
+
+    // 详细的边界检查和调试信息
+    UE_LOG(LogTemp, Warning, TEXT("ReadCharArray: pos=%lld, length=%d, remaining=%lld, encoding=%d"),
+           StartPos, StringLength, Remaining, PMXInfo.PMXGlobals.TextEncoding);
+
+    // 严格的边界检查
+    if (StringLength < 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: invalid length=%d remaining=%lld"), StringLength, Remaining);
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: negative length %d at position %lld"), StringLength, StartPos);
+        OutString = TEXT("");
+        return false;
+    }
+
+    if (StringLength > Remaining)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: length %d exceeds remaining %lld at position %lld"),
+               StringLength, Remaining, StartPos);
+        OutString = TEXT("");
+        return false;
+    }
+
+    if (StringLength > 32768) // 合理的最大字符串长度限制
+    {
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: suspiciously large length %d at position %lld"),
+               StringLength, StartPos);
+        OutString = TEXT("");
         return false;
     }
 
     if (StringLength == 0)
     {
-        OutString.Empty();
+        OutString = TEXT("");
         return true;
     }
 
-    // allocate +1 for null terminator
-    TArray<uint8> StringData;
-    StringData.SetNumUninitialized(StringLength + 1);
-    Reader.Serialize(StringData.GetData(), StringLength);
-    StringData[StringLength] = 0; // ensure null-terminated
+    // 安全的数据读取
+    TArray<uint8> RawData;
+    RawData.SetNumZeroed(StringLength + 4); // 额外的安全边界
+    Reader.Serialize(RawData.GetData(), StringLength);
 
+    // 根据编码类型安全地转换字符串
     if (PMXInfo.PMXGlobals.TextEncoding == 0) // UTF-16LE
     {
         if (StringLength % 2 != 0)
-            UE_LOG(LogTemp, Warning, TEXT("ReadCharArray: UTF-16 string length must be even: %d"), StringLength);
+        {
+            UE_LOG(LogTemp, Error, TEXT("ReadCharArray: UTF-16 odd length %d at position %lld"),
+                   StringLength, StartPos);
+            OutString = TEXT("");
+            return false;
+        }
 
-        int32 NumChars = StringLength / 2;
-        TArray<uint16> UTF16Data;
-        UTF16Data.SetNumUninitialized(NumChars + 1);
-        FMemory::Memcpy(UTF16Data.GetData(), StringData.GetData(), StringLength);
-        UTF16Data[NumChars] = 0;
-        OutString = FString(reinterpret_cast<const TCHAR *>(UTF16Data.GetData()));
+        int32 CharCount = StringLength / 2;
+        if (CharCount == 0)
+        {
+            OutString = TEXT("");
+            return true;
+        }
+
+        // 最安全的方法：逐字节构建字符串
+        FString Result;
+        Result.Reserve(CharCount);
+
+        for (int32 i = 0; i < CharCount; i++)
+        {
+            // 安全地读取每个UTF-16字符
+            if (i * 2 + 1 < StringLength)
+            {
+                uint16 Char16 = (uint16)RawData[i * 2] | ((uint16)RawData[i * 2 + 1] << 8);
+                if (Char16 == 0)
+                    break; // 遇到null终止符就停止
+
+                // 直接append单个字符，避免构造函数问题
+                TCHAR WideChar = (TCHAR)Char16;
+                if (WideChar >= 32 || WideChar == 9 || WideChar == 10 || WideChar == 13) // 可打印字符或基本空白符
+                {
+                    Result.AppendChar(WideChar);
+                }
+            }
+        }
+        OutString = Result;
     }
     else // UTF-8
     {
-        const char *UTF8Ptr = reinterpret_cast<const char *>(StringData.GetData());
-        OutString = FString(UTF8_TO_TCHAR(UTF8Ptr));
+        // UTF-8处理：使用UE的转换函数
+        TArray<char> UTF8Data;
+        UTF8Data.SetNumZeroed(StringLength + 1);
+
+        // 安全地复制数据
+        for (int32 i = 0; i < StringLength; i++)
+        {
+            UTF8Data[i] = (char)RawData[i];
+        }
+
+        // 使用UE5的安全转换
+        FString Result = FString(UTF8_TO_TCHAR(UTF8Data.GetData()));
+        OutString = Result;
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("ReadCharArray: successfully read '%s' (length: %d)"),
+           *OutString.Left(20), StringLength); // 只显示前20个字符
 
     return true;
 }
@@ -235,7 +322,7 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
         UE_LOG(LogTemp, Warning, TEXT("ReadPMXVertex: ModelVertexCount is suspiciously low: %d"), PMXInfo.ModelVertexCount);
         return false;
     }
-    PMXInfo.ModelVertices.SetNumUninitialized(PMXInfo.ModelVertexCount);
+    PMXInfo.ModelVertices.SetNum(PMXInfo.ModelVertexCount);
     for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
     {
         float px, py, pz;
@@ -411,9 +498,17 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
 bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelMaterialCount;
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXMaterial: MaterialCount=%d at position=%lld"),
+           PMXInfo.ModelMaterialCount, Reader.Tell());
+
     PMXInfo.ModelMaterials.SetNum(PMXInfo.ModelMaterialCount);
+
     for (int32 i = 0; i < PMXInfo.ModelMaterialCount; i++)
     {
+        int64 MaterialStartPos = Reader.Tell();
+        UE_LOG(LogTemp, Verbose, TEXT("Reading material %d/%d at position %lld"),
+               i + 1, PMXInfo.ModelMaterialCount, MaterialStartPos);
+
         ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameJP, PMXInfo);
         ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameEN, PMXInfo);
 
@@ -437,22 +532,31 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
         Reader << PMXInfo.ModelMaterials[i].EdgeSize;
         PMXInfo.ModelMaterials[i].TextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
-
         PMXInfo.ModelMaterials[i].SphereTextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
         Reader << PMXInfo.ModelMaterials[i].SphereMode;
 
         Reader << PMXInfo.ModelMaterials[i].UseSharedToon;
 
+        // 修复：正确处理 Toon 数据类型
         if (PMXInfo.ModelMaterials[i].UseSharedToon == 0)
         {
-            Reader << PMXInfo.ModelMaterials[i].ToonNumber;
+            uint8 ToonNumber; // 应该是 uint8，不是 int32
+            Reader << ToonNumber;
+            PMXInfo.ModelMaterials[i].ToonNumber = ToonNumber;
         }
         else
         {
             PMXInfo.ModelMaterials[i].ToonTextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
         }
+
         ReadCharArray(Reader, PMXInfo.ModelMaterials[i].Memo, PMXInfo);
         Reader << PMXInfo.ModelMaterials[i].FaceIndexCount;
+
+        // 添加位置检查
+        int64 MaterialEndPos = Reader.Tell();
+        UE_LOG(LogTemp, Verbose, TEXT("Material %d finished at position %lld (size: %lld bytes)"),
+               i, MaterialEndPos, MaterialEndPos - MaterialStartPos);
+
         if (i < 5)
         {
             UE_LOG(LogTemp, Warning, TEXT("Material[%d]: Name=%s TexIdx=%d SphereIdx=%d SphereMode=%d SharedToon=%d ToonNum=%d FaceCount=%d"),
@@ -466,12 +570,15 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
                    PMXInfo.ModelMaterials[i].FaceIndexCount);
         }
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXMaterial: Finished at position=%lld"), Reader.Tell());
     return true;
 }
 bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelBoneCount;
-    PMXInfo.ModelBones.SetNumUninitialized(PMXInfo.ModelBoneCount);
+    PMXInfo.ModelBones.SetNum(PMXInfo.ModelBoneCount);
+
     for (int32 i = 0; i < PMXInfo.ModelBoneCount; i++)
     {
         ReadCharArray(Reader, PMXInfo.ModelBones[i].NameJP, PMXInfo);
@@ -506,10 +613,10 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
         }
         if (PMXInfo.ModelBones[i].Flags & 0x0800) // LocalAxis
         {
-            float x1, x2, x3, y1, y2, y3;
-            Reader << x1 << x2 << x3 << y1 << y2 << y3;
+            float x1, x2, x3, z1, z2, z3;
+            Reader << x1 << x2 << x3 << z1 << z2 << z3;
             PMXInfo.ModelBones[i].LocalAxisX = FVector(x1, x2, x3);
-            PMXInfo.ModelBones[i].LocalAxisZ = FVector(y1, y2, y3);
+            PMXInfo.ModelBones[i].LocalAxisZ = FVector(z1, z2, z3);
         }
         if (PMXInfo.ModelBones[i].Flags & 0x2000) // ExternalParent
         {
@@ -517,11 +624,12 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
         }
         if (PMXInfo.ModelBones[i].Flags & 0x0020) // IK
         {
-            Reader << PMXInfo.ModelBones[i].IKTargetBoneIndex;
+            PMXInfo.ModelBones[i].IKTargetBoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
             Reader << PMXInfo.ModelBones[i].IKLoopCount;
             Reader << PMXInfo.ModelBones[i].IKLimitAngle;
             Reader << PMXInfo.ModelBones[i].IKLinkCount;
-            PMXInfo.ModelBones[i].IKLinks.SetNumUninitialized(PMXInfo.ModelBones[i].IKLinkCount);
+
+            PMXInfo.ModelBones[i].IKLinks.SetNum(PMXInfo.ModelBones[i].IKLinkCount);
 
             for (int32 j = 0; j < PMXInfo.ModelBones[i].IKLinkCount; j++)
             {
@@ -550,6 +658,145 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
     return true;
 }
 
+bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
+{
+    Reader << PMXInfo.ModelMorphCount;
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXMorphs: MorphCount=%d"),
+           PMXInfo.ModelMorphCount);
+    PMXInfo.ModelMorphs.SetNum(PMXInfo.ModelMorphCount);
+    for (int32 i = 0; i < PMXInfo.ModelMorphCount; i++)
+    {
+        ReadCharArray(Reader, PMXInfo.ModelMorphs[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelMorphs[i].NameEN, PMXInfo);
+        Reader << PMXInfo.ModelMorphs[i].Panel;
+        Reader << PMXInfo.ModelMorphs[i].MorphType;
+        Reader << PMXInfo.ModelMorphs[i].ElementCount;
+        if (PMXInfo.ModelMorphs[i].ElementCount < 0 || PMXInfo.ModelMorphs[i].ElementCount > 50000)
+        {
+            UE_LOG(LogTemp, Error, TEXT("ReadPMXMorphs: Invalid element count %d for morph %d"),
+                   PMXInfo.ModelMorphs[i].ElementCount, i);
+            return false;
+        }
+        switch (PMXInfo.ModelMorphs[i].MorphType)
+        {
+        case 0: // Group
+            PMXInfo.ModelMorphs[i].Groups.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+
+                PMXInfo.ModelMorphs[i].Groups[j].MorphIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MorphIndexSize);
+                Reader << PMXInfo.ModelMorphs[i].Groups[j].Weight;
+            }
+            /* code */
+            break;
+        case 1: // Vertex
+            PMXInfo.ModelMorphs[i].Vertices.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+                PMXInfo.ModelMorphs[i].Vertices[j].VertexIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+                float dx, dy, dz;
+                Reader << dx << dy << dz;
+                PMXInfo.ModelMorphs[i].Vertices[j].PositionOffset = FVector(dx, dy, dz);
+            }
+            break;
+        case 2: // bone
+            PMXInfo.ModelMorphs[i].Bones.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+                PMXInfo.ModelMorphs[i].Bones[j].BoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+                float tr, tg, tb;
+                Reader << tr << tg << tb;
+                PMXInfo.ModelMorphs[i].Bones[j].Translation = FVector(tr, tg, tb);
+                float rx, ry, rz, rw;
+                Reader << rx << ry << rz << rw;
+                PMXInfo.ModelMorphs[i].Bones[j].RotationQuat = FQuat(rx, ry, rz, rw);
+            }
+            break;
+        case 3: // UV
+        case 4: // AdditionalUV1
+        case 5: // AdditionalUV2
+        case 6: // AdditionalUV3
+        case 7: // AdditionalUV4
+            PMXInfo.ModelMorphs[i].UVs.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+                PMXInfo.ModelMorphs[i].UVs[j].VertexIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+                float x, y, z, w;
+                Reader << x << y << z << w;
+                PMXInfo.ModelMorphs[i].UVs[j].UVOffset = FVector4(x, y, z, w);
+            }
+            break;
+        case 8: // Material
+            PMXInfo.ModelMorphs[i].Materials.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+                PMXInfo.ModelMorphs[i].Materials[j].MaterialIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MaterialIndexSize);
+                Reader << PMXInfo.ModelMorphs[i].Materials[j].CalcMode;
+                float dr, dg, db, da;
+                Reader << dr << dg << db << da;
+                PMXInfo.ModelMorphs[i].Materials[j].Diffuse = FVector4(dr, dg, db, da);
+                float sr, sg, sb;
+                Reader << sr << sg << sb;
+                PMXInfo.ModelMorphs[i].Materials[j].Specular = FVector(sr, sg, sb);
+                Reader << PMXInfo.ModelMorphs[i].Materials[j].SpecularPower;
+                float ar, ag, ab;
+                Reader << ar << ag << ab;
+                PMXInfo.ModelMorphs[i].Materials[j].Ambient = FVector(ar, ag, ab);
+                float er, eg, eb, ea;
+                Reader << er << eg << eb << ea;
+                PMXInfo.ModelMorphs[i].Materials[j].EdgeColor = FVector4(er, eg, eb, ea);
+                Reader << PMXInfo.ModelMorphs[i].Materials[j].EdgeSize;
+                float tr, tg, tb, ta;
+                Reader << tr << tg << tb << ta;
+                PMXInfo.ModelMorphs[i].Materials[j].TextureTint = FVector4(tr, tg, tb, ta);
+                float str, stg, stb, sta;
+                Reader << str << stg << stb << sta;
+                PMXInfo.ModelMorphs[i].Materials[j].SphereTextureTint = FVector4(str, stg, stb, sta);
+                float ttr, ttg, ttb, tta;
+                Reader << ttr << ttg << ttb << tta;
+                PMXInfo.ModelMorphs[i].Materials[j].ToonTextureTint = FVector4(ttr, ttg, ttb, tta);
+            }
+            break;
+        case 9: // Flip
+            PMXInfo.ModelMorphs[i].Flips.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+                PMXInfo.ModelMorphs[i].Flips[j].MorphIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MorphIndexSize);
+                Reader << PMXInfo.ModelMorphs[i].Flips[j].Weight;
+            }
+            break;
+        case 10: // Impulse
+            PMXInfo.ModelMorphs[i].Impulses.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
+            for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
+            {
+                PMXInfo.ModelMorphs[i].Impulses[j].RigidIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
+                Reader << PMXInfo.ModelMorphs[i].Impulses[j].IsLocal;
+                float x, y, z;
+                Reader << x << y << z;
+                PMXInfo.ModelMorphs[i].Impulses[j].Velocity = FVector(x, y, z);
+                float rx, ry, rz;
+                Reader << rx << ry << rz;
+                PMXInfo.ModelMorphs[i].Impulses[j].Torque = FVector(rx, ry, rz);
+            }
+            break;
+        default:
+            // ✅ 添加这个关键的 default 分支！
+            UE_LOG(LogTemp, Error, TEXT("ReadPMXMorphs: Unknown morph type %d for morph %d"),
+                   PMXInfo.ModelMorphs[i].MorphType, i);
+                   
+        }
+        if (i < 5)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Morph[%d]: Name=%s Type=%d ElementCount=%d"),
+                   i,
+                   *PMXInfo.ModelMorphs[i].NameJP,
+                   PMXInfo.ModelMorphs[i].MorphType,
+                   PMXInfo.ModelMorphs[i].ElementCount);
+        }
+    }
+
+    return true;
+}
 // =============================================
 // PMX文件解析格式
 // =============================================

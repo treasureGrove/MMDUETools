@@ -21,9 +21,9 @@
 /ALTERNATENAME:__imp___std_init_once_complete=__imp_InitOnceComplete
 /DELAYLOAD:"d3d12.dll"
 /DELAYLOAD:"DBGHELP.DLL"
-/LIBPATH:"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.38.33130\lib\x64"
-/LIBPATH:"C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\ucrt\x64"
-/LIBPATH:"C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\um\x64"
+/LIBPATH:"D:\VisualStudio\VC\Tools\MSVC\14.38.33130\lib\x64"
+/LIBPATH:"D:\Windows Kits\10\lib\10.0.22621.0\ucrt\x64"
+/LIBPATH:"D:\Windows Kits\10\lib\10.0.22621.0\um\x64"
 /NODEFAULTLIB:"LIBCMT"
 /NODEFAULTLIB:"LIBCPMT"
 /NODEFAULTLIB:"LIBCMTD"
@@ -37,11 +37,11 @@
 /FUNCTIONPADMIN:6
 /NOIMPLIB
 /NATVIS:"..\Intermediate\Build\Win64\x64\UnrealEditor\Development\RenderCore\RenderCore.natvis"
-"E:\Uproject\MMDUETools\MMD\Intermediate\Build\Win64\x64\MMDEditor\Development\UnrealEd\SharedPCH.UnrealEd.Project.ValApi.Cpp20.h.obj"
-"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Module.Ue5MMDTools.cpp.obj"
-"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\TPMXParser.cpp.obj"
-"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Default.rc2.res"
-"D:\Performance\API\lib\x64\PerformanceAPI_MD.lib"
+"Z:\Project\UEProject\MMDUETools\MMD\Intermediate\Build\Win64\x64\MMDEditor\Development\UnrealEd\SharedPCH.UnrealEd.Project.ValApi.Cpp20.h.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Module.Ue5MMDTools.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\MMDImportSetting.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\TPMXParser.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Default.rc2.res"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\Projects\UnrealEditor-Projects.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\InputCore\UnrealEditor-InputCore.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\UnrealEd\UnrealEditor-UnrealEd.lib"
@@ -86,6 +86,6 @@
 "synchronization.lib"
 "dwmapi.lib"
 "imm32.lib"
-/OUT:"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Binaries\Win64\UnrealEditor-Ue5MMDTools.dll"
-/PDB:"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Binaries\Win64\UnrealEditor-Ue5MMDTools.pdb"
+/OUT:"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Binaries\Win64\UnrealEditor-Ue5MMDTools.dll"
+/PDB:"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Binaries\Win64\UnrealEditor-Ue5MMDTools.pdb"
 /ignore:4078

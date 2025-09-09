@@ -129,9 +129,9 @@ struct PMXBone
     FString NameJP;
     FString NameEN;
     FVector Position = FVector::ZeroVector;
-    int32 ParentBoneIndex;
-    int32 DeformLayer;
-    uint16 Flags;
+    int32 ParentBoneIndex = -1; 
+    int32 DeformLayer = 0;      
+    uint16 Flags = 0;           
 
     int32 TailBoneIndex = -1;
     FVector TailOffset = FVector::ZeroVector;
@@ -150,6 +150,7 @@ struct PMXBone
     int32 IKLoopCount = 0;
     float IKLimitAngle = 0.0f;
     int32 IKLinkCount = 0;
+
     struct PMXIKLink
     {
         int32 LinkBoneIndex = -1;
@@ -159,10 +160,123 @@ struct PMXBone
     };
     TArray<PMXIKLink> IKLinks;
 };
+// 8) Morphs
+// - int32 morphCount
+// - repeat morphCount:
+// - nameJP (string)
+// - nameEN (string)
+// - uint8 panel // 0=System/Hidden, 1=Eyebrow, 2=Eye, 3=Mouth, 4=Other
+// - uint8 morphType // 0=Group,1=Vertex,2=Bone,3=UV,4=AddUV1,5=AddUV2,6=AddUV3,7=AddUV4,8=Material,9=Flip(2.1),10=Impulse(2.1)
+// - int32 elementCount
+// - switch(morphType):
+// Group:
+// - repeat elementCount:
+// - morphIndex (morphIndexSize)
+// - float weight
+// Vertex:
+// - repeat:
+// - vertexIndex (vertexIndexSize)
+// - float3 positionOffset
+// Bone:
+// - repeat:
+// - boneIndex (boneIndexSize)
+// - float3 translation
+// - float4 rotationQuat // (x,y,z,w)
+// UV / AddUV1..4:
+// - repeat:
+// - vertexIndex (vertexIndexSize)
+// - float4 uvOffset
+// Material:
+// - repeat:
+// - materialIndex (materialIndexSize) // -1 means “all materials”
+// - uint8 calcMode // 0=Multiply, 1=Add
+// - float4 diffuse
+// - float3 specular
+// - float specularPower
+// - float3 ambient
+// - float4 edgeColor
+// - float edgeSize
+// - float4 textureTint
+// - float4 sphereTextureTint
+// - float4 toonTextureTint
+// Flip (2.1):
+// - repeat:
+// - morphIndex (morphIndexSize)
+// - float weight
+// Impulse (2.1):
+// - repeat:
+// - rigidIndex (rigidIndexSize)
+// - uint8 isLocal
+// - float3 velocity
+// - float3 torque
+struct PMXMorph
+{
+    FString NameJP;
+    FString NameEN;
+    uint8 Panel = 0;        
+    uint8 MorphType = 0;    
+    int32 ElementCount = 0; 
+
+    struct Group
+    {
+        int32 MorphIndex = -1; 
+        float Weight = 0.0f;   
+    };
+    struct Vertex
+    {
+        int32 VertexIndex = -1;                     
+        FVector PositionOffset = FVector::ZeroVector; 
+    };
+    struct Bone
+    {
+        int32 BoneIndex = -1;                      
+        FVector Translation = FVector::ZeroVector; 
+        FQuat RotationQuat = FQuat::Identity;     
+    };
+    struct UV
+    {
+        int32 VertexIndex = -1;               
+        FVector4 UVOffset = FVector4::Zero(); 
+    };
+    struct Material
+    {
+        int32 MaterialIndex = -1;                      
+        uint8 CalcMode = 0;                            
+        FVector4 Diffuse = FVector4::Zero();           
+        FVector Specular = FVector::ZeroVector;        
+        float SpecularPower = 0.0f;                   
+        FVector Ambient = FVector::ZeroVector;        
+        FVector4 EdgeColor = FVector4::Zero();         
+        float EdgeSize = 0.0f;                         
+        FVector4 TextureTint = FVector4::Zero();       
+        FVector4 SphereTextureTint = FVector4::Zero(); 
+        FVector4 ToonTextureTint = FVector4::Zero();  
+    };
+    struct Flip
+    {
+        int32 MorphIndex = -1; 
+        float Weight = 0.0f;   
+    };
+    struct Impulse
+    {
+        int32 RigidIndex = -1;                  
+        uint8 IsLocal = 0;                      
+        FVector Velocity = FVector::ZeroVector; 
+        FVector Torque = FVector::ZeroVector;   
+    };
+
+    TArray<Group> Groups;
+    TArray<Vertex> Vertices;
+    TArray<Bone> Bones;
+    TArray<UV> UVs;
+    TArray<Material> Materials;
+    TArray<Flip> Flips;
+    TArray<Impulse> Impulses;
+};
 struct PMXDatas
 {
-    float Version;
-    uint8 Sig[4];
+    float Version = 0.0f;
+    uint8 Sig[4] = {0};
 
     FString ModelNameJP;
     FString ModelNameEN;
@@ -172,20 +286,23 @@ struct PMXDatas
     TPMXGlobals PMXGlobals;
 
     // 顶点数据
-    int32 ModelVertexCount;
+    int32 ModelVertexCount = 0;
     TArray<PMXVertex> ModelVertices;
     // 三角面数据
-    int32 ModelIndicesCount;
+    int32 ModelIndicesCount = 0;
     TArray<int32> ModelIndices;
 
-    int32 ModelTextureCount;
+    int32 ModelTextureCount = 0;
     TArray<FString> ModelTexturePaths;
 
-    int32 ModelMaterialCount;
+    int32 ModelMaterialCount = 0;
     TArray<PMXMaterial> ModelMaterials;
 
-    int32 ModelBoneCount;
+    int32 ModelBoneCount = 0;
     TArray<PMXBone> ModelBones;
+
+    int32 ModelMorphCount = 0;
+    TArray<PMXMorph> ModelMorphs;
 };
 
 class UE5MMDTOOLS_API TPMXParser

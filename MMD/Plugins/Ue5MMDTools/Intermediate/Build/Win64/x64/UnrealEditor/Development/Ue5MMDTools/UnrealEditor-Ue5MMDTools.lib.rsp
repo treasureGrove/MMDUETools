@@ -6,8 +6,9 @@
 /NAME:"UnrealEditor-Ue5MMDTools.dll"
 /IGNORE:4221
 /NODEFAULTLIB
-"E:\Uproject\MMDUETools\MMD\Intermediate\Build\Win64\x64\MMDEditor\Development\UnrealEd\SharedPCH.UnrealEd.Project.ValApi.Cpp20.h.obj"
-"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Module.Ue5MMDTools.cpp.obj"
-"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\TPMXParser.cpp.obj"
-"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Default.rc2.res"
-/OUT:"E:\Uproject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\UnrealEditor-Ue5MMDTools.lib"
+"Z:\Project\UEProject\MMDUETools\MMD\Intermediate\Build\Win64\x64\MMDEditor\Development\UnrealEd\SharedPCH.UnrealEd.Project.ValApi.Cpp20.h.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Module.Ue5MMDTools.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\MMDImportSetting.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\TPMXParser.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Default.rc2.res"
+/OUT:"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\UnrealEditor-Ue5MMDTools.lib"

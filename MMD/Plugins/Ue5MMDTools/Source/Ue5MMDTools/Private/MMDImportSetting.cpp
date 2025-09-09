@@ -87,14 +87,37 @@ void MMDImportSetting::ImportMMDModel()
             {
                 ViewPanel->LoadMMDModel(SelectedFile);
                 ShowImportProgress(FString::Printf(TEXT("正在加载模型: %s"), *FileName));
-                TPMXParser Parser;
-                if (Parser.ParsePMXFile(SelectedFile))
+
+                // 使用静态变量避免析构问题
+                static TUniquePtr<TPMXParser> StaticParser;
+
+                // 每次使用前重置
+                if (!StaticParser.IsValid())
+                {
+                    StaticParser = MakeUnique<TPMXParser>();
+                    UE_LOG(LogTemp, Warning, TEXT("创建静态Parser"));
+                }
+                bool bSuccess = StaticParser->ParsePMXFile(SelectedFile);
+
+                if (bSuccess)
                 {
                     ShowImportProgress(TEXT("PMX文件解析成功"));
+                    UE_LOG(LogTemp, Warning, TEXT("解析成功. 骨骼数量: %d"), StaticParser->PMXInfo.ModelBones.Num());
+
+                    // 保存关键信息
+                    int32 BoneCount = StaticParser->PMXInfo.ModelBones.Num();
+                    int32 VertexCount = StaticParser->PMXInfo.ModelVertices.Num();
+                    int32 MaterialCount = StaticParser->PMXInfo.ModelMaterials.Num();
+
+                    UE_LOG(LogTemp, Warning, TEXT("成功解析：骨骼=%d 顶点=%d 材质=%d"), BoneCount, VertexCount, MaterialCount);
+                    UE_LOG(LogTemp, Warning, TEXT("使用静态Parser避免析构问题"));
+
+                    // 不清空数据，让静态变量持有，避免析构
                 }
                 else
                 {
                     ShowImportProgress(TEXT("PMX文件解析失败"));
+                    UE_LOG(LogTemp, Error, TEXT("解析失败"));
                 }
             }
             else

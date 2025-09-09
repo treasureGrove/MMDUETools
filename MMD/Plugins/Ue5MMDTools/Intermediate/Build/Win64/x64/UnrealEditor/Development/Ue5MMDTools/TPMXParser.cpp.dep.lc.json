@@ -1,12 +1,12 @@
 {
     "Version": "1.2",
     "Data": {
-        "Source": "e:\\uproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\private\\tpmxparser.cpp",
+        "Source": "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\private\\tpmxparser.cpp",
         "ProvidedModule": "",
-        "PCH": "e:\\uproject\\mmduetools\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
+        "PCH": "z:\\project\\ueproject\\mmduetools\\mmd\\intermediate\\build\\win64\\x64\\mmdeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.cpp20.h.pch",
         "Includes": [
-            "e:\\uproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\ue5mmdtools\\definitions.ue5mmdtools.h",
-            "e:\\uproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\public\\tpmxparser.h"
+            "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\ue5mmdtools\\definitions.ue5mmdtools.h",
+            "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\public\\tpmxparser.h"
         ],
         "ImportedModules": [],
         "ImportedHeaderUnits": []
