@@ -273,6 +273,64 @@ struct PMXMorph
     TArray<Flip> Flips;
     TArray<Impulse> Impulses;
 };
+// 9) Display Frames (for UI panels)
+// - int32 frameCount
+// - repeat frameCount:
+// - nameJP (string)
+// - nameEN (string)
+// - uint8 isSpecial // 0=normal, 1=special (root frame)
+// - int32 elementCount
+// - repeat elementCount:
+// - uint8 elemType // 0=Bone, 1=Morph
+// - elemIndex // sized by (boneIndexSize or morphIndexSize)
+struct PMXFrame{
+    FString NameJP;
+    FString NameEN;
+    uint8 IsSpecial = 0;
+    int32 ElementCount = 0;
+
+    struct Element
+    {
+        uint8 ElemType;
+        int32 ElemIndex;
+    };
+    TArray<Element> Elements;
+};
+// 10) Rigid Bodies (physics)
+// - int32 rigidCount
+// - repeat rigidCount:
+// - nameJP (string)
+// - nameEN (string)
+// - relatedBoneIndex (boneIndexSize) // -1 if unbound
+// - uint8 group // 0..15
+// - uint16 collisionMask // bitmask
+// - uint8 shapeType // 0=Sphere, 1=Box, 2=Capsule
+// - float3 size // sphere:r= x; box: x,y,z; capsule: r=x, h=y
+// - float3 position
+// - float3 rotation // radians
+// - float mass
+// - float linearDamping
+// - float angularDamping
+// - float restitution
+// - float friction
+// - uint8 physicsMode // 0=Static, 1=Dynamic, 2=BoneTracked
+struct PMXRigid{
+    FString NameJP;
+    FString NameEN;
+    int32 RelatedBoneIndex = -1;
+    uint8 Group = 0;
+    uint16 CollisionMask = 0;
+    uint8 ShapeType = 0;
+    FVector Size = FVector::ZeroVector;
+    FVector Position = FVector::ZeroVector;
+    FVector Rotation = FVector::ZeroVector;
+    float Mass = 0.0f;
+    float LinearDamping = 0.0f;
+    float AngularDamping = 0.0f;
+    float Restitution = 0.0f;
+    float Friction = 0.0f;
+    uint8 PhysicsMode = 0;
+};
 struct PMXDatas
 {
     float Version = 0.0f;
@@ -303,6 +361,12 @@ struct PMXDatas
 
     int32 ModelMorphCount = 0;
     TArray<PMXMorph> ModelMorphs;
+
+    int32 ModelFrameCount = 0;
+    TArray<PMXFrame> ModelFrames;
+
+    int32 ModelRigidCount = 0;
+    TArray<PMXRigid> ModelRigids;
 };
 
 class UE5MMDTOOLS_API TPMXParser

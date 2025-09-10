@@ -9,6 +9,8 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo);
+bool ReadPMXRigid(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
     // 简单重置 - 不使用复杂的赋值操作
@@ -144,6 +146,22 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX morphs"));
+    }
+    if(ReadPMXFrames(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX frames"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX frames"));
+    }
+    if(ReadPMXRigid(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX rigids"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX rigids"));
     }
     UE_LOG(LogTemp, Log, TEXT("=== PMX Parse Summary ==="));
     UE_LOG(LogTemp, Log, TEXT("Vertices: %d"), PMXInfo.ModelVertexCount);
@@ -796,6 +814,91 @@ bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
     }
 
     return true;
+}
+
+bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
+    Reader<< PMXInfo.ModelFrameCount;
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXFrames: FrameCount=%d"),
+           PMXInfo.ModelFrameCount);
+    PMXInfo.ModelFrames.SetNum(PMXInfo.ModelFrameCount);
+    for (int32 i = 0; i < PMXInfo.ModelFrameCount; i++){
+        ReadCharArray(Reader, PMXInfo.ModelFrames[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelFrames[i].NameEN, PMXInfo);
+        Reader<<PMXInfo.ModelFrames[i].IsSpecial;
+        Reader << PMXInfo.ModelFrames[i].ElementCount;
+        if (PMXInfo.ModelFrames[i].ElementCount < 0 || PMXInfo.ModelFrames[i].ElementCount > 9999999)
+        {
+            UE_LOG(LogTemp, Error, TEXT("ReadPMXFrames: Invalid element count %d for frame %d"),
+                   PMXInfo.ModelFrames[i].ElementCount, i);
+            return false;
+        }
+        PMXInfo.ModelFrames[i].Elements.SetNum(PMXInfo.ModelFrames[i].ElementCount);
+        for (int32 j = 0; j < PMXInfo.ModelFrames[i].ElementCount; j++){
+            Reader<<PMXInfo.ModelFrames[i].Elements[j].ElemType;
+            if(PMXInfo.ModelFrames[i].Elements[j].ElemType==0){
+                ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+            }else if(PMXInfo.ModelFrames[i].Elements[j].ElemType==1){
+                ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MorphIndexSize);
+            }else{
+                UE_LOG(LogTemp,Error,TEXT("PMX Frame ElemType Error"));
+            }
+        }
+        if (i < 5)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Frame[%d]: Name=%s ElementCount=%d"),
+                   i,
+                   *PMXInfo.ModelFrames[i].NameJP,
+                   PMXInfo.ModelFrames[i].ElementCount);
+        }
+    }
+}
+bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
+    Reader<<PMXInfo.ModelRigidCount;
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXRigid: RigidBodiesCount=%d"),
+           PMXInfo.ModelRigidCount);
+    PMXInfo.ModelRigids.SetNum(PMXInfo.ModelRigidCount);
+    for (int32 i = 0; i < PMXInfo.ModelRigidCount; i++){
+        ReadCharArray(Reader, PMXInfo.ModelRigids[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelRigids[i].NameEN, PMXInfo);
+        PMXInfo.ModelRigids[i].RelatedBoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+        Reader<<PMXInfo.ModelRigids[i].Group;
+        Reader<<PMXInfo.ModelRigids[i].CollisionMask;
+        Reader<<PMXInfo.ModelRigids[i].ShapeType;
+        float sx,sy,sz;
+        Reader<<sx<<sy<<sz;
+        PMXInfo.ModelRigids[i].Size=FVector(sx,sy,sz);
+        float px,py,pz;
+        Reader<<px<<py<<pz;
+        PMXInfo.ModelRigids[i].Position=FVector(px,py,pz);
+        float rx,ry,rz;
+        Reader<<rx<<ry<<rz;
+        PMXInfo.ModelRigids[i].Rotation=FVector(rx,ry,rz);
+        Reader<<PMXInfo.ModelRigids[i].Mass;
+        Reader<<PMXInfo.ModelRigids[i].LinearDamping;
+        Reader<<PMXInfo.ModelRigids[i].AngularDamping;
+        Reader<<PMXInfo.ModelRigids[i].Restitution;
+        Reader<<PMXInfo.ModelRigids[i].Friction;
+        Reader<<PMXInfo.ModelRigids[i].PhysicsMode;
+
+        if (i < 5)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Rigid[%d]: Name=%s BoneIndex=%d ShapeType=%d Size=(%.4f,%.4f,%.4f) Pos=(%.4f,%.4f,%.4f) Rot=(%.4f,%.4f,%.4f) Mass=%.4f"),
+                   i,
+                   *PMXInfo.ModelRigids[i].NameJP,
+                   PMXInfo.ModelRigids[i].RelatedBoneIndex,
+                   PMXInfo.ModelRigids[i].ShapeType,
+                   PMXInfo.ModelRigids[i].Size.X,
+                   PMXInfo.ModelRigids[i].Size.Y,
+                   PMXInfo.ModelRigids[i].Size.Z,
+                   PMXInfo.ModelRigids[i].Position.X,
+                   PMXInfo.ModelRigids[i].Position.Y,
+                   PMXInfo.ModelRigids[i].Position.Z,
+                   PMXInfo.ModelRigids[i].Rotation.X,
+                   PMXInfo.ModelRigids[i].Rotation.Y,
+                   PMXInfo.ModelRigids[i].Rotation.Z,
+                   PMXInfo.ModelRigids[i].Mass);
+        }
+    }
 }
 // =============================================
 // PMX文件解析格式

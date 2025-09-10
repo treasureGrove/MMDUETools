@@ -19,7 +19,11 @@
 			"DOTNET_MULTILEVEL_LOOKUP": "0",
 			"DOTNET_ROLL_FORWARD": "LatestMajor"
 		},
-		"powershell.cwd": "MMD"
+		"powershell.cwd": "MMD",
+		"files.associations": {
+			"*.usf": "hlsl",
+			"*.rh": "cpp"
+		}
 	},
 	"extensions": {
 		"recommendations": [
