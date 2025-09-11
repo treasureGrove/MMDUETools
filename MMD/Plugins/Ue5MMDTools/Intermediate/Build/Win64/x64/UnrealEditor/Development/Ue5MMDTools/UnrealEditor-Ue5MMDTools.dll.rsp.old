@@ -39,6 +39,7 @@
 /NATVIS:"..\Intermediate\Build\Win64\x64\UnrealEditor\Development\RenderCore\RenderCore.natvis"
 "Z:\Project\UEProject\MMDUETools\MMD\Intermediate\Build\Win64\x64\MMDEditor\Development\UnrealEd\SharedPCH.UnrealEd.Project.ValApi.Cpp20.h.obj"
 "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Module.Ue5MMDTools.cpp.obj"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\MMDImportSetting.cpp.obj"
 "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\TPMXParser.cpp.obj"
 "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Default.rc2.res"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\Projects\UnrealEditor-Projects.lib"

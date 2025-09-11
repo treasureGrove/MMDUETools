@@ -13,11 +13,13 @@
 #include "Misc/Paths.h"
 #include "TPMXParser.h"
 
+TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 静态成员初始化
 void MMDImportSetting::Construct(const FArguments &InArgs)
 {
     // 保存ViewPanel引用
     ViewPanel = InArgs._ViewPanel;
-
+    // 保存当前实例的弱引用
+    CurrentInstance = SharedThis(this);
     ChildSlot
         [SNew(SHorizontalBox) + SHorizontalBox::Slot().FillWidth(1.0f)[SNew(SVerticalBox) + SVerticalBox::Slot().AutoHeight().Padding(2.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("设置区 - MMD模型导入"))).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))] + SVerticalBox::Slot().AutoHeight().Padding(2.0f)[SAssignNew(StatusText, STextBlock).Text(FText::FromString(TEXT("准备就绪..."))).ColorAndOpacity(FSlateColor(FLinearColor::Green))]] + SHorizontalBox::Slot().AutoWidth()[SNew(SHorizontalBox) + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入MMD模型"))).ToolTipText(FText::FromString(TEXT("导入.pmx/.pmd/.fbx等MMD模型文件"))).OnClicked(this, &MMDImportSetting::OnImportModelClicked)] + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入静态网格"))).ToolTipText(FText::FromString(TEXT("导入.fbx/.obj等静态网格文件"))).OnClicked_Lambda([this]() -> FReply
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       {
@@ -82,52 +84,52 @@ void MMDImportSetting::ImportMMDModel()
 
             ShowImportProgress(FString::Printf(TEXT("已选择文件: %s"), *FileName));
 
-            // 通过ViewPanel加载模型到场景
             if (ViewPanel.IsValid())
             {
                 ViewPanel->LoadMMDModel(SelectedFile);
                 ShowImportProgress(FString::Printf(TEXT("正在加载模型: %s"), *FileName));
 
-                // 使用静态变量避免析构问题
-                static TUniquePtr<TPMXParser> StaticParser;
-
-                // 每次使用前重置
-                if (!StaticParser.IsValid())
+                // 安全的PMX解析实现
+                if (SelectedFile.EndsWith(TEXT(".pmx")))
                 {
-                    StaticParser = MakeUnique<TPMXParser>();
-                    UE_LOG(LogTemp, Warning, TEXT("创建静态Parser"));
-                }
-                bool bSuccess = StaticParser->ParsePMXFile(SelectedFile);
+                    ShowImportProgress(TEXT("开始解析PMX文件..."));
+                    UE_LOG(LogTemp, Warning, TEXT("开始解析PMX文件: %s"), *SelectedFile);
 
-                if (bSuccess)
-                {
-                    ShowImportProgress(TEXT("PMX文件解析成功"));
-                    UE_LOG(LogTemp, Warning, TEXT("解析成功. 骨骼数量: %d"), StaticParser->PMXInfo.ModelBones.Num());
+                    // 使用静态变量避免析构函数问题
+                    static TUniquePtr<TPMXParser> StaticParser = MakeUnique<TPMXParser>();
 
-                    // 保存关键信息
-                    int32 BoneCount = StaticParser->PMXInfo.ModelBones.Num();
-                    int32 VertexCount = StaticParser->PMXInfo.ModelVertices.Num();
-                    int32 MaterialCount = StaticParser->PMXInfo.ModelMaterials.Num();
+                    bool bSuccess = StaticParser->ParsePMXFile(SelectedFile);
 
-                    UE_LOG(LogTemp, Warning, TEXT("成功解析：骨骼=%d 顶点=%d 材质=%d"), BoneCount, VertexCount, MaterialCount);
-                    UE_LOG(LogTemp, Warning, TEXT("使用静态Parser避免析构问题"));
+                    if (bSuccess)
+                    {
+                        // 获取解析数据
+                        const PMXDatas &PMXData = StaticParser->PMXInfo;
 
-                    // 不清空数据，让静态变量持有，避免析构
+                        // 显示解析结果
+                        ShowImportProgress(FString::Printf(TEXT("PMX解析成功! 顶点: %d, 骨骼: %d, 变形: %d"),
+                                                           PMXData.ModelVertices.Num(),
+                                                           PMXData.ModelBones.Num(),
+                                                           PMXData.ModelMorphs.Num()));
+
+                        UE_LOG(LogTemp, Warning, TEXT("PMX解析成功 - 顶点: %d, 面: %d, 材质: %d, 骨骼: %d, 变形: %d, 帧: %d"),
+                               PMXData.ModelVertices.Num(),
+                               PMXData.ModelIndices.Num() / 3,
+                               PMXData.ModelMaterials.Num(),
+                               PMXData.ModelBones.Num(),
+                               PMXData.ModelMorphs.Num(),
+                               PMXData.ModelFrames.Num());
+                    }
+                    else
+                    {
+                        ShowImportProgress(TEXT("PMX解析失败"));
+                        UE_LOG(LogTemp, Error, TEXT("PMX解析失败: %s"), *SelectedFile);
+                    }
                 }
                 else
                 {
-                    ShowImportProgress(TEXT("PMX文件解析失败"));
-                    UE_LOG(LogTemp, Error, TEXT("解析失败"));
+                    ShowImportProgress(FString::Printf(TEXT("文件类型: %s (非PMX)"), *FPaths::GetExtension(SelectedFile)));
                 }
             }
-            else
-            {
-                ShowImportProgress(TEXT("错误: ViewPanel无效"));
-            }
-        }
-        else
-        {
-            ShowImportProgress(TEXT("导入已取消"));
         }
     }
     else
@@ -178,10 +180,64 @@ void MMDImportSetting::ImportStaticMesh()
     }
 }
 
-void MMDImportSetting::ShowImportProgress(const FString &Message)
+void MMDImportSetting::ShowImportProgress(const FString &Message, EMMDMessageType Type)
 {
     if (StatusText.IsValid())
     {
-        StatusText->SetText(FText::FromString(Message));
+        switch (Type)
+        {
+        case EMMDMessageType::Info:
+            StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Green));
+            StatusText->SetText(FText::FromString(Message));
+            break;
+
+        case EMMDMessageType::Warning:
+            StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Yellow));
+            StatusText->SetText(FText::FromString(Message));
+            break;
+
+        case EMMDMessageType::Error:
+            StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Red));
+            StatusText->SetText(FText::FromString(Message));
+            break;
+
+        case EMMDMessageType::Success:
+            StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Green));
+            StatusText->SetText(FText::FromString(Message));
+            break;
+        default:
+            StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+            StatusText->SetText(FText::FromString("No Type: " + Message));
+            break;
+        }
+    }
+}
+void MMDImportSetting::ShowGlobalImportProgress(const FString &Message, EMMDMessageType Type)
+{
+    TSharedPtr<MMDImportSetting> Instance = CurrentInstance.Pin();
+    
+    if (Instance.IsValid())
+    {
+        // 如果实例存在，调用实例方法
+        Instance->ShowImportProgress(Message, Type);
+    }
+    else
+    {
+        // 如果实例不存在，至少输出到日志
+        switch (Type)
+        {
+            case EMMDMessageType::Info:
+                UE_LOG(LogTemp, Log, TEXT("[MMD导入] %s"), *Message);
+                break;
+            case EMMDMessageType::Warning:
+                UE_LOG(LogTemp, Warning, TEXT("[MMD导入] %s"), *Message);
+                break;
+            case EMMDMessageType::Error:
+                UE_LOG(LogTemp, Error, TEXT("[MMD导入] %s"), *Message);
+                break;
+            case EMMDMessageType::Success:
+                UE_LOG(LogTemp, Warning, TEXT("[MMD导入成功] %s"), *Message);
+                break;
+        }
     }
 }

@@ -11,6 +11,8 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo);
 bool ReadPMXRigid(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXJoint(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo);
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
     // 简单重置 - 不使用复杂的赋值操作
@@ -163,6 +165,24 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX rigids"));
     }
+    if(ReadPMXJoint(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX joints"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX joints"));
+    }
+    if (ReadPMXSoftBody(PMXReader, PMXInfo))
+    {
+        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX soft bodies"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX soft bodies"));
+    }
+
+
     UE_LOG(LogTemp, Log, TEXT("=== PMX Parse Summary ==="));
     UE_LOG(LogTemp, Log, TEXT("Vertices: %d"), PMXInfo.ModelVertexCount);
     UE_LOG(LogTemp, Log, TEXT("Indices: %d"), PMXInfo.ModelIndicesCount);
@@ -170,6 +190,10 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     UE_LOG(LogTemp, Log, TEXT("Materials: %d"), PMXInfo.ModelMaterialCount);
     UE_LOG(LogTemp, Log, TEXT("Bones: %d"), PMXInfo.ModelBoneCount);
     UE_LOG(LogTemp, Log, TEXT("Morphs: %d"), PMXInfo.ModelMorphCount);
+    UE_LOG(LogTemp, Log, TEXT("Frames: %d"), PMXInfo.ModelFrameCount);
+    UE_LOG(LogTemp, Log, TEXT("Rigids: %d"), PMXInfo.ModelRigidCount);
+    UE_LOG(LogTemp, Log, TEXT("Joints: %d"), PMXInfo.ModelJointCount);
+    UE_LOG(LogTemp, Log, TEXT("Soft Bodies: %d"), PMXInfo.ModelSoftBodyCount);
     return true;
 }
 bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
@@ -801,7 +825,7 @@ bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
             // ✅ 添加这个关键的 default 分支！
             UE_LOG(LogTemp, Error, TEXT("ReadPMXMorphs: Unknown morph type %d for morph %d"),
                    PMXInfo.ModelMorphs[i].MorphType, i);
-                   
+            return false;
         }
         if (i < 5)
         {
@@ -836,9 +860,9 @@ bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
         for (int32 j = 0; j < PMXInfo.ModelFrames[i].ElementCount; j++){
             Reader<<PMXInfo.ModelFrames[i].Elements[j].ElemType;
             if(PMXInfo.ModelFrames[i].Elements[j].ElemType==0){
-                ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
+                PMXInfo.ModelFrames[i].Elements[j].ElemIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
             }else if(PMXInfo.ModelFrames[i].Elements[j].ElemType==1){
-                ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MorphIndexSize);
+                PMXInfo.ModelFrames[i].Elements[j].ElemIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MorphIndexSize);
             }else{
                 UE_LOG(LogTemp,Error,TEXT("PMX Frame ElemType Error"));
             }
@@ -851,6 +875,7 @@ bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
                    PMXInfo.ModelFrames[i].ElementCount);
         }
     }
+    return true;
 }
 bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelRigidCount;
@@ -899,7 +924,108 @@ bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
                    PMXInfo.ModelRigids[i].Mass);
         }
     }
+    return true;
 }
+bool ReadPMXJoint(FMemoryReader& Reader, PMXDatas& PMXInfo){
+    Reader<<PMXInfo.ModelJointCount;
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXJoint: JointsCount=%d"),
+           PMXInfo.ModelJointCount);
+    PMXInfo.ModelJoints.SetNum(PMXInfo.ModelJointCount);
+
+    for (int32 i = 0; i < PMXInfo.ModelJointCount; i++){
+        ReadCharArray(Reader, PMXInfo.ModelJoints[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelJoints[i].NameEN, PMXInfo);
+        Reader<<PMXInfo.ModelJoints[i].JointType;
+        PMXInfo.ModelJoints[i].RigidA = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
+        PMXInfo.ModelJoints[i].RigidB = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
+        float px,py,pz;
+        Reader<<px<<py<<pz;
+        PMXInfo.ModelJoints[i].Position=FVector(px,py,pz);
+        float rx,ry,rz;
+        Reader<<rx<<ry<<rz;
+        PMXInfo.ModelJoints[i].Rotation=FVector(rx,ry,rz);
+        float llx,lly,llz;
+        Reader<<llx<<lly<<llz;
+        PMXInfo.ModelJoints[i].LimitPosLower=FVector(llx,lly,llz);
+        float ulx,uly,ulz;
+        Reader<<ulx<<uly<<ulz;
+        PMXInfo.ModelJoints[i].LimitPosUpper=FVector(ulx,uly,ulz);
+        float lrx,lry,lrz;
+        Reader<<lrx<<lry<<lrz;
+        PMXInfo.ModelJoints[i].LimitRotLower=FVector(lrx,lry,lrz);
+        float urx,ury,urz;
+        Reader<<urx<<ury<<urz;
+        PMXInfo.ModelJoints[i].LimitRotUpper=FVector(urx,ury,urz);
+        float spx,spy,spz;
+        Reader<<spx<<spy<<spz;
+        PMXInfo.ModelJoints[i].SpringPos=FVector(spx,spy,spz);
+        float srz,sry,srx;
+        Reader<<srx<<sry<<srz;
+        PMXInfo.ModelJoints[i].SpringRot=FVector(srx,sry,srz);
+    }
+    return true;
+}
+bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo){
+    Reader<<PMXInfo.ModelSoftBodyCount;
+    UE_LOG(LogTemp, Warning, TEXT("ReadPMXSoftBody: SoftBodiesCount=%d"),
+           PMXInfo.ModelSoftBodyCount);
+    PMXInfo.ModelSoftBodies.SetNum(PMXInfo.ModelSoftBodyCount);
+    for (int32 i = 0; i < PMXInfo.ModelSoftBodyCount; i++){
+        ReadCharArray(Reader, PMXInfo.ModelSoftBodies[i].NameJP, PMXInfo);
+        ReadCharArray(Reader, PMXInfo.ModelSoftBodies[i].NameEN, PMXInfo);
+        Reader<<PMXInfo.ModelSoftBodies[i].ShapeType;
+        Reader<<PMXInfo.ModelSoftBodies[i].MaterialIndex;
+        Reader<<PMXInfo.ModelSoftBodies[i].Group;
+        Reader<<PMXInfo.ModelSoftBodies[i].CollisionMask;
+        Reader<<PMXInfo.ModelSoftBodies[i].Flags;
+        Reader<<PMXInfo.ModelSoftBodies[i].BLinkDistance;
+        Reader<<PMXInfo.ModelSoftBodies[i].ClusterCount;
+        Reader<<PMXInfo.ModelSoftBodies[i].TotalMass;
+        Reader<<PMXInfo.ModelSoftBodies[i].Margin;
+        Reader<<PMXInfo.ModelSoftBodies[i].AeroModel;
+
+        Reader<<PMXInfo.ModelSoftBodies[i].VCF;
+        Reader<<PMXInfo.ModelSoftBodies[i].DP;
+        Reader<<PMXInfo.ModelSoftBodies[i].DG;
+        Reader<<PMXInfo.ModelSoftBodies[i].LF;
+        Reader<<PMXInfo.ModelSoftBodies[i].PR;
+        Reader<<PMXInfo.ModelSoftBodies[i].VC;
+        Reader<<PMXInfo.ModelSoftBodies[i].DF;
+        Reader<<PMXInfo.ModelSoftBodies[i].MT;
+        Reader<<PMXInfo.ModelSoftBodies[i].CHR;
+        Reader<<PMXInfo.ModelSoftBodies[i].KHR;
+        Reader<<PMXInfo.ModelSoftBodies[i].SHR;
+        Reader<<PMXInfo.ModelSoftBodies[i].AHR;
+
+        Reader<<PMXInfo.ModelSoftBodies[i].SRHR_CL;
+        Reader<<PMXInfo.ModelSoftBodies[i].SKHR_CL;
+        Reader<<PMXInfo.ModelSoftBodies[i].SSHR_CL;
+        Reader<<PMXInfo.ModelSoftBodies[i].SR_SPLT_CL;
+        Reader<<PMXInfo.ModelSoftBodies[i].SK_SPLT_CL;
+        Reader<<PMXInfo.ModelSoftBodies[i].SS_SPLT_CL;
+
+        Reader<<PMXInfo.ModelSoftBodies[i].V_IT;
+        Reader<<PMXInfo.ModelSoftBodies[i].P_IT;
+        Reader<<PMXInfo.ModelSoftBodies[i].D_IT;
+        Reader<<PMXInfo.ModelSoftBodies[i].LST;
+        Reader<<PMXInfo.ModelSoftBodies[i].AST;
+        Reader<<PMXInfo.ModelSoftBodies[i].VST;
+
+        Reader<<PMXInfo.ModelSoftBodies[i].AnchorCount;
+        PMXInfo.ModelSoftBodies[i].Anchors.SetNum(PMXInfo.ModelSoftBodies[i].AnchorCount);
+        for (int32 j = 0; j < PMXInfo.ModelSoftBodies[i].AnchorCount; j++){
+            PMXInfo.ModelSoftBodies[i].Anchors[j].RigidIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
+        }
+        Reader<<PMXInfo.ModelSoftBodies[i].PinVertexCount;
+        PMXInfo.ModelSoftBodies[i].PinVertices.SetNum(PMXInfo.ModelSoftBodies[i].PinVertexCount);
+        for (int32 j = 0; j < PMXInfo.ModelSoftBodies[i].PinVertexCount; j++){
+            PMXInfo.ModelSoftBodies[i].PinVertices[j] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+        }
+
+    }
+    return true;
+}
+
 // =============================================
 // PMX文件解析格式
 // =============================================

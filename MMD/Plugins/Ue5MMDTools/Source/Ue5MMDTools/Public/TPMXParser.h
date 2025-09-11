@@ -129,9 +129,9 @@ struct PMXBone
     FString NameJP;
     FString NameEN;
     FVector Position = FVector::ZeroVector;
-    int32 ParentBoneIndex = -1; 
-    int32 DeformLayer = 0;      
-    uint16 Flags = 0;           
+    int32 ParentBoneIndex = -1;
+    int32 DeformLayer = 0;
+    uint16 Flags = 0;
 
     int32 TailBoneIndex = -1;
     FVector TailOffset = FVector::ZeroVector;
@@ -213,56 +213,56 @@ struct PMXMorph
 {
     FString NameJP;
     FString NameEN;
-    uint8 Panel = 0;        
-    uint8 MorphType = 0;    
-    int32 ElementCount = 0; 
+    uint8 Panel = 0;
+    uint8 MorphType = 0;
+    int32 ElementCount = 0;
 
     struct Group
     {
-        int32 MorphIndex = -1; 
-        float Weight = 0.0f;   
+        int32 MorphIndex = -1;
+        float Weight = 0.0f;
     };
     struct Vertex
     {
-        int32 VertexIndex = -1;                     
-        FVector PositionOffset = FVector::ZeroVector; 
+        int32 VertexIndex = -1;
+        FVector PositionOffset = FVector::ZeroVector;
     };
     struct Bone
     {
-        int32 BoneIndex = -1;                      
-        FVector Translation = FVector::ZeroVector; 
-        FQuat RotationQuat = FQuat::Identity;     
+        int32 BoneIndex = -1;
+        FVector Translation = FVector::ZeroVector;
+        FQuat RotationQuat = FQuat::Identity;
     };
     struct UV
     {
-        int32 VertexIndex = -1;               
-        FVector4 UVOffset = FVector4::Zero(); 
+        int32 VertexIndex = -1;
+        FVector4 UVOffset = FVector4::Zero();
     };
     struct Material
     {
-        int32 MaterialIndex = -1;                      
-        uint8 CalcMode = 0;                            
-        FVector4 Diffuse = FVector4::Zero();           
-        FVector Specular = FVector::ZeroVector;        
-        float SpecularPower = 0.0f;                   
-        FVector Ambient = FVector::ZeroVector;        
-        FVector4 EdgeColor = FVector4::Zero();         
-        float EdgeSize = 0.0f;                         
-        FVector4 TextureTint = FVector4::Zero();       
-        FVector4 SphereTextureTint = FVector4::Zero(); 
-        FVector4 ToonTextureTint = FVector4::Zero();  
+        int32 MaterialIndex = -1;
+        uint8 CalcMode = 0;
+        FVector4 Diffuse = FVector4::Zero();
+        FVector Specular = FVector::ZeroVector;
+        float SpecularPower = 0.0f;
+        FVector Ambient = FVector::ZeroVector;
+        FVector4 EdgeColor = FVector4::Zero();
+        float EdgeSize = 0.0f;
+        FVector4 TextureTint = FVector4::Zero();
+        FVector4 SphereTextureTint = FVector4::Zero();
+        FVector4 ToonTextureTint = FVector4::Zero();
     };
     struct Flip
     {
-        int32 MorphIndex = -1; 
-        float Weight = 0.0f;   
+        int32 MorphIndex = -1;
+        float Weight = 0.0f;
     };
     struct Impulse
     {
-        int32 RigidIndex = -1;                  
-        uint8 IsLocal = 0;                      
-        FVector Velocity = FVector::ZeroVector; 
-        FVector Torque = FVector::ZeroVector;   
+        int32 RigidIndex = -1;
+        uint8 IsLocal = 0;
+        FVector Velocity = FVector::ZeroVector;
+        FVector Torque = FVector::ZeroVector;
     };
 
     TArray<Group> Groups;
@@ -283,7 +283,8 @@ struct PMXMorph
 // - repeat elementCount:
 // - uint8 elemType // 0=Bone, 1=Morph
 // - elemIndex // sized by (boneIndexSize or morphIndexSize)
-struct PMXFrame{
+struct PMXFrame
+{
     FString NameJP;
     FString NameEN;
     uint8 IsSpecial = 0;
@@ -314,7 +315,8 @@ struct PMXFrame{
 // - float restitution
 // - float friction
 // - uint8 physicsMode // 0=Static, 1=Dynamic, 2=BoneTracked
-struct PMXRigid{
+struct PMXRigid
+{
     FString NameJP;
     FString NameEN;
     int32 RelatedBoneIndex = -1;
@@ -330,6 +332,113 @@ struct PMXRigid{
     float Restitution = 0.0f;
     float Friction = 0.0f;
     uint8 PhysicsMode = 0;
+};
+// 11) Joints (constraints)
+// - int32 jointCount
+// - repeat jointCount:
+// - nameJP (string)
+// - nameEN (string)
+// - uint8 jointType // 0=Spring6DOF (common). 2.1 may define more but layout same below.
+// - rigidA (rigidIndexSize)
+// - rigidB (rigidIndexSize)
+// - float3 position
+// - float3 rotation
+// - float3 limitPosLower
+// - float3 limitPosUpper
+// - float3 limitRotLower
+// - float3 limitRotUpper
+// - float3 springPos
+// - float3 springRot
+struct PMXJoint
+{
+    FString NameJP;
+    FString NameEN;
+    uint8 JointType = 0;
+    int32 RigidA = -1;
+    int32 RigidB = -1;
+    FVector Position = FVector::ZeroVector;
+    FVector Rotation = FVector::ZeroVector;
+    FVector LimitPosLower = FVector::ZeroVector;
+    FVector LimitPosUpper = FVector::ZeroVector;
+    FVector LimitRotLower = FVector::ZeroVector;
+    FVector LimitRotUpper = FVector::ZeroVector;
+    FVector SpringPos = FVector::ZeroVector;
+    FVector SpringRot = FVector::ZeroVector;
+};
+// 12) Soft Bodies (PMX 2.1 only; optional, often 0)
+// - int32 softBodyCount
+// - repeat softBodyCount:
+// - nameJP (string)
+// - nameEN (string)
+// - uint8 shapeType // 0=TriMesh, 1=Rope, etc.
+// - int32 materialIndex // target material
+// - uint8 group
+// - uint16 collisionMask
+// - uint8 flags // soft body flags
+// - int32 bLinkDistance, clusterCount, totalMass, margin, aeroModel, etc. // 多个 sim 参数（按规范顺序读取）
+// - int32 anchorCount
+// - repeat anchorCount:
+// - rigidIndex (rigidIndexSize)
+// - vertexIndex (vertexIndexSize)
+// - uint8 nearMode
+// - int32 pinVertexCount
+// - repeat pinVertexCount:
+// - vertexIndex (vertexIndexSize)
+struct PMXSoftBody
+{
+    FString NameJP;
+    FString NameEN;
+    uint8 ShapeType = 0;
+    int32 MaterialIndex = -1;
+    uint8 Group = 0;
+    uint16 CollisionMask = 0;
+    uint8 Flags = 0;
+    // 多个 sim 参数（按规范顺序读取）
+    int32 BLinkDistance = 0;
+    int32 ClusterCount;
+    int32 TotalMass=0;
+    int32 Margin=0;
+    int32 AeroModel=0;
+
+    int32 VCF=0;//Velocities Correction Factor - 速度修正因子
+    int32 DP=0;//Damping Parameter - 阻尼参数
+    int32 DG=0;//Drag Coefficient - 拖曳系数
+    int32 LF=0;//Lift Force - 升力
+    int32 PR=0;//Pressure - 压力
+    int32 VC=0;//Volume Conservation - 体积守恒
+    int32 DF=0;//Dynamic Friction - 动态摩擦
+    int32 MT=0;//Pose Matching - 姿态匹配
+    int32 CHR=0;//Rigid Contact Hardness - 与刚体碰撞硬度
+    int32 KHR=0;//Kinetic Contact Hardness - 动态碰撞硬度
+    int32 SHR=0;//Soft Contact Hardness - 与柔性体碰撞硬度
+    int32 AHR=0;//Anchor Hardness - 与锚点碰撞硬度
+
+    int32 SRHR_CL=0;//Soft vs Rigid Hardness (Cluster) - 柔性体与刚体碰撞硬度（Cluster）
+    int32 SKHR_CL=0;//Soft vs Kinetic Hardness (Cluster) - 柔性体与动态碰撞硬度（Cluster）
+    int32 SSHR_CL=0;//Soft vs Soft Hardness (Cluster) - 柔性体与柔性体碰撞硬度（Cluster）
+    int32 SR_SPLT_CL=0;//Soft vs Rigid Impulse Splitting (Cluster) - 柔性体与刚体冲量分割（Cluster）
+    int32 SK_SPLT_CL=0;//Soft vs Kinetic Impulse Splitting (Cluster) - 柔性体与动态冲量分割（Cluster）
+    int32 SS_SPLT_CL=0;//Soft vs Soft Impulse Splitting (Cluster) - 柔性体与柔性体冲量分割（Cluster）
+
+    int32 V_IT=0;//Velocities Iterations - 速度迭代
+    int32 P_IT=0;//Positions Iterations - 位置迭代
+    int32 D_IT=0;//Densities Iterations - 密度迭代
+    int32 C_IT=0;//Cluster Iterations - 簇迭代
+
+    float LST=0.0f;//Lift Coefficient - 升力系数
+    float AST=0.0f;//Aero Surface Tension - 空气表面
+    float VST=0.0f;//Volume Surface Tension - 体积表面
+
+    int32 AnchorCount = 0;
+    struct Anchor
+    {
+        int32 RigidIndex = -1;
+        int32 VertexIndex = -1;
+        uint8 NearMode = 0;
+    };
+    TArray<Anchor> Anchors;
+    int32 PinVertexCount = 0;
+    TArray<int32> PinVertices;
 };
 struct PMXDatas
 {
@@ -367,6 +476,12 @@ struct PMXDatas
 
     int32 ModelRigidCount = 0;
     TArray<PMXRigid> ModelRigids;
+
+    int32 ModelJointCount = 0;
+    TArray<PMXJoint> ModelJoints;
+
+    int32 ModelSoftBodyCount = 0;
+    TArray<PMXSoftBody> ModelSoftBodies;
 };
 
 class UE5MMDTOOLS_API TPMXParser

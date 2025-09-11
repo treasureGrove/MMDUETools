@@ -10,6 +10,14 @@ class MMDViewPanel;
 /**
  * MMD导入设置面板 - 处理模型导入和相关设置
  */
+enum class EMMDMessageType : uint8
+{
+    Info,
+    Warning,
+    Error,
+    Success  // 可以添加成功状态
+};
+
 class UE5MMDTOOLS_API MMDImportSetting : public SCompoundWidget
 {
 public:
@@ -19,6 +27,10 @@ public:
 
     /** 构造设置面板 */
     void Construct(const FArguments &InArgs);
+        /** 显示导入进度 */
+    void ShowImportProgress(const FString &Message,EMMDMessageType Type = EMMDMessageType::Info);
+
+    static void ShowGlobalImportProgress(const FString &Message, EMMDMessageType Type = EMMDMessageType::Info);
 
 private:
     /** 导入模型按钮点击事件 */
@@ -30,8 +42,7 @@ private:
     /** 导入静态网格模型 */
     void ImportStaticMesh();
 
-    /** 显示导入进度 */
-    void ShowImportProgress(const FString &Message);
+
 
 private:
     /** 关联的视口面板 */
@@ -39,4 +50,7 @@ private:
 
     /** 状态文本显示 */
     TSharedPtr<STextBlock> StatusText;
+        
+    // 🔧 添加静态成员，保存当前实例的弱引用
+    static TWeakPtr<MMDImportSetting> CurrentInstance;
 };
