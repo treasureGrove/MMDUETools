@@ -20,10 +20,7 @@
 			"DOTNET_ROLL_FORWARD": "LatestMajor"
 		},
 		"powershell.cwd": "MMD",
-		"files.associations": {
-			"*.usf": "hlsl",
-			"*.rh": "cpp"
-		}
+		"Codegeex.RepoIndex": true
 	},
 	"extensions": {
 		"recommendations": [
