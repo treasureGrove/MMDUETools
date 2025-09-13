@@ -1,0 +1,120 @@
+{
+    "workbench.colorTheme":  "One Monokai",
+    "cmake.configureOnOpen":  true,
+    "[html]":  {
+                   "editor.defaultFormatter":  "vscode.html-language-features"
+               },
+    "security.workspace.trust.untrustedFiles":  "open",
+    "[css]":  {
+                  "editor.defaultFormatter":  "vscode.css-language-features"
+              },
+    "[javascript]":  {
+                         "editor.defaultFormatter":  "vscode.typescript-language-features"
+                     },
+    "workbench.iconTheme":  "Monokai Pro Icons",
+    "[json]":  {
+                   "editor.defaultFormatter":  "vscode.json-language-features"
+               },
+    "workbench.colorCustomizations":  {
+                                          "terminal.background":  "#00000000"
+                                      },
+    "workbench.settings.applyToAllProfiles":  [
+                                                  "workbench.colorCustomizations"
+                                              ],
+    "workbench.editorAssociations":  {
+                                         "*.bin":  "default",
+                                         "*.waifu":  "default"
+                                     },
+    "leetcode.endpoint":  "leetcode-cn",
+    "leetcode.workspaceFolder":  "f:\\Coding\\C++",
+    "C_Cpp.default.compilerPath":  "d:\\VisualStudio\\Common7\\IDE\\devenv.exe",
+    "markdown.preview.fontSize":  16,
+    "code-runner.executorMap":  {
+                                    "javascript":  "node",
+                                    "java":  "cd $dir \u0026\u0026 javac $fileName \u0026\u0026 java $fileNameWithoutExt",
+                                    "c":  "cd $dir \u0026\u0026 gcc $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "zig":  "zig run",
+                                    "cpp":  "cd $dir \u0026\u0026 g++ $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "objective-c":  "cd $dir \u0026\u0026 gcc -framework Cocoa $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "php":  "php",
+                                    "python":  "python -u",
+                                    "perl":  "perl",
+                                    "perl6":  "perl6",
+                                    "ruby":  "ruby",
+                                    "go":  "go run",
+                                    "lua":  "lua",
+                                    "groovy":  "groovy",
+                                    "powershell":  "powershell -ExecutionPolicy ByPass -File",
+                                    "bat":  "cmd /c",
+                                    "shellscript":  "bash",
+                                    "fsharp":  "fsi",
+                                    "csharp":  "scriptcs",
+                                    "vbscript":  "cscript //Nologo",
+                                    "typescript":  "ts-node",
+                                    "coffeescript":  "coffee",
+                                    "scala":  "scala",
+                                    "swift":  "swift",
+                                    "julia":  "julia",
+                                    "crystal":  "crystal",
+                                    "ocaml":  "ocaml",
+                                    "r":  "Rscript",
+                                    "applescript":  "osascript",
+                                    "clojure":  "lein exec",
+                                    "haxe":  "haxe --cwd $dirWithoutTrailingSlash --run $fileNameWithoutExt",
+                                    "rust":  "cd $dir \u0026\u0026 rustc $fileName \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "racket":  "racket",
+                                    "scheme":  "csi -script",
+                                    "ahk":  "autohotkey",
+                                    "autoit":  "autoit3",
+                                    "dart":  "dart",
+                                    "pascal":  "cd $dir \u0026\u0026 fpc $fileName \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "d":  "cd $dir \u0026\u0026 dmd $fileName \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "haskell":  "runghc",
+                                    "nim":  "nim compile --verbosity:0 --hints:off --run",
+                                    "lisp":  "sbcl --script",
+                                    "kit":  "kitc --run",
+                                    "v":  "v run",
+                                    "sass":  "sass --style expanded",
+                                    "scss":  "scss --style expanded",
+                                    "less":  "cd $dir \u0026\u0026 lessc $fileName $fileNameWithoutExt.css",
+                                    "FortranFreeForm":  "cd $dir \u0026\u0026 gfortran $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "fortran-modern":  "cd $dir \u0026\u0026 gfortran $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "fortran_fixed-form":  "cd $dir \u0026\u0026 gfortran $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "fortran":  "cd $dir \u0026\u0026 gfortran $fileName -o $fileNameWithoutExt \u0026\u0026 $dir$fileNameWithoutExt",
+                                    "sml":  "cd $dir \u0026\u0026 sml $fileName",
+                                    "mojo":  "mojo run",
+                                    "erlang":  "escript",
+                                    "spwn":  "spwn build",
+                                    "pkl":  "cd $dir \u0026\u0026 pkl eval -f yaml $fileName -o $fileNameWithoutExt.yaml",
+                                    "gleam":  "gleam run -m $fileNameWithoutExt"
+                                },
+    "[lua]":  {
+                  "editor.defaultFormatter":  "sumneko.lua"
+              },
+    "python.autoComplete.extraPaths":  [
+                                           "F:\\DesignerCourse\\CLearning\\Intermediate\\PythonStub"
+                                       ],
+    "python.analysis.extraPaths":  [
+                                       "F:\\DesignerCourse\\CLearning\\Intermediate\\PythonStub"
+                                   ],
+    "python.defaultInterpreterPath":  "E:\\ae\\UE_5.5\\Engine\\Binaries\\ThirdParty\\Python3\\Win64\\python.exe",
+    "editor.largeFileOptimizations":  false,
+    "files.associations":  {
+                               "*.usf":  "hlsl"
+                           },
+    "codeium.enableConfig":  {
+                                 "*":  true,
+                                 "UnityShader":  true
+                             },
+    "Codegeex.License":  "",
+    "Codegeex.Privacy":  true,
+    "github.copilot.nextEditSuggestions.enabled":  true,
+    "clangd.path":  "c:\\Users\\Yin\\AppData\\Roaming\\Code\\User\\globalStorage\\llvm-vs-code-extensions.vscode-clangd\\install\\20.1.8\\clangd_20.1.8\\bin\\clangd.exe",
+    "explorer.confirmDelete":  false,
+    "Codegeex.DisabledFor":  {
+                                 "cpp":  true
+                             },
+    "audioCues.enabled":  "off",
+    "accessibility.signals.sounds.volume":  0,
+    "workbench.tips.enabled":  false
+}

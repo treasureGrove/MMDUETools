@@ -1,163 +1,182 @@
-#include "TMMDMeshBuilder.h"
-#include "TPMXParser.h"
-#include "MMDImportSetting.h"
-#include "Engine/StaticMesh.h"
+#include "Factories/FbxSkeletalMeshImportData.h"
 #include "Engine/SkeletalMesh.h"
-#include "StaticMeshDescription.h"
-#include "StaticMeshAttributes.h"
+#include "Animation/Skeleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "UObject/Package.h"
-#include "Rendering/SkeletalMeshModel.h"	   // FSkeletalMeshModel
-#include "Rendering/SkeletalMeshLODModel.h"	   // FSkeletalMeshLODModel
-#include "GPUSkinVertexFactory.h"			   // FSoftSkinVertex
-#include "Rendering/MultiSizeIndexContainer.h" // 索引容器
-#include "Rendering/SkeletalMeshVertexBuffer.h"
+#include "Misc/PackageName.h"
+#include "ObjectTools.h"
+#include "Rendering/SkeletalMeshModel.h"
+#include "Rendering/SkeletalMeshLODImporterData.h"
+#include "TPMXParser.h"
+#include "TMMDMeshBuilder.h"
 
-USkeletalMesh *TMMDMeshBuilder::CreateSkeletalMeshFromPMX(const PMXDatas &PMXInfo, const FString &AssetName)
+// 正确的MMD→UE5坐标转换
+static FVector3f ConvertPMXPositionToUnreal(const FVector &InPosition)
 {
-	MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("正在创建骨骼网格体: %s"), *AssetName), EMMDMessageType::Info);
-	UE_LOG(LogTemp, Warning, TEXT("=== 开始创建SkeletalMesh ==="));
-	UE_LOG(LogTemp, Warning, TEXT("模型名: %s"), *PMXInfo.ModelNameJP);
-	UE_LOG(LogTemp, Warning, TEXT("顶点数: %d"), PMXInfo.ModelVertices.Num());
-	UE_LOG(LogTemp, Warning, TEXT("骨骼数: %d"), PMXInfo.ModelBones.Num());
-	UE_LOG(LogTemp, Warning, TEXT("材质数: %d"), PMXInfo.ModelMaterials.Num());
-	// 验证数据
-	if (PMXInfo.ModelVertices.Num() == 0)
-	{
-		MMDImportSetting::ShowGlobalImportProgress(TEXT("错误: 没有顶点数据"), EMMDMessageType::Error);
-		return nullptr;
-	}
-	if (PMXInfo.ModelBones.Num() == 0)
-	{
-		MMDImportSetting::ShowGlobalImportProgress(TEXT("警告: 没有骨骼数据，将创建静态网格"), EMMDMessageType::Error);
-		return nullptr;
-	}
-	USkeletalMesh *SkeletalMesh = NewObject<USkeletalMesh>(GetTransientPackage(), *AssetName);
-	if (!SkeletalMesh)
-	{
-		MMDImportSetting::ShowGlobalImportProgress(TEXT("创建SkeletalMesh失败"), EMMDMessageType::Error);
-		return nullptr;
-	}
-	MMDImportSetting::ShowGlobalImportProgress(TEXT("开始转换顶点数据..."), EMMDMessageType::Info);
+	// MMD右手坐标系 → UE5左手坐标系
+	// MMD: X(右), Y(上), Z(前) → UE5: X(前), Y(右), Z(上)
+	const float PMXConvertScale = 1.0f; // MMD和UE5都使用厘米，无需缩放
 
-	// 🔧 转换PMX顶点数据
-	FSkeletalMeshModel *ImportedModel = SkeletalMesh->GetImportedModel();
-	if (!ImportedModel)
-	{
-		MMDImportSetting::ShowGlobalImportProgress(TEXT("获取FSkeletalMeshModel失败"), EMMDMessageType::Error);
-		return nullptr;
-	}
-	if (ImportedModel->LODModels.Num() == 0)
-	{
-		ImportedModel->LODModels.Add(new FSkeletalMeshLODModel());
-	}
-	FSkeletalMeshLODModel &LODModel = ImportedModel->LODModels[0];
-	ConvertPMXVertices(PMXInfo, LODModel);
-
-	return nullptr;
+	return FVector3f(
+		InPosition.X * PMXConvertScale,	 // X保持不变
+		-InPosition.Z * PMXConvertScale, // MMD的Z → UE5的-Y
+		InPosition.Y * PMXConvertScale	 // MMD的Y → UE5的Z
+	);
 }
-// 这里实现顶点数据的转换逻辑
-// 将PMX的顶点格式转换为Unreal Engine的顶点格式
-void TMMDMeshBuilder::ConvertPMXVertices(const PMXDatas &PMXData, FSkeletalMeshLODModel &LODModel)
+
+static FVector3f ConvertPMXNormalToUnreal(const FVector &InNormal)
 {
-	const int32 VertexCount = PMXData.ModelVertices.Num();
-	const int32 MaxBoneCount = PMXData.ModelBones.Num();
-	MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("顶点数: %d"), VertexCount), EMMDMessageType::Info);
+	// 法线向量转换（无缩放）
+	return FVector3f(
+		InNormal.X,	 // X保持不变
+		-InNormal.Z, // MMD的Z → UE5的-Y
+		InNormal.Y	 // MMD的Y → UE5的Z
+	);
+}
 
-	LODModel.NumVertices = VertexCount;
+static FVector2f ConvertPMXUVToUnreal(const FVector2D &InUV)
+{
+	// UV坐标转换（V坐标翻转）
+	return FVector2f(InUV.X, 1.0f - InUV.Y);
+}
+void TMMDMeshBuilder::CreatePMXSkeletalMesh(const PMXDatas &PMXInfo)
+{
+	FString PackagePath = FString::Printf(TEXT("/Game/MMD/Models/%s"), *PMXInfo.ModelNameEN);
+	UPackage *Package = CreatePackage(*PackagePath);
 
-	TArray<FSoftSkinVertex> Vertices;
-	Vertices.Reserve(VertexCount);
+	USkeletalMesh *SkeletalMesh = NewObject<USkeletalMesh>(Package, *PMXInfo.ModelNameEN, RF_Public | RF_Standalone);
 
-	for (int32 i = 0; i < VertexCount; i++)
+	FSkeletalMeshImportData *ImportData = new FSkeletalMeshImportData();
+	ImportData->Points.Reserve(PMXInfo.ModelVertexCount);
+	ImportData->PointToRawMap.Reserve(PMXInfo.ModelVertexCount);
+	ImportData->Wedges.Reserve(PMXInfo.ModelVertexCount);
+	for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
 	{
-		const PMXVertex &PMXVert = PMXData.ModelVertices[i];
-		// 🔧 添加这行
-		FSoftSkinVertex NewVert;
-		const float PMXConvertScale = 100.0f;
-		NewVert.UVs[0] = FVector2f(PMXVert.UV.X, 1 - PMXVert.UV.Y);
-		NewVert.Position = FVector3f(PMXVert.Position.X * PMXConvertScale, -PMXVert.Position.Z * PMXConvertScale, PMXVert.Position.Y * PMXConvertScale);
-		NewVert.TangentZ = FVector4f(PMXVert.Normal.X, -PMXVert.Normal.Z, PMXVert.Normal.Y, 1.0f);
-		for (int j = 0; j < PMXVert.AdditionalUVs.Num(); ++j)
+		const PMXVertex &Vertex = PMXInfo.ModelVertices[i];
+
+		ImportData->Points.Add(FVector3f(ConvertPMXPositionToUnreal(Vertex.Position)));
+		ImportData->PointToRawMap.Add(i);
+
+		SkeletalMeshImportData::FVertex WedgeVertex;
+		WedgeVertex.VertexIndex = i;
+		WedgeVertex.UVs[0] = ConvertPMXUVToUnreal(Vertex.UV);
+		for (int32 j = 0; j < Vertex.AdditionalUVs.Num() && j < MAX_TEXCOORDS - 1; j++)
 		{
-			if (j + 1 < MAX_TEXCOORDS)
+			WedgeVertex.UVs[j + 1] = ConvertPMXUVToUnreal(FVector2D(Vertex.AdditionalUVs[j].X, Vertex.AdditionalUVs[j].Y));
+		}
+		WedgeVertex.MatIndex = 0;
+		ImportData->Wedges.Add(WedgeVertex);
+	}
+	// 三角形索引 Face
+	for (int32 i = 0; i < PMXInfo.ModelIndicesCount; i += 3)
+	{
+		SkeletalMeshImportData::FTriangle Tri;
+		Tri.WedgeIndex[0] = PMXInfo.ModelIndices[i];
+		Tri.WedgeIndex[1] = PMXInfo.ModelIndices[i + 1];
+		Tri.WedgeIndex[2] = PMXInfo.ModelIndices[i + 2];
+		Tri.MatIndex = 0;		 // 暂时不处理材质
+		Tri.SmoothingGroups = 0; // 暂时不处理光滑组
+		ImportData->Faces.Add(Tri);
+	}
+	// Bone
+	for (int32 i = 0; i < PMXInfo.ModelBoneCount; i++)
+	{
+		const PMXBone &PMXBone = PMXInfo.ModelBones[i];
+		SkeletalMeshImportData::FBone Bone;
+		Bone.Name = ObjectTools::SanitizeObjectName(PMXBone.NameEN);
+		if (Bone.Name.IsEmpty())
+		{
+			Bone.Name = FString::Printf(TEXT("Bone_%d"), i);
+		}
+		if (PMXBone.ParentBoneIndex >= 0 && PMXBone.ParentBoneIndex < PMXInfo.ModelBoneCount)
+		{
+			Bone.ParentIndex = PMXBone.ParentBoneIndex;
+		}
+		else
+		{
+			Bone.ParentIndex = INDEX_NONE; // 根骨骼
+		}
+
+		FVector3f BonePosition = ConvertPMXPositionToUnreal(PMXBone.Position);
+		Bone.BonePos.Transform = FTransform3f(
+			FQuat4f::Identity,	 // float精度四元数
+			BonePosition,		 // FVector3f位置
+			FVector3f::OneVector // FVector3f缩放
+		);
+		Bone.BonePos.Length = 10.0f; // 未知
+		Bone.BonePos.XSize = 10.0f;
+		Bone.BonePos.YSize = 1.0f;
+		Bone.BonePos.ZSize = 1.0f;
+		ImportData->RefBonesBinary.Add(Bone);
+	}
+	ImportData->Influences.Reserve(PMXInfo.ModelVertexCount);
+	// SkinWeights
+	for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
+	{
+		const PMXVertex &Vertex = PMXInfo.ModelVertices[i];
+		switch (Vertex.Weight.WeightDeformType)
+		{
+		case 0:
+			if (Vertex.Weight.BoneIndices[0] >= 0)
 			{
-				NewVert.UVs[j + 1] = FVector2f(PMXVert.AdditionalUVs[j].X, 1 - PMXData.ModelVertices[i].AdditionalUVs[j].Y);
+				SkeletalMeshImportData::FRawBoneInfluence Influence;
+				Influence.BoneIndex = Vertex.Weight.BoneIndices[0];
+				Influence.VertexIndex = i;
+				Influence.Weight = 1.0f;
+				ImportData->Influences.Add(Influence);
 			}
-		}
-		for (int32 j = 0; j < MAX_TOTAL_INFLUENCES; j++)
-		{
-			NewVert.InfluenceBones[j] = 0;
-			NewVert.InfluenceWeights[j] = 0;
-		}
-		const PMXVertexWeight &Weight = PMXVert.Weight;
-		switch (Weight.WeightDeformType)
-		{
-		case 0: // BDEF1 - 单骨骼
-			NewVert.InfluenceBones[0] = FMath::Clamp(Weight.BoneIndices[0], 0, MaxBoneCount - 1);
-			NewVert.InfluenceWeights[0] = 255; // UE5使用0-255范围
 			break;
 		case 1:
-			// BDEF2 - 双骨骼
-			NewVert.InfluenceBones[0] = FMath::Clamp(Weight.BoneIndices[0], 0, MaxBoneCount - 1);
-			NewVert.InfluenceBones[1] = FMath::Clamp(Weight.BoneIndices[1], 0, MaxBoneCount - 1);
-			NewVert.InfluenceWeights[0] = FMath::Clamp(static_cast<int32>(Weight.Weights[0] * 255), 0, 255);
-			NewVert.InfluenceWeights[1] = 255 - NewVert.InfluenceWeights[0];
-			break;
-		case 2:
-			// BDEF4 - 四骨骼
+			if (Vertex.Weight.BoneIndices[0] >= 0 && Vertex.Weight.Weights[0] > 0.0f)
 			{
-				int32 TotalWeight = 0;
-				for (int32 j = 0; j < 4; j++)
-				{
-					NewVert.InfluenceBones[j] = FMath::Clamp(Weight.BoneIndices[j], 0, MaxBoneCount - 1);
-					NewVert.InfluenceWeights[j] = FMath::Clamp(static_cast<int32>(Weight.Weights[j] * 255), 0, 255);
-					TotalWeight += NewVert.InfluenceWeights[j];
-				}
-				// 确保权重总和为255
-				if (TotalWeight != 255 && TotalWeight > 0)
-				{
-					// 找到最大的权重进行调整
-					int32 MaxWeightIndex = 0;
-					for (int32 j = 1; j < 4 && j < MAX_TOTAL_INFLUENCES; j++)
-					{
-						if (NewVert.InfluenceWeights[j] > NewVert.InfluenceWeights[MaxWeightIndex])
-						{
-							MaxWeightIndex = j;
-						}
-					}
+				SkeletalMeshImportData::FRawBoneInfluence Influence;
+				Influence.Weight = Vertex.Weight.Weights[0];
+				Influence.BoneIndex = Vertex.Weight.BoneIndices[0];
+				Influence.VertexIndex = i;
 
-					int32 WeightDiff = 255 - TotalWeight;
-					NewVert.InfluenceWeights[MaxWeightIndex] = FMath::Clamp(
-						NewVert.InfluenceWeights[MaxWeightIndex] + WeightDiff,
-						0, 255);
-				}
-				else if (TotalWeight == 0)
+				ImportData->Influences.Add(Influence);
+			}
+			if (Vertex.Weight.BoneIndices[1] >= 0)
+			{
+				SkeletalMeshImportData::FRawBoneInfluence Influence;
+				Influence.BoneIndex = Vertex.Weight.BoneIndices[1];
+				Influence.VertexIndex = i;
+				Influence.Weight = Vertex.Weight.Weights[1];
+				ImportData->Influences.Add(Influence);
+			}
+		case 2:
+			for (int32 j = 0; j < 4; j++)
+			{
+				if (Vertex.Weight.BoneIndices[j] >= 0 && Vertex.Weight.Weights[j] > 0.0f)
 				{
-					// 所有权重都是0，默认绑定
-					NewVert.InfluenceBones[0] = 0;
-					NewVert.InfluenceWeights[0] = 255;
+					SkeletalMeshImportData::FRawBoneInfluence Influence;
+					Influence.Weight = Vertex.Weight.Weights[j];
+					Influence.BoneIndex = Vertex.Weight.BoneIndices[j];
+					Influence.VertexIndex = i;
+
+					ImportData->Influences.Add(Influence);
 				}
 			}
 			break;
 		case 3:
-			// SDEF - 特殊双骨骼
-			NewVert.InfluenceBones[0] = FMath::Clamp(Weight.BoneIndices[0], 0, MaxBoneCount - 1);
-			NewVert.InfluenceBones[1] = FMath::Clamp(Weight.BoneIndices[1], 0, MaxBoneCount - 1);
-			NewVert.InfluenceWeights[0] = FMath::Clamp(static_cast<int32>(Weight.Weights[0] * 255), 0, 255);
-			NewVert.InfluenceWeights[1] = 255 - NewVert.InfluenceWeights[0];
-			// SDEF特有的参数暂时忽略
+			if (Vertex.Weight.BoneIndices[0] >= 0 && Vertex.Weight.Weights[0] > 0.0f)
+			{
+				SkeletalMeshImportData::FRawBoneInfluence Influence;
+				Influence.BoneIndex = Vertex.Weight.BoneIndices[0];
+				Influence.Weight = Vertex.Weight.Weights[0];
+				Influence.VertexIndex = i;
+				ImportData->Influences.Add(Influence);
+			}
+			if (Vertex.Weight.BoneIndices[1] >= 0 && Vertex.Weight.Weights[1] > 0.0f)
+			{
+				SkeletalMeshImportData::FRawBoneInfluence Influence;
+				Influence.BoneIndex = Vertex.Weight.BoneIndices[1];
+				Influence.Weight = Vertex.Weight.Weights[1];
+				Influence.VertexIndex = i;
+				ImportData->Influences.Add(Influence);
+			}
 			break;
 		default:
-			MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("警告: 顶点 %d 使用未知的变形类型 %d，设置为默认值"), i, Weight.WeightDeformType), EMMDMessageType::Warning);
-			// 未知的变形类型，设置为默认值
-		}
-
-		Vertices.Add(NewVert);
-		if (i < 3)
-		{
-			UE_LOG(LogTemp, Log, TEXT("顶点[%d]: 权重类型=%d"), i, Weight.WeightDeformType);
+			break;
 		}
 	}
-	UE_LOG(LogTemp, Warning, TEXT("顶点转换完成: %d 个顶点"), VertexCount);
 }

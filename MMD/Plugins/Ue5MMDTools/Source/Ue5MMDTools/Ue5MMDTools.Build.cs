@@ -8,7 +8,7 @@ public class Ue5MMDTools : ModuleRules
 
         PublicDependencyModuleNames.AddRange(new string[] {
             "Core", "CoreUObject", "Engine", "Slate", "SlateCore" ,  "EditorStyle",
-            "RenderCore", "RHI"
+            "RenderCore", "RHI","AnimationCore"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[] {
@@ -24,6 +24,10 @@ public class Ue5MMDTools : ModuleRules
             "DesktopPlatform",
             "AssetTools",
             "AssetRegistry",
+             "Engine",
+    "SkeletalMeshUtilitiesCommon",
+    "MeshUtilities",
+
         });
 
         PublicIncludePaths.AddRange(new string[] { });
