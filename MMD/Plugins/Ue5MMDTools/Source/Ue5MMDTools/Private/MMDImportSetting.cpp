@@ -11,6 +11,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/Paths.h"
+#include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
 
 TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 静态成员初始化
@@ -118,6 +119,10 @@ void MMDImportSetting::ImportMMDModel()
                                PMXData.ModelBones.Num(),
                                PMXData.ModelMorphs.Num(),
                                PMXData.ModelFrames.Num());
+                            ShowImportProgress(TEXT("开始构建UE5骨骼网格"));
+                            TMMDMeshBuilder meshbuilder;
+                            meshbuilder.BuildSkeletalMeshFromPMX(PMXData,FString("/Game/MMDModels"),PMXData.ModelNameEN,FPaths::GetPath(SelectedFile));
+                            ShowImportProgress(FString::Printf(TEXT("UE5模型创建完成: %s"), *PMXData.ModelNameEN), EMMDMessageType::Success);
                     }
                     else
                     {
@@ -215,7 +220,7 @@ void MMDImportSetting::ShowImportProgress(const FString &Message, EMMDMessageTyp
 void MMDImportSetting::ShowGlobalImportProgress(const FString &Message, EMMDMessageType Type)
 {
     TSharedPtr<MMDImportSetting> Instance = CurrentInstance.Pin();
-    
+
     if (Instance.IsValid())
     {
         // 如果实例存在，调用实例方法
@@ -226,18 +231,18 @@ void MMDImportSetting::ShowGlobalImportProgress(const FString &Message, EMMDMess
         // 如果实例不存在，至少输出到日志
         switch (Type)
         {
-            case EMMDMessageType::Info:
-                UE_LOG(LogTemp, Log, TEXT("[MMD导入] %s"), *Message);
-                break;
-            case EMMDMessageType::Warning:
-                UE_LOG(LogTemp, Warning, TEXT("[MMD导入] %s"), *Message);
-                break;
-            case EMMDMessageType::Error:
-                UE_LOG(LogTemp, Error, TEXT("[MMD导入] %s"), *Message);
-                break;
-            case EMMDMessageType::Success:
-                UE_LOG(LogTemp, Warning, TEXT("[MMD导入成功] %s"), *Message);
-                break;
+        case EMMDMessageType::Info:
+            UE_LOG(LogTemp, Log, TEXT("[MMD导入] %s"), *Message);
+            break;
+        case EMMDMessageType::Warning:
+            UE_LOG(LogTemp, Warning, TEXT("[MMD导入] %s"), *Message);
+            break;
+        case EMMDMessageType::Error:
+            UE_LOG(LogTemp, Error, TEXT("[MMD导入] %s"), *Message);
+            break;
+        case EMMDMessageType::Success:
+            UE_LOG(LogTemp, Warning, TEXT("[MMD导入成功] %s"), *Message);
+            break;
         }
     }
 }

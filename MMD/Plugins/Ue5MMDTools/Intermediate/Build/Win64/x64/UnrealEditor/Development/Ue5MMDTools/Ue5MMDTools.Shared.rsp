@@ -289,6 +289,7 @@
 /I "Editor\EditorStyle\Public"
 /I "..\Intermediate\Build\Win64\UnrealEditor\Inc\EditorWidgets\UHT"
 /I "Editor\EditorWidgets\Public"
+/I "Developer\SkeletalMeshUtilitiesCommon\Public"
 /I "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Source"
 /I "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Source\Ue5MMDTools\Public"
 /external:W0

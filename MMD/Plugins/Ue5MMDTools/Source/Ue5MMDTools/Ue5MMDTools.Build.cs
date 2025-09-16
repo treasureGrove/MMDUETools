@@ -27,7 +27,10 @@ public class Ue5MMDTools : ModuleRules
              "Engine",
     "SkeletalMeshUtilitiesCommon",
     "MeshUtilities",
-
+    "MeshUtilitiesCommon",     // 👈 添加这个
+    "ToolMenus",
+    "StaticMeshDescription",   // 👈 添加这个
+    "MeshDescription",         // 👈 添加这个
         });
 
         PublicIncludePaths.AddRange(new string[] { });

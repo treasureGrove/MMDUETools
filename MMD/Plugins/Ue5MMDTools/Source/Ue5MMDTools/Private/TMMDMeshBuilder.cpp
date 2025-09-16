@@ -1,182 +1,171 @@
-#include "Factories/FbxSkeletalMeshImportData.h"
+#include "TMMDMeshBuilder.h"
+#include "TPMXParser.h"
+
 #include "Engine/SkeletalMesh.h"
 #include "Animation/Skeleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/PackageName.h"
-#include "ObjectTools.h"
-#include "Rendering/SkeletalMeshModel.h"
-#include "Rendering/SkeletalMeshLODImporterData.h"
-#include "TPMXParser.h"
-#include "TMMDMeshBuilder.h"
 
-// 正确的MMD→UE5坐标转换
-static FVector3f ConvertPMXPositionToUnreal(const FVector &InPosition)
-{
-	// MMD右手坐标系 → UE5左手坐标系
-	// MMD: X(右), Y(上), Z(前) → UE5: X(前), Y(右), Z(上)
-	const float PMXConvertScale = 1.0f; // MMD和UE5都使用厘米，无需缩放
+#include "ImportUtils/SkelImport.h"                  
+#include "ImportUtils/SkeletalMeshImportUtils.h"       
+#include "MeshUtilities.h"                             
+#include "Engine/SkinnedAssetCommon.h"                
+//材质
+#include "Materials/Material.h"
+#include "MaterialDomain.h"
+//转换
+#include "Factories/TextureFactory.h"
+#include "AssetToolsModule.h"
+#include "IAssetTools.h"
+#include "Misc/FileHelper.h"
 
-	return FVector3f(
-		InPosition.X * PMXConvertScale,	 // X保持不变
-		-InPosition.Z * PMXConvertScale, // MMD的Z → UE5的-Y
-		InPosition.Y * PMXConvertScale	 // MMD的Y → UE5的Z
-	);
+UTexture2D* CreateTextureFromFile(const FString& TexturePath, const FString& OutPath, const FString& AssetName) {
+
+    if (!FPaths::FileExists(TexturePath))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Texture file does not exist: %s"), *TexturePath);
+        return nullptr;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("=== CreateTextureFromFile Debug ==="));
+    UE_LOG(LogTemp, Warning, TEXT("原始资源名: %s"), *AssetName);
+
+    FString CleanAssetName = AssetName;
+    CleanAssetName = CleanAssetName.Replace(TEXT(" "), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("."), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("-"), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("("), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT(")"), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("["), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("]"), TEXT("_"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("中"), TEXT("ZH"));
+    CleanAssetName = CleanAssetName.Replace(TEXT("文"), TEXT("WEN"));
+
+    while (CleanAssetName.Contains(TEXT("__"))) {
+        CleanAssetName = CleanAssetName.Replace(TEXT("__"), TEXT("_"));
+    }
+
+    if (!CleanAssetName.IsEmpty() && !FChar::IsAlpha(CleanAssetName[0])) {
+        CleanAssetName = TEXT("T_") + CleanAssetName;
+    }
+
+    if (CleanAssetName.IsEmpty()) {
+        CleanAssetName = TEXT("T_Unknown_Texture");
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("清理后的资源名: %s"), *CleanAssetName);
+
+    FString SafeOutPath = OutPath;
+    if (!SafeOutPath.EndsWith(TEXT("/"))) {
+        SafeOutPath += TEXT("/");
+    }
+    FString PackageName = SafeOutPath + CleanAssetName;
+
+    PackageName = PackageName.Replace(TEXT("//"), TEXT("/"));
+
+    UE_LOG(LogTemp, Warning, TEXT("最终包名: %s"), *PackageName);
+
+    if (PackageName.Contains(TEXT(" "))) {
+        UE_LOG(LogTemp, Error, TEXT("包名仍然包含空格，这会导致错误: %s"), *PackageName);
+        return nullptr;
+    }
+
+    UTextureFactory* TextureFactory = NewObject<UTextureFactory>();
+    TextureFactory->bCreateMaterial = false;
+
+    TArray<uint8> FileData;
+    if (!FFileHelper::LoadFileToArray(FileData, *TexturePath)) {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load texture file: %s"), *TexturePath);
+        return nullptr;
+    }
+
+    UPackage* Package = CreatePackage(*PackageName);
+    if (!Package) {
+        UE_LOG(LogTemp, Error, TEXT("CreatePackage failed: %s"), *PackageName);
+        return nullptr;
+    }
+
+    const uint8* FileBuffer = FileData.GetData();
+
+    UTexture2D* ImportedTexture = Cast<UTexture2D>(TextureFactory->FactoryCreateBinary(
+        UTexture2D::StaticClass(),
+        Package,
+        FName(*CleanAssetName),  // 使用清理后的名称
+        RF_Public | RF_Standalone,
+        nullptr,
+        *FPaths::GetExtension(TexturePath),
+        FileBuffer,
+        FileBuffer + FileData.Num(),
+        nullptr)
+    );
+
+    if (ImportedTexture) {
+        FAssetRegistryModule::AssetCreated(ImportedTexture);
+        Package->MarkPackageDirty();
+        UE_LOG(LogTemp, Log, TEXT("Successfully imported texture: %s"), *PackageName);
+    }
+    else {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to import texture: %s"), *PackageName);
+    }
+
+    return ImportedTexture;
+}
+UMaterialInterface* CreateMaterialFromTexture(const FString& TexturePath, const FString& MaterialName) {
+	UMaterial* DefaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+	
+	return nullptr;
+}
+FString GetMaterialTexturePath(const PMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
+	if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
+		FString PMXDirectory = PMXFilePath;
+
+		FString RelativeTexturePath = PMXInfo.ModelTexturePaths[Material.TextureIndex];
+		// 使用 FPaths::Combine 安全拼接路径
+		FString FullTexturePath = FPaths::Combine(PMXDirectory, RelativeTexturePath);
+
+		UE_LOG(LogTemp, Warning, TEXT("拼接后的完整路径: '%s'"), *FullTexturePath);
+		UE_LOG(LogTemp, Warning, TEXT("文件是否存在: %s"), FPaths::FileExists(FullTexturePath) ? TEXT("是") : TEXT("否"));
+
+		return FullTexturePath;
+	}
+	else if (Material.TextureIndex == -1) {
+		// 没有贴图
+		return FString();
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("Invalid texture index %d for material %s"), Material.TextureIndex, *Material.NameEN);
+		return FString();
+	}
 }
 
-static FVector3f ConvertPMXNormalToUnreal(const FVector &InNormal)
-{
-	// 法线向量转换（无缩放）
-	return FVector3f(
-		InNormal.X,	 // X保持不变
-		-InNormal.Z, // MMD的Z → UE5的-Y
-		InNormal.Y	 // MMD的Y → UE5的Z
-	);
+
+void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
+#pragma region 材质
+	for (const auto& Material : PMXInfo.ModelMaterials) {
+		SkeletalMeshImportData::FMaterial MaterialData;
+		MaterialData.MaterialImportName = Material.NameEN.IsEmpty()?Material.NameJP:Material.NameEN;
+		FString TexturePath = GetMaterialTexturePath(Material, PMXInfo,PMXFilePath);
+		UTexture2D* Texture = CreateTextureFromFile(TexturePath, FString("/Game/MMDModels/Textures"), FPaths::GetCleanFilename(TexturePath));
+
+
+	}
+#pragma endregion
+
 }
 
-static FVector2f ConvertPMXUVToUnreal(const FVector2D &InUV)
+USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo, const FString& PackagePath, const FString& AssetName,const FString& PMXFilePath)
 {
-	// UV坐标转换（V坐标翻转）
-	return FVector2f(InUV.X, 1.0f - InUV.Y);
-}
-void TMMDMeshBuilder::CreatePMXSkeletalMesh(const PMXDatas &PMXInfo)
-{
-	FString PackagePath = FString::Printf(TEXT("/Game/MMD/Models/%s"), *PMXInfo.ModelNameEN);
-	UPackage *Package = CreatePackage(*PackagePath);
 
-	USkeletalMesh *SkeletalMesh = NewObject<USkeletalMesh>(Package, *PMXInfo.ModelNameEN, RF_Public | RF_Standalone);
+	//创建数据包和对象
+	FString PackageName = PackagePath + TEXT("/") + AssetName;
+	UPackage* Package = CreatePackage(*PackageName);
+	USkeletalMesh* SkeletalMesh = NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
 
-	FSkeletalMeshImportData *ImportData = new FSkeletalMeshImportData();
-	ImportData->Points.Reserve(PMXInfo.ModelVertexCount);
-	ImportData->PointToRawMap.Reserve(PMXInfo.ModelVertexCount);
-	ImportData->Wedges.Reserve(PMXInfo.ModelVertexCount);
-	for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
-	{
-		const PMXVertex &Vertex = PMXInfo.ModelVertices[i];
+	//2.填充FSkeletalMeshImportData
 
-		ImportData->Points.Add(FVector3f(ConvertPMXPositionToUnreal(Vertex.Position)));
-		ImportData->PointToRawMap.Add(i);
+	FSkeletalMeshImportData PMXImportData;
+	LoadPMXImportData(PMXImportData, PMXInfo, PMXFilePath);
 
-		SkeletalMeshImportData::FVertex WedgeVertex;
-		WedgeVertex.VertexIndex = i;
-		WedgeVertex.UVs[0] = ConvertPMXUVToUnreal(Vertex.UV);
-		for (int32 j = 0; j < Vertex.AdditionalUVs.Num() && j < MAX_TEXCOORDS - 1; j++)
-		{
-			WedgeVertex.UVs[j + 1] = ConvertPMXUVToUnreal(FVector2D(Vertex.AdditionalUVs[j].X, Vertex.AdditionalUVs[j].Y));
-		}
-		WedgeVertex.MatIndex = 0;
-		ImportData->Wedges.Add(WedgeVertex);
-	}
-	// 三角形索引 Face
-	for (int32 i = 0; i < PMXInfo.ModelIndicesCount; i += 3)
-	{
-		SkeletalMeshImportData::FTriangle Tri;
-		Tri.WedgeIndex[0] = PMXInfo.ModelIndices[i];
-		Tri.WedgeIndex[1] = PMXInfo.ModelIndices[i + 1];
-		Tri.WedgeIndex[2] = PMXInfo.ModelIndices[i + 2];
-		Tri.MatIndex = 0;		 // 暂时不处理材质
-		Tri.SmoothingGroups = 0; // 暂时不处理光滑组
-		ImportData->Faces.Add(Tri);
-	}
-	// Bone
-	for (int32 i = 0; i < PMXInfo.ModelBoneCount; i++)
-	{
-		const PMXBone &PMXBone = PMXInfo.ModelBones[i];
-		SkeletalMeshImportData::FBone Bone;
-		Bone.Name = ObjectTools::SanitizeObjectName(PMXBone.NameEN);
-		if (Bone.Name.IsEmpty())
-		{
-			Bone.Name = FString::Printf(TEXT("Bone_%d"), i);
-		}
-		if (PMXBone.ParentBoneIndex >= 0 && PMXBone.ParentBoneIndex < PMXInfo.ModelBoneCount)
-		{
-			Bone.ParentIndex = PMXBone.ParentBoneIndex;
-		}
-		else
-		{
-			Bone.ParentIndex = INDEX_NONE; // 根骨骼
-		}
 
-		FVector3f BonePosition = ConvertPMXPositionToUnreal(PMXBone.Position);
-		Bone.BonePos.Transform = FTransform3f(
-			FQuat4f::Identity,	 // float精度四元数
-			BonePosition,		 // FVector3f位置
-			FVector3f::OneVector // FVector3f缩放
-		);
-		Bone.BonePos.Length = 10.0f; // 未知
-		Bone.BonePos.XSize = 10.0f;
-		Bone.BonePos.YSize = 1.0f;
-		Bone.BonePos.ZSize = 1.0f;
-		ImportData->RefBonesBinary.Add(Bone);
-	}
-	ImportData->Influences.Reserve(PMXInfo.ModelVertexCount);
-	// SkinWeights
-	for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
-	{
-		const PMXVertex &Vertex = PMXInfo.ModelVertices[i];
-		switch (Vertex.Weight.WeightDeformType)
-		{
-		case 0:
-			if (Vertex.Weight.BoneIndices[0] >= 0)
-			{
-				SkeletalMeshImportData::FRawBoneInfluence Influence;
-				Influence.BoneIndex = Vertex.Weight.BoneIndices[0];
-				Influence.VertexIndex = i;
-				Influence.Weight = 1.0f;
-				ImportData->Influences.Add(Influence);
-			}
-			break;
-		case 1:
-			if (Vertex.Weight.BoneIndices[0] >= 0 && Vertex.Weight.Weights[0] > 0.0f)
-			{
-				SkeletalMeshImportData::FRawBoneInfluence Influence;
-				Influence.Weight = Vertex.Weight.Weights[0];
-				Influence.BoneIndex = Vertex.Weight.BoneIndices[0];
-				Influence.VertexIndex = i;
-
-				ImportData->Influences.Add(Influence);
-			}
-			if (Vertex.Weight.BoneIndices[1] >= 0)
-			{
-				SkeletalMeshImportData::FRawBoneInfluence Influence;
-				Influence.BoneIndex = Vertex.Weight.BoneIndices[1];
-				Influence.VertexIndex = i;
-				Influence.Weight = Vertex.Weight.Weights[1];
-				ImportData->Influences.Add(Influence);
-			}
-		case 2:
-			for (int32 j = 0; j < 4; j++)
-			{
-				if (Vertex.Weight.BoneIndices[j] >= 0 && Vertex.Weight.Weights[j] > 0.0f)
-				{
-					SkeletalMeshImportData::FRawBoneInfluence Influence;
-					Influence.Weight = Vertex.Weight.Weights[j];
-					Influence.BoneIndex = Vertex.Weight.BoneIndices[j];
-					Influence.VertexIndex = i;
-
-					ImportData->Influences.Add(Influence);
-				}
-			}
-			break;
-		case 3:
-			if (Vertex.Weight.BoneIndices[0] >= 0 && Vertex.Weight.Weights[0] > 0.0f)
-			{
-				SkeletalMeshImportData::FRawBoneInfluence Influence;
-				Influence.BoneIndex = Vertex.Weight.BoneIndices[0];
-				Influence.Weight = Vertex.Weight.Weights[0];
-				Influence.VertexIndex = i;
-				ImportData->Influences.Add(Influence);
-			}
-			if (Vertex.Weight.BoneIndices[1] >= 0 && Vertex.Weight.Weights[1] > 0.0f)
-			{
-				SkeletalMeshImportData::FRawBoneInfluence Influence;
-				Influence.BoneIndex = Vertex.Weight.BoneIndices[1];
-				Influence.Weight = Vertex.Weight.Weights[1];
-				Influence.VertexIndex = i;
-				ImportData->Influences.Add(Influence);
-			}
-			break;
-		default:
-			break;
-		}
-	}
+    return nullptr;
 }

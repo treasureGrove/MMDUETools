@@ -1,13 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "TPMXParser.h"  // 需要获取 PMXDatas 定义
+#include "TPMXParser.h" // 需要获取 PMXDatas 定义
 
 class TMMDMeshBuilder
 {
 public:
-    void CreatePMXSkeletalMesh(const PMXDatas &PMXInfo);
+    static USkeletalMesh *BuildSkeletalMeshFromPMX(const PMXDatas &PMXInfo, const FString &PackagePath, const FString &AssetName, const FString& PMXFilePath);
     
-private:
-
 };
+

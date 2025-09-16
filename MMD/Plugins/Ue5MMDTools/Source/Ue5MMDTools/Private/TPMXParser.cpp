@@ -526,13 +526,11 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
             return false;
         }
 
-        // 可选：统一路径分隔符
         PMXInfo.ModelTexturePaths[i].ReplaceInline(TEXT("\\"), TEXT("/"));
 
-        // 可选：打印少量样本
         if (i < 3)
         {
-            UE_LOG(LogTemp, Log, TEXT("Texture[%d]: %s"), i, *PMXInfo.ModelTexturePaths[i]);
+            UE_LOG(LogTemp, Error, TEXT("路径是Texture[%d]: %s"), i, *PMXInfo.ModelTexturePaths[i]);
         }
     }
     return true;
