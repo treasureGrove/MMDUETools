@@ -121,7 +121,7 @@ void MMDImportSetting::ImportMMDModel()
                                PMXData.ModelFrames.Num());
                             ShowImportProgress(TEXT("开始构建UE5骨骼网格"));
                             TMMDMeshBuilder meshbuilder;
-                            meshbuilder.BuildSkeletalMeshFromPMX(PMXData,FString("/Game/MMDModels"),PMXData.ModelNameEN,FPaths::GetPath(SelectedFile));
+                            meshbuilder.BuildSkeletalMeshFromPMX(PMXData,FString("/Game/MMDModels"),PMXData.ModelNameEN,SelectedFile);
                             ShowImportProgress(FString::Printf(TEXT("UE5模型创建完成: %s"), *PMXData.ModelNameEN), EMMDMessageType::Success);
                     }
                     else

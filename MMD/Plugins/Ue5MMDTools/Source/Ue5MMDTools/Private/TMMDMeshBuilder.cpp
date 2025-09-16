@@ -13,12 +13,14 @@
 //材质
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
+#include "Materials/MaterialInstanceConstant.h"
 //转换
 #include "Factories/TextureFactory.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "Misc/FileHelper.h"
 
+#pragma region 材质贴图
 UTexture2D* CreateTextureFromFile(const FString& TexturePath, const FString& OutPath, const FString& AssetName) {
 
     if (!FPaths::FileExists(TexturePath))
@@ -69,7 +71,7 @@ UTexture2D* CreateTextureFromFile(const FString& TexturePath, const FString& Out
         UE_LOG(LogTemp, Error, TEXT("包名仍然包含空格，这会导致错误: %s"), *PackageName);
         return nullptr;
     }
-
+    UTextureFactory::SuppressImportOverwriteDialog(true);
     UTextureFactory* TextureFactory = NewObject<UTextureFactory>();
     TextureFactory->bCreateMaterial = false;
 
@@ -110,44 +112,84 @@ UTexture2D* CreateTextureFromFile(const FString& TexturePath, const FString& Out
 
     return ImportedTexture;
 }
-UMaterialInterface* CreateMaterialFromTexture(const FString& TexturePath, const FString& MaterialName) {
-	UMaterial* DefaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
-	
-	return nullptr;
-}
+
 FString GetMaterialTexturePath(const PMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
-	if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
-		FString PMXDirectory = PMXFilePath;
+    if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
+        FString PMXDirectory = PMXFilePath;
 
-		FString RelativeTexturePath = PMXInfo.ModelTexturePaths[Material.TextureIndex];
-		// 使用 FPaths::Combine 安全拼接路径
-		FString FullTexturePath = FPaths::Combine(PMXDirectory, RelativeTexturePath);
+        FString RelativeTexturePath = PMXInfo.ModelTexturePaths[Material.TextureIndex];
+        // 使用 FPaths::Combine 安全拼接路径
+        FString FullTexturePath = FPaths::Combine(PMXDirectory, RelativeTexturePath);
 
-		UE_LOG(LogTemp, Warning, TEXT("拼接后的完整路径: '%s'"), *FullTexturePath);
-		UE_LOG(LogTemp, Warning, TEXT("文件是否存在: %s"), FPaths::FileExists(FullTexturePath) ? TEXT("是") : TEXT("否"));
+        UE_LOG(LogTemp, Warning, TEXT("拼接后的完整路径: '%s'"), *FullTexturePath);
+        UE_LOG(LogTemp, Warning, TEXT("文件是否存在: %s"), FPaths::FileExists(FullTexturePath) ? TEXT("是") : TEXT("否"));
 
-		return FullTexturePath;
-	}
-	else if (Material.TextureIndex == -1) {
-		// 没有贴图
-		return FString();
-	}
-	else {
-		UE_LOG(LogTemp, Warning, TEXT("Invalid texture index %d for material %s"), Material.TextureIndex, *Material.NameEN);
-		return FString();
-	}
+        return FullTexturePath;
+    }
+    else if (Material.TextureIndex == -1) {
+        // 没有贴图
+        return FString();
+    }
+    else {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid texture index %d for material %s"), Material.TextureIndex, *Material.NameEN);
+        return FString();
+    }
 }
+UMaterialInterface* CreateMaterialFromTexture(UTexture2D& Texture2D, const FString& MaterialName, const FString& OutPath) {
+
+	static const FString BaseMaterialPath = TEXT("/Ue5MMDTools/Resources/MaterialInstance/Mat_MMD_Base.Mat_MMD_Base");
+	UMaterial* BaseMaterial = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *BaseMaterialPath));
+
+	if (!BaseMaterial) {
+		UE_LOG(LogTemp, Error, TEXT("Failed to load base material from path: %s"), *BaseMaterialPath);
+		return nullptr;
+	}
+
+	FString CleanMaterialName = MaterialName;
+    CleanMaterialName = CleanMaterialName.Replace(TEXT(" "), TEXT("_"));
+    if (!CleanMaterialName.IsEmpty() && !FChar::IsAlpha(CleanMaterialName[0]))
+        CleanMaterialName = TEXT("M_") + CleanMaterialName;
+    if (CleanMaterialName.IsEmpty())
+        CleanMaterialName = TEXT("M_Unknown");
+
+    FString SafeOutPath = OutPath;
+    if(!SafeOutPath.EndsWith(TEXT("/")))
+        SafeOutPath += TEXT("/");
+    FString PackageName = SafeOutPath + CleanMaterialName;
+    PackageName =PackageName.Replace(TEXT("//"), TEXT("/"));
+    PackageName = PackageName.Replace(TEXT(" "), TEXT("_"));
+
+    UPackage* Package = CreatePackage(*PackageName);
+    if (!Package)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CreatePackage failed: %s"), *PackageName);
+        return nullptr;
+    }
+	UMaterialInstanceConstant* MaterialInstance = NewObject<UMaterialInstanceConstant>(Package, *CleanMaterialName, RF_Public | RF_Standalone);
+    MaterialInstance->SetParentEditorOnly(BaseMaterial);
+
+	FMaterialParameterInfo ParamInfo("BaseColorMap");
+    MaterialInstance->SetTextureParameterValueEditorOnly(ParamInfo, &Texture2D);
+
+    FAssetRegistryModule::AssetCreated(MaterialInstance);
+    Package->MarkPackageDirty();
+
+    return MaterialInstance;
+}
+
+#pragma endregion
 
 
 void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
 #pragma region 材质
+    FString PMXPath=FPaths::GetPath(PMXFilePath);
+    FString PMXModelName = FPaths::GetBaseFilename(PMXFilePath);
 	for (const auto& Material : PMXInfo.ModelMaterials) {
 		SkeletalMeshImportData::FMaterial MaterialData;
 		MaterialData.MaterialImportName = Material.NameEN.IsEmpty()?Material.NameJP:Material.NameEN;
-		FString TexturePath = GetMaterialTexturePath(Material, PMXInfo,PMXFilePath);
-		UTexture2D* Texture = CreateTextureFromFile(TexturePath, FString("/Game/MMDModels/Textures"), FPaths::GetCleanFilename(TexturePath));
-
-
+		FString TexturePath = GetMaterialTexturePath(Material, PMXInfo, PMXPath);
+		UTexture2D* Texture = CreateTextureFromFile(TexturePath, FString("/Game/MMDModels/")+ PMXModelName +FString("/Textures"), FPaths::GetCleanFilename(TexturePath));
+        MaterialData.Material = CreateMaterialFromTexture(*Texture, MaterialData.MaterialImportName, FString("/Game/MMDModels/") + PMXModelName + FString("/Materials"));
 	}
 #pragma endregion
 
