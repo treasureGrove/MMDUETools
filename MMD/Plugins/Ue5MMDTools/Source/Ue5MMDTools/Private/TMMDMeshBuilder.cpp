@@ -287,11 +287,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
     for (int32 i = 0; i < PMXInfo.ModelVertices.Num(); ++i) {
         const PMXVertex& Vertex = PMXInfo.ModelVertices[i];
         PMXImportData.Points.Add(ConvertPMXVectorToUnreal(Vertex.Position));
-        UE_LOG(LogTemp, Warning, TEXT("顶点位置: Pos=(%.4f,%.4f,%.4f)"), ConvertPMXVectorToUnreal(Vertex.Position).X, ConvertPMXVectorToUnreal(Vertex.Position).Y, ConvertPMXVectorToUnreal(Vertex.Position).Z);
     }
-    UE_LOG(LogTemp, Warning, TEXT("生成顶点数: %d"), PMXImportData.Points.Num());
-
-    UE_LOG(LogTemp, Warning, TEXT("生成PointToRawMap数: %d"), PMXImportData.PointToRawMap.Num());
 #pragma endregion
 
 #pragma region 面
@@ -391,22 +387,11 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
             BoneLocalPos = BoneGlobalPos - ParentGlobalPos;
         }
         NewBone.BonePos.Transform = FTransform3f(FQuat4f::Identity, BoneLocalPos);
-		UE_LOG(LogTemp, Warning, TEXT("Bone[%d] %s Parent=%d Pos=(%.4f,%.4f,%.4f)"),
 			i, *NewBone.Name, NewBone.ParentIndex,
 			NewBone.BonePos.Transform.GetLocation().X,
 			NewBone.BonePos.Transform.GetLocation().Y,
 			NewBone.BonePos.Transform.GetLocation().Z);
         NewBone.BonePos.Length = NewBone.BonePos.XSize = NewBone.BonePos.YSize = 1;
-
-        if (NewBone.Name == TEXT("頭")) {
-            int32 ParentIdx = Bone.ParentBoneIndex;
-            if (ParentIdx >= 0 && ParentIdx < PMXInfo.ModelBoneCount) {
-                const PMXBone& ParentBone = PMXInfo.ModelBones[ParentIdx];
-                FVector3f ParentGlobalPos = ConvertPMXBonePositionToUnreal(ParentBone.Position);
-                UE_LOG(LogTemp, Warning, TEXT("头骨父骨: %s, 全局位置: (%.4f,%.4f,%.4f)"),
-                    *ParentBone.NameJP, ParentGlobalPos.X, ParentGlobalPos.Y, ParentGlobalPos.Z);
-            }
-        }
         PMXImportData.RefBonesBinary.Add(NewBone);
     }
 #pragma endregion

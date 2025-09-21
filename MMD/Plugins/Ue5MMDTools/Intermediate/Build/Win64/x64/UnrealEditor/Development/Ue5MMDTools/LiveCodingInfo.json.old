@@ -8,11 +8,12 @@
 			"MMDModelImporter.cpp.obj",
 			"MMDPhysicsSystem.cpp.obj",
 			"MMDViewPanel.cpp.obj",
+			"TMMDMeshBuilder.cpp.obj",
 			"TPMXParser.cpp.obj",
+			"TVMDParser.cpp.obj",
 			"Ue5MMDTools.cpp.obj",
 			"Ue5MMDToolsCommands.cpp.obj",
-			"Ue5MMDToolsStyle.cpp.obj",
-			"TMMDMeshBuilder.cpp.obj"
+			"Ue5MMDToolsStyle.cpp.obj"
 		]
 	}
 }
