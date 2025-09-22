@@ -14,7 +14,14 @@
             "e:\\ae\\ue_5.5\\engine\\source\\developer\\desktopplatform\\public\\desktopplatformmodule.h",
             "e:\\ae\\ue_5.5\\engine\\source\\developer\\desktopplatform\\public\\idesktopplatform.h",
             "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\public\\tmmdmeshbuilder.h",
-            "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\public\\tpmxparser.h"
+            "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\public\\tpmxparser.h",
+            "z:\\project\\ueproject\\mmduetools\\mmd\\plugins\\ue5mmdtools\\source\\ue5mmdtools\\public\\tvmdparser.h",
+            "e:\\ae\\ue_5.5\\engine\\source\\runtime\\coreuobject\\public\\uobject\\noexporttypes.h",
+            "e:\\ae\\ue_5.5\\engine\\source\\runtime\\coreuobject\\public\\uobject\\propertyaccessutil.h",
+            "e:\\ae\\ue_5.5\\engine\\source\\runtime\\coreuobject\\public\\serialization\\testundeclaredscriptstructobjectreferences.h",
+            "e:\\ae\\ue_5.5\\engine\\source\\runtime\\core\\public\\math\\unitconversion.h",
+            "e:\\ae\\ue_5.5\\engine\\source\\runtime\\core\\public\\math\\unitconversion.inl",
+            "e:\\ae\\ue_5.5\\engine\\source\\runtime\\core\\public\\internationalization\\polyglottextdata.h"
         ],
         "ImportedModules": [],
         "ImportedHeaderUnits": []

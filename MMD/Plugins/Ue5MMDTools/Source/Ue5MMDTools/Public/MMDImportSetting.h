@@ -7,9 +7,6 @@
 
 class MMDViewPanel;
 
-/**
- * MMD导入设置面板 - 处理模型导入和相关设置
- */
 enum class EMMDMessageType : uint8
 {
     Info,
@@ -25,9 +22,8 @@ public:
     SLATE_ARGUMENT(TSharedPtr<MMDViewPanel>, ViewPanel)
     SLATE_END_ARGS()
 
-    /** 构造设置面板 */
     void Construct(const FArguments &InArgs);
-        /** 显示导入进度 */
+
     void ShowImportProgress(const FString &Message,EMMDMessageType Type = EMMDMessageType::Info);
 
     static void ShowGlobalImportProgress(const FString &Message, EMMDMessageType Type = EMMDMessageType::Info);
@@ -36,13 +32,17 @@ private:
     /** 导入模型按钮点击事件 */
     FReply OnImportModelClicked();
 
+    FReply OnImportVMDClicked();
+
     /** 导入MMD模型文件 */
     void ImportMMDModel();
 
     /** 导入静态网格模型 */
     void ImportStaticMesh();
 
+    void ImportVMDAnimation();
 
+   
 
 private:
     /** 关联的视口面板 */

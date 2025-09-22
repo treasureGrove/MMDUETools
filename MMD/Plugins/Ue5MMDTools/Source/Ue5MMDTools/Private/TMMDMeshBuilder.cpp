@@ -387,10 +387,6 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
             BoneLocalPos = BoneGlobalPos - ParentGlobalPos;
         }
         NewBone.BonePos.Transform = FTransform3f(FQuat4f::Identity, BoneLocalPos);
-			i, *NewBone.Name, NewBone.ParentIndex,
-			NewBone.BonePos.Transform.GetLocation().X,
-			NewBone.BonePos.Transform.GetLocation().Y,
-			NewBone.BonePos.Transform.GetLocation().Z);
         NewBone.BonePos.Length = NewBone.BonePos.XSize = NewBone.BonePos.YSize = 1;
         PMXImportData.RefBonesBinary.Add(NewBone);
     }

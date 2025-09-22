@@ -107,8 +107,9 @@ struct VMDIKKeyframe
 	TArray<TPair<FString, bool>> IKInfos;
 };
 struct VMDData {
+	FString Header; // "Vocaloid Motion Data 0002"
 	FString ModelName;
-	int32 NextByteLength = 0; // 下一个数据块的字节长度
+	int32 NextStringLength = 0;
 	TArray<VMDBoneKeyframe> BoneFrames; 
 	TArray<VMDMorphKeyframe> MorphFrames; 
 	TArray<VMDCameraKeyframe> CameraFrames;
@@ -120,5 +121,8 @@ struct VMDData {
 class UE5MMDTOOLS_API TVMDParser
 {
 public:
-	bool ParserVMDFile(const FString& FilePath);
+
+	bool ParseVMDFile(const FString& FilePath);
+
+	VMDData VMDInfo;
 };
