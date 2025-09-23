@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#pragma region  VMD
 FString DecodeSJISToString(const char* SJISStr, int32 Length)
 {
 	if (Length <= 0 || SJISStr == nullptr)
@@ -47,7 +48,7 @@ bool ReadCharArray(FMemoryReader& Reader, FString& OutString, VMDData& VMDInfo)
 	{
 		if (RawData[i] == 0)
 		{
-			break; 
+			break;
 		}
 		ActualLength++;
 	}
@@ -111,7 +112,7 @@ bool ReadVMDMorphKeyframe(FMemoryReader& Reader, VMDData& VMDInfo)
 	for (uint32 i = 0; i < BoneKeyFrameCount; ++i)
 	{
 		VMDMorphKeyframe KeyFrame;
-		
+
 		VMDInfo.NextStringLength = 15;
 		if (!ReadCharArray(Reader, KeyFrame.MorphName, VMDInfo))
 		{
@@ -246,13 +247,13 @@ bool ReadVMDIKKeyframe(FMemoryReader& Reader, VMDData& VMDInfo) {
 
 bool TVMDParser::ParseVMDFile(const FString& FilePath)
 {
-	VMDInfo =VMDData();
+	VMDInfo = VMDData();
 	if (!FPaths::FileExists(FilePath))
 	{
 		UE_LOG(LogTemp, Error, TEXT("VMD文件不存在: %s"), *FilePath);
 		return false;
 	}
-		
+
 	TArray<uint8> FileData;
 	if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
 	{
@@ -264,8 +265,8 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	VMDInfo.NextStringLength = 30;
 	if (ReadCharArray(Reader, VMDInfo.Header, VMDInfo))
 	{
-	
-			UE_LOG(LogTemp, Error, TEXT("VMD: %s"), *VMDInfo.Header);
+
+		UE_LOG(LogTemp, Error, TEXT("VMD: %s"), *VMDInfo.Header);
 	}
 	else
 	{
@@ -310,6 +311,10 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 		return false;
 	}
 
-	
+
 	return true;
 }
+
+#pragma endregion
+
+

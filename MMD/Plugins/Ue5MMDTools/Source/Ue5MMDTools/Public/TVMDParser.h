@@ -106,7 +106,7 @@ struct VMDIKKeyframe
 	uint8 Display = 0;
 	TArray<TPair<FString, bool>> IKInfos;
 };
-struct VMDData {
+struct  VMDData {
 	FString Header; // "Vocaloid Motion Data 0002"
 	FString ModelName;
 	int32 NextStringLength = 0;
