@@ -133,7 +133,18 @@ void MMDImportSetting::ImportMMDModel()
 							PMXData.ModelFrames.Num());
 						ShowImportProgress(TEXT("开始构建UE5骨骼网格"));
 						TMMDMeshBuilder meshbuilder;
-						meshbuilder.BuildSkeletalMeshFromPMX(PMXData, FString("/Game/MMDModels"), PMXData.ModelNameEN, SelectedFile);
+						USkeletalMesh* BuiltMesh= meshbuilder.BuildSkeletalMeshFromPMX(PMXData, FString("/Game/MMDModels"), PMXData.ModelNameEN, SelectedFile);
+						if (BuiltMesh) {
+							ShowImportProgress(TEXT("骨骼网格创建成功"), EMMDMessageType::Success);
+							if(ViewPanel.IsValid())
+							{
+								ViewPanel->ShowImportedSkeletalMesh(BuiltMesh);
+
+							}
+							else {
+								UE_LOG(LogTemp, Warning, TEXT("[MMDImportSetting] ViewPanel 无效，无法显示模型"));
+							}
+						}
 						ShowImportProgress(FString::Printf(TEXT("UE5模型创建完成: %s"), *PMXData.ModelNameEN), EMMDMessageType::Success);
 					}
 					else

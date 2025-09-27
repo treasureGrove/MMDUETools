@@ -17,6 +17,7 @@ public:
 	/** 加载MMD模型文件到场景中 */
 	void LoadMMDModel(const FString &FilePath);
 
+	void ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh);
 protected:
 	/** Creates the viewport client for this viewport */
 	virtual TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;
@@ -24,7 +25,7 @@ protected:
 	virtual TSharedPtr<SWidget> MakeViewportToolbar() override;
 
 private:
-	// 创建预览Actor的函数
+	// 创建预览Actor的函数 
 	void CreatePreviewActor();
 
 	// 导入模型的函数
@@ -35,4 +36,15 @@ private:
 	AActor *SelectedActor = nullptr;
 	TSharedPtr<FEditorViewportClient> CustomViewportClient;
 	FVector WidgetLocation;
+
+	TWeakObjectPtr<class ASkeletalMeshActor> PreviewSkeletalActor;
+
+	TWeakObjectPtr<UAnimSequence> CurrentVMDSequence;
+
+	void FocusCameraOnActor(AActor* Actor);
+
+	UAnimSequence* LoadVMDAndCreateAnimSequence(const FString& FilePath, USkeleton* TargetSkeleton);
+
+	void PlayCurrentVMD(bool bLoop = true);
+	void StopCurrentVMD();
 };
