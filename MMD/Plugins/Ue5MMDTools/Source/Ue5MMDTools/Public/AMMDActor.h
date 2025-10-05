@@ -4,14 +4,14 @@
 #include "TPMXParser.h"
 #include "TVMDParser.h"
 #include "Components/SkeletalMeshComponent.h" 
-#include "AMMDPreviewActor.generated.h"
+#include "AMMDActor.generated.h"
 
 UCLASS()
-class UE5MMDTOOLS_API AAMMDPreviewActor : public AActor
+class UE5MMDTOOLS_API AMMDActor : public AActor
 {
     GENERATED_BODY()
 public:
-    AAMMDPreviewActor();
+    AMMDActor();
 
     void BuildFromPMXData(const PMXDatas& PMXInfo, const FString& PMXFilePath);
 

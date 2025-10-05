@@ -4,6 +4,7 @@
 #include "SEditorViewport.h"
 #include "AdvancedPreviewScene.h"
 #include "EditorViewportClient.h"
+#include "AMMDActor.h"
 
 class UE5MMDTOOLS_API MMDViewPanel : public SEditorViewport
 {
@@ -37,14 +38,7 @@ private:
 	TSharedPtr<FEditorViewportClient> CustomViewportClient;
 	FVector WidgetLocation;
 
-	TWeakObjectPtr<class ASkeletalMeshActor> PreviewSkeletalActor;
+	AMMDActor* PreviewActor = nullptr;
+	
 
-	TWeakObjectPtr<UAnimSequence> CurrentVMDSequence;
-
-	void FocusCameraOnActor(AActor* Actor);
-
-	UAnimSequence* LoadVMDAndCreateAnimSequence(const FString& FilePath, USkeleton* TargetSkeleton);
-
-	void PlayCurrentVMD(bool bLoop = true);
-	void StopCurrentVMD();
 };

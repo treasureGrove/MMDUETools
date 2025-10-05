@@ -2,10 +2,11 @@
 	"RemapUnityFiles": 
 	{
 		"Module.Ue5MMDTools.cpp.obj": [
-			"AMMDPreviewActor.gen.cpp.obj",
+			"AMMDActor.gen.cpp.obj",
 			"Ue5MMDTools.init.gen.cpp.obj",
 			"PerModuleInline.gen.cpp.obj",
 			"MMDActor.cpp.obj",
+			"MMDImportSetting.cpp.obj",
 			"MMDModelImporter.cpp.obj",
 			"MMDPhysicsSystem.cpp.obj",
 			"TMMDMeshBuilder.cpp.obj",
@@ -14,8 +15,7 @@
 			"Ue5MMDTools.cpp.obj",
 			"Ue5MMDToolsCommands.cpp.obj",
 			"Ue5MMDToolsStyle.cpp.obj",
-			"AMMDPreviewActor.cpp.obj",
-			"MMDImportSetting.cpp.obj",
+			"AMMDActor.cpp.obj",
 			"MMDViewPanel.cpp.obj"
 		]
 	}

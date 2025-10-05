@@ -1,14 +1,14 @@
-#include "AMMDPreviewActor.h"
+#include "AMMDActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "TMMDMeshBuilder.h"
 
-AAMMDPreviewActor::AAMMDPreviewActor()
+AMMDActor::AMMDActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	SetupComponents();
 }
-void AAMMDPreviewActor::SetupComponents()
+void AMMDActor::SetupComponents()
 {
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MMD_SkeletalMesh"));
@@ -16,15 +16,15 @@ void AAMMDPreviewActor::SetupComponents()
 	SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 }
-void AAMMDPreviewActor::BeginPlay()
+void AMMDActor::BeginPlay()
 {
 	Super::BeginPlay();
 }
-void AAMMDPreviewActor::Tick(float DeltaSeconds)
+void AMMDActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 }
-void AAMMDPreviewActor::Cleanup()
+void AMMDActor::Cleanup()
 {
 	if (SkeletalMeshComponent) {
 		SkeletalMeshComponent->SetSkeletalMesh(nullptr);
@@ -32,7 +32,7 @@ void AAMMDPreviewActor::Cleanup()
 	LoadedPMX = PMXDatas();
 	LoadedPMXPath.Reset();
 }
-void AAMMDPreviewActor::BuildFromPMXData(const PMXDatas& PMXInfo, const FString& PMXFilePath)
+void AMMDActor::BuildFromPMXData(const PMXDatas& PMXInfo, const FString& PMXFilePath)
 {
 	Cleanup();
 	LoadedPMX = PMXInfo;

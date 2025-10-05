@@ -564,97 +564,14 @@ void MMDViewPanel::ImportModelClicked()
     }
 }
 
-void MMDViewPanel::FocusCameraOnActor(AActor* Actor)
-{
-}
-
-UAnimSequence* MMDViewPanel::LoadVMDAndCreateAnimSequence(const FString& FilePath, USkeleton* TargetSkeleton)
-{
-    UE_LOG(LogTemp, Log, TEXT("[VMD] LoadVMDAndCreateAnimSequence 占位调用 File=%s Skeleton=%s"),
-        *FilePath,
-        TargetSkeleton ? *TargetSkeleton->GetName() : TEXT("NULL"));
-    return nullptr; // 下一步替换为真正创建
-}
-
-void MMDViewPanel::PlayCurrentVMD(bool bLoop /*=true*/)
-{
-    UE_LOG(LogTemp, Log, TEXT("[VMD] PlayCurrentVMD 占位：当前没有可播放动画"));
-}
-
-void MMDViewPanel::StopCurrentVMD()
-{
-    UE_LOG(LogTemp, Log, TEXT("[VMD] StopCurrentVMD 占位"));
-}
-
 void MMDViewPanel::LoadMMDModel(const FString &FilePath)
 {
     UE_LOG(LogTemp, Warning, TEXT("LoadMMDModel called with file: %s"), *FilePath);
     // 检查是否为PMX文件
     FString FileExtension = FPaths::GetExtension(FilePath).ToLower();
 }
-
-void MMDViewPanel::ShowImportedSkeletalMesh(USkeletalMesh* SkeletalMesh)
+void MMDViewPanel::ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh)
 {
-    if (!SkeletalMesh) {
-        UE_LOG(LogTemp, Warning, TEXT("ShowImportedSkeletalMesh called with null SkeletalMesh"));
-        return;
-    }
-    else {
-        UE_LOG(LogTemp, Warning, TEXT("ShowImportedSkeletalMesh called with SkeletalMesh"));
-    }
-    if (!PreviewScene.IsValid() || !PreviewScene->GetWorld())
-    {
-        UE_LOG(LogTemp, Error, TEXT("[MMDViewPanel] 无效的 PreviewScene 或 World"));
-        return;
-    }
-    UWorld* World = PreviewScene->GetWorld();
-    if (PreviewSkeletalActor.IsValid())
-    {
-        World->DestroyActor(PreviewSkeletalActor.Get());
-        PreviewSkeletalActor.Reset();
-    }
 
-	FActorSpawnParameters Params;
-	Params.Name = *FString::Printf(TEXT("MMDPreviewSkeletalActor_%s"), *SkeletalMesh->GetName());
-	Params.ObjectFlags |= RF_Transient;
 
-	ASkeletalMeshActor* SkeletalActor = World->SpawnActor<ASkeletalMeshActor>(ASkeletalMeshActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
-    if (!SkeletalActor)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[MMDViewPanel] 无法生成 SkeletalMeshActor"));
-        return;
-	}
-
-    USkeletalMeshComponent* SkelComp = SkeletalActor->GetSkeletalMeshComponent();
-    SkelComp->SetSkeletalMesh(SkeletalMesh);
-    SkelComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);              
-    SkelComp->SetComponentTickEnabled(true);                                      
-    SkelComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPose;
-    SkelComp->bEnableUpdateRateOptimizations = false;                             
-    SkelComp->SetUpdateAnimationInEditor(true);                                   
-    SkelComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    SkelComp->MarkRenderStateDirty();
-
-    PreviewSkeletalActor = SkeletalActor;
-
-    if (CustomViewportClient.IsValid())
-    {
-        if (auto VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
-        {
-            VC->SetSelectedActor(SkeletalActor);
-        }
-    }
-
-    {
-        const FBoxSphereBounds B = SkelComp->Bounds;
-        const float R = FMath::Max(B.SphereRadius, 50.f);
-        if (auto VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
-        {
-            VC->SetLookAtLocation(B.Origin);
-            VC->SetViewLocation(B.Origin + FVector(-R * 1.8f, R * 1.5f, R * 1.2f));
-            VC->Invalidate();
-        }
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 已显示 SkeletalMesh: %s"), *SkeletalMesh->GetName());
 }
