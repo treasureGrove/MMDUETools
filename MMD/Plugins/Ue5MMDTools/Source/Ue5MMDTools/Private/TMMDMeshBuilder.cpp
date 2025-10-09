@@ -194,13 +194,25 @@ FVector3f ConvertPMXVectorToUnreal(const FVector& PMXVector) {
 FVector3f ConvertPMXBonePositionToUnreal(const FVector& PMXPosition, float Scale = 8.0f) {
     return FVector3f(PMXPosition.Z * Scale, PMXPosition.X * Scale, PMXPosition.Y * Scale);
 }
+static FVector3f ConvertPMXNormalToUnreal(const FVector& PMXNormal, bool bForceFlip = true)
+{
+    // 与 Position 同轴交换 (Z,X,Y)，不缩放
+    FVector3f N(PMXNormal.Z, PMXNormal.X, PMXNormal.Y);
+    float LenSq = N.SizeSquared();
+    if (LenSq > KINDA_SMALL_NUMBER)
+        N *= 1.0f / FMath::Sqrt(LenSq);
+    else
+        N = FVector3f(0, 0, 1);
+    if (bForceFlip) N = -N;
+    return N;
+}
 #pragma endregion
 
 
 void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
     FString PMXPath = FPaths::GetPath(PMXFilePath);
     FString PMXModelName = FPaths::GetBaseFilename(PMXFilePath);
-    PMXImportData.bHasNormals = false;
+    PMXImportData.bHasNormals = true;
 	PMXImportData.bHasTangents = false;
 	PMXImportData.bHasVertexColors = false;
 	PMXImportData.NumTexCoords = 1 + PMXInfo.PMXGlobals.ExtraUV; // 主UV加上额外的UV
@@ -277,6 +289,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
             }
 		}
         Wedge.Color = FColor::White;
+        
         PMXImportData.Wedges.Add(Wedge);
     }
 #pragma endregion
@@ -293,6 +306,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 #pragma region 面
     PMXImportData.Faces.Reserve(PMXInfo.ModelIndicesCount / 3);
     int32 BaseIndex = 0;
+    int32 ZeroNormalCount = 0;
     for (int32 MatIndex = 0; MatIndex < PMXInfo.ModelMaterials.Num(); MatIndex++)
     {
         const PMXMaterial& Material = PMXInfo.ModelMaterials[MatIndex];
@@ -301,44 +315,51 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 
         for (int32 f = 0; f < TriangleCount; f++)
         {
-            // 每个三角形对应 3 个 Wedge
             int32 w0 = BaseIndex + f * 3 + 0;
             int32 w1 = BaseIndex + f * 3 + 1;
             int32 w2 = BaseIndex + f * 3 + 2;
 
-            // wedge 里记录的是顶点号
-            int32 idx0 = PMXImportData.Wedges[w0].VertexIndex;
-            int32 idx1 = PMXImportData.Wedges[w1].VertexIndex;
-            int32 idx2 = PMXImportData.Wedges[w2].VertexIndex;
+            int32 vi0 = PMXInfo.ModelIndices[w0];
+            int32 vi1 = PMXInfo.ModelIndices[w1];
+            int32 vi2 = PMXInfo.ModelIndices[w2];
 
-            // 过滤掉退化三角形
-            if (idx0 == idx1 || idx1 == idx2 || idx0 == idx2) {
-                UE_LOG(LogTemp, Error, TEXT("退化三角形: 顶点索引 %d, %d, %d (MatIndex=%d, Face=%d)"), idx0, idx1, idx2, MatIndex, f);
+            // 退化剔除
+            if (vi0 == vi1 || vi1 == vi2 || vi0 == vi2)
                 continue;
-            }
-
-            // 越界检查
-            if (idx0 < 0 || idx1 < 0 || idx2 < 0 ||
-                idx0 >= PMXInfo.ModelVertices.Num() ||
-                idx1 >= PMXInfo.ModelVertices.Num() ||
-                idx2 >= PMXInfo.ModelVertices.Num()) {
-                UE_LOG(LogTemp, Error, TEXT("三角面索引越界: %d, %d, %d (MatIndex=%d, Face=%d)"), idx0, idx1, idx2, MatIndex, f);
+            if (vi0 < 0 || vi1 < 0 || vi2 < 0 ||
+                vi0 >= PMXInfo.ModelVertices.Num() ||
+                vi1 >= PMXInfo.ModelVertices.Num() ||
+                vi2 >= PMXInfo.ModelVertices.Num())
                 continue;
-            }
 
-            SkeletalMeshImportData::FTriangle Triangle;
-            Triangle.WedgeIndex[0] = w0;
-            Triangle.WedgeIndex[1] = w1;
-            Triangle.WedgeIndex[2] = w2;
-            Triangle.MatIndex = MatIndex;
-            Triangle.AuxMatIndex = 0;
-            Triangle.SmoothingGroups = 1;
+            SkeletalMeshImportData::FTriangle Tri;
+            Tri.WedgeIndex[0] = w0;
+            Tri.WedgeIndex[1] = w1;
+            Tri.WedgeIndex[2] = w2;
+            Tri.MatIndex = MatIndex;
+            Tri.AuxMatIndex = 0;
+            Tri.SmoothingGroups = 1; // 统一一组；硬边依靠 PMX 已拆分的重复顶点
 
-            PMXImportData.Faces.Add(Triangle);
+            const FVector& N0 = PMXInfo.ModelVertices[vi0].Normal;
+            const FVector& N1 = PMXInfo.ModelVertices[vi1].Normal;
+            const FVector& N2 = PMXInfo.ModelVertices[vi2].Normal;
+
+            Tri.TangentZ[0] = ConvertPMXNormalToUnreal(N0);
+            Tri.TangentZ[1] = ConvertPMXNormalToUnreal(N1);
+            Tri.TangentZ[2] = ConvertPMXNormalToUnreal(N2);
+
+            if (Tri.TangentZ[0].IsNearlyZero()) { Tri.TangentZ[0] = FVector3f(0, 0, 1); ++ZeroNormalCount; }
+            if (Tri.TangentZ[1].IsNearlyZero()) { Tri.TangentZ[1] = FVector3f(0, 0, 1); ++ZeroNormalCount; }
+            if (Tri.TangentZ[2].IsNearlyZero()) { Tri.TangentZ[2] = FVector3f(0, 0, 1); ++ZeroNormalCount; }
+
+            PMXImportData.Faces.Add(Tri);
         }
-
         BaseIndex += FaceIndexCount;
     }
+
+    // 不再调用 ComputeSmoothGroupFromNormals / SplitVertices...
+    UE_LOG(LogTemp, Log, TEXT("Original PMX normals applied. Triangles=%d ZeroFixed=%d"),
+        PMXImportData.Faces.Num(), ZeroNormalCount);
 #pragma endregion
 
 #pragma region 骨骼Bone
@@ -531,10 +552,10 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
         LODInfo.ScreenSize.Default = 1.0f;
         LODInfo.LODHysteresis = 0.02f;
 
-        LODInfo.BuildSettings.bRecomputeNormals = true;
+        LODInfo.BuildSettings.bRecomputeNormals = false;
         LODInfo.BuildSettings.bRecomputeTangents = true;
         LODInfo.BuildSettings.bUseMikkTSpace = true;
-        LODInfo.BuildSettings.bComputeWeightedNormals = true;
+        LODInfo.BuildSettings.bComputeWeightedNormals = false;
         LODInfo.BuildSettings.bRemoveDegenerates = true;
         LODInfo.BuildSettings.bUseFullPrecisionUVs = false;
         LODInfo.BuildSettings.bUseHighPrecisionTangentBasis = false;
@@ -562,10 +583,10 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
     IMeshUtilities& MeshUtilities = FModuleManager::Get().LoadModuleChecked<IMeshUtilities>("MeshUtilities");
 
     IMeshUtilities::MeshBuildOptions BuildOptions;
-    BuildOptions.bComputeNormals = true;
+    BuildOptions.bComputeNormals = false;
     BuildOptions.bComputeTangents = true;
     BuildOptions.bUseMikkTSpace = true;
-    BuildOptions.bComputeWeightedNormals = true;
+    BuildOptions.bComputeWeightedNormals = false;
     BuildOptions.bRemoveDegenerateTriangles = true;
 
     TArray<FVector3f> LODPoints;
@@ -636,3 +657,19 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
     UE_LOG(LogTemp, Log, TEXT("骨骼网格创建成功: %s"), *PackageName);
     return SkeletalMesh;
 }
+
+UIKRigDefinition* TMMDMeshBuilder::BuildIKRigFromPMX(const FString& PackagePath, const FString& AssetName, USkeletalMesh* BuiltMesh)
+{
+#if !WITH_EDITOR
+    return nullptr;
+#else
+    if (!BuiltMesh) {
+        return nullptr;
+        UE_LOG(LogTemp, Error, TEXT("mmd模型缺失"));
+    }
+
+
+
+#endif
+}
+

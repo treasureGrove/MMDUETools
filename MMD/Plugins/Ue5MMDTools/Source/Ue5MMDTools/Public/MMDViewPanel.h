@@ -15,10 +15,10 @@ public:
 	/** Constructs the viewport panel with the given arguments */
 	void Construct(const FArguments &InArgs);
 
-	/** 加载MMD模型文件到场景中 */
 	void LoadMMDModel(const FString &FilePath);
 
 	void ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh);
+	bool CreatePreviewActor(UClass* ActorClass);
 protected:
 	/** Creates the viewport client for this viewport */
 	virtual TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;
@@ -26,19 +26,16 @@ protected:
 	virtual TSharedPtr<SWidget> MakeViewportToolbar() override;
 
 private:
-	// 创建预览Actor的函数 
-	void CreatePreviewActor();
 
-	// 导入模型的函数
+
 	void ImportModelClicked();
 
-	// 成员变量
 	TSharedPtr<FAdvancedPreviewScene> PreviewScene;
 	AActor *SelectedActor = nullptr;
 	TSharedPtr<FEditorViewportClient> CustomViewportClient;
 	FVector WidgetLocation;
 
-	AMMDActor* PreviewActor = nullptr;
+	AActor* PreviewActor = nullptr;
 	
 
 };

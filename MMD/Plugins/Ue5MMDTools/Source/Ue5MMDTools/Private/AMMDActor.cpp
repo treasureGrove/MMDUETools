@@ -2,19 +2,46 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "TMMDMeshBuilder.h"
+#include "MMDImportSetting.h"
 
 AMMDActor::AMMDActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	SetupComponents();
-}
-void AMMDActor::SetupComponents()
-{
+
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MMD_SkeletalMesh"));
 	SkeletalMeshComponent->SetupAttachment(RootComponent);
 	SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+}
+
+void AMMDActor::SetupComponents(const FString& FilePath)
+{
+	static TUniquePtr<TPMXParser> StaticParser = MakeUnique<TPMXParser>();
+	bool bSuccess = StaticParser->ParsePMXFile(FilePath);
+	if (bSuccess) {
+		const PMXDatas& PMXData = StaticParser->PMXInfo;
+		MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("Successfully loaded PMX file: %s"), *FilePath), EMMDMessageType::Success);
+		TMMDMeshBuilder meshbuilder;
+		USkeletalMesh* BuiltMesh = meshbuilder.BuildSkeletalMeshFromPMX(PMXData, FString("/Game/MMDModels"), PMXData.ModelNameEN, FilePath);
+
+#pragma region SetupBlueprint
+		if (!SkeletalMeshComponent)
+		{
+			SkeletalMeshComponent = NewObject<USkeletalMeshComponent>(this, TEXT("MMD_SkeletalMesh_RT"));
+			SkeletalMeshComponent->SetupAttachment(RootComponent);
+			SkeletalMeshComponent->RegisterComponent();
+			SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+		}
+		SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
+#pragma endregion
+
+	}
+	else {
+		MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("MMD文件解析不成功")), EMMDMessageType::Error);
+		return;
+	}
 }
 void AMMDActor::BeginPlay()
 {

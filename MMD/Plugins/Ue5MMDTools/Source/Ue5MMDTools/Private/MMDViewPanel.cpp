@@ -35,7 +35,6 @@
 #include "Animation/AnimationAsset.h"
 #include "Animation/SkeletalMeshActor.h"
 
-// 自定义的视窗客户端类 - 支持UE5编辑器功能
 class FMMDViewportClient : public FEditorViewportClient
 {
 public:
@@ -483,40 +482,121 @@ TSharedPtr<SWidget> MMDViewPanel::MakeViewportToolbar()
                         .Text(FText::FromString(TEXT("Add Test Cube")))
                         .OnClicked_Lambda([this]()
                                           {
-                CreatePreviewActor();
                 return FReply::Handled(); })];
 }
 
-void MMDViewPanel::CreatePreviewActor()
+
+bool MMDViewPanel::CreatePreviewActor(UClass* InActorClass)
 {
-    if (PreviewScene.IsValid() && PreviewScene->GetWorld())
+    // === 基础校验 ===
+    if (!InActorClass || !InActorClass->IsChildOf<AActor>())
     {
-        // 加载立方体网格
-        UStaticMesh *CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-        if (CubeMesh)
+        UE_LOG(LogTemp, Warning, TEXT("CreatePreviewActor: Invalid ActorClass"));
+        return false;
+    }
+    if (!PreviewScene.IsValid() || !PreviewScene->GetWorld())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CreatePreviewActor: PreviewScene is invalid"));
+        return false;
+    }
+
+    UClass* ActorClass = InActorClass;
+    const FString RawName = ActorClass->GetName();
+
+    // === 处理 Blueprint 过渡类 (REINST_ / SKEL_)，需包含 Engine/Blueprint.h ===
+    if (RawName.StartsWith(TEXT("REINST_")) || RawName.StartsWith(TEXT("SKEL_")))
+    {
+#if WITH_EDITOR
+        UBlueprint* BP = Cast<UBlueprint>(ActorClass->ClassGeneratedBy);
+        if (BP)
         {
-            // 生成立方体Actor
-            FVector SpawnLocation = FVector(0, 0, 0);
-            AStaticMeshActor *NewCube = PreviewScene->GetWorld()->SpawnActor<AStaticMeshActor>(SpawnLocation, FRotator::ZeroRotator);
-
-            if (NewCube && NewCube->GetStaticMeshComponent())
+            if (BP->GeneratedClass && BP->GeneratedClass != ActorClass)
             {
-                NewCube->GetStaticMeshComponent()->SetStaticMesh(CubeMesh);
-                NewCube->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
-
-                // 设置碰撞
-                NewCube->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-                NewCube->GetStaticMeshComponent()->SetCollisionObjectType(ECC_WorldStatic);
-                NewCube->GetStaticMeshComponent()->SetCollisionResponseToAllChannels(ECR_Block);
-
-                // 选中新创建的立方体
-                if (FMMDViewportClient *ViewportClient = static_cast<FMMDViewportClient *>(CustomViewportClient.Get()))
-                {
-                    ViewportClient->SetSelectedActor(NewCube);
-                }
+                UE_LOG(LogTemp, Warning, TEXT("CreatePreviewActor: Transitional %s -> Use GeneratedClass %s"),
+                    *RawName, *BP->GeneratedClass->GetName());
+                ActorClass = BP->GeneratedClass;
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("CreatePreviewActor: Transitional %s but no final GeneratedClass yet (still compiling?)"), *RawName);
+                return false; // 暂停，等待下一次再尝试
             }
         }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("CreatePreviewActor: Transitional class %s has no Blueprint origin"), *RawName);
+            return false;
+        }
+#else
+        UE_LOG(LogTemp, Warning, TEXT("CreatePreviewActor: Transitional class %s in non-editor build"), *RawName);
+        return false;
+#endif
     }
+
+    // === 抽象 / 不可放置过滤 ===
+    if (ActorClass->HasAnyClassFlags(CLASS_Abstract))
+    {
+        UE_LOG(LogTemp, Error, TEXT("CreatePreviewActor: Class %s is abstract"), *ActorClass->GetName());
+        return false;
+    }
+    if (ActorClass->HasAnyClassFlags(CLASS_NotPlaceable))
+    {
+        UE_LOG(LogTemp, Error, TEXT("CreatePreviewActor: Class %s is not placeable (CLASS_NotPlaceable)"), *ActorClass->GetName());
+        return false;
+    }
+
+    UWorld* World = PreviewScene->GetWorld();
+
+    // === 如当前预览被选中，先清除再销毁 ===
+    if (FMMDViewportClient* VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
+    {
+        if (IsValid(PreviewActor) && VC->GetSelectedActor() == PreviewActor)
+        {
+            VC->SetSelectedActor(nullptr);
+        }
+    }
+    if (IsValid(PreviewActor))
+    {
+        World->DestroyActor(PreviewActor);
+        PreviewActor = nullptr;
+    }
+
+    // === Spawn 参数（不强制命名，减少重名/重复） ===
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    SpawnParams.ObjectFlags |= RF_Transient; // 预览对象不参与保存
+    // 如果你必须自定义名字再取消注释：
+    // SpawnParams.Name = MakeUniqueObjectName(World, ActorClass, FName(TEXT("MMDPreviewActor")));
+
+    UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Spawning Class=%s Flags=0x%X"),
+        *ActorClass->GetName(), (int32)ActorClass->GetClassFlags());
+
+    AActor* NewActor = World->SpawnActor<AActor>(ActorClass, FTransform::Identity, SpawnParams);
+    if (!IsValid(NewActor))
+    {
+        UE_LOG(LogTemp, Error, TEXT("CreatePreviewActor: SpawnActor failed for %s"), *ActorClass->GetName());
+        return false;
+    }
+
+    PreviewActor = NewActor;
+
+    if (FMMDViewportClient* VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
+    {
+        VC->SetSelectedActor(PreviewActor);
+        const FBox Bounds = PreviewActor->GetComponentsBoundingBox(true);
+        if (Bounds.IsValid)
+        {
+            VC->FocusViewportOnBox(Bounds);
+        }
+        else
+        {
+            // 你的版本可能没有 FocusViewportOnLocation，若无就忽略该情况
+            UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Bounds invalid, skip focus"));
+        }
+    }
+
+    UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Success %s"), *PreviewActor->GetName());
+    return true;
 }
 
 void MMDViewPanel::ImportModelClicked()
@@ -541,7 +621,6 @@ void MMDViewPanel::ImportModelClicked()
         {
             FString SelectedFile = OpenedFiles[0];
 
-            // 显示导入成功的消息
             if (GEngine)
             {
                 GEngine->AddOnScreenDebugMessage(
@@ -557,9 +636,6 @@ void MMDViewPanel::ImportModelClicked()
                     TEXT("Model import functionality ready - you can implement FBX/OBJ import here"));
             }
 
-            // 这里可以添加实际的模型导入逻辑
-            // 比如使用UE5的FBX导入器来导入模型
-            // ImportStaticMeshFromFile(SelectedFile);
         }
     }
 }

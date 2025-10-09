@@ -11,17 +11,19 @@ class UE5MMDTOOLS_API AMMDActor : public AActor
 {
     GENERATED_BODY()
 public:
-    AMMDActor();
+
+	AMMDActor();
 
     void BuildFromPMXData(const PMXDatas& PMXInfo, const FString& PMXFilePath);
 
     UFUNCTION(BlueprintCallable, Category = "MMD")
     USkeletalMeshComponent* GetMeshComponent() const { return SkeletalMeshComponent; }
 
+    void SetupComponents(const FString& FilePath);
 protected:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
-
+    
 private:
     UPROPERTY(VisibleAnywhere, Category = "MMD")
     USkeletalMeshComponent* SkeletalMeshComponent = nullptr;
@@ -29,6 +31,6 @@ private:
     PMXDatas LoadedPMX;
     FString  LoadedPMXPath;
 
-    void SetupComponents();
+
     void Cleanup();
 };

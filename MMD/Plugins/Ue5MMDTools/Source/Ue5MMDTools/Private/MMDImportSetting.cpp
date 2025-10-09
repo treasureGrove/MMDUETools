@@ -14,6 +14,99 @@
 #include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
 #include "TVMDParser.h"
+#if WITH_EDITOR
+#include "Factories/BlueprintFactory.h"
+#include "Editor.h"
+#include "AMMDActor.h"
+#include "Modules/ModuleManager.h" 
+#include "Kismet2/KismetEditorUtilities.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetToolsModule.h"
+#include "IAssetTools.h"
+#include "UObject/Package.h"
+#include "UObject/SavePackage.h"
+#include "Misc/PackageName.h"
+#endif // WITH_EDITOR
+
+
+static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& FolderPath, const FString& AssetName, bool bReplaceInLevel)
+{
+	if (!TargetActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SaveMMDBlueprintAsset: TargetActor is null."));
+		return nullptr;
+	}
+#if WITH_EDITOR
+	// 1) 生成唯一包名和资源名
+	FString UniquePackageName, UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		const FString TargetLongPackageName = FolderPath / AssetName; // 例如 /Game/MMDModels/Foo
+		AssetToolsModule.Get().CreateUniqueAssetName(TargetLongPackageName, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	// 2) 创建包与蓝图（使用 CreateBlueprint，规避 CreateBlueprintFromActor 的重载差异）
+	UPackage* Package = CreatePackage(*UniquePackageName);
+	if (!Package)
+	{
+		UE_LOG(LogTemp, Error, TEXT("CreatePackage failed: %s"), *UniquePackageName);
+		return nullptr;
+	}
+
+	UBlueprint* NewBP = FKismetEditorUtilities::CreateBlueprint(
+		TargetActor->GetClass(),      // 父类：与实例相同
+		Package,                      // 外部：包
+		*UniqueAssetName,             // 资源名
+		BPTYPE_Normal,                // 蓝图类型
+		UBlueprint::StaticClass(),
+		UBlueprintGeneratedClass::StaticClass()
+	);
+	if (!NewBP)
+	{
+		UE_LOG(LogTemp, Error, TEXT("CreateBlueprint failed for: %s/%s"), *UniquePackageName, *UniqueAssetName);
+		return nullptr;
+	}
+
+	// 3) 编译，确保 GeneratedClass/CDO 可用
+	FKismetEditorUtilities::CompileBlueprint(NewBP);
+
+	// 4) 将实例属性复制到蓝图 CDO（参数顺序：Old=实例，New=CDO）
+	if (UClass* GenClass = NewBP->GeneratedClass)
+	{
+		if (UObject* BPCDO = GenClass->GetDefaultObject(/*bCreateIfNeeded*/true))
+		{
+			UEngine::FCopyPropertiesForUnrelatedObjectsParams Params; // 按现有 API，移除不存在的字段设置
+			UEngine::CopyPropertiesForUnrelatedObjects(/*OldObject=*/TargetActor, /*NewObject=*/BPCDO, Params);
+		}
+	}
+
+	// 5) 标记和注册
+	NewBP->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(NewBP);
+
+	// 6) 保存（使用 FSavePackageArgs 新 API）
+	const EObjectFlags TopLevelFlags = RF_Public | RF_Standalone;
+	const FString FilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = TopLevelFlags;
+	SaveArgs.SaveFlags = SAVE_None;               // 视需要设置 SAVE_NoError 等
+	SaveArgs.Error = GError;                      // 错误输出
+	SaveArgs.bWarnOfLongFilename = false;
+
+	if (!UPackage::SavePackage(Package, /*InBase*/nullptr, *FilePath, SaveArgs))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SavePackage failed: %s"), *FilePath);
+	}
+
+	// 7) 关注蓝图
+	FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(NewBP);
+	return NewBP;
+#else
+	UE_LOG(LogTemp, Error, TEXT("SaveActorInstanceAsBlueprint: editor-only function"));
+	return nullptr;
+#endif
+}
 
 TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 静态成员初始化
 void MMDImportSetting::Construct(const FArguments& InArgs)
@@ -102,56 +195,47 @@ void MMDImportSetting::ImportMMDModel()
 				ViewPanel->LoadMMDModel(SelectedFile);
 				ShowImportProgress(FString::Printf(TEXT("正在加载模型: %s"), *FileName));
 
-				// 安全的PMX解析实现
 				if (SelectedFile.EndsWith(TEXT(".pmx")))
 				{
 					ShowImportProgress(TEXT("开始解析PMX文件..."));
 					UE_LOG(LogTemp, Warning, TEXT("开始解析PMX文件: %s"), *SelectedFile);
-
-					// 使用静态变量避免析构函数问题
-					static TUniquePtr<TPMXParser> StaticParser = MakeUnique<TPMXParser>();
-
-					bool bSuccess = StaticParser->ParsePMXFile(SelectedFile);
-
-					if (bSuccess)
+#if WITH_EDITOR
+					UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+					if (!EditorWorld) {
+						ShowImportProgress(TEXT("未找到编辑器世界，无法生成Actor"), EMMDMessageType::Error);
+						return;
+					}
+					FActorSpawnParameters SpawnParams;
+					SpawnParams.Name = MakeUniqueObjectName(EditorWorld, AMMDActor::StaticClass(), FName(TEXT("MMDActor")));
+					AMMDActor* NewMMDActor = EditorWorld->SpawnActor<AMMDActor>(AMMDActor::StaticClass(), FTransform::Identity, SpawnParams);
+					if (!NewMMDActor)
 					{
-						// 获取解析数据
-						const PMXDatas& PMXData = StaticParser->PMXInfo;
-
-						// 显示解析结果
-						ShowImportProgress(FString::Printf(TEXT("PMX解析成功! 顶点: %d, 骨骼: %d, 变形: %d"),
-							PMXData.ModelVertices.Num(),
-							PMXData.ModelBones.Num(),
-							PMXData.ModelMorphs.Num()));
-
-						UE_LOG(LogTemp, Warning, TEXT("PMX解析成功 - 顶点: %d, 面: %d, 材质: %d, 骨骼: %d, 变形: %d, 帧: %d"),
-							PMXData.ModelVertices.Num(),
-							PMXData.ModelIndices.Num() / 3,
-							PMXData.ModelMaterials.Num(),
-							PMXData.ModelBones.Num(),
-							PMXData.ModelMorphs.Num(),
-							PMXData.ModelFrames.Num());
-						ShowImportProgress(TEXT("开始构建UE5骨骼网格"));
-						TMMDMeshBuilder meshbuilder;
-						USkeletalMesh* BuiltMesh= meshbuilder.BuildSkeletalMeshFromPMX(PMXData, FString("/Game/MMDModels"), PMXData.ModelNameEN, SelectedFile);
-						if (BuiltMesh) {
-							ShowImportProgress(TEXT("骨骼网格创建成功"), EMMDMessageType::Success);
-							if(ViewPanel.IsValid())
-							{
-								ViewPanel->ShowImportedSkeletalMesh(BuiltMesh);
-
-							}
-							else {
-								UE_LOG(LogTemp, Warning, TEXT("[MMDImportSetting] ViewPanel 无效，无法显示模型"));
-							}
+						ShowImportProgress(TEXT("生成AMMDActor失败"), EMMDMessageType::Error);
+						return;
+					}
+					NewMMDActor->SetupComponents(SelectedFile);
+					// 保存为蓝图资产
+					FString AssetFolder = TEXT("/Game/MMDModels");
+					FString AssetName = FPaths::GetBaseFilename(FileName);
+					if (UBlueprint* NewBP = SaveMMDBlueprintAsset(NewMMDActor, AssetFolder + TEXT("/") + AssetName + TEXT("/BluePrint"), AssetName, true))
+					{
+						if (NewBP->GeneratedClass)
+						{
+							// 关键：这里调用预览函数在插件预览窗口生成 Actor
+							ViewPanel->CreatePreviewActor(NewBP->GeneratedClass);
 						}
-						ShowImportProgress(FString::Printf(TEXT("UE5模型创建完成: %s"), *PMXData.ModelNameEN), EMMDMessageType::Success);
 					}
-					else
-					{
-						ShowImportProgress(TEXT("PMX解析失败"));
-						UE_LOG(LogTemp, Error, TEXT("PMX解析失败: %s"), *SelectedFile);
-					}
+
+					GEditor->SelectNone(false, true);
+					GEditor->SelectActor(NewMMDActor, true, true);
+					GEditor->MoveViewportCamerasToActor(*NewMMDActor, false);
+
+
+					ShowImportProgress(TEXT("已在关卡中生成AMMDActor并加载PMX"), EMMDMessageType::Success);
+
+#else
+					ShowImportProgress(TEXT("仅在编辑器中可生成Actor"), EMMDMessageType::Warning);
+#endif
 				}
 				else
 				{
@@ -207,7 +291,6 @@ void MMDImportSetting::ImportStaticMesh()
 		}
 	}
 }
-
 void MMDImportSetting::ImportVMDAnimation()
 {
 	ShowImportProgress(TEXT("打开VMD动画选择对话框..."));
@@ -256,9 +339,6 @@ void MMDImportSetting::ImportVMDAnimation()
 		}
 	}
 }
-
-
-
 void MMDImportSetting::ShowImportProgress(const FString& Message, EMMDMessageType Type)
 {
 	if (StatusText.IsValid())
@@ -320,3 +400,4 @@ void MMDImportSetting::ShowGlobalImportProgress(const FString& Message, EMMDMess
 		}
 	}
 }
+
