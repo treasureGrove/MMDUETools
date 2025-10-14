@@ -170,6 +170,9 @@ protected:
     void SolveConstraints(float DeltaTime);
     void ApplyDamping(float DeltaTime);
     void UpdateBoneTransforms();
+    void CheckCollisions();
+    bool CheckSphereCollision(const FMMDPhysicsBone& BoneA, const FMMDPhysicsBone& BoneB) const;
+    void ResolveCollision(FMMDPhysicsBone& BoneA, FMMDPhysicsBone& BoneB);
 
     // Coordinate conversion (MMD to UE5)
     FVector ConvertMMDToUE5Position(const FVector& MMDPos) const;

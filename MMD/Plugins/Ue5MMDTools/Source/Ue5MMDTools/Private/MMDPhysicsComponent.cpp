@@ -134,6 +134,9 @@ void UMMDPhysicsComponent::UpdatePhysics(float DeltaTime)
     // Verlet integration
     IntegrateVerlet(ClampedDeltaTime);
 
+    // Check and resolve collisions
+    CheckCollisions();
+
     // Solve constraints multiple times for stability
     for (int32 i = 0; i < ConstraintIterations; ++i)
     {
@@ -271,4 +274,123 @@ FVector UMMDPhysicsComponent::ConvertMMDToUE5Scale(const FVector& MMDScale) cons
 {
     // Scale conversion (same as position for proportions)
     return FVector(MMDScale.X, MMDScale.Z, MMDScale.Y);
+}
+
+void UMMDPhysicsComponent::CheckCollisions()
+{
+    // Simple collision detection between physics bones
+    for (int32 i = 0; i < PhysicsBones.Num(); ++i)
+    {
+        FMMDPhysicsBone& BoneA = PhysicsBones[i];
+        
+        // Skip static bones
+        if (BoneA.PhysicsMode == EMMDPhysicsMode::Static)
+        {
+            continue;
+        }
+
+        for (int32 j = i + 1; j < PhysicsBones.Num(); ++j)
+        {
+            FMMDPhysicsBone& BoneB = PhysicsBones[j];
+
+            // Skip if both are static
+            if (BoneB.PhysicsMode == EMMDPhysicsMode::Static)
+            {
+                continue;
+            }
+
+            // Check collision group
+            bool bCanCollide = (BoneA.CollisionMask & (1 << BoneB.CollisionGroup)) != 0 &&
+                               (BoneB.CollisionMask & (1 << BoneA.CollisionGroup)) != 0;
+
+            if (!bCanCollide)
+            {
+                continue;
+            }
+
+            // Check collision based on shape type
+            bool bColliding = false;
+            
+            if (BoneA.ShapeType == EMMDShapeType::Sphere && BoneB.ShapeType == EMMDShapeType::Sphere)
+            {
+                bColliding = CheckSphereCollision(BoneA, BoneB);
+            }
+            
+            if (bColliding)
+            {
+                ResolveCollision(BoneA, BoneB);
+            }
+        }
+    }
+}
+
+bool UMMDPhysicsComponent::CheckSphereCollision(const FMMDPhysicsBone& BoneA, const FMMDPhysicsBone& BoneB) const
+{
+    float RadiusA = BoneA.Size.X;
+    float RadiusB = BoneB.Size.X;
+    float Distance = FVector::Dist(BoneA.CurrentPosition, BoneB.CurrentPosition);
+    
+    return Distance < (RadiusA + RadiusB);
+}
+
+void UMMDPhysicsComponent::ResolveCollision(FMMDPhysicsBone& BoneA, FMMDPhysicsBone& BoneB)
+{
+    FVector Delta = BoneB.CurrentPosition - BoneA.CurrentPosition;
+    float Distance = Delta.Size();
+    
+    if (Distance < SMALL_NUMBER)
+    {
+        return;
+    }
+
+    FVector Normal = Delta / Distance;
+    float RadiusA = BoneA.Size.X;
+    float RadiusB = BoneB.Size.X;
+    float Overlap = (RadiusA + RadiusB) - Distance;
+
+    if (Overlap <= 0.0f)
+    {
+        return;
+    }
+
+    // Calculate masses for impulse resolution
+    float MassA = BoneA.Mass > 0.0f ? BoneA.Mass : 1.0f;
+    float MassB = BoneB.Mass > 0.0f ? BoneB.Mass : 1.0f;
+    float TotalMass = MassA + MassB;
+
+    // Position correction
+    FVector Correction = Normal * Overlap;
+    
+    if (BoneA.PhysicsMode == EMMDPhysicsMode::Dynamic)
+    {
+        BoneA.CurrentPosition -= Correction * (MassB / TotalMass);
+    }
+    if (BoneB.PhysicsMode == EMMDPhysicsMode::Dynamic)
+    {
+        BoneB.CurrentPosition += Correction * (MassA / TotalMass);
+    }
+
+    // Velocity correction with restitution
+    FVector RelativeVelocity = BoneB.Velocity - BoneA.Velocity;
+    float VelocityAlongNormal = FVector::DotProduct(RelativeVelocity, Normal);
+
+    if (VelocityAlongNormal > 0)
+    {
+        return; // Velocities are separating
+    }
+
+    float Restitution = FMath::Min(BoneA.Restitution, BoneB.Restitution);
+    float ImpulseMagnitude = -(1.0f + Restitution) * VelocityAlongNormal;
+    ImpulseMagnitude /= (1.0f / MassA + 1.0f / MassB);
+
+    FVector Impulse = Normal * ImpulseMagnitude;
+
+    if (BoneA.PhysicsMode == EMMDPhysicsMode::Dynamic)
+    {
+        BoneA.Velocity -= Impulse / MassA;
+    }
+    if (BoneB.PhysicsMode == EMMDPhysicsMode::Dynamic)
+    {
+        BoneB.Velocity += Impulse / MassB;
+    }
 }

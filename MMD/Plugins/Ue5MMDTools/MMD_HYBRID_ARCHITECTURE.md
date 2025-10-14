@@ -34,11 +34,19 @@ VMD文件 → FVMDParser → UAnimSequence (UE5格式)
 - ✅ 材质系统适配
 - 🔄 实际文件解析实现
 
-### 阶段2: MMD物理系统 (架构完成)
-- ✅ FMMDRigidBodyData - 刚体数据结构
-- ✅ FMMDConstraintData - 约束数据结构
+### 阶段2: MMD物理系统 (已完成)
+- ✅ FMMDPhysicsBone - 物理骨骼数据结构
+- ✅ FMMDPhysicsConstraint - 约束数据结构
 - ✅ UMMDPhysicsComponent - 物理组件
-- 🔄 与UE5物理世界的集成
+- ✅ Verlet积分法实现
+- ✅ 碰撞检测和解决
+- ✅ 约束求解器
+- ✅ MMD坐标系转换
+- ✅ Blueprint接口
+- ✅ UMMDAnimInstance - 动画实例集成
+- 🔄 完整的骨骼变换应用
+- 🔄 高级碰撞形状（Box, Capsule）
+- 🔄 性能优化和多线程
 
 ### 阶段3: 动画转换系统 (架构完成)
 - ✅ FVMDAnimationData - VMD数据结构
@@ -144,7 +152,8 @@ MMDMat->SetOutlineParameters(2.0f, FLinearColor::Black);
 ### 正在开发
 - 🔄 PMX文件实际解析
 - 🔄 VMD动画转换
-- 🔄 物理系统实现
+- ✅ 物理系统基础实现（Verlet积分、碰撞、约束）
+- 🔄 物理系统高级功能（完整骨骼变换、性能优化）
 
 ### 计划功能
 - ⏳ 表情动画
@@ -163,9 +172,16 @@ FMMDModelImporter::CreateSkeletalMeshFromPMX()
 
 ### 2. 实现基础物理
 ```cpp
-// 需要实现的物理组件
-UMMDPhysicsComponent::InitializeMMDPhysics()
+// ✅ 已实现
+UMMDPhysicsComponent::InitializeFromPMXData()
 UMMDPhysicsComponent::UpdatePhysics()
+UMMDPhysicsComponent::IntegrateVerlet()
+UMMDPhysicsComponent::CheckCollisions()
+UMMDPhysicsComponent::SolveConstraints()
+
+// 🔄 待完成
+UMMDPhysicsComponent::UpdateBoneTransforms() // 应用物理到骨骼
+UMMDAnimInstance::ApplyPhysicsToAnimation() // 混合物理和动画
 ```
 
 ### 3. 测试整合
