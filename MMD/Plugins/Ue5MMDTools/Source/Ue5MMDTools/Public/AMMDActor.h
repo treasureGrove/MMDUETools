@@ -5,6 +5,7 @@
 #include "TVMDParser.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MMDPhysicsComponent.h"
+#include "MMDPhysicsDebugDraw.h"
 #include "AMMDActor.generated.h"
 
 UCLASS()
@@ -24,10 +25,16 @@ public:
     UMMDPhysicsComponent* GetPhysicsComponent() const { return PhysicsComponent; }
 
     UFUNCTION(BlueprintCallable, Category = "MMD")
+    UMMDPhysicsDebugDraw* GetDebugDrawComponent() const { return DebugDrawComponent; }
+
+    UFUNCTION(BlueprintCallable, Category = "MMD")
     void SetPhysicsEnabled(bool bEnabled);
 
     UFUNCTION(BlueprintCallable, Category = "MMD")
     bool IsPhysicsEnabled() const;
+
+    UFUNCTION(BlueprintCallable, Category = "MMD")
+    void SetPhysicsDebugDrawEnabled(bool bEnabled);
 
     void SetupComponents(const FString& FilePath);
 protected:
@@ -40,6 +47,9 @@ private:
 
     UPROPERTY(VisibleAnywhere, Category = "MMD")
     UMMDPhysicsComponent* PhysicsComponent = nullptr;
+
+    UPROPERTY(VisibleAnywhere, Category = "MMD")
+    UMMDPhysicsDebugDraw* DebugDrawComponent = nullptr;
 
     PMXDatas LoadedPMX;
     FString  LoadedPMXPath;

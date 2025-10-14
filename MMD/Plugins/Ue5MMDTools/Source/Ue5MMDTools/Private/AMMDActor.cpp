@@ -4,6 +4,7 @@
 #include "TMMDMeshBuilder.h"
 #include "MMDImportSetting.h"
 #include "MMDPhysicsComponent.h"
+#include "MMDPhysicsDebugDraw.h"
 
 AMMDActor::AMMDActor()
 {
@@ -18,6 +19,7 @@ AMMDActor::AMMDActor()
 	SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 
 	PhysicsComponent = CreateDefaultSubobject<UMMDPhysicsComponent>(TEXT("MMD_PhysicsComponent"));
+	DebugDrawComponent = CreateDefaultSubobject<UMMDPhysicsDebugDraw>(TEXT("MMD_DebugDrawComponent"));
 }
 
 void AMMDActor::SetupComponents(const FString& FilePath)
@@ -118,6 +120,14 @@ void AMMDActor::SetPhysicsEnabled(bool bEnabled)
 bool AMMDActor::IsPhysicsEnabled() const
 {
 	return PhysicsComponent ? PhysicsComponent->IsPhysicsEnabled() : false;
+}
+
+void AMMDActor::SetPhysicsDebugDrawEnabled(bool bEnabled)
+{
+	if (DebugDrawComponent)
+	{
+		DebugDrawComponent->SetDebugDrawEnabled(bEnabled);
+	}
 }
 
 
