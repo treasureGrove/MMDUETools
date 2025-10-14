@@ -3,6 +3,7 @@
 #include "Components/SceneComponent.h"
 #include "TMMDMeshBuilder.h"
 #include "MMDImportSetting.h"
+#include "MMDPhysicsComponent.h"
 
 AMMDActor::AMMDActor()
 {
@@ -15,6 +16,8 @@ AMMDActor::AMMDActor()
 	SkeletalMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	SkeletalMeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+
+	PhysicsComponent = CreateDefaultSubobject<UMMDPhysicsComponent>(TEXT("MMD_PhysicsComponent"));
 }
 
 void AMMDActor::SetupComponents(const FString& FilePath)
@@ -41,7 +44,7 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 #pragma endregion
 
 #pragma region SetupIKRig
-	//Ê¹ÓÃmmdÄ¬ÈÏµÄ¹Ç÷ÀÃû´´½¨
+	//Ê¹ï¿½ï¿½mmdÄ¬ï¿½ÏµÄ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 #pragma endregion
 
@@ -57,7 +60,7 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 
 	}
 	else {
-		MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("MMDÎÄ¼þ½âÎö²»³É¹¦")), EMMDMessageType::Error);
+		MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("MMDï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É¹ï¿½")), EMMDMessageType::Error);
 		return;
 	}
 }
@@ -94,6 +97,27 @@ void AMMDActor::BuildFromPMXData(const PMXDatas& PMXInfo, const FString& PMXFile
 	}
 	SkeletalMeshComponent->SetSkeletalMesh(NewMesh);
 	UE_LOG(LogTemp, Log, TEXT("Successfully built skeletal mesh from PMX data."));
+
+	// Initialize physics from PMX data
+	if (PhysicsComponent)
+	{
+		PhysicsComponent->InitializeFromPMXData(PMXInfo);
+		UE_LOG(LogTemp, Log, TEXT("Initialized MMD physics component with %d rigid bodies and %d joints"), 
+			PMXInfo.ModelRigidCount, PMXInfo.ModelJointCount);
+	}
+}
+
+void AMMDActor::SetPhysicsEnabled(bool bEnabled)
+{
+	if (PhysicsComponent)
+	{
+		PhysicsComponent->SetPhysicsEnabled(bEnabled);
+	}
+}
+
+bool AMMDActor::IsPhysicsEnabled() const
+{
+	return PhysicsComponent ? PhysicsComponent->IsPhysicsEnabled() : false;
 }
 
 
