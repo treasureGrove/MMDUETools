@@ -11,7 +11,9 @@ AMMDActor::AMMDActor()
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MMD_SkeletalMesh"));
 	SkeletalMeshComponent->SetupAttachment(RootComponent);
-	SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	SkeletalMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+	SkeletalMeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 }
 
@@ -24,18 +26,34 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		MMDImportSetting::ShowGlobalImportProgress(FString::Printf(TEXT("Successfully loaded PMX file: %s"), *FilePath), EMMDMessageType::Success);
 		TMMDMeshBuilder meshbuilder;
 		USkeletalMesh* BuiltMesh = meshbuilder.BuildSkeletalMeshFromPMX(PMXData, FString("/Game/MMDModels"), PMXData.ModelNameEN, FilePath);
-
 #pragma region SetupBlueprint
 		if (!SkeletalMeshComponent)
 		{
 			SkeletalMeshComponent = NewObject<USkeletalMeshComponent>(this, TEXT("MMD_SkeletalMesh_RT"));
 			SkeletalMeshComponent->SetupAttachment(RootComponent);
 			SkeletalMeshComponent->RegisterComponent();
-			SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			SkeletalMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+			SkeletalMeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 			SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 		}
 		SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
 #pragma endregion
+
+#pragma region SetupIKRig
+	//使用mmd默认的骨骼名创建
+
+#pragma endregion
+
+#pragma region SetupPhysicsAsset
+
+#pragma endregion
+
+#pragma region SetupAnimationBlueprint
+
+#pragma endregion
+
+
 
 	}
 	else {

@@ -664,12 +664,14 @@ UIKRigDefinition* TMMDMeshBuilder::BuildIKRigFromPMX(const FString& PackagePath,
     return nullptr;
 #else
     if (!BuiltMesh) {
-        return nullptr;
+      
         UE_LOG(LogTemp, Error, TEXT("mmd模型缺失"));
+        return nullptr;
     }
 
 
 
 #endif
+	return nullptr;
 }
 

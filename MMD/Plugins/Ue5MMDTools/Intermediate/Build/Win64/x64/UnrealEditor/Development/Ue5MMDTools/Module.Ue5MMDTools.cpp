@@ -7,6 +7,5 @@
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDPhysicsSystem.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/TPMXParser.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/TVMDParser.cpp"
-#include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Ue5MMDTools.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Ue5MMDToolsCommands.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Ue5MMDToolsStyle.cpp"

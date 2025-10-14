@@ -61,6 +61,10 @@ TSharedRef<SDockTab> FUe5MMDToolsModule::OnSpawnPluginTab(const FSpawnTabArgs &S
     // 创建ViewPanel引用，以便传递给设置区
     TSharedRef<MMDViewPanel> ViewPanelWidget = SNew(MMDViewPanel);
 
+    // 创建设置面板，并在创建后注册实例，避免在 Construct 中触发 SharedThis 断言
+    TSharedRef<MMDImportSetting> ImportSetting = SNew(MMDImportSetting).ViewPanel(ViewPanelWidget);
+    MMDImportSetting::RegisterInstance(ImportSetting);
+
     return SNew(SDockTab)
         .TabRole(ETabRole::NomadTab)
             [SNew(SSplitter)
@@ -85,9 +89,7 @@ TSharedRef<SDockTab> FUe5MMDToolsModule::OnSpawnPluginTab(const FSpawnTabArgs &S
                    .Value(0.2f)
                        [SNew(SBorder)
                             .Padding(5)
-                                [SNew(MMDImportSetting)
-                                     .ViewPanel(ViewPanelWidget)]]];
-    // ...existing code...
+                                [ImportSetting]]];
 }
 
 void FUe5MMDToolsModule::PluginButtonClicked()

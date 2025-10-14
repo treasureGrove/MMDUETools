@@ -28,7 +28,7 @@
 #include "Misc/PackageName.h"
 #endif // WITH_EDITOR
 
-
+// Define helper now (was accidentally removed)
 static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& FolderPath, const FString& AssetName, bool bReplaceInLevel)
 {
 	if (!TargetActor)
@@ -108,13 +108,28 @@ static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& Fol
 #endif
 }
 
+static UAnimationAsset* SaveMMDAnimationAsset(UAnimSequence* AnimSeq, const FString& FolderPath, const FString& AssetName)
+{
+	if (!AnimSeq)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SaveMMDAnimationAsset: AnimSeq is null."));
+		return nullptr;
+	}
+}
+
+
 TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 静态成员初始化
+
+void MMDImportSetting::RegisterInstance(const TSharedRef<MMDImportSetting>& InstanceRef)
+{
+	CurrentInstance = InstanceRef;
+}
+
 void MMDImportSetting::Construct(const FArguments& InArgs)
 {
 	// 保存ViewPanel引用
 	ViewPanel = InArgs._ViewPanel;
-	// 保存当前实例的弱引用
-	CurrentInstance = SharedThis(this);
+	// 不要在 Construct 里调用 SharedThis(this)，避免 TSharedFromThis 断言
 	ChildSlot
 		[SNew(SHorizontalBox) + SHorizontalBox::Slot().FillWidth(1.0f)[SNew(SVerticalBox) + SVerticalBox::Slot().AutoHeight().Padding(2.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("设置区 - MMD模型导入"))).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))] + SVerticalBox::Slot().AutoHeight().Padding(2.0f)[SAssignNew(StatusText, STextBlock).Text(FText::FromString(TEXT("准备就绪..."))).ColorAndOpacity(FSlateColor(FLinearColor::Green))]] + SHorizontalBox::Slot().AutoWidth()[SNew(SHorizontalBox) + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入MMD模型"))).ToolTipText(FText::FromString(TEXT("导入.pmx/.pmd/.fbx等MMD模型文件"))).OnClicked(this, &MMDImportSetting::OnImportModelClicked)] + SHorizontalBox::Slot()  // 改为 SHorizontalBox::Slot()
 		.AutoWidth()

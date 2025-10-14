@@ -28,6 +28,9 @@ public:
 
     static void ShowGlobalImportProgress(const FString &Message, EMMDMessageType Type = EMMDMessageType::Info);
 
+    // 注册当前实例，避免在 Construct 中调用 SharedThis
+    static void RegisterInstance(const TSharedRef<MMDImportSetting>& InstanceRef);
+
 private:
     /** 导入模型按钮点击事件 */
     FReply OnImportModelClicked();

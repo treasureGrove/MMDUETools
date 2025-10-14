@@ -6,6 +6,8 @@
 #include "EditorViewportClient.h"
 #include "AMMDActor.h"
 
+class FEditorModeTools; // forward declare editor type
+
 class UE5MMDTOOLS_API MMDViewPanel : public SEditorViewport
 {
 public:
@@ -19,6 +21,10 @@ public:
 
 	void ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh);
 	bool CreatePreviewActor(UClass* ActorClass);
+
+	// destructor to clean up editor-only pointers
+	virtual ~MMDViewPanel();
+
 protected:
 	/** Creates the viewport client for this viewport */
 	virtual TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;
@@ -26,8 +32,6 @@ protected:
 	virtual TSharedPtr<SWidget> MakeViewportToolbar() override;
 
 private:
-
-
 	void ImportModelClicked();
 
 	TSharedPtr<FAdvancedPreviewScene> PreviewScene;
@@ -36,6 +40,7 @@ private:
 	FVector WidgetLocation;
 
 	AActor* PreviewActor = nullptr;
-	
 
+	// Local ModeTools as shared pointer so AsShared() in engine code is valid
+	TSharedPtr<FEditorModeTools> LocalModeTools;
 };

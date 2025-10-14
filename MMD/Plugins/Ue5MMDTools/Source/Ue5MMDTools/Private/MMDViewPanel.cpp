@@ -6,6 +6,7 @@
 #include "SEditorViewport.h"
 #include "UnrealWidget.h"
 #include "Editor.h"
+#include "EditorModeTools.h" // include privately
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -18,9 +19,7 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "EditorModeManager.h"
 #include "Engine/Selection.h"
-#include "EditorModeTools.h"
 #include "DragAndDrop/AssetDragDropOp.h"
-#include "HitProxies.h"
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
 #include "Engine/Engine.h"
@@ -34,16 +33,21 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimationAsset.h"
 #include "Animation/SkeletalMeshActor.h"
+#include "Components/PrimitiveComponent.h"
+#include "HitProxies.h"
+#include "Templates/SharedPointer.h"
 
 class FMMDViewportClient : public FEditorViewportClient
 {
 public:
-    FMMDViewportClient(FPreviewScene *InPreviewScene, const TWeakPtr<SEditorViewport> &InEditorViewportWidget)
-        : FEditorViewportClient(nullptr, InPreviewScene, InEditorViewportWidget), PreviewScene(InPreviewScene), SelectedActor(nullptr)
+    FMMDViewportClient(FEditorModeTools* InModeTools, FPreviewScene *InPreviewScene, const TWeakPtr<SEditorViewport> &InEditorViewportWidget)
+        : FEditorViewportClient(InModeTools, InPreviewScene, InEditorViewportWidget), PreviewScene(InPreviewScene), SelectedActor(nullptr)
     {
         SetViewMode(VMI_Lit);
         SetRealtime(true);
-
+        // 关键：启用编辑器/后处理/选择描边相关的 ShowFlag（保持兼容）
+        EngineShowFlags.SetEditor(true);
+        EngineShowFlags.SetPostProcessing(true);
         // 设置默认视角
         SetViewLocation(FVector(300, 300, 300));
         SetViewRotation(FRotator(-25, 45, 0));
@@ -63,9 +67,10 @@ public:
         // 启用选择高亮渲染（让UE5自动处理选择描边）
         EngineShowFlags.SetSelection(true);
         EngineShowFlags.SetSelectionOutline(true);
-
+        EngineShowFlags.SetModeWidgets(true);
         // 连接到编辑器选择系统
         USelection::SelectionChangedEvent.AddRaw(this, &FMMDViewportClient::OnActorSelectionChanged);
+        
     }
     ~FMMDViewportClient()
     {
@@ -197,6 +202,14 @@ public:
         return FMatrix::Identity;
     }
 
+    virtual void SetWidgetMode(UE::Widget::EWidgetMode NewMode) override
+    {
+        if (SelectedActor)
+        {
+            FEditorViewportClient::SetWidgetMode(NewMode);
+        }
+    }
+
     // 处理Widget变换 - 确保右键不被Widget拦截
     virtual bool InputWidgetDelta(FViewport *InViewport, EAxisList::Type CurrentAxis, FVector &Drag, FRotator &Rot, FVector &Scale) override
     {
@@ -232,31 +245,29 @@ public:
         return FEditorViewportClient::InputWidgetDelta(InViewport, CurrentAxis, Drag, Rot, Scale);
     }
 
-    // 处理鼠标点击选择 - 让父类优先处理视角控制
+    // 处理鼠标点击选择：使用屏幕射线选择
     virtual void ProcessClick(FSceneView &View, HHitProxy *HitProxy, FKey Key, EInputEvent Event, uint32 HitX, uint32 HitY) override
     {
-        // 先让父类处理所有输入（包括视角控制）
+        // 先让父类处理（更新内部状态/Widget等）
         FEditorViewportClient::ProcessClick(View, HitProxy, Key, Event, HitX, HitY);
 
-        // 只有在左键释放时才处理选择（避免干扰拖拽）
-        if (Key == EKeys::LeftMouseButton && Event == IE_Released)
+        if (Key == EKeys::LeftMouseButton && Event == IE_Pressed)
         {
-            // 使用射线检测进行选择
+            // 屏幕射线
             if (GetWorld())
             {
                 FVector WorldOrigin, WorldDirection;
-                View.DeprojectFVector2D(FVector2D(HitX, HitY), WorldOrigin, WorldDirection);
+                View.DeprojectFVector2D(FVector2D((float)HitX, (float)HitY), WorldOrigin, WorldDirection);
 
-                FVector TraceStart = WorldOrigin;
-                FVector TraceEnd = WorldOrigin + WorldDirection * 10000.0f;
-
+                const FVector TraceStart = WorldOrigin;
+                const FVector TraceEnd = WorldOrigin + WorldDirection * 10000.0f;
                 FHitResult HitResult;
                 FCollisionQueryParams Params(SCENE_QUERY_STAT(ProcessClick), true);
+                Params.bTraceComplex = true;
 
                 if (GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, Params))
                 {
-                    AActor *HitActor = HitResult.GetActor();
-                    if (HitActor && IsValid(HitActor))
+                    if (AActor* HitActor = HitResult.GetActor())
                     {
                         SetSelectedActor(HitActor);
                         return;
@@ -264,7 +275,7 @@ public:
                 }
             }
 
-            // 如果没有找到对象，清除选择
+            // 清空选择
             SetSelectedActor(nullptr);
         }
     }
@@ -389,6 +400,9 @@ public:
     void IncreaseCameraSpeed() { SetCameraSpeed(CameraSpeedSetting * 1.25f); }
     void DecreaseCameraSpeed() { SetCameraSpeed(CameraSpeedSetting * 0.8f); }
 
+    // 声明该视口为关卡编辑器类型，启用相关编辑器特性
+    virtual bool IsLevelEditorClient() const override { return true; }
+
 private:
     FPreviewScene *PreviewScene;
     AActor *SelectedActor;
@@ -400,15 +414,25 @@ private:
 void MMDViewPanel::Construct(const FArguments &InArgs)
 {
     // 创建预览场景
-    PreviewScene = MakeShareable(new FAdvancedPreviewScene(FPreviewScene::ConstructionValues()));
+    PreviewScene = MakeShared<FAdvancedPreviewScene>(FPreviewScene::ConstructionValues());
+
+    // create local ModeTools instance as shared, required because FEditorViewportClient's ctor calls AsShared()
+    LocalModeTools = MakeShared<FEditorModeTools>();
 
     // 首先调用父类的Construct来初始化视口
     SEditorViewport::Construct(SEditorViewport::FArguments());
 }
 
+MMDViewPanel::~MMDViewPanel()
+{
+    LocalModeTools.Reset();
+}
+
 TSharedRef<FEditorViewportClient> MMDViewPanel::MakeEditorViewportClient()
 {
-    CustomViewportClient = MakeShareable(new FMMDViewportClient(PreviewScene.Get(), SharedThis(this)));
+    // Avoid SharedThis(this) here (may assert before shared instance exists)
+    TWeakPtr<SEditorViewport> NullViewportWidget;
+    CustomViewportClient = MakeShared<FMMDViewportClient>(LocalModeTools.Get(), PreviewScene.Get(), NullViewportWidget);
     return CustomViewportClient.ToSharedRef();
 }
 
@@ -579,6 +603,19 @@ bool MMDViewPanel::CreatePreviewActor(UClass* InActorClass)
     }
 
     PreviewActor = NewActor;
+    {
+        TArray<UPrimitiveComponent*> PrimComps;
+        PreviewActor->GetComponents<UPrimitiveComponent>(PrimComps);
+        for (UPrimitiveComponent* Comp : PrimComps)
+        {
+            if (!Comp) continue;
+            Comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+            Comp->SetCollisionResponseToAllChannels(ECR_Ignore);
+            Comp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+            Comp->bTraceComplexOnMove = true; // 旧版标志可忽略，新版以 bTraceComplex 为准
+            Comp->MarkRenderStateDirty();
+        }
+    }
 
     if (FMMDViewportClient* VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
     {
