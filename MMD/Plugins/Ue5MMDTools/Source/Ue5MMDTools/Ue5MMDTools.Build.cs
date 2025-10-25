@@ -8,7 +8,10 @@ public class Ue5MMDTools : ModuleRules
 
         PublicDependencyModuleNames.AddRange(new string[] {
             "Core", "CoreUObject", "Engine", "Slate", "SlateCore" ,  "EditorStyle",
-            "RenderCore", "RHI","AnimationCore"
+            "RenderCore", "RHI",   "AnimGraph",
+    "AnimGraphRuntime",
+    "BlueprintGraph",
+    "KismetCompiler"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[] {
@@ -31,10 +34,11 @@ public class Ue5MMDTools : ModuleRules
             "ApplicationCore",
     "SkeletalMeshUtilitiesCommon",
     "MeshUtilities",
-    "MeshUtilitiesCommon",     // 👈 添加这个
+    "MeshUtilitiesCommon",
     "ToolMenus",
-    "StaticMeshDescription",   // 👈 添加这个
-    "MeshDescription",         // 👈 添加这个
+    "StaticMeshDescription",
+    "MeshDescription",
+
         });
 
         PublicIncludePaths.AddRange(new string[] { });

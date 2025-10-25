@@ -293,6 +293,11 @@
 /I "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\UnrealEditor\Inc\Ue5MMDTools\UHT"
 /I "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Source"
 /I "Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Source\Ue5MMDTools\Public"
+/I "..\Intermediate\Build\Win64\UnrealEditor\Inc\AnimGraph\UHT"
+/I "Editor\AnimGraph\Public"
+/I "Editor\AnimGraph\Internal"
+/I "..\Intermediate\Build\Win64\UnrealEditor\Inc\AnimGraphRuntime\UHT"
+/I "Runtime\AnimGraphRuntime\Public"
 /external:W0
 /external:I "ThirdParty\GuidelinesSupportLibrary\GSL-1144\include"
 /external:I "ThirdParty\RapidJSON\1.1.0"
