@@ -132,6 +132,8 @@ public:
 
     void SetupComponents(const FString& FilePath);
 
+	UFUNCTION(BlueprintCallable, Category = "MMD Physics")
+	class UAnimBlueprint* GenerateMMDAnimationBlueprint(const FString& FilePath,const FString& AssetName);
 
 protected:
     virtual void BeginPlay() override;
@@ -163,6 +165,7 @@ private:
     PMXDatas LoadedPMX;
     FString  LoadedPMXPath;
 
-
     void Cleanup();
+    
+    UAnimBlueprint* CreateAnimBlueprintWithPhysics(USkeletalMesh* TargetMesh, const FString& PackagePath, const FString& AssetName);
 };
