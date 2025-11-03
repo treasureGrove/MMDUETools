@@ -4,6 +4,7 @@
 #include "TPMXParser.h"
 #include "TVMDParser.h"
 #include "Components/SkeletalMeshComponent.h" 
+#include "Components/CapsuleComponent.h"
 #include "AMMDActor.generated.h"
 USTRUCT(BlueprintType)
 struct FMMDPhysicsState {
@@ -125,47 +126,43 @@ public:
 
 	AMMDActor();
 
-    void BuildFromPMXData(const PMXDatas& PMXInfo, const FString& PMXFilePath);
-
     UFUNCTION(BlueprintCallable, Category = "MMD")
     USkeletalMeshComponent* GetMeshComponent() const { return SkeletalMeshComponent; }
 
+
     void SetupComponents(const FString& FilePath);
 
-	UFUNCTION(BlueprintCallable, Category = "MMD Physics")
-	class UAnimBlueprint* GenerateMMDAnimationBlueprint(const FString& FilePath,const FString& AssetName);
-
 protected:
+
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
-	TArray<FMMDPhysicsBone> PhysicsBones;
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
+	//TArray<FMMDPhysicsBone> PhysicsBones;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
-	TArray<FMMDPhysicsConstraint> PhysicsConstraints;
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
+	//TArray<FMMDPhysicsConstraint> PhysicsConstraints;
 
-    // 全局物理设置
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics", meta = (ClampMin = "0.1", ClampMax = "10.0"))
-    float GlobalPhysicsScale = 1.0f;
+ //   // 全局物理设置
+ //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics", meta = (ClampMin = "0.1", ClampMax = "10.0"))
+ //   float GlobalPhysicsScale = 1.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
-    FVector GlobalGravity = FVector(0, 0, -980.0f);
+ //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
+ //   FVector GlobalGravity = FVector(0, 0, -980.0f);
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
-    bool bEnableMMDPhysics = true;
+ //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
+ //   bool bEnableMMDPhysics = true;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics", meta = (ClampMin = "1", ClampMax = "10"))
-    int32 PhysicsIterations = 3;  // 约束求解迭代次数
-    
+ //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics", meta = (ClampMin = "1", ClampMax = "10"))
+ //   int32 PhysicsIterations = 3;  // 约束求解迭代次数
+ //   
 private:
+    //蓝图组成
     UPROPERTY(VisibleAnywhere, Category = "MMD")
     USkeletalMeshComponent* SkeletalMeshComponent = nullptr;
 
-    PMXDatas LoadedPMX;
-    FString  LoadedPMXPath;
-
-    void Cleanup();
-    
-    UAnimBlueprint* CreateAnimBlueprintWithPhysics(USkeletalMesh* TargetMesh, const FString& PackagePath, const FString& AssetName);
+    UPROPERTY(VisibleAnywhere, Category = "MMD")
+	class UCapsuleComponent* CapsuleComponent = nullptr;
+    UPROPERTY(VisibleAnywhere, Category = "MMD")
+	USceneComponent* RootSceneComponent = nullptr;
 };

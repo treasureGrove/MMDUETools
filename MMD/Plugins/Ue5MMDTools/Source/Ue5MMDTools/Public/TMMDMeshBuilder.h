@@ -11,5 +11,7 @@ public:
     static USkeletalMesh *BuildSkeletalMeshFromPMX(const PMXDatas &PMXInfo, const FString &PackagePath, const FString &AssetName, const FString& PMXFilePath);
     
 	static UIKRigDefinition* BuildIKRigFromPMX(const FString &PackagePath,const FString& AssetName, USkeletalMesh* BuiltMesh);
+
+    static UAnimBlueprint* BuildAnimBlueprint(USkeletalMesh* SkeletalMesh,const FString& PMXFilePath);
 };
 

@@ -1,153 +1,78 @@
-#pragma once  
+ï»¿// AGN_MMDSkeletalControl.h
+#pragma once
 
 #include "CoreMinimal.h"
-#include "BoneIndices.h"
-#include "BoneContainer.h"
-#include "Engine.h"
-#include "TPMXParser.h"
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
+
+// âœ… Editorç›¸å…³å¤´æ–‡ä»¶è¦åœ¨ .generated.h ä¹‹å‰
+#if WITH_EDITORONLY_DATA
 #include "AnimGraphNode_SkeletalControlBase.h"
-#include "AGN_MMDSkeletalControl.generated.h"
-
-USTRUCT(BlueprintType)
-struct UE5MMDTOOLS_API FPMXPhysicsData
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	FName BoneName;
-
-	UPROPERTY()
-	int32 RigidIndex;
-
-	UPROPERTY()
-	FVector Size;
-
-	UPROPERTY()
-	FVector Position;
-
-	UPROPERTY()
-	FVector Rotation;
-
-	UPROPERTY()
-	float Mass;
-
-	UPROPERTY()
-	float LinearDamping;
-
-	UPROPERTY()
-	float AngularDamping;
-
-	UPROPERTY()
-	float Restitution;
-
-	UPROPERTY()
-	float Friction;
-
-	UPROPERTY()
-	uint8 PhysicsMode;//0-static 1-dynamic 2-bonetracked
-
-	UPROPERTY()
-	uint8 ShapeType;//0-sphere 1-box 2-capsule
-
-	FPMXPhysicsData()
-		: BoneName(NAME_None)           // ¿ÕÃû³Æ£¬±íÊ¾Î´°ó¶¨µ½¾ßÌå¹Ç÷À
-		, RigidIndex(-1)                // -1 ±íÊ¾ÎŞĞ§/Î´·ÖÅäµÄË÷Òı
-		, Size(FVector::ZeroVector)     // ×¢Òâ£ºÕâÀïÓÃSIzeÊÇÒòÎªÄãµÄÉùÃ÷ÖĞÓĞÆ´Ğ´´íÎó
-		, Position(FVector::ZeroVector) // Ô­µãÎ»ÖÃ
-		, Rotation(FVector::ZeroVector) // ÎŞĞı×ª
-		, Mass(1.0f)                    // 1kg£¬ºÏÀíµÄÄ¬ÈÏÖÊÁ¿
-		, LinearDamping(0.0f)           // ÎŞÏßĞÔ×èÄá
-		, AngularDamping(0.0f)          // ÎŞ½Ç¶È×èÄá  
-		, Restitution(0.0f)             // ÍêÈ«·Çµ¯ĞÔÅö×²
-		, Friction(0.5f)                // ÖĞµÈÄ¦²ÁÁ¦
-		, PhysicsMode(1)                // 1=Dynamic£¬×î³£ÓÃµÄ¶¯Ì¬ÎïÀíÄ£Ê½
-		, ShapeType(0)                  // 0=Sphere£¬ÇòÌåÊÇ×î¼òµ¥µÄÅö×²ĞÎ×´
-	{
-	}
-
-};
-
-
-// MMD ÎïÀíÁ£×Ó½á¹¹
-USTRUCT(BlueprintType)
-struct UE5MMDTOOLS_API FMMDParticle
-{
-	GENERATED_BODY()
-
-
-	UPROPERTY()
-	FVector Position;
-	UPROPERTY()
-	FVector PrevPosition;  // ĞŞ¸´£º¸ÄÎª PrevPosition£¬±£³ÖÒ»ÖÂ
-	UPROPERTY()
-	float Mass;
-	UPROPERTY()
-	float InvMass; // ÖÊÁ¿µ¹Êı£¬ÓÅ»¯¼ÆËãÓÃ
-
-	FCompactPoseBoneIndex BoneIndex;
-
-	FMMDParticle();
-
-};
-
-// MMD ÎïÀí¶¯»­½Úµã
-USTRUCT(BlueprintInternalUseOnly)
-struct UE5MMDTOOLS_API FAnimNode_MMDPhysics : public FAnimNode_SkeletalControlBase
-{
-	GENERATED_BODY()
-
-public:
-	FAnimNode_MMDPhysics();
-
-	// ĞŞ¸´£ºPinShownByDefault ¶ø²»ÊÇ PinShowByDefault
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (PinShownByDefault))
-	bool bEnablePhysics;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
-	TArray<FName> TargetBoneNames;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
-	FVector Gravity;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float Damping;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
-	bool bApplyPMXPhysics; // ÊÇ·ñÓ¦ÓÃPMXÎïÀí²ÎÊı
-
-	// ±ØĞëÊµÏÖµÄĞéº¯Êı
-	virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
-	virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
-	virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
-
-private:
-	// ÔËĞĞÊ±Êı¾İ
-	TArray<FMMDParticle> Particles;
-	bool bNeedsRebuild;
-
-	// ÄÚ²¿º¯ÊıÉùÃ÷
-	void RebuildParticles(FComponentSpacePoseContext& Output);
-	void SimulatePhysics(FComponentSpacePoseContext& Output);
-	void WriteBackTransforms(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms);
-	void ApplyPMXPhysicsData(const TPMXParser& PMXParser,const FBoneContainer& BoneContainer);
-};
-
-#if WITH_EDITOR
-
-
-UCLASS()
-class UE5MMDTOOLS_API UAGN_MMDSkeletalControl : public UAnimGraphNode_SkeletalControlBase  // ĞŞ¸´£ºÀàÃûÓ¦¸ÃÊÇ UAGN_MMDSkeletalControl
-{
-	GENERATED_BODY()
-
-public:
-	UPROPERTY(EditAnywhere, Category = "Settings")
-	FAnimNode_MMDPhysics Node;
-
-	virtual const FAnimNode_SkeletalControlBase* GetNode() const override { return &Node; }
-	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
-	virtual FString GetNodeCategory() const override;
-};
+#include "Animation/AnimBlueprint.h"
 #endif
 
+#include "AGN_MMDSkeletalControl.generated.h"
+
+// ============================================
+// Runtime èŠ‚ç‚¹ï¼ˆæ¸¸æˆè¿è¡Œæ—¶ï¼‰
+// ============================================
+
+USTRUCT(BlueprintInternalUseOnly)
+struct UE5MMDTOOLS_API FAGN_MMDSkeletalControl : public FAnimNode_SkeletalControlBase
+{
+    GENERATED_BODY()
+
+public:
+    FAGN_MMDSkeletalControl();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (PinShownByDefault))
+    bool bEnablePhysics;
+
+    virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
+    virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
+    virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
+};
+
+// ============================================
+// Editor èŠ‚ç‚¹ï¼ˆä»…ç¼–è¾‘å™¨ï¼‰
+// ============================================
+
+#if WITH_EDITORONLY_DATA
+
+UCLASS(MinimalAPI)  // âœ… ä¸è¦ç”¨ UE5MMDTOOLS_API
+class UAnimGraphNode_MMDSkeletalControl : public UAnimGraphNode_SkeletalControlBase
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, Category = "Settings")
+    FAGN_MMDSkeletalControl Node;
+
+    virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
+    virtual FText GetTooltipText() const override;
+    virtual FString GetNodeCategory() const override;
+    virtual FLinearColor GetNodeTitleColor() const override;
+
+protected:
+    virtual const FAnimNode_SkeletalControlBase* GetNode() const override;
+};
+
+// ============================================
+// âœ… å·¥å…·ç±»ï¼šä¸è¦å¯¼å‡ºAPI
+// ============================================
+
+class FMMDAnimGraphHelper  // âœ… å»æ‰ UE5MMDTOOLS_API
+{
+public:
+    static UAnimGraphNode_MMDSkeletalControl* AddMMDNodeToAnimBP(
+        UAnimBlueprint* AnimBP,
+        bool bConnectToRoot = true
+    );
+
+    static UAnimGraphNode_MMDSkeletalControl* InsertMMDNodeBetween(
+        UAnimBlueprint* AnimBP,
+        UAnimGraphNode_Base* UpstreamNode,
+        UAnimGraphNode_Base* DownstreamNode
+    );
+};
+
+#endif // WITH_EDITORONLY_DATA

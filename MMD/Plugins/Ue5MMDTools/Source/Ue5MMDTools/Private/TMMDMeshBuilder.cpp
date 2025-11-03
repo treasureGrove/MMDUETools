@@ -22,7 +22,10 @@
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "Misc/FileHelper.h"
-
+//动画蓝图
+#include "Factories/AnimBlueprintFactory.h"
+#include "Kismet2/KismetEditorUtilities.h"
+#include "UObject/SavePackage.h"
 #pragma region 材质贴图
 FString FixMMDName(const FString& InName, const FString& Prefix = TEXT(""))
 {
@@ -673,5 +676,77 @@ UIKRigDefinition* TMMDMeshBuilder::BuildIKRigFromPMX(const FString& PackagePath,
 
 #endif
 	return nullptr;
+}
+
+UAnimBlueprint* TMMDMeshBuilder::BuildAnimBlueprint(USkeletalMesh* SkeletalMesh, const FString& PMXFilePath)
+{
+    if(!SkeletalMesh) {
+        UE_LOG(LogTemp, Error, TEXT("SkeletalMesh is null"));
+        return nullptr;
+	}
+
+    FString PMXModelName = FixMMDName(FPaths::GetBaseFilename(PMXFilePath));
+    FString AnimBPPackagePath = FString("/Game/MMDModels/") + PMXModelName + TEXT("/Animation");
+    FString AnimBPName = PMXModelName + TEXT("_AnimBP");
+
+	USkeleton* Skeleton = SkeletalMesh->GetSkeleton();
+    if (!Skeleton) {
+        UE_LOG(LogTemp, Error, TEXT("TargetMesh has no skeleton"));
+        return nullptr;
+    }
+    
+    FString UniquePackageName, UniqueAssetName; 
+    {
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		AssetToolsModule.Get().CreateUniqueAssetName(AnimBPPackagePath + TEXT("/") + AnimBPName, TEXT(""), UniquePackageName, UniqueAssetName);
+    }
+	UPackage* Package = CreatePackage(*UniquePackageName);
+    if (!Package) {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create package: %s"), *UniquePackageName);
+        return nullptr;
+    }
+
+    UAnimBlueprintFactory* Factory = NewObject<UAnimBlueprintFactory>();
+	Factory->TargetSkeleton = Skeleton;
+	Factory->ParentClass = UAnimInstance::StaticClass();
+	Factory->PreviewSkeletalMesh = SkeletalMesh;
+
+    UAnimBlueprint* NewAnimBP= Cast<UAnimBlueprint>(Factory->FactoryCreateNew(
+        UAnimBlueprint::StaticClass(),
+        Package,
+        *UniqueAssetName,
+        RF_Public | RF_Standalone,
+        nullptr,
+        GWarn
+	));
+
+    if (!NewAnimBP) {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create AnimBlueprint"));
+        return nullptr;
+    }
+    
+    FKismetEditorUtilities::CompileBlueprint(NewAnimBP);
+
+    Package->MarkPackageDirty();
+    FAssetRegistryModule::AssetCreated(NewAnimBP);
+
+    const FString FilePath = FPackageName::LongPackageNameToFilename(
+        Package->GetName(),
+        FPackageName::GetAssetPackageExtension()
+    );
+    FSavePackageArgs SaveArgs;
+    SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+    SaveArgs.SaveFlags = SAVE_None;
+    SaveArgs.Error = GError;
+    SaveArgs.bWarnOfLongFilename = false;
+
+    if (UPackage::SavePackage(Package, nullptr, *FilePath, SaveArgs)) {
+        UE_LOG(LogTemp, Log, TEXT("Successfully created and saved AnimBlueprint: %s"), *FilePath);
+    }
+    else {
+        UE_LOG(LogTemp, Warning, TEXT("AnimBlueprint created but failed to save: %s"), *FilePath);
+    }
+
+    return NewAnimBP;
 }
 
