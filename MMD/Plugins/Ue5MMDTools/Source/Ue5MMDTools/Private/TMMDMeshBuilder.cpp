@@ -661,21 +661,9 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
     return SkeletalMesh;
 }
 
-UIKRigDefinition* TMMDMeshBuilder::BuildIKRigFromPMX(const FString& PackagePath, const FString& AssetName, USkeletalMesh* BuiltMesh)
+UIKRigDefinition* TMMDMeshBuilder::BuildIKRigFromPMX(USkeletalMesh* SkeletalMesh, const FString& PMXFilePath)
 {
-#if !WITH_EDITOR
     return nullptr;
-#else
-    if (!BuiltMesh) {
-      
-        UE_LOG(LogTemp, Error, TEXT("mmd模型缺失"));
-        return nullptr;
-    }
-
-
-
-#endif
-	return nullptr;
 }
 
 UAnimBlueprint* TMMDMeshBuilder::BuildAnimBlueprint(USkeletalMesh* SkeletalMesh, const FString& PMXFilePath)
