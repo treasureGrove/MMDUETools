@@ -12,9 +12,6 @@
 
 #include "AGN_MMDSkeletalControl.generated.h"
 
-// ============================================
-// Runtime 节点（游戏运行时）
-// ============================================
 
 USTRUCT(BlueprintInternalUseOnly)
 struct UE5MMDTOOLS_API FAGN_MMDSkeletalControl : public FAnimNode_SkeletalControlBase
@@ -32,13 +29,10 @@ public:
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
 };
 
-// ============================================
-// Editor 节点（仅编辑器）
-// ============================================
 
 #if WITH_EDITORONLY_DATA
 
-UCLASS(MinimalAPI)  // ✅ 不要用 UE5MMDTOOLS_API
+UCLASS(MinimalAPI) 
 class UAnimGraphNode_MMDSkeletalControl : public UAnimGraphNode_SkeletalControlBase
 {
     GENERATED_BODY()
@@ -56,11 +50,8 @@ protected:
     virtual const FAnimNode_SkeletalControlBase* GetNode() const override;
 };
 
-// ============================================
-// ✅ 工具类：不要导出API
-// ============================================
 
-class FMMDAnimGraphHelper  // ✅ 去掉 UE5MMDTOOLS_API
+class FMMDAnimGraphHelper  
 {
 public:
     static UAnimGraphNode_MMDSkeletalControl* AddMMDNodeToAnimBP(

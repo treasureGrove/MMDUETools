@@ -38,6 +38,11 @@ public class Ue5MMDTools : ModuleRules
     "ToolMenus",
     "StaticMeshDescription",
     "MeshDescription",
+     "IKRig",              
+                "IKRigEditor",   
+                "IKRigDeveloper",
+                "Persona",
+                "SkeletonEditor"
 
         });
 

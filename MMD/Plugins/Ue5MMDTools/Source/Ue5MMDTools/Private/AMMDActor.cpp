@@ -62,15 +62,6 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
 #pragma endregion
 
-#pragma region SetupIKRig
-	//使用mmd默认的骨骼名创建
-
-#pragma endregion
-
-#pragma region SetupPhysicsAsset
-
-#pragma endregion
-
 #pragma region SetupAnimationBlueprint
 		UAnimBlueprint* MMDAnimBP = meshbuilder.BuildAnimBlueprint(BuiltMesh, FilePath);
 		UAnimGraphNode_MMDSkeletalControl* MMDNode= FMMDAnimGraphHelper::AddMMDNodeToAnimBP(MMDAnimBP, true);
@@ -82,7 +73,13 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
 #pragma endregion
 
-
+#pragma region SetupIKRig
+		UIKRigDefinition* IKRig = meshbuilder.BuildIKRigFromPMX(BuiltMesh, FilePath);
+		UIKRetargeter* IKRetargeter = meshbuilder.BuildIKRetargeterFromPMX(IKRig, FilePath);
+#pragma endregion
+//#pragma region SetupPhysicsAsset
+//
+//#pragma endregion
 
 	}
 	else {

@@ -29,9 +29,6 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
     // 暂时什么都不做
 }
 
-// ============================================
-// Editor 节点实现
-// ============================================
 
 #if WITH_EDITORONLY_DATA
 

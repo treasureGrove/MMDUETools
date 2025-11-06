@@ -222,6 +222,7 @@ void MMDImportSetting::ImportMMDModel()
 					}
 					FActorSpawnParameters SpawnParams;
 					SpawnParams.Name = MakeUniqueObjectName(EditorWorld, AMMDActor::StaticClass(), FName(TEXT("MMDActor")));
+					SpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
 					AMMDActor* NewMMDActor = EditorWorld->SpawnActor<AMMDActor>(AMMDActor::StaticClass(), FTransform::Identity, SpawnParams);
 					if (!NewMMDActor)
 					{
