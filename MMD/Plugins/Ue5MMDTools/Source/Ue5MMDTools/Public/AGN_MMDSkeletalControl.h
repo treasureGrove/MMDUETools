@@ -3,12 +3,12 @@
 
 #include "CoreMinimal.h"
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
-
 // ✅ Editor相关头文件要在 .generated.h 之前
 #if WITH_EDITORONLY_DATA
 #include "AnimGraphNode_SkeletalControlBase.h"
 #include "Animation/AnimBlueprint.h"
 #endif
+
 #include "AGN_MMDSkeletalControl.generated.h"
 
 #pragma region 物理数据结构体

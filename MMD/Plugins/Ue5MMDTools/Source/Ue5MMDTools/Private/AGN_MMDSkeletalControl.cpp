@@ -1,9 +1,6 @@
 ﻿// AGN_MMDSkeletalControl.cpp
 #include "AGN_MMDSkeletalControl.h"
-
-// ============================================
-// Runtime 节点实现
-// ============================================
+#include "TPMXParser.h"
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
