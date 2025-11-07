@@ -68,7 +68,12 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		if (MMDNode)
 		{
 			MMDNode->Node.bEnablePhysics = true;
-			UE_LOG(LogTemp, Log, TEXT("MMD node added successfully!"));
+			// Initialize MMD physics data from PMX file
+			InitializeMMDPhysics(MMDNode, PMXData);
+			UE_LOG(LogTemp, Log, TEXT("MMD node added successfully with %d rigid bodies, %d joints, %d soft bodies"), 
+				MMDNode->Node.RuntimeRigidBodies.Num(),
+				MMDNode->Node.RuntimeJoints.Num(),
+				MMDNode->Node.RuntimeSoftBodies.Num());
 		}
 		SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
 #pragma endregion
