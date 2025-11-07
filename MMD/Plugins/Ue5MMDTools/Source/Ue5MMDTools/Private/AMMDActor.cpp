@@ -78,8 +78,25 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 			
 			// Recompile the blueprint to include the physics data in the generated class
 			FKismetEditorUtilities::CompileBlueprint(MMDAnimBP);
+			
+			// Verify compilation succeeded before using the generated class
+			if (MMDAnimBP->GeneratedClass)
+			{
+				SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("Failed to compile Animation Blueprint - GeneratedClass is null"));
+			}
 		}
-		SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
+		else
+		{
+			// If we couldn't add the MMD node, still try to use the blueprint
+			if (MMDAnimBP && MMDAnimBP->GeneratedClass)
+			{
+				SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
+			}
+		}
 #pragma endregion
 
 #pragma region SetupIKRig
