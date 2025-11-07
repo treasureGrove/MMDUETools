@@ -41,10 +41,6 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
 
 #define LOCTEXT_NAMESPACE "MMDSkeletalControl"
 
-// ============================================
-// Editor节点 - 名字和显示
-// ============================================
-
 FText UAnimGraphNode_MMDSkeletalControl::GetNodeTitle(ENodeTitleType::Type TitleType) const
 {
     return LOCTEXT("NodeTitle", "MMD Skeletal Control");
@@ -69,10 +65,6 @@ const FAnimNode_SkeletalControlBase* UAnimGraphNode_MMDSkeletalControl::GetNode(
 {
     return &Node;
 }
-
-// ============================================
-// 工具类实现
-// ============================================
 
 UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
     UAnimBlueprint* AnimBP,

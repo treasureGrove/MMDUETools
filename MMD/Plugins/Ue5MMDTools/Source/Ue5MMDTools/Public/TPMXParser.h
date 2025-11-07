@@ -384,7 +384,7 @@ struct PMXJoint
 // - int32 pinVertexCount
 // - repeat pinVertexCount:
 // - vertexIndex (vertexIndexSize)
-struct PMXSoftBody
+struct PMXSoftBody  
 {
     FString NameJP;
     FString NameEN;
