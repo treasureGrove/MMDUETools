@@ -5,6 +5,7 @@
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
+    , bIsInitialized(false)
 {
 }
 
