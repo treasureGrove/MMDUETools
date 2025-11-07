@@ -87,6 +87,117 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		return;
 	}
 }
+
+void AMMDActor::InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode, const PMXDatas& PMXData)
+{
+	if(!MMDNode)
+	{
+		UE_LOG(LogTemp, Error, TEXT("MMDNode is null"));
+		return;
+	}
+	MMDNode->Node.RuntimeRigidBodies.Reset();
+	for (const PMXRigid& Rigid : PMXData.ModelRigids)
+	{
+		FMMDRigidBodyRuntime RuntimeRigid;
+		RuntimeRigid.NameEN = Rigid.NameEN;
+		RuntimeRigid.NameJP = Rigid.NameJP;
+		RuntimeRigid.RelatedBoneIndex = Rigid.RelatedBoneIndex;
+		RuntimeRigid.NameJP = Rigid.NameJP;
+		RuntimeRigid.NameEN = Rigid.NameEN;
+		RuntimeRigid.RelatedBoneIndex = Rigid.RelatedBoneIndex;
+		RuntimeRigid.Group = Rigid.Group;
+		RuntimeRigid.CollisionMask = Rigid.CollisionMask;
+		RuntimeRigid.ShapeType = Rigid.ShapeType;
+		RuntimeRigid.Size = Rigid.Size;
+		RuntimeRigid.Position = Rigid.Position;
+		RuntimeRigid.Rotation = Rigid.Rotation;
+		RuntimeRigid.Mass = Rigid.Mass;
+		RuntimeRigid.LinearDamping = Rigid.LinearDamping;
+		RuntimeRigid.AngularDamping = Rigid.AngularDamping;
+		RuntimeRigid.Restitution = Rigid.Restitution;
+		RuntimeRigid.Friction = Rigid.Friction;
+		RuntimeRigid.PhysicsMode = Rigid.PhysicsMode;
+
+		MMDNode->Node.RuntimeRigidBodies.Add(RuntimeRigid);
+	}
+
+	MMDNode->Node.RuntimeJoints.Reset();
+	for (const PMXJoint& Joint : PMXData.ModelJoints)
+	{
+		FMMDJointRuntime RuntimeJoint;
+		RuntimeJoint.NameJP = Joint.NameJP;
+		RuntimeJoint.NameEN = Joint.NameEN;
+		RuntimeJoint.JointType = Joint.JointType;
+		RuntimeJoint.RigidA = Joint.RigidA;
+		RuntimeJoint.RigidB = Joint.RigidB;
+		RuntimeJoint.Position = Joint.Position;
+		RuntimeJoint.Rotation = Joint.Rotation;
+		RuntimeJoint.LimitPosLower = Joint.LimitPosLower;
+		RuntimeJoint.LimitPosUpper = Joint.LimitPosUpper;
+		RuntimeJoint.LimitRotLower = Joint.LimitRotLower;
+		RuntimeJoint.LimitRotUpper = Joint.LimitRotUpper;
+		RuntimeJoint.SpringPos = Joint.SpringPos;
+		RuntimeJoint.SpringRot = Joint.SpringRot;
+
+		MMDNode->Node.RuntimeJoints.Add(RuntimeJoint);
+	}
+
+	MMDNode->Node.RuntimeSoftBodies.Reset();
+	for (const PMXSoftBody& SoftBody : PMXData.ModelSoftBodies)
+	{
+		FMMDSoftBodyRuntime RuntimeSoftBody;
+		RuntimeSoftBody.NameJP = SoftBody.NameJP;
+		RuntimeSoftBody.NameEN = SoftBody.NameEN;
+		RuntimeSoftBody.ShapeType = SoftBody.ShapeType;
+		RuntimeSoftBody.MaterialIndex = SoftBody.MaterialIndex;
+		RuntimeSoftBody.Group = SoftBody.Group;
+		RuntimeSoftBody.CollisionMask = SoftBody.CollisionMask;
+		RuntimeSoftBody.Flags = SoftBody.Flags;
+		RuntimeSoftBody.BLinkDistance = SoftBody.BLinkDistance;
+		RuntimeSoftBody.ClusterCount = SoftBody.ClusterCount;
+		RuntimeSoftBody.TotalMass = SoftBody.TotalMass;
+		RuntimeSoftBody.Margin = SoftBody.Margin;
+		RuntimeSoftBody.AeroModel = SoftBody.AeroModel;
+		RuntimeSoftBody.VCF = SoftBody.VCF;
+		RuntimeSoftBody.DP = SoftBody.DP;
+		RuntimeSoftBody.DG = SoftBody.DG;
+		RuntimeSoftBody.LF = SoftBody.LF;
+		RuntimeSoftBody.PR = SoftBody.PR;
+		RuntimeSoftBody.VC = SoftBody.VC;
+		RuntimeSoftBody.DF = SoftBody.DF;
+		RuntimeSoftBody.MT = SoftBody.MT;
+		RuntimeSoftBody.CHR = SoftBody.CHR;
+		RuntimeSoftBody.KHR = SoftBody.KHR;
+		RuntimeSoftBody.SHR = SoftBody.SHR;
+		RuntimeSoftBody.AHR = SoftBody.AHR;
+		RuntimeSoftBody.SRHR_CL = SoftBody.SRHR_CL;
+		RuntimeSoftBody.SKHR_CL = SoftBody.SKHR_CL;
+		RuntimeSoftBody.SSHR_CL = SoftBody.SSHR_CL;
+		RuntimeSoftBody.SR_SPLT_CL = SoftBody.SR_SPLT_CL;
+		RuntimeSoftBody.SK_SPLT_CL = SoftBody.SK_SPLT_CL;
+		RuntimeSoftBody.SS_SPLT_CL = SoftBody.SS_SPLT_CL;
+		RuntimeSoftBody.V_IT = SoftBody.V_IT;
+		RuntimeSoftBody.P_IT = SoftBody.P_IT;
+		RuntimeSoftBody.D_IT = SoftBody.D_IT;
+		RuntimeSoftBody.C_IT = SoftBody.C_IT;
+		RuntimeSoftBody.LST = SoftBody.LST;
+		RuntimeSoftBody.AST = SoftBody.AST;
+		RuntimeSoftBody.VST = SoftBody.VST;
+		RuntimeSoftBody.Anchors.Reset();
+		for (const auto& Anchor : SoftBody.Anchors)
+		{
+			FMMDSoftBodyAnchor RuntimeAnchor;
+			RuntimeAnchor.RigidIndex = Anchor.RigidIndex;
+			RuntimeAnchor.VertexIndex = Anchor.VertexIndex;
+			RuntimeAnchor.NearMode = Anchor.NearMode;
+			RuntimeSoftBody.Anchors.Add(RuntimeAnchor);
+		}
+		RuntimeSoftBody.PinVertices = SoftBody.PinVertices;
+		MMDNode->Node.RuntimeSoftBodies.Add(RuntimeSoftBody);
+	}
+	
+}
+
 void AMMDActor::BeginPlay()
 {
 	Super::BeginPlay();

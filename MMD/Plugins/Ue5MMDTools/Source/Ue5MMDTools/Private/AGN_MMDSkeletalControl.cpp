@@ -1,6 +1,7 @@
 ﻿// AGN_MMDSkeletalControl.cpp
 #include "AGN_MMDSkeletalControl.h"
 #include "TPMXParser.h"
+#include "Animation/AnimInstanceProxy.h"
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
@@ -11,7 +12,157 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
 {
-    // 暂时什么都不做
+    DECLARE_SCOPE_HIERARCHICAL_COUNTER_ANIMNODE(EvaluateComponentPose_AnyThread)
+    if (!bEnablePhysics)
+    {
+        return;
+    }
+	const float DeltaTime = Output.AnimInstanceProxy->GetDeltaSeconds();
+
+	const float MaxDeltaTime = 0.0333f; // 最大时间步长，防止物理计算不稳定
+	const float ClampedDeltaTime = FMath::Min(DeltaTime, MaxDeltaTime);
+
+    if (ClampedDeltaTime <= KINDA_SMALL_NUMBER) // KINDA_SMALL_NUMBER 是 UE5 的常量 (1e-8)
+    {
+        return;
+    }
+
+    if (RuntimeRigidBodies.Num() == 0)
+    {
+        return;
+    }
+    for (FMMDRigidBodyRuntime& Rigid : RuntimeRigidBodies)
+    {
+        // 验证骨骼索引
+        if (!Rigid.CompactBoneIndex.IsValid())
+        {
+            continue;
+        }
+
+        // ✅ 获取当前骨骼的组件空间变换
+        FTransform BoneTransform = Output.Pose.GetComponentSpaceTransform(Rigid.CompactBoneIndex);
+
+        // 处理不同的物理模式
+        switch (Rigid.PhysicsMode)
+        {
+        case 0: // Bone-Driven (跟随骨骼，不做物理)
+        {
+            Rigid.PrevPosition = BoneTransform.GetLocation();
+            Rigid.PrevRotation = BoneTransform.GetRotation();
+            Rigid.Velocity = FVector::ZeroVector;
+            Rigid.AngularVelocity = FVector::ZeroVector;
+        }
+        break;
+
+        case 1: // Physics (完全物理模拟)
+        {
+            // 🌍 应用重力
+            const FVector Gravity(0.0f, 0.0f, -980.0f); // cm/s²
+            Rigid.Velocity += Gravity * ClampedDeltaTime;
+
+            // 💨 应用线性阻尼
+            float LinearDampingFactor = FMath::Clamp(1.0f - Rigid.LinearDamping * ClampedDeltaTime, 0.0f, 1.0f);
+            Rigid.Velocity *= LinearDampingFactor;
+
+            // 🔄 应用角阻尼
+            float AngularDampingFactor = FMath::Clamp(1.0f - Rigid.AngularDamping * ClampedDeltaTime, 0.0f, 1.0f);
+            Rigid.AngularVelocity *= AngularDampingFactor;
+
+            // 📍 更新位置
+            FVector CurrentPosition = BoneTransform.GetLocation();
+            FVector NewPosition = CurrentPosition + Rigid.Velocity * ClampedDeltaTime;
+
+            // 🔄 更新旋转
+            FQuat CurrentRotation = BoneTransform.GetRotation();
+            FQuat NewRotation = CurrentRotation;
+
+            if (Rigid.AngularVelocity.SizeSquared() > KINDA_SMALL_NUMBER)
+            {
+                FVector AngularAxis = Rigid.AngularVelocity;
+                float AngularSpeed = AngularAxis.Size();
+                AngularAxis /= AngularSpeed;
+
+                FQuat DeltaRotation = FQuat(AngularAxis, AngularSpeed * ClampedDeltaTime);
+                NewRotation = DeltaRotation * CurrentRotation;
+                NewRotation.Normalize();
+            }
+
+            // 🌏 地面碰撞检测
+            const float GroundHeight = 0.0f;
+            if (NewPosition.Z < GroundHeight)
+            {
+                // 位置修正
+                NewPosition.Z = GroundHeight;
+
+                // 反弹
+                Rigid.Velocity.Z = -Rigid.Velocity.Z * Rigid.Restitution;
+
+                // 摩擦力
+                FVector HorizontalVelocity(Rigid.Velocity.X, Rigid.Velocity.Y, 0.0f);
+                float FrictionFactor = FMath::Clamp(1.0f - Rigid.Friction * ClampedDeltaTime, 0.0f, 1.0f);
+                HorizontalVelocity *= FrictionFactor;
+                Rigid.Velocity.X = HorizontalVelocity.X;
+                Rigid.Velocity.Y = HorizontalVelocity.Y;
+
+                UE_LOG(LogTemp, VeryVerbose, TEXT("  ⚠️ Ground collision: %s"), *Rigid.NameEN);
+            }
+
+            // 应用变换
+            BoneTransform.SetLocation(NewPosition);
+            BoneTransform.SetRotation(NewRotation);
+
+            // 保存状态
+            Rigid.PrevPosition = NewPosition;
+            Rigid.PrevRotation = NewRotation;
+            Rigid.LocalTransform = BoneTransform;
+        }
+        break;
+
+        case 2: // Physics + Bone (混合模式)
+        {
+            // 物理模拟部分
+            const FVector Gravity(0.0f, 0.0f, -980.0f);
+            Rigid.Velocity += Gravity * ClampedDeltaTime;
+
+            float LinearDampingFactor = FMath::Clamp(1.0f - Rigid.LinearDamping * ClampedDeltaTime, 0.0f, 1.0f);
+            Rigid.Velocity *= LinearDampingFactor;
+
+            FVector PhysicsPosition = Rigid.PrevPosition + Rigid.Velocity * ClampedDeltaTime;
+
+            // 与骨骼位置混合
+            FVector BonePosition = BoneTransform.GetLocation();
+            FVector BlendedPosition = FMath::Lerp(BonePosition, PhysicsPosition, 0.5f);
+
+            BoneTransform.SetLocation(BlendedPosition);
+
+            Rigid.PrevPosition = BlendedPosition;
+            Rigid.Velocity = (BlendedPosition - BonePosition) / ClampedDeltaTime;
+            Rigid.LocalTransform = BoneTransform;
+        }
+        break;
+        }
+    }
+
+    // ✅ 步骤4：收集并输出骨骼变换
+    OutBoneTransforms.Reset();
+
+    for (const FMMDRigidBodyRuntime& Rigid : RuntimeRigidBodies)
+    {
+        if (!Rigid.CompactBoneIndex.IsValid())
+        {
+            continue;
+        }
+
+        // 只输出受物理影响的骨骼
+        if (Rigid.PhysicsMode > 0)
+        {
+            FBoneTransform BoneTransform(Rigid.CompactBoneIndex, Rigid.LocalTransform);
+            OutBoneTransforms.Add(BoneTransform);
+        }
+    }
+
+    // ✅ 关键：按骨骼层级排序
+    OutBoneTransforms.Sort(FCompareBoneTransformIndex());
 }
 
 bool FAGN_MMDSkeletalControl::IsValidToEvaluate(
@@ -23,7 +174,20 @@ bool FAGN_MMDSkeletalControl::IsValidToEvaluate(
 
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {
-    // 暂时什么都不做
+    if (bIsInitialized) {
+        return;
+    }
+    for (FMMDRigidBodyRuntime& Rigid : RuntimeRigidBodies)
+    {
+        FSkeletonPoseBoneIndex SkeletonBoneIndex(Rigid.RelatedBoneIndex + 1);
+        Rigid.CompactBoneIndex = RequiredBones.GetCompactPoseIndexFromSkeletonPoseIndex(SkeletonBoneIndex);
+
+        if (Rigid.CompactBoneIndex.IsValid()) {
+            Rigid.Velocity = FVector::ZeroVector;
+            Rigid.AngularVelocity = FVector::ZeroVector;
+        }
+    }
+	bIsInitialized = true;
 }
 
 
@@ -37,7 +201,7 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
 #include "EdGraph/EdGraphPin.h"
 
 #define LOCTEXT_NAMESPACE "MMDSkeletalControl"
-
+#pragma region 节点名字
 FText UAnimGraphNode_MMDSkeletalControl::GetNodeTitle(ENodeTitleType::Type TitleType) const
 {
     return LOCTEXT("NodeTitle", "MMD Skeletal Control");
@@ -62,6 +226,9 @@ const FAnimNode_SkeletalControlBase* UAnimGraphNode_MMDSkeletalControl::GetNode(
 {
     return &Node;
 }
+#pragma endregion
+
+
 
 UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
     UAnimBlueprint* AnimBP,

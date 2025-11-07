@@ -62,12 +62,12 @@ struct  FMMDRigidBodyRuntime
     UPROPERTY()
     uint8 PhysicsMode=0;
 
-    FCompactPoseBoneIndex CompactBoneIndex;  // 编译后的骨骼索引
-    FVector Velocity;                        // 当前速度
-    FVector AngularVelocity;                 // 角速度
-    FVector PrevPosition;                    // 上一帧位置
-    FQuat PrevRotation;                      // 上一帧旋转
-    FTransform LocalTransform;               // 缓存的局部变换
+    FCompactPoseBoneIndex CompactBoneIndex= FCompactPoseBoneIndex(INDEX_NONE);  // 编译后的骨骼索引
+    FVector Velocity=FVector::ZeroVector;                        // 当前速度
+    FVector AngularVelocity= FVector::ZeroVector;                 // 角速度
+    FVector PrevPosition= FVector::ZeroVector;                    // 上一帧位置
+    FQuat PrevRotation=FQuat::Identity;                      // 上一帧旋转
+    FTransform LocalTransform= FTransform::Identity;               // 缓存的局部变换
 
 };
 //约束数据结构体
@@ -222,7 +222,18 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (PinShownByDefault))
     bool bEnablePhysics;
+    bool bIsInitialized;
+    //MMD数据
+    UPROPERTY()
+    TArray<FMMDRigidBodyRuntime> RuntimeRigidBodies;
 
+    UPROPERTY()
+    TArray<FMMDJointRuntime> RuntimeJoints;
+
+    UPROPERTY()
+    TArray<FMMDSoftBodyRuntime> RuntimeSoftBodies;
+    
+    
     virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
     virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
