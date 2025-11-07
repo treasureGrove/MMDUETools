@@ -6,6 +6,7 @@
 
 #include "Animation/AnimBlueprint.h"
 #include "AGN_MMDSkeletalControl.h"
+#include "Kismet2/KismetEditorUtilities.h"
 
 AMMDActor::AMMDActor()
 {
@@ -74,6 +75,9 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 				MMDNode->Node.RuntimeRigidBodies.Num(),
 				MMDNode->Node.RuntimeJoints.Num(),
 				MMDNode->Node.RuntimeSoftBodies.Num());
+			
+			// Recompile the blueprint to include the physics data in the generated class
+			FKismetEditorUtilities::CompileBlueprint(MMDAnimBP);
 		}
 		SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
 #pragma endregion
