@@ -189,8 +189,6 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
     }
 	bIsInitialized = true;
 }
-
-
 #if WITH_EDITORONLY_DATA
 
 #include "Kismet2/KismetEditorUtilities.h"
