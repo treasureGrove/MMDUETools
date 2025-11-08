@@ -18,7 +18,8 @@
 			"Ue5MMDTools.cpp.obj",
 			"Ue5MMDToolsCommands.cpp.obj",
 			"Ue5MMDToolsStyle.cpp.obj",
-			"AGN_MMDSkeletalControl.cpp.obj"
+			"AGN_MMDSkeletalControl.cpp.obj",
+			"MMDPhysicsSimulator.cpp.obj"
 		]
 	}
 }

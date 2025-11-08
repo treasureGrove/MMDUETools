@@ -12,7 +12,6 @@ public class Ue5MMDTools : ModuleRules
     "AnimGraphRuntime",
     "BlueprintGraph",
     "KismetCompiler",
-    "Bullet"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[] {
