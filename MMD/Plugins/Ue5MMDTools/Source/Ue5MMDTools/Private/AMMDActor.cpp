@@ -6,6 +6,7 @@
 
 #include "Animation/AnimBlueprint.h"
 #include "AGN_MMDSkeletalControl.h"
+#include "Kismet2/KismetEditorUtilities.h"
 
 AMMDActor::AMMDActor()
 {
@@ -68,9 +69,34 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		if (MMDNode)
 		{
 			MMDNode->Node.bEnablePhysics = true;
-			UE_LOG(LogTemp, Log, TEXT("MMD node added successfully!"));
+			// Initialize MMD physics data from PMX file
+			InitializeMMDPhysics(MMDNode, PMXData);
+			UE_LOG(LogTemp, Log, TEXT("MMD node added successfully with %d rigid bodies, %d joints, %d soft bodies"), 
+				MMDNode->Node.RuntimeRigidBodies.Num(),
+				MMDNode->Node.RuntimeJoints.Num(),
+				MMDNode->Node.RuntimeSoftBodies.Num());
+			
+			// Recompile the blueprint to include the physics data in the generated class
+			FKismetEditorUtilities::CompileBlueprint(MMDAnimBP);
+			
+			// Verify compilation succeeded before using the generated class
+			if (MMDAnimBP->GeneratedClass)
+			{
+				SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("Failed to compile Animation Blueprint - GeneratedClass is null"));
+			}
 		}
-		SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
+		else
+		{
+			// If we couldn't add the MMD node, still try to use the blueprint
+			if (MMDAnimBP && MMDAnimBP->GeneratedClass)
+			{
+				SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
+			}
+		}
 #pragma endregion
 
 #pragma region SetupIKRig
@@ -95,6 +121,8 @@ void AMMDActor::InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,
 		UE_LOG(LogTemp, Error, TEXT("MMDNode is null"));
 		return;
 	}
+	
+	// Initialize rigid bodies
 	MMDNode->Node.RuntimeRigidBodies.Reset();
 	for (const PMXRigid& Rigid : PMXData.ModelRigids)
 	{
@@ -121,6 +149,7 @@ void AMMDActor::InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,
 		MMDNode->Node.RuntimeRigidBodies.Add(RuntimeRigid);
 	}
 
+	// Initialize joints
 	MMDNode->Node.RuntimeJoints.Reset();
 	for (const PMXJoint& Joint : PMXData.ModelJoints)
 	{
@@ -142,6 +171,7 @@ void AMMDActor::InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,
 		MMDNode->Node.RuntimeJoints.Add(RuntimeJoint);
 	}
 
+	// Initialize soft bodies
 	MMDNode->Node.RuntimeSoftBodies.Reset();
 	for (const PMXSoftBody& SoftBody : PMXData.ModelSoftBodies)
 	{
@@ -196,6 +226,11 @@ void AMMDActor::InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,
 		MMDNode->Node.RuntimeSoftBodies.Add(RuntimeSoftBody);
 	}
 	
+	// Log a warning if no physics data was found (some models may not have physics)
+	if (PMXData.ModelRigids.Num() == 0 && PMXData.ModelJoints.Num() == 0 && PMXData.ModelSoftBodies.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No physics data found in PMX file - this model may not have MMD physics setup"));
+	}
 }
 
 void AMMDActor::BeginPlay()
