@@ -11,7 +11,8 @@ public class Ue5MMDTools : ModuleRules
             "RenderCore", "RHI",   "AnimGraph",
     "AnimGraphRuntime",
     "BlueprintGraph",
-    "KismetCompiler"
+    "KismetCompiler",
+    "Bullet"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[] {
