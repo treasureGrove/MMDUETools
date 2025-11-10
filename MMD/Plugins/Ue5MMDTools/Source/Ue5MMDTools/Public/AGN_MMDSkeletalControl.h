@@ -69,6 +69,10 @@ struct  FMMDRigidBodyRuntime
     FQuat PrevRotation=FQuat::Identity;                      // 上一帧旋转
     FTransform LocalTransform= FTransform::Identity;               // 缓存的局部变换
 
+    bool bInitialized = false;
+    FTransform RigidBodyOffset = FTransform::Identity;
+
+    float InvMass = 0;
 };
 //约束数据结构体
 USTRUCT(BlueprintType)
@@ -102,6 +106,9 @@ struct FMMDJointRuntime
     FVector SpringPos = FVector::ZeroVector;
     UPROPERTY()
     FVector SpringRot = FVector::ZeroVector;
+
+    bool bInitialized = false;                 // 是否已缓存过初始世界偏移
+    FVector InitialPositionWorld = FVector::ZeroVector; // RigidB_world - RigidA_world
 
 };
 //软体锚点结构体

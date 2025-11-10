@@ -1,4 +1,5 @@
 using UnrealBuildTool;
+using System.IO;
 
 public class Ue5MMDTools : ModuleRules
 {
@@ -45,6 +46,9 @@ public class Ue5MMDTools : ModuleRules
                 "SkeletonEditor"
 
         });
+
+        // Add dependency to BulletThirdParty module (vendorized bullet). If missing, build will continue without it (stubbed implementation).
+        PrivateDependencyModuleNames.AddRange(new string[] { "BulletThirdParty" });
 
         PublicIncludePaths.AddRange(new string[] { });
         PrivateIncludePaths.AddRange(new string[] { });

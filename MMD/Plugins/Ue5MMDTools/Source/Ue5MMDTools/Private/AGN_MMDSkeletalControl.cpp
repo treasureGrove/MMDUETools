@@ -3,6 +3,8 @@
 #include "TPMXParser.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "MMDPhysicsSimulator.h"
+#include "DrawDebugHelpers.h" // 新增：用于绘制调试刚体
+#include "Async/Async.h" 
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
@@ -35,17 +37,116 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
         DeltaTime
     );
 
-    // ✅ 将物理结果写回骨骼
+    // ✅ 将物理结果写回骨骼，并绘制刚体调试可视化（仅在编辑/预览时）
     for (const FMMDRigidBodyRuntime& Rigid : RuntimeRigidBodies)
     {
-        // 只写回物理模式为 1 和 2 的刚体
         if (Rigid.PhysicsMode == 0 || !Rigid.CompactBoneIndex.IsValid())
             continue;
 
-        FTransform NewTransform(Rigid.PrevRotation, Rigid.PrevPosition);
-        OutBoneTransforms.Add(FBoneTransform(Rigid.CompactBoneIndex, NewTransform));
+        // 刚体世界变换
+        FTransform RigidWorldTransform(Rigid.PrevRotation, Rigid.PrevPosition);
+
+        // 反算骨骼世界：刚体世界 * 偏移逆
+        FTransform OffsetInverse = Rigid.RigidBodyOffset.Inverse();
+        FTransform BoneWorldTransform = OffsetInverse * RigidWorldTransform;
+
+        // 父骨世界变换
+        FCompactPoseBoneIndex ParentBoneIndex = Output.Pose.GetPose().GetParentBoneIndex(Rigid.CompactBoneIndex);
+        FTransform ParentWorldTransform = FTransform::Identity;
+        if (ParentBoneIndex.IsValid())
+        {
+            ParentWorldTransform = Output.Pose.GetComponentSpaceTransform(ParentBoneIndex);
+        }
+
+        // 计算骨骼局部变换（物理结果）
+        FTransform BoneLocalTransform = BoneWorldTransform.GetRelativeTransform(ParentWorldTransform);
+        BoneLocalTransform.NormalizeRotation();
+
+        // 获取当前动画/原始局部变换（用于保护与混合）
+        FTransform OriginalLocal = Output.Pose.GetLocalSpaceTransform(Rigid.CompactBoneIndex);
+
+        // 1) 保留原始缩放，避免无意间改写缩放造成拉伸
+        BoneLocalTransform.SetScale3D(OriginalLocal.GetScale3D());
+
+        // 2) 限制位置偏移（防止单帧过大跳跃导致拉伸）
+        const float MaxTranslationCm = 50.0f; // 最大允许偏移（厘米，可根据需求调小）
+        FVector Delta = BoneLocalTransform.GetLocation() - OriginalLocal.GetLocation();
+        if (Delta.Size() > MaxTranslationCm)
+        {
+            BoneLocalTransform.SetLocation(OriginalLocal.GetLocation() + Delta.GetSafeNormal() * MaxTranslationCm);
+        }
+
+        // 3) 对于混合模式 (Physics+Bone)，做平滑混合（位置线性、旋转球面插值）
+        if (Rigid.PhysicsMode == 2)
+        {
+            const float PhysicsWeight = 0.8f; // 0..1，越大越由物理主导
+            FVector BlendedLoc = FMath::Lerp(OriginalLocal.GetLocation(), BoneLocalTransform.GetLocation(), PhysicsWeight);
+            FQuat BlendedRot = FQuat::Slerp(OriginalLocal.GetRotation(), BoneLocalTransform.GetRotation(), PhysicsWeight);
+            BlendedRot.Normalize();
+            BoneLocalTransform.SetLocation(BlendedLoc);
+            BoneLocalTransform.SetRotation(BlendedRot);
+            BoneLocalTransform.SetScale3D(OriginalLocal.GetScale3D());
+        }
+
+        // 4) 最后有效性检查并写回
+        if (!BoneLocalTransform.ContainsNaN())
+        {
+            OutBoneTransforms.Add(FBoneTransform(Rigid.CompactBoneIndex, BoneLocalTransform));
+        }
+
+        // ============== 调试绘制部分 ==============
+#if WITH_EDITOR
+        // 在编辑器/预览模式下绘制刚体形状和速度矢量（在游戏线程执行）
+        UPrimitiveComponent* SkelComp = Output.AnimInstanceProxy->GetSkelMeshComponent();
+        if (SkelComp)
+        {
+            UWorld* World = SkelComp->GetWorld();
+            // 拷贝到本地变量以在线程间传递
+            const FVector Center = RigidWorldTransform.GetLocation();
+            const FQuat Rot = RigidWorldTransform.GetRotation();
+            const FVector Size = Rigid.Size;
+            const FVector Velocity = Rigid.Velocity;
+            const FString Name = Rigid.NameEN;
+            const int32 ShapeType = Rigid.ShapeType;
+
+            const float Duration = 0.1f; // 给一个短持续时间，方便在 Preview 中看到
+
+            if (World)
+            {
+                // 绘制必须在游戏线程
+                AsyncTask(ENamedThreads::GameThread, [World, Center, Rot, Size, Velocity, Name, ShapeType, Duration]()
+                    {
+                        if (!World) return;
+                        if (ShapeType == 0)
+                        {
+                            float Radius = FMath::Max(Size.X, 1.0f);
+                            DrawDebugSphere(World, Center, Radius, 12, FColor::Green, false, Duration, 0, 1.5f);
+                        }
+                        else
+                        {
+                            DrawDebugBox(World, Center, Size, Rot, FColor::Blue, false, Duration, 0, 1.5f);
+                        }
+
+                        if (!Velocity.IsNearlyZero(1e-4f))
+                        {
+                            DrawDebugLine(World, Center, Center + Velocity * 0.05f, FColor::Red, false, Duration, 0, 1.5f);
+                        }
+
+#if !UE_BUILD_SHIPPING
+                        DrawDebugString(World, Center + FVector(0, 0, 5.0f), Name, nullptr, FColor::White, Duration, false, 0.8f);
+#endif
+                    });
+            }
+            else
+            {
+                // 如果没有 World，输出日志作为回退诊断
+                UE_LOG(LogTemp, Warning, TEXT("MMD Debug: No World for drawing. Rigid %s at %s, Vel=%s"), *Name, *Center.ToString(), *Velocity.ToString());
+            }
+        }
+#endif
+        // ============== 调试绘制结束 ==============
     }
-        if (OutBoneTransforms.Num() > 1)
+    if (OutBoneTransforms.Num() > 1)
     {
         OutBoneTransforms.Sort(FCompareBoneTransformIndex());
     }
@@ -73,7 +174,7 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
             Rigid.AngularVelocity = FVector::ZeroVector;
         }
     }
-	bIsInitialized = true;
+    bIsInitialized = true;
 }
 #if WITH_EDITORONLY_DATA
 

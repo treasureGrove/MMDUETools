@@ -7,6 +7,7 @@
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDActor.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDImportSetting.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDModelImporter.cpp"
+#include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDPhysicsSimulator.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDPhysicsSystem.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/MMDViewPanel.cpp"
 #include "Z:/Project/UEProject/MMDUETools/MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/TMMDMeshBuilder.cpp"
