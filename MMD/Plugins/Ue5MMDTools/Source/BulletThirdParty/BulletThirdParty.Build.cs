@@ -6,31 +6,46 @@ public class BulletThirdParty : ModuleRules
     public BulletThirdParty(ReadOnlyTargetRules Target) : base(Target)
     {
         Type = ModuleType.External;
-        // Path to vendorized bullet source relative to module directory
-        string BulletRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "ThirdParty", "bullet3-master"));
-        PublicIncludePaths.Add(Path.Combine(BulletRoot, "src"));
 
-        // Collect source files to compile into static lib for multiple platforms
-        if (Target.Platform == UnrealTargetPlatform.Win64)
+        // Expect vendorized Bullet placed at Plugins/Ue5MMDTools/ThirdParty/Bullet
+        string BulletRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "ThirdParty", "Bullet"));
+        string BulletInclude = Path.Combine(BulletRoot, "src");
+
+        // Add includes if exist
+        if (Directory.Exists(BulletInclude))
         {
-            // Example: compile subset of Bullet sources
-            string[] BulletSources = new string[] {
-                Path.Combine(BulletRoot, "src", "BulletCollision", "CollisionDispatch", "btDefaultCollisionConfiguration.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletCollision", "CollisionShapes", "btBoxShape.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletCollision", "CollisionShapes", "btSphereShape.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletCollision", "CollisionShapes", "btCapsuleShape.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletCollision", "NarrowPhaseCollision", "GjkEpa2.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletCollision", "CollisionDispatch", "CollisionWorld.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletDynamics", "Dynamics", "RigidBody.cpp"),
-                Path.Combine(BulletRoot, "src", "BulletDynamics", "ConstraintSolver", "SequentialImpulseConstraintSolver.cpp"),
-                Path.Combine(BulletRoot, "src", "LinearMath", "btQuaternion.cpp"),
-                Path.Combine(BulletRoot, "src", "LinearMath", "btMatrix3x3.cpp"),
-            };
+            PublicIncludePaths.Add(BulletInclude);
+        }
 
-            foreach (string src in BulletSources)
+        // Link prebuilt libs if available under lib/<platform>
+        string LibDir = Path.Combine(BulletRoot, "lib", Target.Platform.ToString());
+        if (Directory.Exists(LibDir))
+        {
+            if (Target.Platform == UnrealTargetPlatform.Win64)
             {
-                PublicAdditionalLibraries.Add(src);
+                string dyn = Path.Combine(LibDir, "BulletDynamics.lib");
+                string col = Path.Combine(LibDir, "BulletCollision.lib");
+                string lin = Path.Combine(LibDir, "LinearMath.lib");
+                if (File.Exists(dyn)) PublicAdditionalLibraries.Add(dyn);
+                if (File.Exists(col)) PublicAdditionalLibraries.Add(col);
+                if (File.Exists(lin)) PublicAdditionalLibraries.Add(lin);
+            }
+            else
+            {
+                // Unix-like static libs
+                string dyn = Path.Combine(LibDir, "libBulletDynamics.a");
+                string col = Path.Combine(LibDir, "libBulletCollision.a");
+                string lin = Path.Combine(LibDir, "libLinearMath.a");
+                if (File.Exists(dyn)) PublicAdditionalLibraries.Add(dyn);
+                if (File.Exists(col)) PublicAdditionalLibraries.Add(col);
+                if (File.Exists(lin)) PublicAdditionalLibraries.Add(lin);
             }
         }
+
+        // If no prebuilt libs found, recommend building Bullet with CMake into the lib folder.
+        // The build will still attempt to compile but may fail if headers reference missing symbols.
+
+        // Expose include path to consumers
+        PublicSystemIncludePaths.Add(BulletInclude);
     }
 }
