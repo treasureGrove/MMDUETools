@@ -68,6 +68,7 @@
 "..\Plugins\Animation\IKRig\Intermediate\Build\Win64\x64\UnrealEditor\Development\IKRigDeveloper\UnrealEditor-IKRigDeveloper.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\Persona\UnrealEditor-Persona.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\SkeletonEditor\UnrealEditor-SkeletonEditor.lib"
+"Z:\Project\UEProject\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\BulletVendor\UnrealEditor-BulletVendor.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\Core\UnrealEditor-Core.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\CoreUObject\UnrealEditor-CoreUObject.lib"
 "..\Intermediate\Build\Win64\x64\UnrealEditor\Development\Slate\UnrealEditor-Slate.lib"

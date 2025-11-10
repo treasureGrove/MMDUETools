@@ -17,6 +17,9 @@ public class BulletVendor : ModuleRules
             PublicIncludePaths.Add(BulletInclude);
         }
 
+        // Define BT_THREADSAFE so btThreads.h conditional compiles cleanly
+        PublicDefinitions.Add("BT_THREADSAFE=1");
+
         // Try to link prebuilt libs in build/lib/Release or lib/Win64
         string BuildLibRelease = Path.Combine(BulletRoot, "build", "lib", "Release");
         if (Directory.Exists(BuildLibRelease) && Target.Platform == UnrealTargetPlatform.Win64)
