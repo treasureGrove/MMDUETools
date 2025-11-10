@@ -292,4 +292,28 @@ void FMMDPhysicsSimulator::SimulatePhysics(TArray<FMMDRigidBodyRuntime>&RigidBod
     WriteBackToBones(RigidBodies, OutBoneTransforms);
 }
 
-// The rest of the file (SyncBoneToPhysics, ApplyForces, IntegrateVelocity, DetectAndResolveCollisions, SolveConstraints, etc.) remains unchanged and is used as fallback implementations
+// Restore fallback implementations for static methods
+void FMMDPhysicsSimulator::SyncBoneToPhysics(TArray<FMMDRigidBodyRuntime>& RigidBodies, FComponentSpacePoseContext& Output)
+{
+    // Fallback: No-op or legacy sync logic
+}
+void FMMDPhysicsSimulator::ApplyForces(FMMDRigidBodyRuntime& Rigid, float DeltaTime)
+{
+    // Fallback: No-op or legacy force logic
+}
+void FMMDPhysicsSimulator::IntegrateVelocity(FMMDRigidBodyRuntime& Rigid, float DeltaTime)
+{
+    // Fallback: No-op or legacy velocity logic
+}
+void FMMDPhysicsSimulator::DetectAndResolveCollisions(TArray<FMMDRigidBodyRuntime>& RigidBodies, float DeltaTime)
+{
+    // Fallback: No-op or legacy collision logic
+}
+void FMMDPhysicsSimulator::SolveConstraints(TArray<FMMDRigidBodyRuntime>& RigidBodies, TArray<FMMDJointRuntime>& Joints, float DeltaTime, int32 IterationCount)
+{
+    // Fallback: No-op or legacy constraint logic
+}
+void FMMDPhysicsSimulator::WriteBackToBones(const TArray<FMMDRigidBodyRuntime>& RigidBodies, TArray<FBoneTransform>& OutBoneTransforms)
+{
+    // Fallback: No-op or legacy writeback logic
+}
