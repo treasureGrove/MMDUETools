@@ -1,5 +1,7 @@
 #include "BulletIntegration.h"
 #include <btBulletDynamicsCommon.h>
+#include "Misc/Paths.h"
+#include "HAL/PlatformFilemanager.h"
 
 FBulletWorld::FBulletWorld()
     : Broadphase(nullptr), CollisionConfig(nullptr), Dispatcher(nullptr), Solver(nullptr), World(nullptr)

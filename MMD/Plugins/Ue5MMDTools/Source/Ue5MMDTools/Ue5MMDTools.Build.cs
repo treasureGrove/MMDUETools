@@ -43,12 +43,14 @@ public class Ue5MMDTools : ModuleRules
                 "IKRigEditor",   
                 "IKRigDeveloper",
                 "Persona",
-                "SkeletonEditor"
+                "SkeletonEditor",
+                "BulletVendor"
 
         });
 
-        // Add dependency to BulletThirdParty module (vendorized bullet). If missing, build will continue without it (stubbed implementation).
-        PrivateDependencyModuleNames.AddRange(new string[] { "BulletThirdParty" });
+        // Expose bullet headers
+        string BulletRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "ThirdParty", "Bullet"));
+        PublicIncludePaths.Add(Path.Combine(BulletRoot, "src"));
 
         PublicIncludePaths.AddRange(new string[] { });
         PrivateIncludePaths.AddRange(new string[] { });
