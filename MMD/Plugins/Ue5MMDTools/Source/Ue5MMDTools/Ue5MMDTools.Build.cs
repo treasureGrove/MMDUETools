@@ -44,7 +44,6 @@ public class Ue5MMDTools : ModuleRules
                 "IKRigDeveloper",
                 "Persona",
                 "SkeletonEditor",
-                "BulletVendor"
 
         });
 

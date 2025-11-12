@@ -2,7 +2,6 @@
 #include "Animation/DebugSkelMeshComponent.h"
 #include "Math/UnrealMathUtility.h"
 #include "Logging/LogMacros.h"
-#include "BulletIntegration.h"
 
 #pragma region 碰撞检测工具函数
 static FVector ClosestPointOnSegment(const FVector& A,const FVector& B,const FVector& P,float &Out) {
@@ -167,129 +166,20 @@ static FMatrix ComputeInvInertiaWorld(const FMMDRigidBodyRuntime& R)
 #pragma endregion
 
 // Bullet integration helpers (file-scope static)
-static FBulletWorld* GBulletWorld = nullptr;
-static TArray<FBulletBody*> GBodiesMap; // parallel to RigidBodies by index
-static TArray<btTypedConstraint*> GConstraints;
-
 static void DestroyBulletWorld()
 {
-    if (!GBulletWorld) return;
-    for (btTypedConstraint* c : GConstraints)
-    {
-        if (c) GBulletWorld->RemoveConstraint(c);
-    }
-    GConstraints.Empty();
-    for (FBulletBody* b : GBodiesMap)
-    {
-        if (b) GBulletWorld->RemoveRigidBody(b);
-    }
-    GBodiesMap.Empty();
-    GBulletWorld->Shutdown();
-    delete GBulletWorld;
-    GBulletWorld = nullptr;
+   
 }
 
 static void EnsureBulletWorldAndMaps(const TArray<FMMDRigidBodyRuntime>& RigidBodies, const TArray<FMMDJointRuntime>& Joints)
 {
     // initialize world if necessary
-    if (!GBulletWorld)
-    {
-        GBulletWorld = new FBulletWorld();
-        if (!GBulletWorld->Init())
-        {
-            delete GBulletWorld; GBulletWorld = nullptr;
-            UE_LOG(LogTemp, Error, TEXT("Bullet: Failed to initialize world"));
-            return;
-        }
-    }
-
-    // Rebuild bodies map if size mismatch
-    if (GBodiesMap.Num() != RigidBodies.Num())
-    {
-        // remove old
-        for (FBulletBody* b : GBodiesMap)
-        {
-            if (b) GBulletWorld->RemoveRigidBody(b);
-        }
-        GBodiesMap.Empty();
-
-        // create new bodies
-        GBodiesMap.SetNum(RigidBodies.Num());
-        for (int32 i = 0; i < RigidBodies.Num(); ++i)
-        {
-            GBodiesMap[i] = GBulletWorld->CreateRigidBody(RigidBodies[i]);
-            if (GBodiesMap[i]) GBodiesMap[i]->PMXRigidIndex = i;
-        }
-
-        // Recreate constraints
-        for (btTypedConstraint* c : GConstraints)
-        {
-            if (c) GBulletWorld->RemoveConstraint(c);
-        }
-        GConstraints.Empty();
-
-        for (const FMMDJointRuntime& Joint : Joints)
-        {
-            if (Joint.RigidA < 0 || Joint.RigidB < 0) continue;
-            if (RigidBodies.IsValidIndex(Joint.RigidA) && RigidBodies.IsValidIndex(Joint.RigidB))
-            {
-                FBulletBody* A = GBodiesMap[Joint.RigidA];
-                FBulletBody* B = GBodiesMap[Joint.RigidB];
-                if (A && B)
-                {
-                    btTypedConstraint* c = GBulletWorld->Create6DofSpringConstraint(Joint, A, B);
-                    if (c) GConstraints.Add(c);
-                }
-            }
-        }
-    }
+    
 }
 
 void FMMDPhysicsSimulator::SimulatePhysics(TArray<FMMDRigidBodyRuntime>&RigidBodies, TArray<FMMDJointRuntime>&Joints, TArray<FMMDSoftBodyRuntime>&SoftBodies, FComponentSpacePoseContext & Output, float DeltaTime)
 {
-    if(RigidBodies.Num() == 0 || DeltaTime <= KINDA_SMALL_NUMBER) return;
-
-    // Use Bullet integration: ensure world and mapping
-    EnsureBulletWorldAndMaps(RigidBodies, Joints);
-    if (!GBulletWorld)
-    {
-        // fallback to built-in solver if Bullet not available
-        const float TimeStep = 1.0f / 30.0f;
-        const int32 SubStepCount = 2;
-        const float SubDeltaTime = TimeStep / SubStepCount;
-        SyncBoneToPhysics(RigidBodies, Output);
-        for (int32 Step = 0; Step < SubStepCount; ++Step)
-        {
-            for (FMMDRigidBodyRuntime& Rigid : RigidBodies)
-            {
-                ApplyForces(Rigid, SubDeltaTime);
-                IntegrateVelocity(Rigid, SubDeltaTime);//对速度进行积分
-            }
-            DetectAndResolveCollisions(RigidBodies, SubDeltaTime);
-            const int32 Iterations = 10;
-            SolveConstraints(RigidBodies, Joints, SubDeltaTime, Iterations);
-        }
-        TArray<FBoneTransform> OutBoneTransforms;
-        WriteBackToBones(RigidBodies, OutBoneTransforms);
-        return;
-    }
-
-    // Sync bones to Bullet kinematic bodies
-    SyncBoneToPhysics(RigidBodies, Output);
-    GBulletWorld->SyncBonesToPhysics(RigidBodies);
-
-    // Step Bullet: use DeltaTime directly, allow internal substeps
-    const float TimeStep = DeltaTime;
-    const int MaxSubSteps = 2;
-    GBulletWorld->StepSimulation(TimeStep, MaxSubSteps);
-
-    // Read back dynamic bodies into runtime
-    GBulletWorld->SyncPhysicsToBones(RigidBodies);
-
-    // SolveConstraints no longer needed (handled by Bullet), but keep call to maintain API
-    // Write back bones
-    TArray<FBoneTransform> OutBoneTransforms;
-    WriteBackToBones(RigidBodies, OutBoneTransforms);
+    
 }
 
 // Restore fallback implementations for static methods
