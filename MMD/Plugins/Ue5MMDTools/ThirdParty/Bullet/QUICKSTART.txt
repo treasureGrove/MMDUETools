@@ -1,0 +1,108 @@
+═══════════════════════════════════════════════════════════════
+  Bullet Physics for UE5 - 快速集成指南
+═══════════════════════════════════════════════════════════════
+
+✅ 已解决 LNK2038 运行库不匹配错误！
+   Release: /MD   Debug: /MDd  (与 UE5 完全匹配)
+
+───────────────────────────────────────────────────────────────
+📦 包内容
+───────────────────────────────────────────────────────────────
+
+MMD_Bullet_Libs_UE5/
+├── lib/x64/
+│   ├── Release/  (8 个 .lib 文件, /MD)
+│   └── Debug/    (8 个 .lib 文件, /MDd)
+├── include/      (完整头文件)
+├── Bullet.Build.cs (示例配置文件)
+└── README_UE5.txt  (详细文档)
+
+───────────────────────────────────────────────────────────────
+🚀 快速集成 (3 步搞定)
+───────────────────────────────────────────────────────────────
+
+步骤 1: 复制文件
+   将 MMD_Bullet_Libs_UE5 文件夹复制到:
+   YourPlugin/Source/ThirdParty/Bullet/
+
+步骤 2: 配置 Build.cs
+   在 YourPlugin.Build.cs 中添加:
+   
+   PrivateDependencyModuleNames.Add("Bullet");
+
+步骤 3: 重新生成项目
+   右键 .uproject → Generate Visual Studio project files
+   编译插件 ✓
+
+───────────────────────────────────────────────────────────────
+💻 代码示例
+───────────────────────────────────────────────────────────────
+
+#include "btBulletDynamicsCommon.h"
+
+void InitBullet()
+{
+    btDefaultCollisionConfiguration* config = 
+        new btDefaultCollisionConfiguration();
+    btCollisionDispatcher* dispatcher = 
+        new btCollisionDispatcher(config);
+    btBroadphaseInterface* broadphase = 
+        new btDbvtBroadphase();
+    btSequentialImpulseConstraintSolver* solver = 
+        new btSequentialImpulseConstraintSolver();
+    
+    btDiscreteDynamicsWorld* world = 
+        new btDiscreteDynamicsWorld(
+            dispatcher, broadphase, solver, config);
+    
+    world->setGravity(btVector3(0, 0, -980));
+}
+
+───────────────────────────────────────────────────────────────
+🔧 核心库说明
+───────────────────────────────────────────────────────────────
+
+必需的 4 个库 (MMD 项目):
+  ✓ BulletCollision  - 碰撞检测
+  ✓ BulletDynamics   - 刚体动力学
+  ✓ BulletSoftBody   - 软体物理 (布料/毛发)
+  ✓ LinearMath       - 数学运算
+
+可选的 Bullet3 库:
+  · Bullet3Common
+  · Bullet3Collision
+  · Bullet3Dynamics
+  · Bullet3Geometry
+
+───────────────────────────────────────────────────────────────
+⚙️ 编译信息
+───────────────────────────────────────────────────────────────
+
+平台:        Windows x64
+运行库:      /MD (Release), /MDd (Debug) ✓
+双精度:      已启用 (BT_USE_DOUBLE_PRECISION)
+多线程:      已启用
+构建日期:    2025-11-13
+Bullet 版本: 3.x
+
+───────────────────────────────────────────────────────────────
+❓ 常见问题
+───────────────────────────────────────────────────────────────
+
+Q: 还是报 LNK2038 错误？
+A: 检查是否使用了正确的配置路径 (Debug/Release)
+
+Q: 找不到头文件？
+A: 确认 PublicSystemIncludePaths 路径正确
+
+Q: Debug 模式链接失败？
+A: UE5 的 Debug Editor 使用 Release 库
+   只有 Debug Game 才用 Debug 库
+
+───────────────────────────────────────────────────────────────
+
+详细文档: README_UE5.txt
+示例配置: Bullet.Build.cs
+官方文档: https://pybullet.org/
+
+═══════════════════════════════════════════════════════════════

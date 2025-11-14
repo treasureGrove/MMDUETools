@@ -8,7 +8,7 @@
 #include "AnimGraphNode_SkeletalControlBase.h"
 #include "Animation/AnimBlueprint.h"
 #endif
-
+#include "btBulletDynamicsCommon.h"
 #include "AGN_MMDSkeletalControl.generated.h"
 
 #pragma region 物理数据结构体
@@ -67,11 +67,14 @@ struct  FMMDRigidBodyRuntime
     FVector AngularVelocity= FVector::ZeroVector;                 // 角速度
     FVector PrevPosition= FVector::ZeroVector;                    // 上一帧位置
     FQuat PrevRotation=FQuat::Identity;                      // 上一帧旋转
-    FTransform LocalTransform= FTransform::Identity;               // 缓存的局部变换
-
-    bool bInitialized = false;
+    FVector FilteredPosition = FVector::ZeroVector;
+	FQuat FilteredRotation = FQuat::Identity;
     FTransform RigidBodyOffset = FTransform::Identity;
-
+    
+   
+    btRigidBody* BulletBody=nullptr;
+	float FollowStrength = 0.35f; // 追随力系数，仅 PhysicsMode=2 有效
+    bool bInitialized = false;
     float InvMass = 0;
 };
 //约束数据结构体
@@ -107,8 +110,8 @@ struct FMMDJointRuntime
     UPROPERTY()
     FVector SpringRot = FVector::ZeroVector;
 
-    bool bInitialized = false;                 // 是否已缓存过初始世界偏移
-    FVector InitialPositionWorld = FVector::ZeroVector; // RigidB_world - RigidA_world
+    btTypedConstraint* BulletConstraint = nullptr;
+    bool bConstraintInitialized = false;
 
 };
 //软体锚点结构体
@@ -228,8 +231,8 @@ public:
     FAGN_MMDSkeletalControl();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (PinShownByDefault))
-    bool bEnablePhysics;
-    bool bIsInitialized;
+    bool bEnablePhysics=true;
+    bool bIsInitialized=false;
     //MMD数据
     UPROPERTY()
     TArray<FMMDRigidBodyRuntime> RuntimeRigidBodies;
