@@ -39,6 +39,7 @@ public:
     virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
     virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
+    void InitializedMMDPhysics(const PMXDatas& InPMXData, USkeletalMeshComponent* SkelComp);
 private:
     TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> Simulator;
     bool bSimulatorInitialized = false;

@@ -68,6 +68,7 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 		if (MMDNode)
 		{
 			MMDNode->Node.bEnablePhysics = true;
+			MMDNode->Node.InitializedMMDPhysics(PMXData, SkeletalMeshComponent);
 		/*	InitializeMMDPhysics(MMDNode, PMXData);*/
 			UE_LOG(LogTemp, Log, TEXT("MMD node added successfully!"));
 		}

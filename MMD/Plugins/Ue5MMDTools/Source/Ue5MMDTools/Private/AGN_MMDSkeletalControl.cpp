@@ -2,6 +2,7 @@
 #include "AGN_MMDSkeletalControl.h"
 #include "TPMXParser.h"
 #include "Animation/AnimInstanceProxy.h"
+#include "AnimationRuntime.h"     
 #include "MMDPhysicsSimulator.h"
 #include "DrawDebugHelpers.h" // 新增：用于绘制调试刚体
 #include "Async/Async.h" 
@@ -15,59 +16,75 @@ bool FAGN_MMDSkeletalControl::IsValidToEvaluate(
     const USkeleton* Skeleton,
     const FBoneContainer& RequiredBones)
 {
-    return bEnablePhysics && Skeleton != nullptr && RequiredBones.GetNumBones() > 0;
+    return true;
 }
 void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
 {
+
     OutBoneTransforms.Reset();
     if (!bEnablePhysics) return;
 
     USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy ? Output.AnimInstanceProxy->GetSkelMeshComponent() : nullptr;
     if (!SkelComp) return;
+    if (!bSimulatorInitialized || !Simulator.IsValid()) return; // 不再做懒加载
 
-    // 懒初始化（不做磁盘 IO）：外部应已在游戏线程准备好 PMXData
-    if (!bSimulatorInitialized)
-    {
-        if (!Simulator.IsValid()) { Simulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>(); }
-        // 只有当 PMXData 中有刚体/约束数据时才初始化
-        const bool bHasData =
-            (PMXData.ModelRigids.Num() > 0) || (PMXData.ModelJoints.Num() > 0);
-        if (bHasData)
-        {
-            Simulator->InitializeFromPMX(PMXData, SkelComp, UnitScale, MaxSubSteps, FixedTimeStep);
-            bSimulatorInitialized = true;
-        }
-        else
-        {
-            // 没有 PMX 数据则直接返回，不做物理
-            return;
-        }
-    }
-
-    // 1) 组件 -> 世界
+    // 1) 组件 -> 世界（建议改成按 Mesh 索引，如果你已经修）
     TArray<FTransform> BoneWorldUE;
     BuildBoneWorldArray(Output, BoneWorldUE);
 
-    // 2) 物理步进（内部封装 PreSync/Step/PostSync）
+    // 2) 物理步进
     const float DeltaSeconds = Output.AnimInstanceProxy->GetDeltaSeconds();
     Simulator->TickMMDPhysics(DeltaSeconds, BoneWorldUE);
 
-    // 3) 世界 -> 组件，写回
+    // 3) 世界 -> 组件
     const FTransform W2C = SkelComp->GetComponentTransform().Inverse();
+    const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
     const int32 NumBones = BoneWorldUE.Num();
-    OutBoneTransforms.Reserve(NumBones);
 
-    for (int32 CompactIdx = 0; CompactIdx < NumBones; ++CompactIdx)
+    TArray<FTransform> CompSpaceFinal; CompSpaceFinal.SetNum(NumBones);
+    for (int32 i = 0; i < NumBones; ++i)
+        CompSpaceFinal[i] = BoneWorldUE[i] * W2C;
+
+    // 4) 组件 -> 局部
+    OutBoneTransforms.Reserve(NumBones);
+    for (int32 i = 0; i < NumBones; ++i)
     {
-        const FCompactPoseBoneIndex CPIndex(CompactIdx);
-        const FTransform NewCS = BoneWorldUE[CompactIdx] * W2C;
-        OutBoneTransforms.Emplace(CPIndex, NewCS);
+        FCompactPoseBoneIndex CPIndex(i);
+        FCompactPoseBoneIndex Parent = BoneContainer.GetParentBoneIndex(CPIndex);
+        const FTransform& ThisCS = CompSpaceFinal[i];
+        FTransform LocalT = Parent.IsValid()
+            ? ThisCS.GetRelativeTransform(CompSpaceFinal[Parent.GetInt()])
+            : ThisCS;
+        OutBoneTransforms.Emplace(CPIndex, LocalT);
+    }
+    OutBoneTransforms.Sort(FCompareBoneTransformIndex());
+}
+void FAGN_MMDSkeletalControl::InitializedMMDPhysics(const PMXDatas& InPMXData, USkeletalMeshComponent* SkelComp)
+{
+    PMXData = InPMXData;
+    if (!SkelComp) { UE_LOG(LogTemp, Warning, TEXT("[AGN] InitMMDPhysics: SkelComp null")); return; }
+    if (!Simulator.IsValid()) { Simulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>(); }
+
+    const bool bHasData = (PMXData.ModelRigids.Num() > 0) || (PMXData.ModelJoints.Num() > 0);
+    if (!bHasData)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AGN] InitMMDPhysics: no rigid/joint data"));
+        return;
     }
 
-    // 按父子顺序排序，避免父骨覆盖子骨
-    OutBoneTransforms.Sort(FCompareBoneTransformIndex());
+    if (Simulator->InitializeFromPMX(PMXData, SkelComp, UnitScale, MaxSubSteps, FixedTimeStep))
+    {
+        bSimulatorInitialized = true;
+        UE_LOG(LogTemp, Log, TEXT("[AGN] InitMMDPhysics: initialized. Rigid=%d Joint=%d"),
+            PMXData.ModelRigids.Num(), PMXData.ModelJoints.Num());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("[AGN] InitMMDPhysics: InitializeFromPMX failed"));
+    }
+	bIsInitialized = true;
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {
