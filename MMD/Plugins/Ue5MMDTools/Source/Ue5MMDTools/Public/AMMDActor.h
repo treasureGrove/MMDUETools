@@ -22,7 +22,7 @@ public:
 
     void SetupComponents(const FString& FilePath);
 
-	void InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,const PMXDatas& PMXData);
+	/*void InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,const PMXDatas& PMXData);*/
 
 protected:
 
