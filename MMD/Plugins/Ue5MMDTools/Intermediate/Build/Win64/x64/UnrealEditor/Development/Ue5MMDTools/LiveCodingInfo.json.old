@@ -5,7 +5,6 @@
 			"AGN_MMDSkeletalControl.gen.cpp.obj",
 			"AMMDActor.gen.cpp.obj",
 			"MMDAnimInstance.gen.cpp.obj",
-			"MMDMeshSourceUserData.gen.cpp.obj",
 			"MMDPhysicsSaveGame.gen.cpp.obj",
 			"MMDPhysicsSimulator.gen.cpp.obj",
 			"MMDPhysicsSimulatorHolder.gen.cpp.obj",

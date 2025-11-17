@@ -36,6 +36,16 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
 
     auto* MMDProxy = static_cast<FMMDAnimInstanceProxy*>(Output.AnimInstanceProxy);
     TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> StrongSimulator = MMDProxy->CacheSimulator.Pin();
+
+    if (!StrongSimulator.IsValid())
+    {
+        // Fallback: query from AnimInstance on game thread-safe path
+        if (const UMMDAnimInstance* MI = Cast<UMMDAnimInstance>(AnimObj))
+        {
+            StrongSimulator = MI->GetSimulator();
+        }
+    }
+
     if (!StrongSimulator.IsValid())
     {
         const USkeletalMeshComponent* Skel = Output.AnimInstanceProxy->GetSkelMeshComponent();

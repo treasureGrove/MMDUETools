@@ -6,6 +6,10 @@
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
+#include "MMDPhysicsSimulatorHolder.h"
+#include "MMDPhysicsRegistry.h"
+#include "Engine/SkeletalMesh.h"
+#include "TPMXParser.h"
 
 static FString GetSnapshotSavePath(const USkeletalMeshComponent* SkelComp)
 {
@@ -86,17 +90,30 @@ static bool DeserializeSnapshotFromJson(const FString& InJson, FMMDPhysicsSimSna
     return true;
 }
 
+void UMMDAnimInstance::AcquireSharedHolder()
+{
+    if (!SkeletalMeshComp.IsValid()) SkeletalMeshComp = GetSkelMeshComponent();
+    if (!SkeletalMeshComp.IsValid()) return;
+    const USkeletalMesh* Mesh = SkeletalMeshComp->GetSkeletalMeshAsset();
+    if (!Mesh) return;
+
+    UMMDPhysicsRegistry* Reg = UMMDPhysicsRegistry::Get();
+    const FString Key = UMMDPhysicsRegistry::BuildKeyFromMesh(Mesh);
+    Holder = Reg->GetOrCreateHolder(Key);
+}
+
 void UMMDAnimInstance::ProvideMMDConfigAndInit(const PMXDatas& InPMXData, USkeletalMeshComponent* InSkelComp)
 {
     SkeletalMeshComp = InSkelComp;
+    EnsureSimulator();
     BuildSimulatorNow(InPMXData);
-    if (Simulator && SkeletalMeshComp.IsValid())
+    if (Holder && Holder->Simulator.IsValid() && SkeletalMeshComp.IsValid())
     {
         FString Path = GetSnapshotSavePath(SkeletalMeshComp.Get());
         FString Json; if (FPaths::FileExists(Path) && FFileHelper::LoadFileToString(Json, *Path))
         {
             FMMDPhysicsSimSnapshot Snapshot; if (DeserializeSnapshotFromJson(Json, Snapshot))
-            { Simulator->ForceApplySnapshot(Snapshot); UE_LOG(LogTemp, Log, TEXT("[MMDAnimInstance] Loaded physics snapshot: %s"), *Path); }
+            { Holder->Simulator->ForceApplySnapshot(Snapshot); UE_LOG(LogTemp, Log, TEXT("[MMDAnimInstance] Loaded physics snapshot: %s"), *Path); }
         }
     }
     SyncProxySimulator();
@@ -104,43 +121,60 @@ void UMMDAnimInstance::ProvideMMDConfigAndInit(const PMXDatas& InPMXData, USkele
 
 void UMMDAnimInstance::EnsureSimulator()
 {
-    if (!Simulator.IsValid() && !SourcePMXFilePath.IsEmpty() && SkeletalMeshComp.IsValid())
+    if (!SkeletalMeshComp.IsValid()) SkeletalMeshComp = GetSkelMeshComponent();
+    if (!Holder)
     {
-        TPMXParser Parser; if (Parser.ParsePMXFile(SourcePMXFilePath))
-        {
-            UE_LOG(LogTemp, Verbose, TEXT("[MMDAnimInstance] EnsureSimulator reparsed PMX: %s"), *SourcePMXFilePath);
-            BuildSimulatorNow(Parser.PMXInfo);
-            SyncProxySimulator();
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[MMDAnimInstance] EnsureSimulator parse failed: %s"), *SourcePMXFilePath);
-        }
+        AcquireSharedHolder();
     }
+    if (!Holder && !SourcePMXFilePath.IsEmpty())
+    {
+        // fallback: local holder if registry missed
+        Holder = NewObject<UMMDPhysicsSimulatorHolder>(GetTransientPackage());
+        Holder->AddToRoot();
+    }
+}
+
+TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> UMMDAnimInstance::GetSimulator() const
+{
+    return Holder ? Holder->Simulator : nullptr;
 }
 
 void UMMDAnimInstance::NativeInitializeAnimation()
 {
     Super::NativeInitializeAnimation();
     EnsureSimulator();
+    if (!GetSimulator().IsValid() && !SourcePMXFilePath.IsEmpty())
+    {
+        // optional: parse and build from PMX if provided
+        TPMXParser Parser; if (Parser.ParsePMXFile(SourcePMXFilePath))
+        {
+            BuildSimulatorNow(Parser.PMXInfo);
+            if (SkeletalMeshComp.IsValid())
+            {
+                FString Path = GetSnapshotSavePath(SkeletalMeshComp.Get());
+                FString Json; if (FPaths::FileExists(Path) && FFileHelper::LoadFileToString(Json, *Path))
+                {
+                    FMMDPhysicsSimSnapshot Snapshot; if (DeserializeSnapshotFromJson(Json, Snapshot))
+                    { Holder->Simulator->ForceApplySnapshot(Snapshot); }
+                }
+            }
+        }
+    }
     SyncProxySimulator();
 }
 
 void UMMDAnimInstance::NativeUninitializeAnimation()
 {
     Super::NativeUninitializeAnimation();
-    if (Simulator && SkeletalMeshComp.IsValid())
+    if (Holder && Holder->Simulator.IsValid() && SkeletalMeshComp.IsValid())
     {
-        FMMDPhysicsSimSnapshot Snapshot; Simulator->CaptureSnapshot(Snapshot); FString Json; SerializeSnapshotToJson(Snapshot, Json); FString Path = GetSnapshotSavePath(SkeletalMeshComp.Get()); if (FFileHelper::SaveStringToFile(Json, *Path)) { UE_LOG(LogTemp, Log, TEXT("[MMDAnimInstance] Saved physics snapshot: %s"), *Path); }
+        FMMDPhysicsSimSnapshot Snapshot; Holder->Simulator->CaptureSnapshot(Snapshot); FString Json; SerializeSnapshotToJson(Snapshot, Json); FString Path = GetSnapshotSavePath(SkeletalMeshComp.Get()); FFileHelper::SaveStringToFile(Json, *Path);
     }
+    if (Holder)
     {
         FMMDAnimInstanceProxy& Proxy = GetProxyOnGameThread<FMMDAnimInstanceProxy>(); Proxy.CacheSimulator.Reset();
     }
-    DestroySimulatorNow();
 }
-
-FAnimInstanceProxy* UMMDAnimInstance::CreateAnimInstanceProxy(){ return new FMMDAnimInstanceProxy(this); }
-void UMMDAnimInstance::DestroyAnimInstanceProxy(FAnimInstanceProxy* InProxy){ delete static_cast<FMMDAnimInstanceProxy*>(InProxy); }
 
 void UMMDAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
@@ -151,21 +185,48 @@ void UMMDAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 void UMMDAnimInstance::BuildSimulatorNow(const PMXDatas& InPMXData)
 {
-    DestroySimulatorNow(); if(!SkeletalMeshComp.IsValid()){ UE_LOG(LogTemp, Warning, TEXT("[UMMDAnimInstance] BuildSimulatorNow skipped: no SkelComp")); return; }
-    Simulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>(); const bool bOk = Simulator->InitializeFromPMX(InPMXData, SkeletalMeshComp.Get()); if(!bOk){ Simulator.Reset(); }
+    EnsureSimulator(); if (!Holder) return;
+    if (!Holder->Simulator.IsValid())
+    {
+        Holder->Simulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
+    }
+    if (!SkeletalMeshComp.IsValid()) SkeletalMeshComp = GetSkelMeshComponent();
+    if (!SkeletalMeshComp.IsValid()) return;
+    const bool bOk = Holder->Simulator->InitializeFromPMX(InPMXData, SkeletalMeshComp.Get());
+    if (!bOk) { Holder->Simulator.Reset(); }
 }
 
 void UMMDAnimInstance::DestroySimulatorNow()
 {
-    if(Simulator){ Simulator->Shutdown(); Simulator.Reset(); }
+    if (Holder && Holder->Simulator.IsValid())
+    {
+        Holder->Simulator->Shutdown();
+        Holder->Simulator.Reset();
+    }
 }
 
 void UMMDAnimInstance::SyncProxySimulator()
 {
-    FMMDAnimInstanceProxy& Proxy = GetProxyOnGameThread<FMMDAnimInstanceProxy>(); Proxy.CacheSimulator = Simulator;
+    FMMDAnimInstanceProxy& Proxy = GetProxyOnGameThread<FMMDAnimInstanceProxy>();
+    Proxy.CacheSimulator = Holder ? Holder->Simulator : nullptr;
+}
+
+FAnimInstanceProxy* UMMDAnimInstance::CreateAnimInstanceProxy()
+{
+    return new FMMDAnimInstanceProxy(this);
+}
+
+void UMMDAnimInstance::DestroyAnimInstanceProxy(FAnimInstanceProxy* InProxy)
+{
+    delete static_cast<FMMDAnimInstanceProxy*>(InProxy);
 }
 
 void FMMDAnimInstanceProxy::Initialize(UAnimInstance* InAnimInstance)
 {
-    FAnimInstanceProxy::Initialize(InAnimInstance); if(UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(InAnimInstance)){ MMDInst->EnsureSimulator(); CacheSimulator = MMDInst->GetSimulator(); }
+    FAnimInstanceProxy::Initialize(InAnimInstance);
+    if(UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(InAnimInstance))
+    {
+        MMDInst->EnsureSimulator();
+        CacheSimulator = MMDInst->GetSimulator();
+    }
 }

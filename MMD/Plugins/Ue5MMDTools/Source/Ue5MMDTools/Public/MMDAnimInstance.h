@@ -9,6 +9,8 @@
 // 前置声明：避免头文件膨胀
 class USkeletalMeshComponent;
 class FMMDPhysicsSimulator;
+class UMMDPhysicsSimulatorHolder;
+class UMMDPhysicsRegistry;
 
 class FMMDAnimInstanceProxy : public FAnimInstanceProxy
 {
@@ -39,7 +41,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="MMDPhysics")
     void EnsureSimulator();
 
-    TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> GetSimulator() const { return Simulator; }
+    TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> GetSimulator() const;
 protected:
     // 生命周期：创建/重建时机（游戏线程）
     virtual void NativeInitializeAnimation() override;
@@ -57,10 +59,16 @@ private:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MMDPhysics", meta=(AllowPrivateAccess="true"))
     FString SourcePMXFilePath; // Persist on CDO for preview rebuild
 
+    UPROPERTY(Transient)
+    UMMDPhysicsSimulatorHolder* Holder = nullptr;
+
+    // legacy field kept to avoid breaking API; not used after holder integration
     TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> Simulator;
     void BuildSimulatorNow(const PMXDatas& InPMXData);
     void DestroySimulatorNow();
 
     // 将当前 Simulator 同步到 Proxy（仅游戏线程调用）
     void SyncProxySimulator();
+
+    void AcquireSharedHolder();
 };
