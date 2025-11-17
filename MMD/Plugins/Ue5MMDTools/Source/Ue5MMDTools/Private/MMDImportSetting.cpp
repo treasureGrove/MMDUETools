@@ -235,10 +235,24 @@ void MMDImportSetting::ImportMMDModel()
 					FString AssetName = FPaths::GetBaseFilename(FileName);
 					if (UBlueprint* NewBP = SaveMMDBlueprintAsset(NewMMDActor, AssetFolder + TEXT("/") + AssetName + TEXT("/BluePrint"), AssetName, true))
 					{
-						if (NewBP->GeneratedClass)
+						if (UClass* GenClass = NewBP->GeneratedClass)
 						{
-							// 关键：这里调用预览函数在插件预览窗口生成 Actor
-							ViewPanel->CreatePreviewActor(NewBP->GeneratedClass);
+							// 关键：把 PMX 源路径设置到蓝图 CDO，保证蓝图实例 OnConstruction 能拿到
+							if (AActor* CDOActor = Cast<AActor>(GenClass->GetDefaultObject()))
+							{
+								if (AMMDActor* CDO = Cast<AMMDActor>(CDOActor))
+								{
+									CDO->SourcePMXFilePath = SelectedFile; // 绝对路径
+									CDO->Modify(true);
+									UE_LOG(LogTemp, Log, TEXT("[Import] Set CDO SourcePMXFilePath: %s"), *SelectedFile);
+								}
+							}
+
+							// 重新编译，使默认值生效
+							FKismetEditorUtilities::CompileBlueprint(NewBP);
+
+							// 预览中生成实例（其 OnConstruction 将基于 CDO 的路径自动初始化）
+							ViewPanel->CreatePreviewActor(GenClass);
 						}
 					}
 

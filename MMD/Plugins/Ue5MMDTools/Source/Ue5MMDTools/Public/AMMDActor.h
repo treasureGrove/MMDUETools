@@ -23,31 +23,17 @@ public:
     void SetupComponents(const FString& FilePath);
 
 	/*void InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,const PMXDatas& PMXData);*/
-
+    UPROPERTY(EditAnywhere, Category = "MMD")
+    FString SourcePMXFilePath;
 protected:
 
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
 
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
-	//TArray<FMMDPhysicsBone> PhysicsBones;
-
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
-	//TArray<FMMDPhysicsConstraint> PhysicsConstraints;
-
- //   // 全局物理设置
- //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics", meta = (ClampMin = "0.1", ClampMax = "10.0"))
- //   float GlobalPhysicsScale = 1.0f;
-
- //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
- //   FVector GlobalGravity = FVector(0, 0, -980.0f);
-
- //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics")
- //   bool bEnableMMDPhysics = true;
-
- //   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD Physics", meta = (ClampMin = "1", ClampMax = "10"))
- //   int32 PhysicsIterations = 3;  // 约束求解迭代次数
- //   
+#if WITH_EDITOR
+    virtual void OnConstruction(const FTransform& Transform) override;
+    void InitSimulatorForPreviewIfNeeded();
+#endif
 private:
     //蓝图组成
     UPROPERTY(VisibleAnywhere, Category = "MMD")

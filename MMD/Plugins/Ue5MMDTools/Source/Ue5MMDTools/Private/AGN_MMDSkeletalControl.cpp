@@ -4,8 +4,12 @@
 #include "Animation/AnimInstanceProxy.h"
 #include "AnimationRuntime.h"     
 #include "MMDPhysicsSimulator.h"
-#include "DrawDebugHelpers.h" // 新增：用于绘制调试刚体
+#include "DrawDebugHelpers.h"
+#include "MMDAnimInstance.h"
 #include "Async/Async.h" 
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<int32> CVarMMDPhysDebugNode(TEXT("mmd.PhysDebug"),0,TEXT("Draw MMD Bullet rigid bodies and joints in UE space. 0:off, 1:on"),ECVF_Cheat);
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
@@ -25,20 +29,44 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
 
     OutBoneTransforms.Reset();
     if (!bEnablePhysics) return;
+    if (!Output.AnimInstanceProxy) return;
 
-    USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy ? Output.AnimInstanceProxy->GetSkelMeshComponent() : nullptr;
+    const UObject* AnimObj = Output.AnimInstanceProxy->GetAnimInstanceObject();
+    if (!AnimObj || !AnimObj->IsA<UMMDAnimInstance>()) return;
+
+    auto* MMDProxy = static_cast<FMMDAnimInstanceProxy*>(Output.AnimInstanceProxy);
+    TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> StrongSimulator = MMDProxy->CacheSimulator.Pin();
+    if (!StrongSimulator.IsValid())
+    {
+        const USkeletalMeshComponent* Skel = Output.AnimInstanceProxy->GetSkelMeshComponent();
+        const AActor* Owner = Skel ? Skel->GetOwner() : nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("[MMDNode] StrongSimulator invalid. WeakValid=%d Owner=%s"),
+            MMDProxy->CacheSimulator.IsValid(),
+            Owner ? *Owner->GetName() : TEXT("None"));
+        return;
+    }
+
+    USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy->GetSkelMeshComponent();
     if (!SkelComp) return;
-    if (!bSimulatorInitialized || !Simulator.IsValid()) return; // 不再做懒加载
 
-    // 1) 组件 -> 世界（建议改成按 Mesh 索引，如果你已经修）
     TArray<FTransform> BoneWorldUE;
     BuildBoneWorldArray(Output, BoneWorldUE);
 
-    // 2) 物理步进
     const float DeltaSeconds = Output.AnimInstanceProxy->GetDeltaSeconds();
-    Simulator->TickMMDPhysics(DeltaSeconds, BoneWorldUE);
+    StrongSimulator->TickMMDPhysics(DeltaSeconds, BoneWorldUE);
 
-    // 3) 世界 -> 组件
+    if (CVarMMDPhysDebugNode->GetInt() != 0)
+    {
+        TWeakPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> WeakSim = StrongSimulator;
+        AsyncTask(ENamedThreads::GameThread, [WeakSim]()
+        {
+            if (auto S = WeakSim.Pin())
+            {
+                S->DebugDraw();
+            }
+        });
+    }
+
     const FTransform W2C = SkelComp->GetComponentTransform().Inverse();
     const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
     const int32 NumBones = BoneWorldUE.Num();
@@ -47,7 +75,6 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     for (int32 i = 0; i < NumBones; ++i)
         CompSpaceFinal[i] = BoneWorldUE[i] * W2C;
 
-    // 4) 组件 -> 局部
     OutBoneTransforms.Reserve(NumBones);
     for (int32 i = 0; i < NumBones; ++i)
     {
@@ -60,31 +87,6 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
         OutBoneTransforms.Emplace(CPIndex, LocalT);
     }
     OutBoneTransforms.Sort(FCompareBoneTransformIndex());
-}
-void FAGN_MMDSkeletalControl::InitializedMMDPhysics(const PMXDatas& InPMXData, USkeletalMeshComponent* SkelComp)
-{
-    PMXData = InPMXData;
-    if (!SkelComp) { UE_LOG(LogTemp, Warning, TEXT("[AGN] InitMMDPhysics: SkelComp null")); return; }
-    if (!Simulator.IsValid()) { Simulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>(); }
-
-    const bool bHasData = (PMXData.ModelRigids.Num() > 0) || (PMXData.ModelJoints.Num() > 0);
-    if (!bHasData)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[AGN] InitMMDPhysics: no rigid/joint data"));
-        return;
-    }
-
-    if (Simulator->InitializeFromPMX(PMXData, SkelComp, UnitScale, MaxSubSteps, FixedTimeStep))
-    {
-        bSimulatorInitialized = true;
-        UE_LOG(LogTemp, Log, TEXT("[AGN] InitMMDPhysics: initialized. Rigid=%d Joint=%d"),
-            PMXData.ModelRigids.Num(), PMXData.ModelJoints.Num());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("[AGN] InitMMDPhysics: InitializeFromPMX failed"));
-    }
-	bIsInitialized = true;
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {

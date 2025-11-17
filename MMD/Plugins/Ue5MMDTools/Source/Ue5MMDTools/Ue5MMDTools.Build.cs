@@ -45,7 +45,9 @@ public class Ue5MMDTools : ModuleRules
             "IKRigEditor",
             "IKRigDeveloper",
             "Persona",
-            "SkeletonEditor"
+            "SkeletonEditor",
+            "Json",
+            "JsonUtilities"
         });
 
         string PluginPath = Path.GetFullPath(Path.Combine(ModuleDirectory, "../../"));
@@ -56,19 +58,17 @@ public class Ue5MMDTools : ModuleRules
         string LibSuffix = ".lib";
         PublicAdditionalLibraries.AddRange(new string[]
         {
-           
-        Path.Combine(LibPath, "BulletCollision" + LibSuffix),
+            Path.Combine(LibPath, "BulletCollision" + LibSuffix),
             Path.Combine(LibPath, "BulletDynamics" + LibSuffix),
             Path.Combine(LibPath, "BulletSoftBody" + LibSuffix),
             Path.Combine(LibPath, "LinearMath" + LibSuffix)
         });
 
-        // 定义 Bullet 宏
         PublicDefinitions.AddRange(new string[]
         {
-            "BT_USE_DOUBLE_PRECISION",      
-            "BT_THREADSAFE=0",              
-            "BT_NO_PROFILE=1"              
+            "BT_USE_DOUBLE_PRECISION",
+            "BT_THREADSAFE=0",
+            "BT_NO_PROFILE=1"
         });
 
     }
