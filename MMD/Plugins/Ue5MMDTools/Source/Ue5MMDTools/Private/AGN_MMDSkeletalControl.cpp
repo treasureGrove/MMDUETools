@@ -8,8 +8,9 @@
 #include "MMDAnimInstance.h"
 #include "Async/Async.h" 
 #include "HAL/IConsoleManager.h"
+#include "Animation/AnimTypes.h"
 
-static TAutoConsoleVariable<int32> CVarMMDPhysDebugNode(TEXT("mmd.PhysDebug"),0,TEXT("Draw MMD Bullet rigid bodies and joints in UE space. 0:off, 1:on"),ECVF_Cheat);
+static TAutoConsoleVariable<int32> CVarMMDPhysDebugNode(TEXT("mmd.PhysDebug"),0,TEXT("Draw MMD Bullet rigid bodies and joints in UE space. 0:off, 1:on"),ECVF_Default);
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
@@ -48,11 +49,6 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
 
     if (!StrongSimulator.IsValid())
     {
-        const USkeletalMeshComponent* Skel = Output.AnimInstanceProxy->GetSkelMeshComponent();
-        const AActor* Owner = Skel ? Skel->GetOwner() : nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("[MMDNode] StrongSimulator invalid. WeakValid=%d Owner=%s"),
-            MMDProxy->CacheSimulator.IsValid(),
-            Owner ? *Owner->GetName() : TEXT("None"));
         return;
     }
 
@@ -70,32 +66,60 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
         TWeakPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> WeakSim = StrongSimulator;
         AsyncTask(ENamedThreads::GameThread, [WeakSim]()
         {
-            if (auto S = WeakSim.Pin())
-            {
-                S->DebugDraw();
-            }
+            if (auto S = WeakSim.Pin()) S->DebugDraw();
         });
     }
 
     const FTransform W2C = SkelComp->GetComponentTransform().Inverse();
     const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
-    const int32 NumBones = BoneWorldUE.Num();
 
-    TArray<FTransform> CompSpaceFinal; CompSpaceFinal.SetNum(NumBones);
-    for (int32 i = 0; i < NumBones; ++i)
-        CompSpaceFinal[i] = BoneWorldUE[i] * W2C;
+    const int32 NumCompact = BoneContainer.GetCompactPoseNumBones();
+    OutBoneTransforms.Reserve(NumCompact);
 
-    OutBoneTransforms.Reserve(NumBones);
-    for (int32 i = 0; i < NumBones; ++i)
+    // Start from current component-space pose
+    TArray<FTransform> CompSpaceFinal; CompSpaceFinal.SetNum(NumCompact);
+    for (int32 CompactIdx = 0; CompactIdx < NumCompact; ++CompactIdx)
     {
-        FCompactPoseBoneIndex CPIndex(i);
+        const FCompactPoseBoneIndex CPIndex(CompactIdx);
+        CompSpaceFinal[CompactIdx] = Output.Pose.GetComponentSpaceTransform(CPIndex);
+    }
+
+    // Track which compact bones were updated by physics (based on actual change)
+    TArray<bool> bChanged; bChanged.Init(false, NumCompact);
+
+    // Overwrite with physics results using mesh->compact mapping
+    const int32 NumMeshBones = SkelComp->GetNumBones();
+    for (int32 MeshIndex = 0; MeshIndex < NumMeshBones; ++MeshIndex)
+    {
+        FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+        if (CPIndex.IsValid() && BoneWorldUE.IsValidIndex(MeshIndex))
+        {
+            const int32 Cpi = CPIndex.GetInt();
+            const FTransform NewCS = BoneWorldUE[MeshIndex] * W2C;
+            // mark changed only if pose actually differs
+            const bool bDifferent = !NewCS.Equals(CompSpaceFinal[Cpi], 1e-3f);
+            if (bDifferent)
+            {
+                bChanged[Cpi] = true;
+                CompSpaceFinal[Cpi] = NewCS;
+            }
+        }
+    }
+
+    // Convert to local space and emit only changed bones
+    for (int32 CompactIdx = 0; CompactIdx < NumCompact; ++CompactIdx)
+    {
+        if (!bChanged[CompactIdx])
+        {
+            continue;
+        }
+        const FCompactPoseBoneIndex CPIndex(CompactIdx);
         FCompactPoseBoneIndex Parent = BoneContainer.GetParentBoneIndex(CPIndex);
-        const FTransform& ThisCS = CompSpaceFinal[i];
-        FTransform LocalT = Parent.IsValid()
-            ? ThisCS.GetRelativeTransform(CompSpaceFinal[Parent.GetInt()])
-            : ThisCS;
+        const FTransform& ThisCS = CompSpaceFinal[CompactIdx];
+        FTransform LocalT = Parent.IsValid() ? ThisCS.GetRelativeTransform(CompSpaceFinal[Parent.GetInt()]) : ThisCS;
         OutBoneTransforms.Emplace(CPIndex, LocalT);
     }
+
     OutBoneTransforms.Sort(FCompareBoneTransformIndex());
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
@@ -104,18 +128,27 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
 }
 void FAGN_MMDSkeletalControl::BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld)
 {
-    const FCompactPose& Pose = Output.Pose.GetPose();
-    const int32 NumBones = Pose.GetNumBones();
-    OutWorld.SetNum(NumBones);
-
     const USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy ? Output.AnimInstanceProxy->GetSkelMeshComponent() : nullptr;
+    const int32 NumMeshBones = SkelComp ? SkelComp->GetNumBones() : 0;
+    OutWorld.SetNum(NumMeshBones);
+
     const FTransform C2W = SkelComp ? SkelComp->GetComponentTransform() : FTransform::Identity;
 
-    for (int32 CompactIdx = 0; CompactIdx < NumBones; ++CompactIdx)
+    const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
+    // Iterate mesh bones and map to compact pose index
+    for (int32 MeshIndex = 0; MeshIndex < NumMeshBones; ++MeshIndex)
     {
-        const FCompactPoseBoneIndex CPIndex(CompactIdx);
-        const FTransform BoneCS = Output.Pose.GetComponentSpaceTransform(CPIndex);
-        OutWorld[CompactIdx] = BoneCS * C2W;
+        FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+        if (CPIndex.IsValid())
+        {
+            const FTransform BoneCS = Output.Pose.GetComponentSpaceTransform(CPIndex);
+            OutWorld[MeshIndex] = BoneCS * C2W;
+        }
+        else
+        {
+            // leave as identity if not part of the current LOD/pose
+            OutWorld[MeshIndex] = FTransform::Identity;
+        }
     }
 }
 #if WITH_EDITORONLY_DATA

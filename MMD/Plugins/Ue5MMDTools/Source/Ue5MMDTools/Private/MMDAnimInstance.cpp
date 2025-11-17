@@ -192,7 +192,12 @@ void UMMDAnimInstance::BuildSimulatorNow(const PMXDatas& InPMXData)
     }
     if (!SkeletalMeshComp.IsValid()) SkeletalMeshComp = GetSkelMeshComponent();
     if (!SkeletalMeshComp.IsValid()) return;
-    const bool bOk = Holder->Simulator->InitializeFromPMX(InPMXData, SkeletalMeshComp.Get());
+
+    // Choose UnitScale consistent with mesh build (ConvertPMXVectorToUnreal uses 8.0f)
+    const float UnitScaleUECmPerPMX = 8.f;
+    const int32 MaxSubSteps = 5;
+    const float FixedTimeStep = 1.f/60.f;
+    const bool bOk = Holder->Simulator->InitializeFromPMX(InPMXData, SkeletalMeshComp.Get(), UnitScaleUECmPerPMX, MaxSubSteps, FixedTimeStep);
     if (!bOk) { Holder->Simulator.Reset(); }
 }
 
