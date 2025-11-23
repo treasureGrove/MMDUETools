@@ -181,6 +181,11 @@ void UMMDAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
     Super::NativeUpdateAnimation(DeltaSeconds);
     EnsureSimulator();
     SyncProxySimulator();
+    // Always draw debug on game thread so users don't need console commands
+    if (Holder && Holder->Simulator.IsValid())
+    {
+        Holder->Simulator->DebugDraw();
+    }
 }
 
 void UMMDAnimInstance::BuildSimulatorNow(const PMXDatas& InPMXData)
@@ -193,8 +198,8 @@ void UMMDAnimInstance::BuildSimulatorNow(const PMXDatas& InPMXData)
     if (!SkeletalMeshComp.IsValid()) SkeletalMeshComp = GetSkelMeshComponent();
     if (!SkeletalMeshComp.IsValid()) return;
 
-    // Choose UnitScale consistent with mesh build (ConvertPMXVectorToUnreal uses 8.0f)
-    const float UnitScaleUECmPerPMX = 8.f;
+    // UnitScale: MUST match asset import scale (cm per PMX unit). Default 8.0f; set to 10.0f if mesh imported as 10cm/unit, etc.
+    const float UnitScaleUECmPerPMX = 8.f; // adjust if your importer used a different scale
     const int32 MaxSubSteps = 5;
     const float FixedTimeStep = 1.f/60.f;
     const bool bOk = Holder->Simulator->InitializeFromPMX(InPMXData, SkeletalMeshComp.Get(), UnitScaleUECmPerPMX, MaxSubSteps, FixedTimeStep);

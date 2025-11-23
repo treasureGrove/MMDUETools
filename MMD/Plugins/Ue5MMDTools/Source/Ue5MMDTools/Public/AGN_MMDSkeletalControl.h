@@ -24,12 +24,17 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (PinShownByDefault))
     bool bEnablePhysics=true;
     bool bIsInitialized=false;
+
+    // 在蓝图里开关调试绘制
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+    bool bDrawDebug = false;
+
     // 基本物理参数（与模拟器默认一致，可在蓝图调）
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
     float UnitScale = 8.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
-    int32 MaxSubSteps = 3;
+    int32 MaxSubSteps = 1;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
     float FixedTimeStep = 1.f / 60.f;

@@ -70,15 +70,50 @@ struct BulletRigidBody
     FTransform BoneToRigid = FTransform::Identity;
     FTransform RigidToBone = FTransform::Identity;
 
-    // Metadata from PMX for safer decisions/logging
-    int32 PMXBoneIndex = -1;           // PMX bone index bound to this rigid
-    FString PMXBoneNameJP;             // PMX bone name (JP)
-    FString PMXBoneNameEN;             // PMX bone name (EN)
-    bool bTransformAfterPhysics = false; // whether this bone should be written back from physics
-
     int32 DebugID = -1;
 };
 
+class FMMDMotionState : public btMotionState
+{
+public:
+    // 当前刚体的UE世界变换（cm）
+    FTransform UEWorldTransform;
+
+    // UE(cm) 与 Bullet(m) 转换比例： 1cm = 0.01m
+    static constexpr float UEToBullet = 0.01f;   // cm → m
+    static constexpr float BulletToUE = 100.0f;  // m → cm
+
+    FMMDMotionState(const FTransform& InUETransform)
+        : UEWorldTransform(InUETransform)
+    {
+    }
+
+    // Bullet → UE（物理更新 → 动画用）
+    virtual void getWorldTransform(btTransform& worldTrans) const override
+    {
+        FVector UEPos = UEWorldTransform.GetLocation();      // cm
+        FVector BulletPos = UEPos * UEToBullet;              // -> m
+
+        FQuat UEQuat = UEWorldTransform.GetRotation();       // UE左手
+        btQuaternion BulletQuat(UEQuat.X, UEQuat.Y, UEQuat.Z, UEQuat.W);
+
+        worldTrans.setOrigin(btVector3(BulletPos.X, BulletPos.Y, BulletPos.Z));
+        worldTrans.setRotation(BulletQuat);
+    }
+
+    // Bullet → UE（物理驱动骨骼时）
+    virtual void setWorldTransform(const btTransform& worldTrans) override
+    {
+        btVector3 P = worldTrans.getOrigin();  // m
+        btQuaternion Q = worldTrans.getRotation();
+
+        FVector UEPos = FVector(P.x(), P.y(), P.z()) * BulletToUE; // m->cm
+        FQuat UEQuat(Q.x(), Q.y(), Q.z(), Q.w());
+
+        UEWorldTransform.SetLocation(UEPos);
+        UEWorldTransform.SetRotation(UEQuat);
+    }
+};
 
 class FMMDPhysicsSimulator
 {
@@ -87,10 +122,7 @@ public:
     ~FMMDPhysicsSimulator() { Shutdown(); }
 
     bool InitializeFromPMX(const PMXDatas& PMXData,
-        USkeletalMeshComponent* InSkelComp,
-        float InUnitScale = 8.f,         // match mesh builder scaling (UE cm per PMX unit)
-        int32 InMaxSubSteps = 5,
-        float InFixedTimeStep = 1.f / 60.f);
+        USkeletalMeshComponent* InSkelComp);
     void GameThreadTick(float DeltaSeconds);
 
     void InitializeBulletWorld();
@@ -99,9 +131,9 @@ public:
     void StepSimulationMMD(float DeltaSeconds);
 
     // MMD Tick 流程
-    void PreSyncKinematicFromBones(const TArray<FTransform>& BoneWorldUE);
+    void PreSyncKinematicFromBones(const FCompactPose& InPose, const FBoneContainer& BoneContainer, TArray<BulletRigidBody>& RigidBodys);
     void PostSyncBonesFromPhysics(TArray<FTransform>& InOutBoneWorldUE);
-    void TickMMDPhysics(float DeltaSeconds, TArray<FTransform>& InOutBoneWorldUE);
+    void TickMMDPhysics(float DeltaSeconds, FComponentSpacePoseContext& InPose,TArray<FTransform>& InOutBoneWorldUE);
 
     void CaptureSnapshot(FMMDPhysicsSimSnapshot& OutSnapshot) const;
     bool ApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot, bool bRespectKinematic = true);
@@ -113,8 +145,9 @@ public:
     }
 
     void DebugDraw();
+    void SetDebugEnabled(bool bEnable);
 
-    USkeletalMeshComponent* GetOwnerSkelComp() const { return OwnerSkelComp.Get(); }
+    //USkeletalMeshComponent* GetOwnerSkelComp() const { return OwnerSkelComp.Get(); }
     bool IsInitialized() const { return bInitialized; }
 
     void Shutdown();
@@ -127,12 +160,15 @@ private:
 
     TArray<BulletRigidBody> BulletRigidBodies;
     TArray<btGeneric6DofSpring2Constraint*> BulletJoints;
-    TWeakObjectPtr<USkeletalMeshComponent> OwnerSkelComp;
+    
     bool bInitialized = false;
     float UnitScale = 8.f;          // UE cm per PMX unit (mesh builder uses 8)
-    int32 MaxSubSteps = 5;           // baseline
+    int32 MaxSubSteps = 1;           // baseline
     float FixedTimeStep = 1.f / 60.f;// baseline
 
     bool bFirstSyncDone = false;
 
+    // PMX->UE bone index global offset (handles extra Root added by mesh builder).
+    int32 BoneIndexOffset = 0;
+	USkeletalMeshComponent* OwnerSkelComp = nullptr;
 };

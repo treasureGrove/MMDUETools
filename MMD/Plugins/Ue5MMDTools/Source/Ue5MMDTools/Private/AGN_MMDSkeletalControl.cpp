@@ -7,10 +7,7 @@
 #include "DrawDebugHelpers.h"
 #include "MMDAnimInstance.h"
 #include "Async/Async.h" 
-#include "HAL/IConsoleManager.h"
 #include "Animation/AnimTypes.h"
-
-static TAutoConsoleVariable<int32> CVarMMDPhysDebugNode(TEXT("mmd.PhysDebug"),0,TEXT("Draw MMD Bullet rigid bodies and joints in UE space. 0:off, 1:on"),ECVF_Default);
 
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
@@ -27,7 +24,7 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
 {
-
+#pragma region 有效性检查
     OutBoneTransforms.Reset();
     if (!bEnablePhysics) return;
     if (!Output.AnimInstanceProxy) return;
@@ -47,77 +44,56 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
         }
     }
 
-    if (!StrongSimulator.IsValid())
-    {
-        return;
-    }
+    if (!StrongSimulator.IsValid()) return;
 
     USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy->GetSkelMeshComponent();
     if (!SkelComp) return;
+#pragma endregion
 
+    // 采集当前骨骼世界空间并驱动物理
     TArray<FTransform> BoneWorldUE;
     BuildBoneWorldArray(Output, BoneWorldUE);
-
     const float DeltaSeconds = Output.AnimInstanceProxy->GetDeltaSeconds();
-    StrongSimulator->TickMMDPhysics(DeltaSeconds, BoneWorldUE);
+    StrongSimulator->TickMMDPhysics(DeltaSeconds, Output, BoneWorldUE);
 
-    if (CVarMMDPhysDebugNode->GetInt() != 0)
+    if (bDrawDebug)
     {
+        StrongSimulator->SetDebugEnabled(true);
         TWeakPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> WeakSim = StrongSimulator;
-        AsyncTask(ENamedThreads::GameThread, [WeakSim]()
-        {
-            if (auto S = WeakSim.Pin()) S->DebugDraw();
-        });
+        AsyncTask(ENamedThreads::GameThread, [WeakSim]() { if (auto S = WeakSim.Pin()) S->DebugDraw(); });
+    }
+    else
+    {
+        StrongSimulator->SetDebugEnabled(false);
     }
 
     const FTransform W2C = SkelComp->GetComponentTransform().Inverse();
     const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
-
     const int32 NumCompact = BoneContainer.GetCompactPoseNumBones();
-    OutBoneTransforms.Reserve(NumCompact);
 
-    // Start from current component-space pose
-    TArray<FTransform> CompSpaceFinal; CompSpaceFinal.SetNum(NumCompact);
-    for (int32 CompactIdx = 0; CompactIdx < NumCompact; ++CompactIdx)
+    // 直接输出组件空间变换；SkeletalControl 期望的是 Component Space（父骨之前已经由框架处理）
+    for (int32 MeshIndex = 0; MeshIndex < SkelComp->GetNumBones(); ++MeshIndex)
     {
-        const FCompactPoseBoneIndex CPIndex(CompactIdx);
-        CompSpaceFinal[CompactIdx] = Output.Pose.GetComponentSpaceTransform(CPIndex);
-    }
+        if (!BoneWorldUE.IsValidIndex(MeshIndex)) continue;
+        // 被标记为 Identity 的骨骼跳过（无效）
+        if (BoneWorldUE[MeshIndex].Equals(FTransform::Identity)) continue;
 
-    // Track which compact bones were updated by physics (based on actual change)
-    TArray<bool> bChanged; bChanged.Init(false, NumCompact);
-
-    // Overwrite with physics results using mesh->compact mapping
-    const int32 NumMeshBones = SkelComp->GetNumBones();
-    for (int32 MeshIndex = 0; MeshIndex < NumMeshBones; ++MeshIndex)
-    {
         FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
-        if (CPIndex.IsValid() && BoneWorldUE.IsValidIndex(MeshIndex))
-        {
-            const int32 Cpi = CPIndex.GetInt();
-            const FTransform NewCS = BoneWorldUE[MeshIndex] * W2C;
-            // mark changed only if pose actually differs
-            const bool bDifferent = !NewCS.Equals(CompSpaceFinal[Cpi], 1e-3f);
-            if (bDifferent)
-            {
-                bChanged[Cpi] = true;
-                CompSpaceFinal[Cpi] = NewCS;
-            }
-        }
-    }
+        if (!CPIndex.IsValid()) continue;
 
-    // Convert to local space and emit only changed bones
-    for (int32 CompactIdx = 0; CompactIdx < NumCompact; ++CompactIdx)
-    {
-        if (!bChanged[CompactIdx])
+        // 世界 -> 组件空间
+        FTransform NewComponentT = BoneWorldUE[MeshIndex] * W2C;
+
+        // 保留原本的平移，避免写回世界旋转后覆盖局部位移（只写旋转）
+        const FTransform ExistingCS = Output.Pose.GetComponentSpaceTransform(CPIndex);
+        NewComponentT.SetTranslation(ExistingCS.GetTranslation());
+        NewComponentT.SetScale3D(FVector(1.0f));
+
+        // 输出组件空间（不要转换成相对父骨的 Local）
+        if (!NewComponentT.ContainsNaN() && NewComponentT.GetRotation().IsNormalized())
         {
-            continue;
+            OutBoneTransforms.Emplace(CPIndex, NewComponentT);
         }
-        const FCompactPoseBoneIndex CPIndex(CompactIdx);
-        FCompactPoseBoneIndex Parent = BoneContainer.GetParentBoneIndex(CPIndex);
-        const FTransform& ThisCS = CompSpaceFinal[CompactIdx];
-        FTransform LocalT = Parent.IsValid() ? ThisCS.GetRelativeTransform(CompSpaceFinal[Parent.GetInt()]) : ThisCS;
-        OutBoneTransforms.Emplace(CPIndex, LocalT);
     }
 
     OutBoneTransforms.Sort(FCompareBoneTransformIndex());
@@ -129,24 +105,45 @@ void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& Req
 void FAGN_MMDSkeletalControl::BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld)
 {
     const USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy ? Output.AnimInstanceProxy->GetSkelMeshComponent() : nullptr;
-    const int32 NumMeshBones = SkelComp ? SkelComp->GetNumBones() : 0;
+    if (!SkelComp) { OutWorld.Reset(); return; }
+
+    const USkeletalMesh* Mesh = SkelComp->GetSkeletalMeshAsset();
+    const int32 NumMeshBones = SkelComp->GetNumBones();
     OutWorld.SetNum(NumMeshBones);
 
-    const FTransform C2W = SkelComp ? SkelComp->GetComponentTransform() : FTransform::Identity;
-
+    const FTransform C2W = SkelComp->GetComponentTransform();
     const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
-    // Iterate mesh bones and map to compact pose index
+
+    // 仅当有 Mesh 才构建 RefCS
+    TArray<FTransform> RefCS;
+    const bool bHaveRef = (Mesh != nullptr);
+    if (bHaveRef)
+    {
+        const FReferenceSkeleton& RefSkel = Mesh->GetRefSkeleton();
+        const TArray<FTransform>& RefLocal = RefSkel.GetRefBonePose();
+        RefCS.SetNum(NumMeshBones);
+        for (int32 i = 0; i < NumMeshBones; ++i)
+        {
+            const int32 Parent = RefSkel.GetParentIndex(i);
+            RefCS[i] = (Parent >= 0) ? (RefLocal[i] * RefCS[Parent]) : RefLocal[i];
+        }
+    }
+
     for (int32 MeshIndex = 0; MeshIndex < NumMeshBones; ++MeshIndex)
     {
-        FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+        const FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
         if (CPIndex.IsValid())
         {
             const FTransform BoneCS = Output.Pose.GetComponentSpaceTransform(CPIndex);
             OutWorld[MeshIndex] = BoneCS * C2W;
         }
+        else if (bHaveRef)
+        {
+            OutWorld[MeshIndex] = RefCS[MeshIndex] * C2W;
+        }
         else
         {
-            // leave as identity if not part of the current LOD/pose
+            // 用 Identity 标记“无效”，上层据此跳过，不制造“世界=组件”的假数据
             OutWorld[MeshIndex] = FTransform::Identity;
         }
     }
