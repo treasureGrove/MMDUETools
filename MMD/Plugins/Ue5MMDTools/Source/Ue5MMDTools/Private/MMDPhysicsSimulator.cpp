@@ -181,38 +181,7 @@ void FMMDPhysicsSimulator::InitializeBulletWorld()
     );
 
     DynamicsWorld->setGravity(btVector3(0.f, -9.8f, 0.f));
-
-//    // 3. 求解器参数（增强稳定性）
-//    btContactSolverInfo& si = DynamicsWorld->getSolverInfo();
-//    si.m_numIterations = 24; // 推荐提高到 20~32，比原 12 更稳（可按场景调）
-//
-//    // Split impulse 防止深度穿透引发爆能
-//    si.m_splitImpulse = 1;
-//    si.m_splitImpulsePenetrationThreshold = -0.03f; // -0.02~-0.04 间调节
-//
-//    // 关节误差修正系数（ERP）与次级 ERP
-//    si.m_erp = 0.2f;
-//    si.m_erp2 = 0.1f;
-//
-//    // 全局 CFM：保持 0，如链条过硬引发振铃可改 1e-5 ~ 1e-4
-//    si.m_globalCfm = 0.0f;
-//
-//    // 4. Solver 标志（去重 + 添加 interleave）
-//    int flags =
-//        SOLVER_USE_WARMSTARTING
-//        | SOLVER_USE_2_FRICTION_DIRECTIONS
-//        | SOLVER_ENABLE_FRICTION_DIRECTION_CACHING
-//        | SOLVER_INTERLEAVE_CONTACT_AND_FRICTION_CONSTRAINTS;
-//#ifdef BT_USE_SSE // 视编译选项而定
-//    flags |= SOLVER_SIMD;
-//#endif
-//    si.m_solverMode |= flags;
 }
-
-// 修正 physicsMode 语义：
-// 0 = FollowBone (Kinematic，参与碰撞，质量设为0，添加到世界，保留接触响应)
-// 1 = Physics (Dynamic)
-// 2 = PhysicsWithBone (Hybrid：动态 + 骨骼纠正力)
 void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
 {
     if(!DynamicsWorld) return;
@@ -220,6 +189,8 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
 
     for(const PMXRigid& Rigid: PMXData.ModelRigids)
     {
+        BulletRigidBody NewRigidBody;
+
         //计算刚体偏移骨骼位置
         FTransform BoneWS=OwnerSkelComp->GetBoneTransform(Rigid.RelatedBoneIndex+1)*OwnerSkelComp->GetComponentTransform();
         const FVector Rot = Rigid.Rotation; // 弧度
@@ -234,12 +205,13 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
 		) * 8.0f;
 		FTransform ShapeOffset = FTransform(ShapeRot, ShapePos)* BoneWS;
 		btTransform boneBT = UEToBullet(ShapeOffset, UE_CM_PER_M);
+        NewRigidBody.ShapeOffset = boneBT;
 		FMMDMotionState* MotionState = new FMMDMotionState(ShapeOffset);
 
 
         
         //FMMDMotionState* Motion = new FMMDMotionState(UEInit);
-        BulletRigidBody NewRigidBody;
+
         //NewRigidBody.Shape=CreateCollisionShape(Rigid);
         //NewRigidBody.MotionState = new  FMMDMotionState(UEBoneTransform, UNIT_SCALE);
 
@@ -247,44 +219,54 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
         NewRigidBody.PhysicsMode = Rigid.PhysicsMode;
 
         btVector3 Inertia(0,0,0);
+
         btScalar Mass = btScalar(Rigid.Mass);
         switch (Rigid.PhysicsMode)
         {
         case 0:
-			Mass = 0.f; // Kinematic 刚体质量设为0
-            btRigidBody::btRigidBodyConstructionInfo CI(Mass, NewRigidBody.MotionState, NewRigidBody.Shape, Inertia);
-            CI.m_friction = (btScalar)Rigid.Friction;
-            CI.m_restitution = (btScalar)Rigid.Restitution;
-            CI.m_linearDamping = (btScalar)FMath::Clamp(Rigid.LinearDamping, 0.f, 0.99f);
-            CI.m_angularDamping = (btScalar)FMath::Clamp(Rigid.AngularDamping, 0.f, 0.99f);
-            NewRigidBody.Body = new btRigidBody(CI);
-            NewRigidBody.Body = new btRigidBody(CI);
-            NewRigidBody.Body->setCollisionFlags(NewRigidBody.Body->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
-			NewRigidBody.Body->setActivationState(DISABLE_DEACTIVATION);
-        case 1:
-			Mass = Rigid.Mass;
-			NewRigidBody.Shape->calculateLocalInertia(Mass, Inertia);
-			btRigidBody::btRigidBodyConstructionInfo CI(Mass, NewRigidBody.MotionState, NewRigidBody.Shape, Inertia);
-            CI.m_friction = (btScalar)Rigid.Friction;
-            CI.m_restitution = (btScalar)Rigid.Restitution;
-            CI.m_linearDamping = (btScalar)FMath::Clamp(Rigid.LinearDamping, 0.f, 0.99f);
-            CI.m_angularDamping = (btScalar)FMath::Clamp(Rigid.AngularDamping, 0.f, 0.99f);
-            NewRigidBody.Body = new btRigidBody(CI);
-			NewRigidBody.Body->setActivationState(DISABLE_DEACTIVATION);
+            Mass = 0.f; // Kinematic 刚体质量设为0
+            {
+                btRigidBody::btRigidBodyConstructionInfo CI(Mass, MotionState, NewRigidBody.Shape, Inertia);
+                CI.m_friction = (btScalar)Rigid.Friction;
+                CI.m_restitution = (btScalar)Rigid.Restitution;
+                CI.m_linearDamping = (btScalar)FMath::Clamp(Rigid.LinearDamping, 0.f, 0.99f);
+                CI.m_angularDamping = (btScalar)FMath::Clamp(Rigid.AngularDamping, 0.f, 0.99f);
+                NewRigidBody.Body = new btRigidBody(CI);
+                NewRigidBody.Body->setCollisionFlags(NewRigidBody.Body->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+                NewRigidBody.Body->setActivationState(DISABLE_DEACTIVATION);
+            }
             break;
+
+        case 1:
+            Mass = Rigid.Mass;
+            NewRigidBody.Shape->calculateLocalInertia(Mass, Inertia);
+            {
+                btRigidBody::btRigidBodyConstructionInfo CI(Mass, MotionState, NewRigidBody.Shape, Inertia);
+                CI.m_friction = (btScalar)Rigid.Friction;
+                CI.m_restitution = (btScalar)Rigid.Restitution;
+                CI.m_linearDamping = (btScalar)FMath::Clamp(Rigid.LinearDamping, 0.f, 0.99f);
+                CI.m_angularDamping = (btScalar)FMath::Clamp(Rigid.AngularDamping, 0.f, 0.99f);
+                NewRigidBody.Body = new btRigidBody(CI);
+                NewRigidBody.Body->setActivationState(DISABLE_DEACTIVATION);
+            }
+            break;
+
         case 2:
             Mass = Rigid.Mass;
-			NewRigidBody.Shape->calculateLocalInertia(Mass, Inertia);
-			btRigidBody::btRigidBodyConstructionInfo CI(Mass, NewRigidBody.MotionState, NewRigidBody.Shape, Inertia);
-            CI.m_friction      = (btScalar)Rigid.Friction;
-            CI.m_restitution   = (btScalar)Rigid.Restitution;
-            CI.m_linearDamping = (btScalar)FMath::Clamp(Rigid.LinearDamping, 0.f, 0.99f);
-            CI.m_angularDamping= (btScalar)FMath::Clamp(Rigid.AngularDamping, 0.f, 0.99f);
-            NewRigidBody.Body = new btRigidBody(CI);
-            NewRigidBody.Body->setActivationState(DISABLE_DEACTIVATION);
-			break;
+            NewRigidBody.Shape->calculateLocalInertia(Mass, Inertia);
+            {
+                btRigidBody::btRigidBodyConstructionInfo CI(Mass, MotionState, NewRigidBody.Shape, Inertia);
+                CI.m_friction = (btScalar)Rigid.Friction;
+                CI.m_restitution = (btScalar)Rigid.Restitution;
+                CI.m_linearDamping = (btScalar)FMath::Clamp(Rigid.LinearDamping, 0.f, 0.99f);
+                CI.m_angularDamping = (btScalar)FMath::Clamp(Rigid.AngularDamping, 0.f, 0.99f);
+                NewRigidBody.Body = new btRigidBody(CI);
+                NewRigidBody.Body->setActivationState(DISABLE_DEACTIVATION);
+            }
+            break;
+
         default:
-			UE_LOG(LogTemp, Error, TEXT("InitializeRigidBody: Unknown PhysicsMode %d, defaulting to Physics (1)"), Rigid.PhysicsMode);
+            UE_LOG(LogTemp, Error, TEXT("InitializeRigidBody: Unknown PhysicsMode %d, defaulting to Physics (1)"), Rigid.PhysicsMode);
             break;
         }
         // 碰撞组与掩码
@@ -351,184 +333,118 @@ void FMMDPhysicsSimulator::InitializeJoints(const PMXDatas& PMXData)
     }
 }
 
-void FMMDPhysicsSimulator::PreSyncKinematicFromBones(const FCompactPose& InPose,const FBoneContainer& BoneContainer,TArray<BulletRigidBody>& RigidBodys)
+void FMMDPhysicsSimulator::PreSyncKinematicFromBones(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
+	const FBoneContainer& BoneContainer = InPose.AnimInstanceProxy->GetRequiredBones();
     if(!DynamicsWorld) return;
-    FCSPose<FCompactPose> CSPose;
-    for (int i = 0; i < BulletRigidBodies.Num(); ++i) {
-        if (BulletRigidBodies[i].PhysicsMode != 0) {
-			UE_LOG(LogTemp, Warning, TEXT("PreSyncKinematicFromBones: Rigid body %d is not kinematic, skipping"), i);
-            continue;
-        }
-        int32 BoneIdx = BulletRigidBodies[i].RelatedBoneIndex + 1;
-        FCompactPoseBoneIndex CompactIndex = BoneContainer.GetCompactPoseIndexFromSkeletonIndex(BoneIdx);
-        if (CompactIndex == INDEX_NONE) {
-            UE_LOG(LogTemp, Error, TEXT("PreSyncKinematicFromBones: Invalid bone index %d for rigid body %d"), BoneIdx, i);
-			continue;
-        }
 
+    for (BulletRigidBody& RB : BulletRigidBodies) {
+        if (!RB.Body || !RB.Body->getMotionState()) continue;
+        if (RB.PhysicsMode != 0) continue;
+        const int32 BoneIdx = RB.RelatedBoneIndex+1;
+        if (RB.RelatedBoneIndex < 0) continue;
+        
+        FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(BoneIdx));
+        if (!CPIndex.IsValid())continue;
 
+        const FTransform BoneCS = InPose.Pose.GetComponentSpaceTransform(CPIndex);
+        const FTransform C2W = InPose.AnimInstanceProxy->GetComponentTransform();
+        //ue世界的骨骼坐标
+        const FTransform BoneWorld = BoneCS * C2W;
+        const btTransform BoneWorldBT = UEToBullet(BoneWorld);
+        const btTransform RigidWorldBT = BoneWorldBT * RB.ShapeOffset;
 
-
+        RB.Body->setWorldTransform(RigidWorldBT);
+        RB.Body->getMotionState()->setWorldTransform(RigidWorldBT);
     }
-
 }
 
-void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(TArray<FTransform>& InOutBoneWorldUE)
+void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
     if(!DynamicsWorld) return;
-    if (GPhysCfg.bNoWriteback) return;
 
-    USkeletalMeshComponent* SkelComp = OwnerSkelComp.Get();
-    const FTransform C2W = SkelComp ? SkelComp->GetComponentTransform() : FTransform::Identity;
-    const FTransform W2C = C2W.Inverse();
+    const FBoneContainer& BoneContainer = InPose.AnimInstanceProxy->GetRequiredBones();
 
-    // 调试期建议关闭过滤，确认写回是否生效
-    const bool bHairOnly     = false;            // 原: GPhysCfg.bHairOnly
-    const bool bUseWhitelist = false;            // 原: GPhysCfg.bUseWhitelist
-    const bool bBlockStructural = false;         // 原: GPhysCfg.bBlockStructural
+	const float MaxRotDeg = FMath::Clamp(GPhysCfg.MaxRotAngle, 10.f, 180.f);
 
-    const float MaxRotDeg   = FMath::Clamp(GPhysCfg.MaxRotAngle, 10.f, 180.f);
-    const bool  bLogDiscard = GPhysCfg.bLogDiscard;
-
-    TArray<FTransform> RefWorld;
-    BuildRefWorldTransforms(SkelComp, RefWorld);
-
-    for(const BulletRigidBody& RB: BulletRigidBodies)
+    for (const BulletRigidBody& RB : BulletRigidBodies)
     {
-        if(!RB.Body) continue;
+		if (!RB.Body || !RB.Body->getMotionState()) continue;
 
-        // 修改：仅跳过 mode=0；允许 mode=1 与 mode=2 写回（让“物理带骨骼动起来”）
-        if (RB.PhysicsMode == 0) continue;
+		if (RB.PhysicsMode == 0) continue; // Kinematic 刚体跳过
 
-        const int32 BoneIdx = RB.RelatedBoneIndex;
-        if(BoneIdx<0 || !InOutBoneWorldUE.IsValidIndex(BoneIdx)) continue;
-        if(!RefWorld.IsValidIndex(BoneIdx)) continue;
+		const int32 BoneIdx = RB.RelatedBoneIndex + 1;
+        if (BoneIdx < 0) continue;
 
-        if (SkelComp && BoneIdx < SkelComp->GetNumBones())
+        const FCompactPoseBoneIndex CompactIdx=BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(BoneIdx));
+        if (!CompactIdx.IsValid()) continue;
+
+		const btTransform RigidWorldBT = RB.Body->getWorldTransform();
+
+        btTransform BoneWorldBT = RigidWorldBT;
+        if (RB.ShapeOffset.getBasis().determinant() != 0) // 简单防御
         {
-            const FName BN = SkelComp->GetBoneName(BoneIdx);
-            if(bBlockStructural && IsStructuralBone(SkelComp,BoneIdx)) continue;
-            if ((bHairOnly || bUseWhitelist) && !IsPhysicsWhitelist(BN)) continue;
-            if (IsUEBoneNameBlacklisted(BN)) continue;
+            btTransform InvOffset = RB.ShapeOffset.inverse();
+            BoneWorldBT = RigidWorldBT * InvOffset;
         }
+		const FTransform BoneWorldUE = BulletToUE(BoneWorldBT);
 
-        const btTransform WorldB = RB.Body->getWorldTransform();
-        const FTransform CurRigidWorldUE = BulletToUE_WorldTransform_YUp(WorldB,UnitScale);
-        if (CurRigidWorldUE.ContainsNaN() || !CurRigidWorldUE.GetRotation().IsNormalized()) continue;
+		const FTransform C2W = InPose.AnimInstanceProxy->GetComponentTransform();
+        FTransform TargetCS=BoneWorldUE * C2W.Inverse();
 
-        const FTransform CurRigidCS   = CurRigidWorldUE * W2C;
-        const FTransform RefBoneWorld = RefWorld[BoneIdx];
-        const FTransform RefBoneCS    = RefBoneWorld * W2C;
-        const FTransform RefRigidCS   = RefBoneCS * RB.BoneToRigid;
-
-        const FTransform DeltaRigidCS    = CurRigidCS.GetRelativeTransform(RefRigidCS);
-        const FTransform TargetBoneCS    = DeltaRigidCS * RefBoneCS;
-        const FTransform TargetBoneWorld = TargetBoneCS * C2W;
-        if (TargetBoneWorld.ContainsNaN() || !TargetBoneWorld.GetRotation().IsNormalized()) continue;
-
-        const FTransform Original = InOutBoneWorldUE[BoneIdx];
-        const float RotDeltaDeg = FMath::RadiansToDegrees(Original.GetRotation().AngularDistance(TargetBoneWorld.GetRotation()));
-        if (RotDeltaDeg > MaxRotDeg)
-        {
-            if (bLogDiscard && SkelComp)
-            {
-                UE_LOG(LogTemp, Verbose, TEXT("[MMDPhys] Discard rot writeback Bone=%s RotDelta=%.1f"),
-                    *SkelComp->GetBoneName(BoneIdx).ToString(), RotDeltaDeg);
-            }
-            continue;
-        }
-
-        FTransform Out = Original;
-        Out.SetRotation(TargetBoneWorld.GetRotation());
-        if (GPhysCfg.bAllowTrans) // 可选写回位移
-        {
-            Out.SetLocation(TargetBoneWorld.GetLocation());
-        }
-        InOutBoneWorldUE[BoneIdx] = Out;
-
-        if (GPhysCfg.bLogWB && SkelComp)
-        {
-            UE_LOG(LogTemp, Verbose, TEXT("[MMDPhys][WB] Bone=%s RotDelta=%.2f deg"),
-                *SkelComp->GetBoneName(BoneIdx).ToString(), RotDeltaDeg);
-        }
+		OutBoneTransforms.Add(FBoneTransform(CompactIdx, TargetCS));
     }
 }
 
-void FMMDPhysicsSimulator::TickMMDPhysics(float DeltaSeconds, FComponentSpacePoseContext& InPose,TArray<FTransform>& InOutBoneWorldUE)
+void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
-    USkeletalMeshComponent* SkelComp = OwnerSkelComp.Get(); if (SkelComp == nullptr) { return; } const FTransform C2W = SkelComp ? SkelComp->GetComponentTransform() : FTransform::Identity; const FTransform W2C = C2W.Inverse();
+    if (!DynamicsWorld) return;
 
-    // 先同步输入姿势，保证首次同步使用正确骨骼位置
-    //if (InPose.AnimInstanceProxy) {
-    //    const FBoneContainer& BoneContainer = InPose.AnimInstanceProxy->GetRequiredBones();
-    //    const int32 NumCompact = BoneContainer.GetCompactPoseNumBones();
-    //    const TArray<FBoneIndexType>& CPToMesh = BoneContainer.GetBoneIndicesArray();
-    //    const int32 NumMeshBones = SkelComp->GetNumBones();
-    //    if (InOutBoneWorldUE.Num() < NumMeshBones) {
-    //        InOutBoneWorldUE.SetNum(NumMeshBones, /*bAllowShrinking*/false);
-    //    }
-    //    for (int32 cpIdx = 0; cpIdx < NumCompact; ++cpIdx)
-    //    {
-    //        const FCompactPoseBoneIndex CP(cpIdx);
-    //        const int32 MeshBoneIdx = CPToMesh[cpIdx];
-    //        if (MeshBoneIdx < 0 || MeshBoneIdx >= NumMeshBones) continue;
-    //        const FTransform BoneCS = InPose.Pose.GetComponentSpaceTransform(CP);
-    //        const FTransform BoneUE = BoneCS * C2W; // world
-    //        InOutBoneWorldUE[MeshBoneIdx] = BoneUE;
-    //    }
-    //} else {
-    //    UE_LOG(LogTemp, Error, TEXT("FMMDPhysicsSimulator::TickMMDPhysics: AnimInstanceProxy is null."));
-    //}
+    PreSyncKinematicFromBones(InPose, OutBoneTransforms);
 
-    // 首次同步：现在骨骼数据已填充
-    if(!bFirstSyncDone){
-        for(BulletRigidBody& RB: BulletRigidBodies){ if(!RB.Body) continue; const int32 BoneIdx=RB.RelatedBoneIndex; if(BoneIdx<0||!InOutBoneWorldUE.IsValidIndex(BoneIdx)) continue; const FTransform BoneCS = InOutBoneWorldUE[BoneIdx] * W2C; const FTransform TargetRigidCS = BoneCS * RB.BoneToRigid; const FTransform TargetRigidWorld = TargetRigidCS * C2W; const btTransform TargetB=UEToBullet_Transform_YUp(TargetRigidWorld,UnitScale); RB.Body->setWorldTransform(TargetB); if(auto* MS=RB.Body->getMotionState()) MS->setWorldTransform(TargetB); RB.Body->clearForces(); RB.Body->setLinearVelocity(btVector3(0,0,0)); RB.Body->setAngularVelocity(btVector3(0,0,0)); RB.Body->activate(true); RB.PrevBulletWorldTransform = RB.BulletWorldTransform = TargetB; RB.PrevUEWorldTransform = RB.UEWorldTransform = TargetRigidWorld; if(GPhysCfg.bLogMap && SkelComp){ const float Dist = FVector::Distance(TargetRigidWorld.GetLocation(), InOutBoneWorldUE[BoneIdx].GetLocation()); UE_LOG(LogTemp, Verbose, TEXT("[MMDPhys][FirstSync] Rigid %d Bone %d (%s) Dist=%.2f"), RB.DebugID, BoneIdx, *SkelComp->GetBoneName(BoneIdx).ToString(), Dist); } }
-        bFirstSyncDone=true;
-    }
+    const float DeltaTime = InPose.AnimInstanceProxy->GetDeltaSeconds();
+    StepSimulationMMD(DeltaTime);
 
-    PreSyncKinematicFromBones(InOutBoneWorldUE);
-    StepSimulationMMD(DeltaSeconds);
-    PostSyncBonesFromPhysics(InOutBoneWorldUE);
+    PostSyncBonesFromPhysics(InPose, OutBoneTransforms);
 }
 
-void FMMDPhysicsSimulator::DebugDraw()
-{
-    if (!GPhysCfg.bDebug) return; USkeletalMeshComponent* SkelComp = OwnerSkelComp.Get(); if (!SkelComp) return; UWorld* World = SkelComp->GetWorld(); if (!World) return; static uint32 FrameCounter = 0; ++FrameCounter; const int32 EveryN = FMath::Max(1, GPhysCfg.DebugEveryN); if ((FrameCounter % (uint32)EveryN) != 0) return; const float LifeTime = FMath::Max(0.f, GPhysCfg.DebugLife); const bool bPersistent = LifeTime > 0.f; const float Thickness = 1.5f; const bool bSimple = GPhysCfg.bDebugSimple; const int32 MaxCount = FMath::Max(1, GPhysCfg.DebugMax); const FTransform C2W = SkelComp->GetComponentTransform(); int32 Drawn = 0; for (const BulletRigidBody& RB : BulletRigidBodies){ if (!RB.Body) continue; if (Drawn >= MaxCount) break; ++Drawn; const btTransform WorldB = RB.Body->getWorldTransform(); const FTransform WorldUE = BulletToUE_WorldTransform_YUp(WorldB, UnitScale); const FVector Center = WorldUE.GetLocation(); const FQuat Rot = WorldUE.GetRotation(); const bool bKinematic = (RB.Body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT)!=0; const bool bDynamic = RB.Body->getInvMass() > 0; const FColor Color = bKinematic ? FColor(255,128,0) : (bDynamic ? FColor(0,255,255) : FColor(200,200,200)); if (bSimple){ DrawDebugSphere(World, Center, 2.5f*UnitScale*0.1f, 8, Color, bPersistent, LifeTime, 0, Thickness); } else { DrawDebugCoordinateSystem(World, Center, Rot.Rotator(), 5.f*UnitScale*0.1f, bPersistent, LifeTime, 0, Thickness); DrawDebugSphere(World, Center, 2.0f*UnitScale*0.1f, 8, Color, bPersistent, LifeTime, 0, Thickness); } }
-    Drawn = 0; for (btTypedConstraint* TC : BulletJoints){ if(!TC) continue; if (Drawn >= MaxCount) break; ++Drawn; auto* C = static_cast<btGeneric6DofSpring2Constraint*>(TC); const btTransform AWorld = C->getRigidBodyA().getWorldTransform(); const btTransform BWorld = C->getRigidBodyB().getWorldTransform(); const btTransform FA = C->getFrameOffsetA(); const btTransform FB = C->getFrameOffsetB(); const FTransform AnchorA_UE = BulletToUE_WorldTransform_YUp(AWorld*FA,UnitScale); const FTransform AnchorB_UE = BulletToUE_WorldTransform_YUp(BWorld*FB,UnitScale); DrawDebugLine(World, AnchorA_UE.GetLocation(), AnchorB_UE.GetLocation(), FColor::Green, bPersistent, LifeTime, 0, Thickness); }
-}
+//void FMMDPhysicsSimulator::DebugDraw()
+//{
+//    if (!GPhysCfg.bDebug) return; USkeletalMeshComponent* SkelComp = OwnerSkelComp.Get(); if (!SkelComp) return; UWorld* World = SkelComp->GetWorld(); if (!World) return; static uint32 FrameCounter = 0; ++FrameCounter; const int32 EveryN = FMath::Max(1, GPhysCfg.DebugEveryN); if ((FrameCounter % (uint32)EveryN) != 0) return; const float LifeTime = FMath::Max(0.f, GPhysCfg.DebugLife); const bool bPersistent = LifeTime > 0.f; const float Thickness = 1.5f; const bool bSimple = GPhysCfg.bDebugSimple; const int32 MaxCount = FMath::Max(1, GPhysCfg.DebugMax); const FTransform C2W = SkelComp->GetComponentTransform(); int32 Drawn = 0; for (const BulletRigidBody& RB : BulletRigidBodies){ if (!RB.Body) continue; if (Drawn >= MaxCount) break; ++Drawn; const btTransform WorldB = RB.Body->getWorldTransform(); const FTransform WorldUE = BulletToUE_WorldTransform_YUp(WorldB, UnitScale); const FVector Center = WorldUE.GetLocation(); const FQuat Rot = WorldUE.GetRotation(); const bool bKinematic = (RB.Body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT)!=0; const bool bDynamic = RB.Body->getInvMass() > 0; const FColor Color = bKinematic ? FColor(255,128,0) : (bDynamic ? FColor(0,255,255) : FColor(200,200,200)); if (bSimple){ DrawDebugSphere(World, Center, 2.5f*UnitScale*0.1f, 8, Color, bPersistent, LifeTime, 0, Thickness); } else { DrawDebugCoordinateSystem(World, Center, Rot.Rotator(), 5.f*UnitScale*0.1f, bPersistent, LifeTime, 0, Thickness); DrawDebugSphere(World, Center, 2.0f*UnitScale*0.1f, 8, Color, bPersistent, LifeTime, 0, Thickness); } }
+//    Drawn = 0; for (btTypedConstraint* TC : BulletJoints){ if(!TC) continue; if (Drawn >= MaxCount) break; ++Drawn; auto* C = static_cast<btGeneric6DofSpring2Constraint*>(TC); const btTransform AWorld = C->getRigidBodyA().getWorldTransform(); const btTransform BWorld = C->getRigidBodyB().getWorldTransform(); const btTransform FA = C->getFrameOffsetA(); const btTransform FB = C->getFrameOffsetB(); const FTransform AnchorA_UE = BulletToUE_WorldTransform_YUp(AWorld*FA,UnitScale); const FTransform AnchorB_UE = BulletToUE_WorldTransform_YUp(BWorld*FB,UnitScale); DrawDebugLine(World, AnchorA_UE.GetLocation(), AnchorB_UE.GetLocation(), FColor::Green, bPersistent, LifeTime, 0, Thickness); }
+//}
 
-void FMMDPhysicsSimulator::CaptureSnapshot(FMMDPhysicsSimSnapshot& OutSnapshot) const
-{
-    OutSnapshot.UnitScale=UnitScale; OutSnapshot.MaxSubSteps=MaxSubSteps; OutSnapshot.FixedTimeStep=FixedTimeStep; OutSnapshot.Bodies.Reset(BulletRigidBodies.Num()); for(int32 i=0;i<BulletRigidBodies.Num();++i){ const BulletRigidBody& RB=BulletRigidBodies[i]; if(!RB.Body) continue; FMMDPhysicsBodyState S; S.BodyIndex=i; const btTransform WorldB=RB.Body->getWorldTransform(); S.WorldUE=BulletToUE_WorldTransform_YUp(WorldB,UnitScale); const btVector3 vB=RB.Body->getLinearVelocity(); const btVector3 wB=RB.Body->getAngularVelocity(); S.LinearVelocityUE=BulletToUE_Vector_YUp(vB,UnitScale); S.AngularVelocityUE = BulletToUE_AngVel_YUp(wB); S.bKinematic=(RB.Body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT)!=0; S.bSleeping=RB.Body->getActivationState()==ISLAND_SLEEPING; OutSnapshot.Bodies.Add(MoveTemp(S)); }
-}
+//void FMMDPhysicsSimulator::CaptureSnapshot(FMMDPhysicsSimSnapshot& OutSnapshot) const
+//{
+//    OutSnapshot.UnitScale=UnitScale; OutSnapshot.MaxSubSteps=MaxSubSteps; OutSnapshot.FixedTimeStep=FixedTimeStep; OutSnapshot.Bodies.Reset(BulletRigidBodies.Num()); for(int32 i=0;i<BulletRigidBodies.Num();++i){ const BulletRigidBody& RB=BulletRigidBodies[i]; if(!RB.Body) continue; FMMDPhysicsBodyState S; S.BodyIndex=i; const btTransform WorldB=RB.Body->getWorldTransform(); S.WorldUE=BulletToUE_WorldTransform_YUp(WorldB,UnitScale); const btVector3 vB=RB.Body->getLinearVelocity(); const btVector3 wB=RB.Body->getAngularVelocity(); S.LinearVelocityUE=BulletToUE_Vector_YUp(vB,UnitScale); S.AngularVelocityUE = BulletToUE_AngVel_YUp(wB); S.bKinematic=(RB.Body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT)!=0; S.bSleeping=RB.Body->getActivationState()==ISLAND_SLEEPING; OutSnapshot.Bodies.Add(MoveTemp(S)); }
+//}
 
-bool FMMDPhysicsSimulator::ApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot, bool bRespectKinematic)
-{
-    if(!DynamicsWorld) return false;
-    if(InSnapshot.Bodies.Num()<=0) return false;
-    const int32 N=FMath::Min(BulletRigidBodies.Num(),InSnapshot.Bodies.Num());
-    for(int32 i=0;i<N;++i){
-        const FMMDPhysicsBodyState& S=InSnapshot.Bodies[i];
-        if(!BulletRigidBodies.IsValidIndex(S.BodyIndex)) continue;
-        BulletRigidBody& RB=BulletRigidBodies[S.BodyIndex];
-        if(!RB.Body) continue;
-        const bool bKinematic=(RB.Body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT)!=0;
-        if(bRespectKinematic && bKinematic) continue;
-
-        const btTransform TargetB=UEToBullet_Transform_YUp(S.WorldUE,UnitScale);
-        RB.Body->setWorldTransform(TargetB);
-        if(auto* MS=RB.Body->getMotionState()) MS->setWorldTransform(TargetB);
-
-        const btVector3 vB=UEToBullet_Vector_YUp(S.LinearVelocityUE,UnitScale);
-        const btVector3 wB=UEToBullet_AngVel_YUp(S.AngularVelocityUE); // 修正：去掉 UnitScale
-        RB.Body->setLinearVelocity(vB);
-        RB.Body->setAngularVelocity(wB);
-
-        if(S.bSleeping){ RB.Body->setActivationState(ISLAND_SLEEPING);} else { RB.Body->activate(true);}
-    }
-    return true;
-}
+//bool FMMDPhysicsSimulator::ApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot, bool bRespectKinematic)
+//{
+//    if(!DynamicsWorld) return false;
+//    if(InSnapshot.Bodies.Num()<=0) return false;
+//    const int32 N=FMath::Min(BulletRigidBodies.Num(),InSnapshot.Bodies.Num());
+//    for(int32 i=0;i<N;++i){
+//        const FMMDPhysicsBodyState& S=InSnapshot.Bodies[i];
+//        if(!BulletRigidBodies.IsValidIndex(S.BodyIndex)) continue;
+//        BulletRigidBody& RB=BulletRigidBodies[S.BodyIndex];
+//        if(!RB.Body) continue;
+//        const bool bKinematic=(RB.Body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT)!=0;
+//        if(bRespectKinematic && bKinematic) continue;
+//
+//        const btTransform TargetB=UEToBullet_Transform_YUp(S.WorldUE,UnitScale);
+//        RB.Body->setWorldTransform(TargetB);
+//        if(auto* MS=RB.Body->getMotionState()) MS->setWorldTransform(TargetB);
+//
+//        const btVector3 vB=UEToBullet_Vector_YUp(S.LinearVelocityUE,UnitScale);
+//        const btVector3 wB=UEToBullet_AngVel_YUp(S.AngularVelocityUE); // 修正：去掉 UnitScale
+//        RB.Body->setLinearVelocity(vB);
+//        RB.Body->setAngularVelocity(wB);
+//
+//        if(S.bSleeping){ RB.Body->setActivationState(ISLAND_SLEEPING);} else { RB.Body->activate(true);}
+//    }
+//    return true;
+//}
 
 void FMMDPhysicsSimulator::Shutdown()
 {
@@ -540,14 +456,4 @@ void FMMDPhysicsSimulator::Shutdown()
 void FMMDPhysicsSimulator::StepSimulationMMD(float DeltaSeconds)
 {
     if (!DynamicsWorld) return; DynamicsWorld->stepSimulation(DeltaSeconds, MaxSubSteps, FixedTimeStep);
-}
-
-void FMMDMotionState::getWorldTransform(btTransform& worldTrans) const
-{
-    worldTrans = UEToBullet(UEWorldTransform, UnitScale);
-}
-
-void FMMDMotionState::setWorldTransform(const btTransform& worldTrans)
-{
-    UEWorldTransform = BulletToUE(worldTrans, UnitScale);
 }

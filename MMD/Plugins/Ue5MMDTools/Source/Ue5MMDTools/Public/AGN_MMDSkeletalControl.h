@@ -3,7 +3,6 @@
 
 #include "CoreMinimal.h"
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
-// ✅ Editor相关头文件要在 .generated.h 之前
 #if WITH_EDITORONLY_DATA
 #include "AnimGraphNode_SkeletalControlBase.h"
 #include "Animation/AnimBlueprint.h"
@@ -45,10 +44,9 @@ public:
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
     virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
 private:
+    TSharedPtr<FMMDPhysicsSimulator,ESPMode::ThreadSafe> SimulatorStrongPtr;
     bool bSimulatorInitialized = false;
     static void BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld);
-
-
 
 };
 

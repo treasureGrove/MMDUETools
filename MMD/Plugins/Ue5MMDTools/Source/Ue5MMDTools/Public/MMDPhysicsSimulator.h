@@ -67,8 +67,7 @@ struct BulletRigidBody
     // PMX PhysicsMode: 0=Static(BoneFollow), 1=Dynamic, 2=Dynamic+BoneTracking
     uint8 PhysicsMode = 0;
 
-    FTransform BoneToRigid = FTransform::Identity;
-    FTransform RigidToBone = FTransform::Identity;
+    btTransform ShapeOffset =btTransform::getIdentity();
 
     int32 DebugID = -1;
 };
@@ -123,7 +122,7 @@ public:
 
     bool InitializeFromPMX(const PMXDatas& PMXData,
         USkeletalMeshComponent* InSkelComp);
-    void GameThreadTick(float DeltaSeconds);
+  /*  void GameThreadTick(float DeltaSeconds);*/
 
     void InitializeBulletWorld();
     void InitializeRigidBody(const PMXDatas& PMXData);
@@ -131,20 +130,20 @@ public:
     void StepSimulationMMD(float DeltaSeconds);
 
     // MMD Tick Á÷³Ì
-    void PreSyncKinematicFromBones(const FCompactPose& InPose, const FBoneContainer& BoneContainer, TArray<BulletRigidBody>& RigidBodys);
-    void PostSyncBonesFromPhysics(TArray<FTransform>& InOutBoneWorldUE);
-    void TickMMDPhysics(float DeltaSeconds, FComponentSpacePoseContext& InPose,TArray<FTransform>& InOutBoneWorldUE);
+    void PreSyncKinematicFromBones(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
+    void PostSyncBonesFromPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
+    void TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
 
-    void CaptureSnapshot(FMMDPhysicsSimSnapshot& OutSnapshot) const;
-    bool ApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot, bool bRespectKinematic = true);
+    //void CaptureSnapshot(FMMDPhysicsSimSnapshot& OutSnapshot) const;
+    //bool ApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot, bool bRespectKinematic = true);
 
-    bool ForceApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot)
-    {
-        bFirstSyncDone = true;
-        return ApplySnapshot(InSnapshot, /*bRespectKinematic*/false);
-    }
+    //bool ForceApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot)
+    //{
+    //    bFirstSyncDone = true;
+    //    return ApplySnapshot(InSnapshot, /*bRespectKinematic*/false);
+    //}
 
-    void DebugDraw();
+    //void DebugDraw();
     void SetDebugEnabled(bool bEnable);
 
     //USkeletalMeshComponent* GetOwnerSkelComp() const { return OwnerSkelComp.Get(); }

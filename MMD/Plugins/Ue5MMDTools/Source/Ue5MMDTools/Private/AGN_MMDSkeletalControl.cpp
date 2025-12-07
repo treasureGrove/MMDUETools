@@ -5,7 +5,6 @@
 #include "AnimationRuntime.h"     
 #include "MMDPhysicsSimulator.h"
 #include "DrawDebugHelpers.h"
-#include "MMDAnimInstance.h"
 #include "Async/Async.h" 
 #include "Animation/AnimTypes.h"
 
@@ -24,79 +23,45 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
 {
-#pragma region 有效性检查
+    OutBoneTransforms.Reset();
+    if (!bEnablePhysics) return;
+    if (!Output.AnimInstanceProxy) return;
     OutBoneTransforms.Reset();
     if (!bEnablePhysics) return;
     if (!Output.AnimInstanceProxy) return;
 
-    const UObject* AnimObj = Output.AnimInstanceProxy->GetAnimInstanceObject();
-    if (!AnimObj || !AnimObj->IsA<UMMDAnimInstance>()) return;
-
-    auto* MMDProxy = static_cast<FMMDAnimInstanceProxy*>(Output.AnimInstanceProxy);
-    TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> StrongSimulator = MMDProxy->CacheSimulator.Pin();
-
-    if (!StrongSimulator.IsValid())
-    {
-        // Fallback: query from AnimInstance on game thread-safe path
-        if (const UMMDAnimInstance* MI = Cast<UMMDAnimInstance>(AnimObj))
-        {
-            StrongSimulator = MI->GetSimulator();
-        }
-    }
-
-    if (!StrongSimulator.IsValid()) return;
-
     USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy->GetSkelMeshComponent();
     if (!SkelComp) return;
-#pragma endregion
 
-    // 采集当前骨骼世界空间并驱动物理
-    TArray<FTransform> BoneWorldUE;
-    BuildBoneWorldArray(Output, BoneWorldUE);
-    const float DeltaSeconds = Output.AnimInstanceProxy->GetDeltaSeconds();
-    StrongSimulator->TickMMDPhysics(DeltaSeconds, Output, BoneWorldUE);
-
-    if (bDrawDebug)
+    // 首帧/尚未初始化：在节点内部按需创建模拟器（Kawaii 风格：每实例自维护）
+    if (!bSimulatorInitialized || !SimulatorStrongPtr.IsValid())
     {
-        StrongSimulator->SetDebugEnabled(true);
-        TWeakPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> WeakSim = StrongSimulator;
-        AsyncTask(ENamedThreads::GameThread, [WeakSim]() { if (auto S = WeakSim.Pin()) S->DebugDraw(); });
-    }
-    else
-    {
-        StrongSimulator->SetDebugEnabled(false);
-    }
-
-    const FTransform W2C = SkelComp->GetComponentTransform().Inverse();
-    const FBoneContainer& BoneContainer = Output.AnimInstanceProxy->GetRequiredBones();
-    const int32 NumCompact = BoneContainer.GetCompactPoseNumBones();
-
-    // 直接输出组件空间变换；SkeletalControl 期望的是 Component Space（父骨之前已经由框架处理）
-    for (int32 MeshIndex = 0; MeshIndex < SkelComp->GetNumBones(); ++MeshIndex)
-    {
-        if (!BoneWorldUE.IsValidIndex(MeshIndex)) continue;
-        // 被标记为 Identity 的骨骼跳过（无效）
-        if (BoneWorldUE[MeshIndex].Equals(FTransform::Identity)) continue;
-
-        FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
-        if (!CPIndex.IsValid()) continue;
-
-        // 世界 -> 组件空间
-        FTransform NewComponentT = BoneWorldUE[MeshIndex] * W2C;
-
-        // 保留原本的平移，避免写回世界旋转后覆盖局部位移（只写旋转）
-        const FTransform ExistingCS = Output.Pose.GetComponentSpaceTransform(CPIndex);
-        NewComponentT.SetTranslation(ExistingCS.GetTranslation());
-        NewComponentT.SetScale3D(FVector(1.0f));
-
-        // 输出组件空间（不要转换成相对父骨的 Local）
-        if (!NewComponentT.ContainsNaN() && NewComponentT.GetRotation().IsNormalized())
+        if (PMXData.ModelRigids.Num() == 0)
         {
-            OutBoneTransforms.Emplace(CPIndex, NewComponentT);
+            // 未提供 PMX 数据则跳过
+            return;
         }
+
+        TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> NewSim = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
+        const bool bOk = NewSim->InitializeFromPMX(PMXData, SkelComp);
+        if (!bOk)
+        {
+            return;
+        }
+
+        // 可按节点参数更新模拟器步进配置
+        SimulatorStrongPtr = MoveTemp(NewSim);
+        bSimulatorInitialized = true;
     }
+
+    // 推进物理并写回骨骼（组件空间）
+    SimulatorStrongPtr->TickMMDPhysics(Output, OutBoneTransforms);
+
+    // Debug 开关
+    SimulatorStrongPtr->SetDebugEnabled(bDrawDebug);
 
     OutBoneTransforms.Sort(FCompareBoneTransformIndex());
+   
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {

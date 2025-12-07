@@ -494,3 +494,8 @@ public:
 
 private:
 };
+
+//USTRUCT(BlueprintType)
+//struct FMMDPmxRigidDatas {
+//    GENERATED_BODY()
+//};

@@ -26,7 +26,6 @@
 #include "Factories/AnimBlueprintFactory.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "UObject/SavePackage.h"
-#include "MMDAnimInstance.h"
 //IKRig
 #if WITH_EDITOR
 #include "RigEditor/IKRigController.h"
@@ -964,7 +963,7 @@ UAnimBlueprint* TMMDMeshBuilder::BuildAnimBlueprint(USkeletalMesh* SkeletalMesh,
 
 	UAnimBlueprintFactory* Factory = NewObject<UAnimBlueprintFactory>();
 	Factory->TargetSkeleton = Skeleton;
-	Factory->ParentClass = UMMDAnimInstance::StaticClass();
+	//Factory->ParentClass = UMMDAnimInstance::StaticClass();
 	Factory->PreviewSkeletalMesh = SkeletalMesh;
 
 	UAnimBlueprint* NewAnimBP = Cast<UAnimBlueprint>(Factory->FactoryCreateNew(
@@ -980,21 +979,21 @@ UAnimBlueprint* TMMDMeshBuilder::BuildAnimBlueprint(USkeletalMesh* SkeletalMesh,
 		UE_LOG(LogTemp, Error, TEXT("Failed to create AnimBlueprint"));
 		return nullptr;
 	}
-	if (NewAnimBP->ParentClass != UMMDAnimInstance::StaticClass()) {
-		NewAnimBP->ParentClass = UMMDAnimInstance::StaticClass();
-	}
+	//if (NewAnimBP->ParentClass != UMMDAnimInstance::StaticClass()) {
+	//	NewAnimBP->ParentClass = UMMDAnimInstance::StaticClass();
+	//}
 	FKismetEditorUtilities::CompileBlueprint(NewAnimBP);
 
 	// Set PMX source path on AnimInstance CDO for preview auto physics rebuild
-    if (NewAnimBP->GeneratedClass)
-    {
-        if (UMMDAnimInstance* AnimCDO = Cast<UMMDAnimInstance>(NewAnimBP->GeneratedClass->GetDefaultObject()))
-        {
-            AnimCDO->SetSourcePMXFilePath(PMXFilePath);
-            AnimCDO->Modify();
-            UE_LOG(LogTemp, Verbose, TEXT("[TMMDMeshBuilder] Set SourcePMXFilePath on AnimInstance CDO: %s"), *PMXFilePath);
-        }
-    }
+    //if (NewAnimBP->GeneratedClass)
+    //{
+    //    //if (UMMDAnimInstance* AnimCDO = Cast<UMMDAnimInstance>(NewAnimBP->GeneratedClass->GetDefaultObject()))
+    //    //{
+    //    //    AnimCDO->SetSourcePMXFilePath(PMXFilePath);
+    //    //    AnimCDO->Modify();
+    //    //    UE_LOG(LogTemp, Verbose, TEXT("[TMMDMeshBuilder] Set SourcePMXFilePath on AnimInstance CDO: %s"), *PMXFilePath);
+    //    //}
+    //}
 
 	Package->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(NewAnimBP);

@@ -7,7 +7,6 @@
 #include "Animation/AnimBlueprint.h"
 #include "AGN_MMDSkeletalControl.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "MMDAnimInstance.h"
 #include "TPMXParser.h"
 
 AMMDActor::AMMDActor()
@@ -80,11 +79,11 @@ void AMMDActor::SetupComponents(const FString& FilePath)
         SkeletalMeshComponent->InitAnim(true);
     }
 
-    if (UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
-    {
-        MMDInst->ProvideMMDConfigAndInit(PMXData, SkeletalMeshComponent);
-        UE_LOG(LogTemp, Log, TEXT("[AMMDActor] SetupComponents: Simulator built for %s"), *GetName());
-    }
+    //if (UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
+    //{
+    //    MMDInst->ProvideMMDConfigAndInit(PMXData, SkeletalMeshComponent);
+    //    UE_LOG(LogTemp, Log, TEXT("[AMMDActor] SetupComponents: Simulator built for %s"), *GetName());
+    //}
 #if WITH_EDITOR
     {
         UIKRigDefinition* IKRig = MeshBuilder.BuildIKRigFromPMX(BuiltMesh, FilePath);
@@ -123,24 +122,7 @@ void AMMDActor::InitSimulatorForPreviewIfNeeded()
         SkeletalMeshComponent->InitAnim(true);
     }
 
-    if (UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
-    {
-        const bool bHasSim = MMDInst->GetSimulator().IsValid();
-        if (!bHasSim && !SourcePMXFilePath.IsEmpty())
-        {
-            TPMXParser Parser;
-            if (Parser.ParsePMXFile(SourcePMXFilePath))
-            {
-                const PMXDatas& PMXData = Parser.PMXInfo;
-                MMDInst->ProvideMMDConfigAndInit(PMXData, SkeletalMeshComponent);
-                UE_LOG(LogTemp, Log, TEXT("[AMMDActor] Auto-inited Simulator for blueprint/preview instance: %s"), *GetName());
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[AMMDActor] Auto-init failed: parse PMX '%s'"), *SourcePMXFilePath);
-            }
-        }
-    }
+   
 }
 #endif
 
