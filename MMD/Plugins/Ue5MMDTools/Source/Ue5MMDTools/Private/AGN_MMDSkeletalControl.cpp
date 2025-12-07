@@ -8,6 +8,7 @@
 #include "Async/Async.h" 
 #include "Animation/AnimTypes.h"
 
+
 FAGN_MMDSkeletalControl::FAGN_MMDSkeletalControl()
     : bEnablePhysics(true)
 {
@@ -22,45 +23,32 @@ bool FAGN_MMDSkeletalControl::IsValidToEvaluate(
 void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
-{
-    OutBoneTransforms.Reset();
-    if (!bEnablePhysics) return;
-    if (!Output.AnimInstanceProxy) return;
-    OutBoneTransforms.Reset();
-    if (!bEnablePhysics) return;
-    if (!Output.AnimInstanceProxy) return;
-
-    USkeletalMeshComponent* SkelComp = Output.AnimInstanceProxy->GetSkelMeshComponent();
-    if (!SkelComp) return;
-
-    // 首帧/尚未初始化：在节点内部按需创建模拟器（Kawaii 风格：每实例自维护）
-    if (!bSimulatorInitialized || !SimulatorStrongPtr.IsValid())
-    {
-        if (PMXData.ModelRigids.Num() == 0)
-        {
-            // 未提供 PMX 数据则跳过
-            return;
-        }
-
-        TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> NewSim = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
-        const bool bOk = NewSim->InitializeFromPMX(PMXData, SkelComp);
-        if (!bOk)
-        {
-            return;
-        }
-
-        // 可按节点参数更新模拟器步进配置
-        SimulatorStrongPtr = MoveTemp(NewSim);
-        bSimulatorInitialized = true;
+{   
+    if (PMXData.ModelRigids.Num() == 0) {
+        return;
+        //checkf(false, TEXT("PMXData is empty when initializing the simulator!"));
     }
-
-    // 推进物理并写回骨骼（组件空间）
-    SimulatorStrongPtr->TickMMDPhysics(Output, OutBoneTransforms);
-
-    // Debug 开关
-    SimulatorStrongPtr->SetDebugEnabled(bDrawDebug);
-
-    OutBoneTransforms.Sort(FCompareBoneTransformIndex());
+	if (!bSimulatorInitialized || !SimulatorStrongPtr.IsValid())
+    {
+        
+		TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> NewSimulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
+		const bool bInitSuccess = NewSimulator->InitializeFromPMX(PMXData, Output.AnimInstanceProxy->GetSkelMeshComponent());
+        if (bInitSuccess) {
+			UE_LOG(LogTemp, Log, TEXT("MMD Physics Simulator initialized successfully."));
+        }
+		SimulatorStrongPtr = MoveTemp(NewSimulator);
+		bSimulatorInitialized = bInitSuccess;
+		if (SimulatorStrongPtr.IsValid())
+        UE_LOG(LogTemp, Log, TEXT("[MMDPhysics] ✅ 从 PMXData 创建 Simulator: Rigids=%d"),
+            PMXData.ModelRigids.Num())
+    }
+    if (SimulatorStrongPtr.IsValid()) {
+        checkf(false, TEXT("PMXData is empty at first evaluation!"));
+        SimulatorStrongPtr->TickMMDPhysics(Output, OutBoneTransforms);
+        SimulatorStrongPtr->SetDebugEnabled(bDrawDebug);
+        OutBoneTransforms.Sort(FCompareBoneTransformIndex());
+    }
+	
    
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
@@ -153,7 +141,7 @@ const FAnimNode_SkeletalControlBase* UAnimGraphNode_MMDSkeletalControl::GetNode(
 
 
 UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
-    UAnimBlueprint* AnimBP,
+	UAnimBlueprint* AnimBP,const FPMXDatas& InputPMXData,
     bool bConnectToRoot)
 {
     if (!AnimBP)
@@ -161,7 +149,6 @@ UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
         UE_LOG(LogTemp, Error, TEXT("AnimBP is null"));
         return nullptr;
     }
-
     // 获取AnimGraph
     UEdGraph* AnimGraph = nullptr;
     for (UEdGraph* Graph : AnimBP->FunctionGraphs)
@@ -196,7 +183,6 @@ UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
         return nullptr;
     }
 
-    // ✅ 创建 Local To Component 节点
     UAnimGraphNode_LocalToComponentSpace* LocalToComponentNode = NewObject<UAnimGraphNode_LocalToComponentSpace>(
         AnimGraph,
         UAnimGraphNode_LocalToComponentSpace::StaticClass(),
@@ -211,7 +197,6 @@ UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
     LocalToComponentNode->NodePosY = RootNode->NodePosY;
     AnimGraph->AddNode(LocalToComponentNode, false, false);
 
-    // ✅ 创建 MMD 节点
     UAnimGraphNode_MMDSkeletalControl* MMDNode = NewObject<UAnimGraphNode_MMDSkeletalControl>(
         AnimGraph,
         UAnimGraphNode_MMDSkeletalControl::StaticClass(),
@@ -226,7 +211,9 @@ UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
     MMDNode->NodePosY = RootNode->NodePosY;
     AnimGraph->AddNode(MMDNode, false, false);
 
-    // ✅ 创建 Component To Local 节点
+	MMDNode->Node.PMXData = InputPMXData;
+	MMDNode->MarkPackageDirty();
+
     UAnimGraphNode_ComponentToLocalSpace* ComponentToLocalNode = NewObject<UAnimGraphNode_ComponentToLocalSpace>(
         AnimGraph,
         UAnimGraphNode_ComponentToLocalSpace::StaticClass(),

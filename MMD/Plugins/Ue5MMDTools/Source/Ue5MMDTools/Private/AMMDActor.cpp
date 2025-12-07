@@ -47,7 +47,7 @@ void AMMDActor::SetupComponents(const FString& FilePath)
         return;
     }
 
-    const PMXDatas& PMXData = StaticParser->PMXInfo;
+    const FPMXDatas& PMXData = StaticParser->PMXInfo;
 
     MMDImportSetting::ShowGlobalImportProgress(
         FString::Printf(TEXT("Successfully loaded PMX file: %s"), *FilePath),
@@ -69,7 +69,8 @@ void AMMDActor::SetupComponents(const FString& FilePath)
     SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
 
     UAnimBlueprint* MMDAnimBP = MeshBuilder.BuildAnimBlueprint(BuiltMesh, FilePath);
-    FMMDAnimGraphHelper::AddMMDNodeToAnimBP(MMDAnimBP, true);
+
+    FMMDAnimGraphHelper::AddMMDNodeToAnimBP(MMDAnimBP,PMXData,true);
     FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(MMDAnimBP);
     FKismetEditorUtilities::CompileBlueprint(MMDAnimBP);
 
@@ -78,6 +79,8 @@ void AMMDActor::SetupComponents(const FString& FilePath)
     {
         SkeletalMeshComponent->InitAnim(true);
     }
+
+
 
     //if (UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
     //{

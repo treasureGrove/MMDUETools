@@ -3,12 +3,15 @@
 #include "CoreMinimal.h"
 #include "Engine/Engine.h"
 #include "Engine/SkeletalMesh.h"
+#include "TPMXParser.generated.h"
 
 class FMemoryReader;
 class USkeletalMesh;
 
-struct TPMXGlobals
+USTRUCT()
+struct FPMXGlobals
 {
+    GENERATED_BODY()
     uint8 TextEncoding = 0;
     uint8 ExtraUV = 0;
     uint8 VertexIndexSize = 4;
@@ -18,8 +21,10 @@ struct TPMXGlobals
     uint8 MorphIndexSize = 4;
     uint8 RigidBodyIndexSize = 4;
 };
-struct PMXVertexWeight
+USTRUCT()
+struct FPMXVertexWeight 
 {
+	GENERATED_BODY()
     uint8 WeightDeformType = 0; // 0=BDEF1, 1=BDEF2, 2=BDEF4, 3=SDEF, 4=QDEF(2.1)
     int32 BoneIndices[4] = {-1, -1, -1, -1};
     float Weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -30,13 +35,15 @@ struct PMXVertexWeight
     // QDEF specific
     float EdgeScale = 0.0f; // 边缘放大系数（轮廓描边用）
 };
-struct PMXVertex
+USTRUCT()
+struct FPMXVertex
 {
+	GENERATED_BODY()
     FVector Position = FVector::ZeroVector;
     FVector Normal = FVector::ZeroVector;
     FVector2D UV = FVector2D::ZeroVector;
     TArray<FVector4> AdditionalUVs;
-    PMXVertexWeight Weight;
+    FPMXVertexWeight Weight;
 };
 // - repeat materialCount:
 // - nameJP (string)
@@ -59,8 +66,10 @@ struct PMXVertex
 // - toonTextureIndex (textureIndexSize)
 // - string memo // material note
 // - int32 faceIndexCount // number of indices this material covers (submesh size)
-struct PMXMaterial
+USTRUCT()
+struct FPMXMaterial
 {
+    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     FVector4 DiffuseColor;
@@ -124,8 +133,10 @@ struct PMXMaterial
 // - if hasLimit != 0:
 // - float3 lowerLimit // per-axis radians
 // - float3 upperLimit
-struct PMXBone
+USTRUCT()
+struct FPMXBone
 {
+    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     FVector Position = FVector::ZeroVector;
@@ -209,8 +220,10 @@ struct PMXBone
 // - uint8 isLocal
 // - float3 velocity
 // - float3 torque
-struct PMXMorph
+USTRUCT()
+struct FPMXMorph
 {
+    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 Panel = 0;
@@ -283,8 +296,10 @@ struct PMXMorph
 // - repeat elementCount:
 // - uint8 elemType // 0=Bone, 1=Morph
 // - elemIndex // sized by (boneIndexSize or morphIndexSize)
-struct PMXFrame
+USTRUCT()
+struct FPMXFrame
 {
+    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 IsSpecial = 0;
@@ -315,8 +330,10 @@ struct PMXFrame
 // - float restitution
 // - float friction
 // - uint8 physicsMode // 0=Static, 1=Dynamic, 2=BoneTracked
-struct PMXRigid
+USTRUCT()
+struct FPMXRigid
 {
+    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     int32 RelatedBoneIndex = -1;
@@ -349,8 +366,10 @@ struct PMXRigid
 // - float3 limitRotUpper
 // - float3 springPos
 // - float3 springRot
-struct PMXJoint
+USTRUCT()
+struct FPMXJoint
 {
+    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 JointType = 0;
@@ -384,8 +403,10 @@ struct PMXJoint
 // - int32 pinVertexCount
 // - repeat pinVertexCount:
 // - vertexIndex (vertexIndexSize)
-struct PMXSoftBody  
+USTRUCT()
+struct FPMXSoftBody  
 {
+	GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 ShapeType = 0;
@@ -440,8 +461,11 @@ struct PMXSoftBody
     int32 PinVertexCount = 0;
     TArray<int32> PinVertices;
 };
-struct PMXDatas
+USTRUCT(BlueprintType)
+struct FPMXDatas
 {
+	GENERATED_BODY()
+
     float Version = 0.0f;
     uint8 Sig[4] = {0};
 
@@ -450,11 +474,11 @@ struct PMXDatas
     FString ModelCommentJP;
     FString ModelCommentEN;
 
-    TPMXGlobals PMXGlobals;
+    FPMXGlobals PMXGlobals;
 
     // 顶点数据
     int32 ModelVertexCount = 0;
-    TArray<PMXVertex> ModelVertices;
+    TArray<FPMXVertex> ModelVertices;
     // 三角面数据
     int32 ModelIndicesCount = 0;
     TArray<int32> ModelIndices;
@@ -463,25 +487,25 @@ struct PMXDatas
     TArray<FString> ModelTexturePaths;
 
     int32 ModelMaterialCount = 0;
-    TArray<PMXMaterial> ModelMaterials;
+    TArray<FPMXMaterial> ModelMaterials;
 
     int32 ModelBoneCount = 0;
-    TArray<PMXBone> ModelBones;
+    TArray<FPMXBone> ModelBones;
 
     int32 ModelMorphCount = 0;
-    TArray<PMXMorph> ModelMorphs;
+    TArray<FPMXMorph> ModelMorphs;
 
     int32 ModelFrameCount = 0;
-    TArray<PMXFrame> ModelFrames;
+    TArray<FPMXFrame> ModelFrames;
 
     int32 ModelRigidCount = 0;
-    TArray<PMXRigid> ModelRigids;
+    TArray<FPMXRigid> ModelRigids;
 
     int32 ModelJointCount = 0;
-    TArray<PMXJoint> ModelJoints;
+    TArray<FPMXJoint> ModelJoints;
 
     int32 ModelSoftBodyCount = 0;
-    TArray<PMXSoftBody> ModelSoftBodies;
+    TArray<FPMXSoftBody> ModelSoftBodies;
 };
 
 class UE5MMDTOOLS_API TPMXParser
@@ -490,7 +514,7 @@ public:
     bool ParsePMXFile(const FString &FilePath);
     TArray<uint8> PMXData;
 
-    PMXDatas PMXInfo;
+    FPMXDatas PMXInfo;
 
 private:
 };

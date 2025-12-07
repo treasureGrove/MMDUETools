@@ -120,13 +120,13 @@ public:
     FMMDPhysicsSimulator() = default;
     ~FMMDPhysicsSimulator() { Shutdown(); }
 
-    bool InitializeFromPMX(const PMXDatas& PMXData,
+    bool InitializeFromPMX(const FPMXDatas& PMXData,
         USkeletalMeshComponent* InSkelComp);
   /*  void GameThreadTick(float DeltaSeconds);*/
 
     void InitializeBulletWorld();
-    void InitializeRigidBody(const PMXDatas& PMXData);
-    void InitializeJoints(const PMXDatas& PMXData);
+    void InitializeRigidBody(const FPMXDatas& PMXData);
+    void InitializeJoints(const FPMXDatas& PMXData);
     void StepSimulationMMD(float DeltaSeconds);
 
     // MMD Tick Á÷³Ì
@@ -161,9 +161,9 @@ private:
     TArray<btGeneric6DofSpring2Constraint*> BulletJoints;
     
     bool bInitialized = false;
-    float UnitScale = 8.f;          // UE cm per PMX unit (mesh builder uses 8)
-    int32 MaxSubSteps = 1;           // baseline
-    float FixedTimeStep = 1.f / 60.f;// baseline
+    static constexpr float UnitScale = 8.f;          // UE cm per PMX unit (mesh builder uses 8)
+    static constexpr int32 MaxSubSteps = 1;           // baseline
+    static constexpr float FixedTimeStep = 1.f / 60.f;// baseline
 
     bool bFirstSyncDone = false;
 

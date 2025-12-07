@@ -137,7 +137,7 @@ UTexture2D* CreateTextureFromFile(const FString& TexturePath, const FString& Out
 	return ImportedTexture;
 }
 
-FString GetMaterialTexturePath(const PMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
+FString GetMaterialTexturePath(const FPMXMaterial& Material, const FPMXDatas& PMXInfo, const FString& PMXFilePath) {
 	if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
 		FString PMXDirectory = PMXFilePath;
 
@@ -223,7 +223,7 @@ static FVector3f ConvertPMXNormalToUnreal(const FVector& PMXNormal, bool bForceF
 #pragma endregion
 
 
-void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
+void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const FPMXDatas& PMXInfo, const FString& PMXFilePath) {
 	FString PMXPath = FPaths::GetPath(PMXFilePath);
 	FString PMXModelName = FPaths::GetBaseFilename(PMXFilePath);
 	PMXImportData.bHasNormals = true;
@@ -284,11 +284,19 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 #pragma endregion
 
 #pragma region Wedges
+
 	PMXImportData.Wedges.Reserve(PMXInfo.ModelIndicesCount);
+	
 	for (int32 i = 0; i < PMXInfo.ModelIndicesCount; i++) {
 		int32 VertexIndex = PMXInfo.ModelIndices[i];
-		const PMXVertex& Vertex = PMXInfo.ModelVertices[VertexIndex];
-
+		const FPMXVertex& Vertex = PMXInfo.ModelVertices[VertexIndex];
+		//int32 InvalidIndexCount = 0;
+		//if (VertexIndex < 0 || VertexIndex >= VertexIndex) {
+		//	UE_LOG(LogTemp, Error, TEXT("Invalid vertex index at ModelIndices[%d]: %d (VertexCount=%d)"),
+		//		i, VertexIndex, VertexIndex);
+		//	InvalidIndexCount++;
+		//	continue; // 跳过无效索引
+		//}
 		SkeletalMeshImportData::FVertex Wedge;
 		Wedge.VertexIndex = VertexIndex;
 		Wedge.UVs[0] = FVector2f(Vertex.UV.X, Vertex.UV.Y);
@@ -312,7 +320,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 	PMXImportData.Points.Reserve(PMXInfo.ModelVertices.Num());
 
 	for (int32 i = 0; i < PMXInfo.ModelVertices.Num(); ++i) {
-		const PMXVertex& Vertex = PMXInfo.ModelVertices[i];
+		const FPMXVertex& Vertex = PMXInfo.ModelVertices[i];
 		PMXImportData.Points.Add(ConvertPMXVectorToUnreal(Vertex.Position));
 	}
 #pragma endregion
@@ -323,7 +331,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 	int32 ZeroNormalCount = 0;
 	for (int32 MatIndex = 0; MatIndex < PMXInfo.ModelMaterials.Num(); MatIndex++)
 	{
-		const PMXMaterial& Material = PMXInfo.ModelMaterials[MatIndex];
+		const FPMXMaterial& Material = PMXInfo.ModelMaterials[MatIndex];
 		int32 FaceIndexCount = Material.FaceIndexCount;
 		int32 TriangleCount = FaceIndexCount / 3;
 
@@ -391,7 +399,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 	}
 
 	for (int32 i = 0; i < PMXInfo.ModelBoneCount; ++i) {
-		const PMXBone& Bone = PMXInfo.ModelBones[i];
+		const FPMXBone& Bone = PMXInfo.ModelBones[i];
 		SkeletalMeshImportData::FBone NewBone;
 
 		;
@@ -417,7 +425,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 		// 计算相对父骨骼的位置（local）
 		FVector3f BoneLocalPos = BoneGlobalPos;
 		if (Bone.ParentBoneIndex >= 0 && Bone.ParentBoneIndex < PMXInfo.ModelBoneCount) {
-			const PMXBone& ParentPMXBone = PMXInfo.ModelBones[Bone.ParentBoneIndex];
+			const FPMXBone& ParentPMXBone = PMXInfo.ModelBones[Bone.ParentBoneIndex];
 			FVector3f ParentGlobalPos = ConvertPMXBonePositionToUnreal(ParentPMXBone.Position);
 			BoneLocalPos = BoneGlobalPos - ParentGlobalPos;
 		}
@@ -432,8 +440,8 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 	VertexInfluences.SetNum(PMXInfo.ModelVertexCount);
 
 	for (int32 i = 0; i < PMXInfo.ModelVertexCount; ++i) {
-		const PMXVertex& Vertex = PMXInfo.ModelVertices[i];
-		const PMXVertexWeight& Weight = Vertex.Weight;
+		const FPMXVertex& Vertex = PMXInfo.ModelVertices[i];
+		const FPMXVertexWeight& Weight = Vertex.Weight;
 
 		switch (Weight.WeightDeformType)
 		{
@@ -519,7 +527,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 }
 
 
-USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo, const FString& PackagePath, const FString& AssetName, const FString& PMXFilePath)
+USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const FPMXDatas& PMXInfo, const FString& PackagePath, const FString& AssetName, const FString& PMXFilePath)
 {
 	FString PMXModelName = FixMMDName(FPaths::GetBaseFilename(PMXFilePath));
 	FString CleanAssetName = FixMMDName(AssetName);

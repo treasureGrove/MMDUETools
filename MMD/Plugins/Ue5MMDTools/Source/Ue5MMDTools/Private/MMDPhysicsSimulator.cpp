@@ -109,7 +109,7 @@ static FTransform PMXToUETransform(const FVector& P, const FVector& RotRad)
 
     return FTransform(Rot.Quaternion(), PosUE);
 }
-static btCollisionShape* CreateCollisionShape(const PMXRigid& Rigid)
+static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
 {
     btCollisionShape* Shape = nullptr;
     switch (Rigid.ShapeType)
@@ -158,7 +158,7 @@ static btCollisionShape* CreateCollisionShape(const PMXRigid& Rigid)
 }
 #pragma endregion
 
-bool FMMDPhysicsSimulator::InitializeFromPMX(const PMXDatas& PMXData, USkeletalMeshComponent* InSkelComp)
+bool FMMDPhysicsSimulator::InitializeFromPMX(const FPMXDatas& PMXData, USkeletalMeshComponent* InSkelComp)
 {
     if(!InSkelComp){ UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: SkeletalMeshComponent null")); return false; }
     if(bInitialized){ UE_LOG(LogTemp, Warning, TEXT("InitializeFromPMX skipped: already initialized")); return true; }
@@ -182,12 +182,12 @@ void FMMDPhysicsSimulator::InitializeBulletWorld()
 
     DynamicsWorld->setGravity(btVector3(0.f, -9.8f, 0.f));
 }
-void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeRigidBody(const FPMXDatas& PMXData)
 {
     if(!DynamicsWorld) return;
 
 
-    for(const PMXRigid& Rigid: PMXData.ModelRigids)
+    for(const FPMXRigid& Rigid: PMXData.ModelRigids)
     {
         BulletRigidBody NewRigidBody;
 
@@ -285,10 +285,10 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
     }
 }
 
-void FMMDPhysicsSimulator::InitializeJoints(const PMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeJoints(const FPMXDatas& PMXData)
 {
 
-    for (const PMXJoint& Joint : PMXData.ModelJoints) {
+    for (const FPMXJoint& Joint : PMXData.ModelJoints) {
         auto* BodyA = BulletRigidBodies[Joint.RigidA].Body;
         auto* BodyB = BulletRigidBodies[Joint.RigidB].Body;
         if (!BodyA || !BodyB) {

@@ -38,7 +38,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
     float FixedTimeStep = 1.f / 60.f;
 
-    PMXDatas PMXData;
+    UPROPERTY(EditAnywhere, Category = "MMD")
+    FPMXDatas PMXData;
+
     //MMD数据
     virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
@@ -76,7 +78,7 @@ class FMMDAnimGraphHelper
 {
 public:
     static UAnimGraphNode_MMDSkeletalControl* AddMMDNodeToAnimBP(
-        UAnimBlueprint* AnimBP,
+		UAnimBlueprint* AnimBP,const FPMXDatas& PMXData,
         bool bConnectToRoot = true
     );
 
