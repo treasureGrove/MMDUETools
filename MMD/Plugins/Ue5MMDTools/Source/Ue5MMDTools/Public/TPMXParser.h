@@ -134,6 +134,15 @@ struct FPMXMaterial
 // - float3 lowerLimit // per-axis radians
 // - float3 upperLimit
 USTRUCT()
+struct FPMXIKLink
+{
+    GENERATED_BODY()
+    int32 LinkBoneIndex = -1;
+    uint8 HasLimit = 0;
+    FVector LowerLimit = FVector::ZeroVector;
+    FVector UpperLimit = FVector::ZeroVector;
+};
+USTRUCT()
 struct FPMXBone
 {
     GENERATED_BODY()
@@ -162,14 +171,7 @@ struct FPMXBone
     float IKLimitAngle = 0.0f;
     int32 IKLinkCount = 0;
 
-    struct PMXIKLink
-    {
-        int32 LinkBoneIndex = -1;
-        uint8 HasLimit = 0;
-        FVector LowerLimit = FVector::ZeroVector;
-        FVector UpperLimit = FVector::ZeroVector;
-    };
-    TArray<PMXIKLink> IKLinks;
+    TArray<FPMXIKLink> IKLinks;
 };
 // 8) Morphs
 // - int32 morphCount
@@ -221,6 +223,67 @@ struct FPMXBone
 // - float3 velocity
 // - float3 torque
 USTRUCT()
+struct FPMXMorphGroup
+{
+    GENERATED_BODY()
+    int32 MorphIndex = -1;
+    float Weight = 0.0f;
+};
+USTRUCT()
+struct FPMXMorphVertex
+{
+    GENERATED_BODY()
+    int32 VertexIndex = -1;
+    FVector PositionOffset = FVector::ZeroVector;
+};
+USTRUCT()
+struct FPMXMorphBone
+{
+    GENERATED_BODY()
+    int32 BoneIndex = -1;
+    FVector Translation = FVector::ZeroVector;
+    FQuat RotationQuat = FQuat::Identity;
+};
+USTRUCT()
+struct FPMXMorphUV
+{
+    GENERATED_BODY()
+    int32 VertexIndex = -1;
+    FVector4 UVOffset = FVector4::Zero();
+};
+USTRUCT()
+struct FPMXMorphMaterial
+{
+    GENERATED_BODY()
+    int32 MaterialIndex = -1;
+    uint8 CalcMode = 0;
+    FVector4 Diffuse = FVector4::Zero();
+    FVector Specular = FVector::ZeroVector;
+    float SpecularPower = 0.0f;
+    FVector Ambient = FVector::ZeroVector;
+    FVector4 EdgeColor = FVector4::Zero();
+    float EdgeSize = 0.0f;
+    FVector4 TextureTint = FVector4::Zero();
+    FVector4 SphereTextureTint = FVector4::Zero();
+    FVector4 ToonTextureTint = FVector4::Zero();
+};
+USTRUCT()
+struct FPMXMorphFlip
+{
+    GENERATED_BODY()
+    int32 MorphIndex = -1;
+    float Weight = 0.0f;
+};
+USTRUCT()
+struct FPMXMorphImpulse
+{
+    GENERATED_BODY()
+    int32 RigidIndex = -1;
+    uint8 IsLocal = 0;
+    FVector Velocity = FVector::ZeroVector;
+    FVector Torque = FVector::ZeroVector;
+};
+USTRUCT()
 struct FPMXMorph
 {
     GENERATED_BODY()
@@ -230,61 +293,14 @@ struct FPMXMorph
     uint8 MorphType = 0;
     int32 ElementCount = 0;
 
-    struct Group
-    {
-        int32 MorphIndex = -1;
-        float Weight = 0.0f;
-    };
-    struct Vertex
-    {
-        int32 VertexIndex = -1;
-        FVector PositionOffset = FVector::ZeroVector;
-    };
-    struct Bone
-    {
-        int32 BoneIndex = -1;
-        FVector Translation = FVector::ZeroVector;
-        FQuat RotationQuat = FQuat::Identity;
-    };
-    struct UV
-    {
-        int32 VertexIndex = -1;
-        FVector4 UVOffset = FVector4::Zero();
-    };
-    struct Material
-    {
-        int32 MaterialIndex = -1;
-        uint8 CalcMode = 0;
-        FVector4 Diffuse = FVector4::Zero();
-        FVector Specular = FVector::ZeroVector;
-        float SpecularPower = 0.0f;
-        FVector Ambient = FVector::ZeroVector;
-        FVector4 EdgeColor = FVector4::Zero();
-        float EdgeSize = 0.0f;
-        FVector4 TextureTint = FVector4::Zero();
-        FVector4 SphereTextureTint = FVector4::Zero();
-        FVector4 ToonTextureTint = FVector4::Zero();
-    };
-    struct Flip
-    {
-        int32 MorphIndex = -1;
-        float Weight = 0.0f;
-    };
-    struct Impulse
-    {
-        int32 RigidIndex = -1;
-        uint8 IsLocal = 0;
-        FVector Velocity = FVector::ZeroVector;
-        FVector Torque = FVector::ZeroVector;
-    };
 
-    TArray<Group> Groups;
-    TArray<Vertex> Vertices;
-    TArray<Bone> Bones;
-    TArray<UV> UVs;
-    TArray<Material> Materials;
-    TArray<Flip> Flips;
-    TArray<Impulse> Impulses;
+    TArray<FPMXMorphGroup> Groups;
+    TArray<FPMXMorphVertex> Vertices;
+    TArray<FPMXMorphBone> Bones;
+    TArray<FPMXMorphUV> UVs;
+    TArray<FPMXMorphMaterial> Materials;
+    TArray<FPMXMorphFlip> Flips;
+    TArray<FPMXMorphImpulse> Impulses;
 };
 // 9) Display Frames (for UI panels)
 // - int32 frameCount
@@ -297,6 +313,13 @@ struct FPMXMorph
 // - uint8 elemType // 0=Bone, 1=Morph
 // - elemIndex // sized by (boneIndexSize or morphIndexSize)
 USTRUCT()
+struct FPMXFrameElement
+{
+    GENERATED_BODY()
+    uint8 ElemType;
+    int32 ElemIndex;
+};
+USTRUCT()
 struct FPMXFrame
 {
     GENERATED_BODY()
@@ -305,12 +328,8 @@ struct FPMXFrame
     uint8 IsSpecial = 0;
     int32 ElementCount = 0;
 
-    struct Element
-    {
-        uint8 ElemType;
-        int32 ElemIndex;
-    };
-    TArray<Element> Elements;
+
+    TArray<FPMXFrameElement> Elements;
 };
 // 10) Rigid Bodies (physics)
 // - int32 rigidCount
@@ -404,6 +423,14 @@ struct FPMXJoint
 // - repeat pinVertexCount:
 // - vertexIndex (vertexIndexSize)
 USTRUCT()
+struct FPMXSoftBodyAnchor
+{
+	GENERATED_BODY()
+    int32 RigidIndex = -1;
+    int32 VertexIndex = -1;
+    uint8 NearMode = 0;
+};
+USTRUCT()
 struct FPMXSoftBody  
 {
 	GENERATED_BODY()
@@ -451,13 +478,8 @@ struct FPMXSoftBody
     float VST=0.0f;//Volume Surface Tension - 体积表面
 
     int32 AnchorCount = 0;
-    struct Anchor
-    {
-        int32 RigidIndex = -1;
-        int32 VertexIndex = -1;
-        uint8 NearMode = 0;
-    };
-    TArray<Anchor> Anchors;
+
+    TArray<FPMXSoftBodyAnchor> Anchors;
     int32 PinVertexCount = 0;
     TArray<int32> PinVertices;
 };
@@ -478,33 +500,43 @@ struct FPMXDatas
 
     // 顶点数据
     int32 ModelVertexCount = 0;
+    UPROPERTY()
     TArray<FPMXVertex> ModelVertices;
     // 三角面数据
     int32 ModelIndicesCount = 0;
+    UPROPERTY()
     TArray<int32> ModelIndices;
 
     int32 ModelTextureCount = 0;
+    UPROPERTY()
     TArray<FString> ModelTexturePaths;
 
     int32 ModelMaterialCount = 0;
+    UPROPERTY()
     TArray<FPMXMaterial> ModelMaterials;
 
     int32 ModelBoneCount = 0;
+    UPROPERTY()
     TArray<FPMXBone> ModelBones;
 
     int32 ModelMorphCount = 0;
+    UPROPERTY()
     TArray<FPMXMorph> ModelMorphs;
 
     int32 ModelFrameCount = 0;
+    UPROPERTY()
     TArray<FPMXFrame> ModelFrames;
 
     int32 ModelRigidCount = 0;
+    UPROPERTY()
     TArray<FPMXRigid> ModelRigids;
 
     int32 ModelJointCount = 0;
+    UPROPERTY()
     TArray<FPMXJoint> ModelJoints;
 
     int32 ModelSoftBodyCount = 0;
+    UPROPERTY()
     TArray<FPMXSoftBody> ModelSoftBodies;
 };
 

@@ -189,8 +189,11 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const FPMXDatas& PMXData)
 
     for(const FPMXRigid& Rigid: PMXData.ModelRigids)
     {
+        if (PMXData.ModelRigids.Num()<=0||PMXData.ModelBoneCount!=PMXData.ModelRigids.Num()) {
+            checkf(false, TEXT("PMXData.ModelRigid is null!"));
+        }
         BulletRigidBody NewRigidBody;
-
+        NewRigidBody.Shape = CreateCollisionShape(Rigid);
         //计算刚体偏移骨骼位置
         FTransform BoneWS=OwnerSkelComp->GetBoneTransform(Rigid.RelatedBoneIndex+1)*OwnerSkelComp->GetComponentTransform();
         const FVector Rot = Rigid.Rotation; // 弧度
@@ -289,6 +292,13 @@ void FMMDPhysicsSimulator::InitializeJoints(const FPMXDatas& PMXData)
 {
 
     for (const FPMXJoint& Joint : PMXData.ModelJoints) {
+        if (Joint.RigidA < 0 || Joint.RigidA >= BulletRigidBodies.Num())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("InitializeJoints: Invalid RigidA index %d (array size: %d), skipping joint"),
+                Joint.RigidA, BulletRigidBodies.Num());
+            checkf(false, TEXT("PMXData is empty at first evaluation!"));
+            continue;
+        }
         auto* BodyA = BulletRigidBodies[Joint.RigidA].Body;
         auto* BodyB = BulletRigidBodies[Joint.RigidB].Body;
         if (!BodyA || !BodyB) {
@@ -300,7 +310,7 @@ void FMMDPhysicsSimulator::InitializeJoints(const FPMXDatas& PMXData)
         btQuaternion JRot;
         JRot.setEuler(Joint.Rotation.X, Joint.Rotation.Y, Joint.Rotation.Z);
         JRot.setX(-JRot.x());
-        JRot.setY(-JRot.y());
+        JRot.setY(-JRot.y()); 
         btTransform JointTr(JRot, JPos);
         btTransform FrameA = BodyA->getWorldTransform().inverse() * JointTr;
         btTransform FrameB = BodyB->getWorldTransform().inverse() * JointTr;
