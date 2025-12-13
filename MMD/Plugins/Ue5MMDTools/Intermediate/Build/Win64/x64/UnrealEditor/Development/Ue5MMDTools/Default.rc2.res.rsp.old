@@ -2,7 +2,7 @@
 /D_WIN64
 /l 0x409
 /I "."
-/I "D:\VisualStudio\VC\Tools\MSVC\14.38.33130\INCLUDE"
+/I "D:\VisualStudio2026\VC\Tools\MSVC\14.50.35717\INCLUDE"
 /I "D:\Windows Kits\10\include\10.0.22621.0\ucrt"
 /I "D:\Windows Kits\10\include\10.0.22621.0\shared"
 /I "D:\Windows Kits\10\include\10.0.22621.0\um"

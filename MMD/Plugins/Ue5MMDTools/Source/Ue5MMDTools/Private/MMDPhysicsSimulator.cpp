@@ -185,15 +185,17 @@ void FMMDPhysicsSimulator::InitializeBulletWorld()
 void FMMDPhysicsSimulator::InitializeRigidBody(const FPMXDatas& PMXData)
 {
     if(!DynamicsWorld) return;
-
+    if (PMXData.ModelRigids.Num() <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
+        return;
+    }
 
     for(const FPMXRigid& Rigid: PMXData.ModelRigids)
     {
-        if (PMXData.ModelRigids.Num()<=0||PMXData.ModelBoneCount!=PMXData.ModelRigids.Num()) {
-            checkf(false, TEXT("PMXData.ModelRigid is null!"));
-        }
         BulletRigidBody NewRigidBody;
         NewRigidBody.Shape = CreateCollisionShape(Rigid);
+		NewRigidBody.RelatedBoneIndex = Rigid.RelatedBoneIndex;
         //计算刚体偏移骨骼位置
         FTransform BoneWS=OwnerSkelComp->GetBoneTransform(Rigid.RelatedBoneIndex+1)*OwnerSkelComp->GetComponentTransform();
         const FVector Rot = Rigid.Rotation; // 弧度
@@ -290,22 +292,27 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const FPMXDatas& PMXData)
 
 void FMMDPhysicsSimulator::InitializeJoints(const FPMXDatas& PMXData)
 {
-
+    if (PMXData.ModelRigids.Num() <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
+        return;
+    }
     for (const FPMXJoint& Joint : PMXData.ModelJoints) {
-        if (Joint.RigidA < 0 || Joint.RigidA >= BulletRigidBodies.Num())
-        {
-            UE_LOG(LogTemp, Warning, TEXT("InitializeJoints: Invalid RigidA index %d (array size: %d), skipping joint"),
-                Joint.RigidA, BulletRigidBodies.Num());
-            checkf(false, TEXT("PMXData is empty at first evaluation!"));
+
+        if (Joint.RigidA < 0 || Joint.RigidA >= BulletRigidBodies.Num() ||
+            Joint.RigidB < 0 || Joint.RigidB >= BulletRigidBodies.Num()) {
+            UE_LOG(LogTemp, Error, TEXT("InitializeJoints: Rigid body index out of bounds (RigidA=%d, RigidB=%d, Max=%d), skipping"),
+                Joint.RigidA, Joint.RigidB, BulletRigidBodies.Num());
             continue;
         }
+
         auto* BodyA = BulletRigidBodies[Joint.RigidA].Body;
         auto* BodyB = BulletRigidBodies[Joint.RigidB].Body;
         if (!BodyA || !BodyB) {
-            UE_LOG(LogTemp, Error, TEXT("InitializeJoints: Invalid rigid body index for joint, skipping"));
+            UE_LOG(LogTemp, Error, TEXT("InitializeJoints: Invalid rigid body pointer for joint (RigidA=%d, RigidB=%d), skipping"),
+                Joint.RigidA, Joint.RigidB);
             continue;
         }
-
         btVector3 JPos = btVector3(Joint.Position.X, Joint.Position.Y, -Joint.Position.Z) * MMD_SCALE;
         btQuaternion JRot;
         JRot.setEuler(Joint.Rotation.X, Joint.Rotation.Y, Joint.Rotation.Z);
@@ -340,6 +347,9 @@ void FMMDPhysicsSimulator::InitializeJoints(const FPMXDatas& PMXData)
             }
 
         }
+		DynamicsWorld->addConstraint(Constraint, true);
+		//BulletJoints.Add(Constraint);
+
     }
 }
 
@@ -466,4 +476,4 @@ void FMMDPhysicsSimulator::Shutdown()
 void FMMDPhysicsSimulator::StepSimulationMMD(float DeltaSeconds)
 {
     if (!DynamicsWorld) return; DynamicsWorld->stepSimulation(DeltaSeconds, MaxSubSteps, FixedTimeStep);
-}
+}////////

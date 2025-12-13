@@ -25,8 +25,9 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     TArray<FBoneTransform>& OutBoneTransforms)
 {   
 
-    if (PMXData.ModelRigids.Num() <= 0 || PMXData.ModelBoneCount != PMXData.ModelRigids.Num()) {
-        checkf(false, TEXT("PMXData.ModelRigid is null!"));
+    if (PMXData.ModelRigids.Num() <= 0) {
+        UE_LOG(LogTemp, Verbose, TEXT("[MMDPhysics] No rigid bodies, skipping physics"));
+        return;
     }
 	if (!bSimulatorInitialized || !SimulatorStrongPtr.IsValid())
     {
@@ -39,15 +40,20 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
 		SimulatorStrongPtr = MoveTemp(NewSimulator);
 		bSimulatorInitialized = bInitSuccess;
 		if (SimulatorStrongPtr.IsValid())
+
         UE_LOG(LogTemp, Log, TEXT("[MMDPhysics] ✅ 从 PMXData 创建 Simulator: Rigids=%d"),
             PMXData.ModelRigids.Num())
     }
-    if (!SimulatorStrongPtr.IsValid()) {
-        checkf(false, TEXT("PMXData is empty at first evaluation!"));
+    if (SimulatorStrongPtr.IsValid()) {
+
         SimulatorStrongPtr->TickMMDPhysics(Output, OutBoneTransforms);
         SimulatorStrongPtr->SetDebugEnabled(bDrawDebug);
         OutBoneTransforms.Sort(FCompareBoneTransformIndex());
     }
+    else {
+        checkf(false, TEXT("PMXData is empty at first evaluation!"));
+    }
+
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {
