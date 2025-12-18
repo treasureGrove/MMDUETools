@@ -158,7 +158,7 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
 }
 #pragma endregion
 
-bool FMMDPhysicsSimulator::InitializeFromPMX(const FPMXDatas& PMXData, USkeletalMeshComponent* InSkelComp)
+bool FMMDPhysicsSimulator::InitializeFromPMX(const PMXDatas& PMXData, USkeletalMeshComponent* InSkelComp)
 {
     if(!InSkelComp){ UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: SkeletalMeshComponent null")); return false; }
     if(bInitialized){ UE_LOG(LogTemp, Warning, TEXT("InitializeFromPMX skipped: already initialized")); return true; }
@@ -182,7 +182,7 @@ void FMMDPhysicsSimulator::InitializeBulletWorld()
 
     DynamicsWorld->setGravity(btVector3(0.f, -9.8f, 0.f));
 }
-void FMMDPhysicsSimulator::InitializeRigidBody(const FPMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
 {
     if(!DynamicsWorld) return;
     if (PMXData.ModelRigids.Num() <= 0)
@@ -290,7 +290,7 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const FPMXDatas& PMXData)
     }
 }
 
-void FMMDPhysicsSimulator::InitializeJoints(const FPMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeJoints(const PMXDatas& PMXData)
 {
     if (PMXData.ModelRigids.Num() <= 0)
     {

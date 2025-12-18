@@ -3,15 +3,12 @@
 #include "CoreMinimal.h"
 #include "Engine/Engine.h"
 #include "Engine/SkeletalMesh.h"
-#include "TPMXParser.generated.h"
 
 class FMemoryReader;
 class USkeletalMesh;
 
-USTRUCT()
-struct FPMXGlobals
+struct PMXGlobals
 {
-    GENERATED_BODY()
     uint8 TextEncoding = 0;
     uint8 ExtraUV = 0;
     uint8 VertexIndexSize = 4;
@@ -21,10 +18,8 @@ struct FPMXGlobals
     uint8 MorphIndexSize = 4;
     uint8 RigidBodyIndexSize = 4;
 };
-USTRUCT()
 struct FPMXVertexWeight 
 {
-	GENERATED_BODY()
     uint8 WeightDeformType = 0; // 0=BDEF1, 1=BDEF2, 2=BDEF4, 3=SDEF, 4=QDEF(2.1)
     int32 BoneIndices[4] = {-1, -1, -1, -1};
     float Weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -35,10 +30,8 @@ struct FPMXVertexWeight
     // QDEF specific
     float EdgeScale = 0.0f; // 边缘放大系数（轮廓描边用）
 };
-USTRUCT()
 struct FPMXVertex
 {
-	GENERATED_BODY()
     FVector Position = FVector::ZeroVector;
     FVector Normal = FVector::ZeroVector;
     FVector2D UV = FVector2D::ZeroVector;
@@ -66,10 +59,8 @@ struct FPMXVertex
 // - toonTextureIndex (textureIndexSize)
 // - string memo // material note
 // - int32 faceIndexCount // number of indices this material covers (submesh size)
-USTRUCT()
 struct FPMXMaterial
 {
-    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     FVector4 DiffuseColor;
@@ -133,19 +124,15 @@ struct FPMXMaterial
 // - if hasLimit != 0:
 // - float3 lowerLimit // per-axis radians
 // - float3 upperLimit
-USTRUCT()
 struct FPMXIKLink
 {
-    GENERATED_BODY()
     int32 LinkBoneIndex = -1;
     uint8 HasLimit = 0;
     FVector LowerLimit = FVector::ZeroVector;
     FVector UpperLimit = FVector::ZeroVector;
 };
-USTRUCT()
 struct FPMXBone
 {
-    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     FVector Position = FVector::ZeroVector;
@@ -222,39 +209,29 @@ struct FPMXBone
 // - uint8 isLocal
 // - float3 velocity
 // - float3 torque
-USTRUCT()
 struct FPMXMorphGroup
 {
-    GENERATED_BODY()
     int32 MorphIndex = -1;
     float Weight = 0.0f;
 };
-USTRUCT()
 struct FPMXMorphVertex
 {
-    GENERATED_BODY()
     int32 VertexIndex = -1;
     FVector PositionOffset = FVector::ZeroVector;
 };
-USTRUCT()
 struct FPMXMorphBone
 {
-    GENERATED_BODY()
     int32 BoneIndex = -1;
     FVector Translation = FVector::ZeroVector;
     FQuat RotationQuat = FQuat::Identity;
 };
-USTRUCT()
 struct FPMXMorphUV
 {
-    GENERATED_BODY()
     int32 VertexIndex = -1;
     FVector4 UVOffset = FVector4::Zero();
 };
-USTRUCT()
 struct FPMXMorphMaterial
 {
-    GENERATED_BODY()
     int32 MaterialIndex = -1;
     uint8 CalcMode = 0;
     FVector4 Diffuse = FVector4::Zero();
@@ -267,26 +244,20 @@ struct FPMXMorphMaterial
     FVector4 SphereTextureTint = FVector4::Zero();
     FVector4 ToonTextureTint = FVector4::Zero();
 };
-USTRUCT()
 struct FPMXMorphFlip
 {
-    GENERATED_BODY()
     int32 MorphIndex = -1;
     float Weight = 0.0f;
 };
-USTRUCT()
 struct FPMXMorphImpulse
 {
-    GENERATED_BODY()
     int32 RigidIndex = -1;
     uint8 IsLocal = 0;
     FVector Velocity = FVector::ZeroVector;
     FVector Torque = FVector::ZeroVector;
 };
-USTRUCT()
 struct FPMXMorph
 {
-    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 Panel = 0;
@@ -312,17 +283,13 @@ struct FPMXMorph
 // - repeat elementCount:
 // - uint8 elemType // 0=Bone, 1=Morph
 // - elemIndex // sized by (boneIndexSize or morphIndexSize)
-USTRUCT()
 struct FPMXFrameElement
 {
-    GENERATED_BODY()
     uint8 ElemType;
     int32 ElemIndex;
 };
-USTRUCT()
 struct FPMXFrame
 {
-    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 IsSpecial = 0;
@@ -349,10 +316,8 @@ struct FPMXFrame
 // - float restitution
 // - float friction
 // - uint8 physicsMode // 0=Static, 1=Dynamic, 2=BoneTracked
-USTRUCT()
 struct FPMXRigid
 {
-    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     int32 RelatedBoneIndex = -1;
@@ -385,10 +350,8 @@ struct FPMXRigid
 // - float3 limitRotUpper
 // - float3 springPos
 // - float3 springRot
-USTRUCT()
 struct FPMXJoint
 {
-    GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 JointType = 0;
@@ -422,18 +385,14 @@ struct FPMXJoint
 // - int32 pinVertexCount
 // - repeat pinVertexCount:
 // - vertexIndex (vertexIndexSize)
-USTRUCT()
 struct FPMXSoftBodyAnchor
 {
-	GENERATED_BODY()
     int32 RigidIndex = -1;
     int32 VertexIndex = -1;
     uint8 NearMode = 0;
 };
-USTRUCT()
 struct FPMXSoftBody  
 {
-	GENERATED_BODY()
     FString NameJP;
     FString NameEN;
     uint8 ShapeType = 0;
@@ -483,11 +442,8 @@ struct FPMXSoftBody
     int32 PinVertexCount = 0;
     TArray<int32> PinVertices;
 };
-USTRUCT(BlueprintType)
-struct FPMXDatas
+struct PMXDatas
 {
-	GENERATED_BODY()
-
     float Version = 0.0f;
     uint8 Sig[4] = {0};
 
@@ -496,47 +452,47 @@ struct FPMXDatas
     FString ModelCommentJP;
     FString ModelCommentEN;
 
-    FPMXGlobals PMXGlobals;
+    PMXGlobals PMXGlobals;
 
     // 顶点数据
     int32 ModelVertexCount = 0;
-    UPROPERTY()
+
     TArray<FPMXVertex> ModelVertices;
     // 三角面数据
     int32 ModelIndicesCount = 0;
-    UPROPERTY()
+
     TArray<int32> ModelIndices;
 
     int32 ModelTextureCount = 0;
-    UPROPERTY()
+
     TArray<FString> ModelTexturePaths;
 
     int32 ModelMaterialCount = 0;
-    UPROPERTY()
+
     TArray<FPMXMaterial> ModelMaterials;
 
     int32 ModelBoneCount = 0;
-    UPROPERTY()
+
     TArray<FPMXBone> ModelBones;
 
     int32 ModelMorphCount = 0;
-    UPROPERTY()
+
     TArray<FPMXMorph> ModelMorphs;
 
     int32 ModelFrameCount = 0;
-    UPROPERTY()
+
     TArray<FPMXFrame> ModelFrames;
 
     int32 ModelRigidCount = 0;
-    UPROPERTY()
+
     TArray<FPMXRigid> ModelRigids;
 
     int32 ModelJointCount = 0;
-    UPROPERTY()
+
     TArray<FPMXJoint> ModelJoints;
 
     int32 ModelSoftBodyCount = 0;
-    UPROPERTY()
+
     TArray<FPMXSoftBody> ModelSoftBodies;
 };
 
@@ -546,7 +502,7 @@ public:
     bool ParsePMXFile(const FString &FilePath);
     TArray<uint8> PMXData;
 
-    FPMXDatas PMXInfo;
+    PMXDatas PMXInfo;
 
 private:
 };

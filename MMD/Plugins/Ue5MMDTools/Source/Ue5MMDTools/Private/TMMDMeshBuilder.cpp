@@ -137,7 +137,7 @@ UTexture2D* CreateTextureFromFile(const FString& TexturePath, const FString& Out
 	return ImportedTexture;
 }
 
-FString GetMaterialTexturePath(const FPMXMaterial& Material, const FPMXDatas& PMXInfo, const FString& PMXFilePath) {
+FString GetMaterialTexturePath(const FPMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
 	if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
 		FString PMXDirectory = PMXFilePath;
 
@@ -223,7 +223,7 @@ static FVector3f ConvertPMXNormalToUnreal(const FVector& PMXNormal, bool bForceF
 #pragma endregion
 
 
-void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const FPMXDatas& PMXInfo, const FString& PMXFilePath) {
+void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
 	FString PMXPath = FPaths::GetPath(PMXFilePath);
 	FString PMXModelName = FPaths::GetBaseFilename(PMXFilePath);
 	PMXImportData.bHasNormals = true;
@@ -527,7 +527,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const FPMXDatas& 
 }
 
 
-USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const FPMXDatas& PMXInfo, const FString& PackagePath, const FString& AssetName, const FString& PMXFilePath)
+USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo, const FString& PackagePath, const FString& AssetName, const FString& PMXFilePath)
 {
 	FString PMXModelName = FixMMDName(FPaths::GetBaseFilename(PMXFilePath));
 	FString CleanAssetName = FixMMDName(AssetName);

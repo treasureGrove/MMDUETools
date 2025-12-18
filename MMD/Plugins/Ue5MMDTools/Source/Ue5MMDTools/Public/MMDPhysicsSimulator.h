@@ -120,13 +120,13 @@ public:
     FMMDPhysicsSimulator() = default;
     ~FMMDPhysicsSimulator() { Shutdown(); }
 
-    bool InitializeFromPMX(const FPMXDatas& PMXData,
+    bool InitializeFromPMX(const PMXDatas& PMXData,
         USkeletalMeshComponent* InSkelComp);
   /*  void GameThreadTick(float DeltaSeconds);*/
 
     void InitializeBulletWorld();
-    void InitializeRigidBody(const FPMXDatas& PMXData);
-    void InitializeJoints(const FPMXDatas& PMXData);
+    void InitializeRigidBody(const PMXDatas& PMXData);
+    void InitializeJoints(const PMXDatas& PMXData);
     void StepSimulationMMD(float DeltaSeconds);
 
     // MMD Tick Á÷³Ì

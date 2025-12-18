@@ -5,21 +5,20 @@
 			"AGN_MMDSkeletalControl.gen.cpp.obj",
 			"AMMDActor.gen.cpp.obj",
 			"MMDPhysicsSimulator.gen.cpp.obj",
-			"TPMXParser.gen.cpp.obj",
 			"Ue5MMDTools.init.gen.cpp.obj",
 			"PerModuleInline.gen.cpp.obj",
-			"AMMDActor.cpp.obj",
 			"MMDActor.cpp.obj",
 			"MMDImportSetting.cpp.obj",
 			"MMDViewPanel.cpp.obj",
-			"TMMDMeshBuilder.cpp.obj",
-			"TPMXParser.cpp.obj",
 			"TVMDParser.cpp.obj",
 			"Ue5MMDTools.cpp.obj",
 			"Ue5MMDToolsCommands.cpp.obj",
 			"Ue5MMDToolsStyle.cpp.obj",
 			"AGN_MMDSkeletalControl.cpp.obj",
-			"MMDPhysicsSimulator.cpp.obj"
+			"AMMDActor.cpp.obj",
+			"MMDPhysicsSimulator.cpp.obj",
+			"TMMDMeshBuilder.cpp.obj",
+			"TPMXParser.cpp.obj"
 		]
 	}
 }

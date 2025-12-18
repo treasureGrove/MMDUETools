@@ -1,18 +1,18 @@
 #include "TPMXParser.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/MemoryReader.h"
-bool ReadCharArray(FMemoryReader &Reader, FString &OutString, FPMXDatas &PMXInfo);
-bool ReadPMXGlobals(FMemoryReader &Reader, FPMXGlobals &OutGlobals);
-bool ReadPMXVertex(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXIndices(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXTexturePath(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXMaterial(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXBones(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXMorphs(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXFrames(FMemoryReader& Reader, FPMXDatas& PMXInfo);
-bool ReadPMXRigid(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXJoint(FMemoryReader &Reader, FPMXDatas &PMXInfo);
-bool ReadPMXSoftBody(FMemoryReader& Reader, FPMXDatas& PMXInfo);
+bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo);
+bool ReadPMXGlobals(FMemoryReader &Reader, PMXGlobals &OutGlobals);
+bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo);
+bool ReadPMXRigid(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXJoint(FMemoryReader &Reader, PMXDatas &PMXInfo);
+bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo);
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
     // 简单重置 - 不使用复杂的赋值操作
@@ -196,7 +196,7 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     UE_LOG(LogTemp, Log, TEXT("Soft Bodies: %d"), PMXInfo.ModelSoftBodyCount);
     return true;
 }
-bool ReadCharArray(FMemoryReader &Reader, FString &OutString, FPMXDatas &PMXInfo)
+bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
 {
     // 记录当前位置用于调试
     int64 StartPos = Reader.Tell();
@@ -334,7 +334,7 @@ int32 ReadGlobalIndex(FMemoryReader &Reader, uint8 IndexSize)
         return -1; // Invalid index size
     }
 }
-bool ReadPMXGlobals(FMemoryReader &Reader, FPMXGlobals &OutGlobals)
+bool ReadPMXGlobals(FMemoryReader &Reader, PMXGlobals &OutGlobals)
 {
     uint8 GlobalsCount;
     Reader << GlobalsCount;
@@ -357,7 +357,7 @@ bool ReadPMXGlobals(FMemoryReader &Reader, FPMXGlobals &OutGlobals)
            << OutGlobals.RigidBodyIndexSize;
     return true;
 }
-bool ReadPMXVertex(FMemoryReader &Reader, FPMXDatas &PMXInfo)
+bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     if (PMXInfo.ModelVertexCount < 10)
     {
@@ -477,7 +477,7 @@ bool ReadPMXVertex(FMemoryReader &Reader, FPMXDatas &PMXInfo)
 
     return true;
 }
-bool ReadPMXIndices(FMemoryReader &Reader, FPMXDatas &PMXInfo)
+bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelIndicesCount;
     UE_LOG(LogTemp, Log, TEXT("ReadPMXIndices: Count: %d"), PMXInfo.ModelIndicesCount);
@@ -494,7 +494,7 @@ bool ReadPMXIndices(FMemoryReader &Reader, FPMXDatas &PMXInfo)
 
     return true;
 }
-bool ReadPMXTexturePath(FMemoryReader &Reader, FPMXDatas &PMXInfo)
+bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     // 先确保还有 4 字节可读（textureCount）
     const int64 remain0 = (int64)Reader.TotalSize() - (int64)Reader.Tell();
@@ -535,7 +535,7 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, FPMXDatas &PMXInfo)
     }
     return true;
 }
-bool ReadPMXMaterial(FMemoryReader &Reader, FPMXDatas &PMXInfo)
+bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelMaterialCount;
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXMaterial: MaterialCount=%d at position=%lld"),
@@ -614,7 +614,7 @@ bool ReadPMXMaterial(FMemoryReader &Reader, FPMXDatas &PMXInfo)
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXMaterial: Finished at position=%lld"), Reader.Tell());
     return true;
 }
-bool ReadPMXBones(FMemoryReader &Reader, FPMXDatas &PMXInfo)
+bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelBoneCount;
     PMXInfo.ModelBones.SetNum(PMXInfo.ModelBoneCount);
@@ -698,7 +698,7 @@ bool ReadPMXBones(FMemoryReader &Reader, FPMXDatas &PMXInfo)
     return true;
 }
 
-bool ReadPMXMorphs(FMemoryReader &Reader, FPMXDatas &PMXInfo)
+bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelMorphCount;
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXMorphs: MorphCount=%d"),
@@ -838,7 +838,7 @@ bool ReadPMXMorphs(FMemoryReader &Reader, FPMXDatas &PMXInfo)
     return true;
 }
 
-bool ReadPMXFrames(FMemoryReader& Reader, FPMXDatas& PMXInfo){
+bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<< PMXInfo.ModelFrameCount;
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXFrames: FrameCount=%d"),
            PMXInfo.ModelFrameCount);
@@ -875,7 +875,7 @@ bool ReadPMXFrames(FMemoryReader& Reader, FPMXDatas& PMXInfo){
     }
     return true;
 }
-bool ReadPMXRigid(FMemoryReader& Reader, FPMXDatas& PMXInfo){
+bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelRigidCount;
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXRigid: RigidBodiesCount=%d"),
            PMXInfo.ModelRigidCount);
@@ -924,7 +924,7 @@ bool ReadPMXRigid(FMemoryReader& Reader, FPMXDatas& PMXInfo){
     }
     return true;
 }
-bool ReadPMXJoint(FMemoryReader& Reader, FPMXDatas& PMXInfo){
+bool ReadPMXJoint(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelJointCount;
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXJoint: JointsCount=%d"),
            PMXInfo.ModelJointCount);
@@ -963,7 +963,7 @@ bool ReadPMXJoint(FMemoryReader& Reader, FPMXDatas& PMXInfo){
     }
     return true;
 }
-bool ReadPMXSoftBody(FMemoryReader& Reader, FPMXDatas& PMXInfo){
+bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelSoftBodyCount;
     UE_LOG(LogTemp, Warning, TEXT("ReadPMXSoftBody: SoftBodiesCount=%d"),
            PMXInfo.ModelSoftBodyCount);

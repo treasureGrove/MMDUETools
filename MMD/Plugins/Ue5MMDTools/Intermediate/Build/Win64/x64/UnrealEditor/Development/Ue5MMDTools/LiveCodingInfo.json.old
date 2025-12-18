@@ -8,6 +8,7 @@
 			"TPMXParser.gen.cpp.obj",
 			"Ue5MMDTools.init.gen.cpp.obj",
 			"PerModuleInline.gen.cpp.obj",
+			"AGN_MMDSkeletalControl.cpp.obj",
 			"AMMDActor.cpp.obj",
 			"MMDActor.cpp.obj",
 			"MMDImportSetting.cpp.obj",
@@ -18,8 +19,7 @@
 			"TVMDParser.cpp.obj",
 			"Ue5MMDTools.cpp.obj",
 			"Ue5MMDToolsCommands.cpp.obj",
-			"Ue5MMDToolsStyle.cpp.obj",
-			"AGN_MMDSkeletalControl.cpp.obj"
+			"Ue5MMDToolsStyle.cpp.obj"
 		]
 	}
 }

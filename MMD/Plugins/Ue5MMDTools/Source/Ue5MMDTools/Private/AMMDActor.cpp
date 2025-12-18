@@ -47,7 +47,7 @@ void AMMDActor::SetupComponents(const FString& FilePath)
         return;
     }
 
-    const FPMXDatas& PMXData = StaticParser->PMXInfo;
+    const PMXDatas& PMXData = StaticParser->PMXInfo;
 
     MMDImportSetting::ShowGlobalImportProgress(
         FString::Printf(TEXT("Successfully loaded PMX file: %s"), *FilePath),

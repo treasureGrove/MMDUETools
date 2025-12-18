@@ -145,7 +145,7 @@ const FAnimNode_SkeletalControlBase* UAnimGraphNode_MMDSkeletalControl::GetNode(
 
 
 UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
-	UAnimBlueprint* AnimBP,const FPMXDatas& InputPMXData,
+	UAnimBlueprint* AnimBP,const PMXDatas& InputPMXData,
     bool bConnectToRoot)
 {
     if (!AnimBP)

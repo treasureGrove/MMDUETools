@@ -10,7 +10,7 @@ class UIKRigDefinition;
 class TMMDMeshBuilder
 {
 public:
-    static USkeletalMesh *BuildSkeletalMeshFromPMX(const FPMXDatas &PMXInfo, const FString &PackagePath, const FString &AssetName, const FString& PMXFilePath);
+    static USkeletalMesh *BuildSkeletalMeshFromPMX(const PMXDatas &PMXInfo, const FString &PackagePath, const FString &AssetName, const FString& PMXFilePath);
     
 	static UIKRigDefinition* BuildIKRigFromPMX(USkeletalMesh* SkeletalMesh,const FString& PMXFilePath);
 

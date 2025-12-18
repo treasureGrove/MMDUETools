@@ -12,6 +12,17 @@
 #include "btBulletDynamicsCommon.h"
 #include "AGN_MMDSkeletalControl.generated.h"
 
+USTRUCT(BlueprintType)
+struct UE5MMDTOOLS_API FMMDPhysicsData
+{
+    GENERATED_BODY()
+
+
+
+};
+
+
+
 USTRUCT(BlueprintInternalUseOnly)
 struct UE5MMDTOOLS_API FAGN_MMDSkeletalControl : public FAnimNode_SkeletalControlBase
 {
@@ -38,8 +49,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
     float FixedTimeStep = 1.f / 60.f;
 
-    UPROPERTY(EditAnywhere, Category = "MMD")
-    FPMXDatas PMXData;
+    PMXDatas PMXData;
 
     //MMD数据
     virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
@@ -78,7 +88,7 @@ class FMMDAnimGraphHelper
 {
 public:
     static UAnimGraphNode_MMDSkeletalControl* AddMMDNodeToAnimBP(
-		UAnimBlueprint* AnimBP,const FPMXDatas& PMXData,
+		UAnimBlueprint* AnimBP,const PMXDatas& PMXData,
         bool bConnectToRoot = true
     );
 
