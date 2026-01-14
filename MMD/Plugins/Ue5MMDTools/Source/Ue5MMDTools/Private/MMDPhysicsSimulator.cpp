@@ -7,35 +7,6 @@
 #include "Animation/AnimTypes.h"
 
 // Internal config (previously console vars). Adjust defaults here instead of console commands.
-struct FMMDPhysConfig
-{
-    bool  bDebug = true;
-    float DebugLife = 0.0f;
-    int   DebugEveryN = 1;
-    bool  bDebugSimple = true;
-    int   DebugMax = 512;
-    bool  bLogMap = true;
-    bool  bNoWriteback = false;
-    bool  bGuessMap = true;
-    bool  bUseWhitelist = false; // 原 true
-    bool  bBlockStructural = false; // 原 true
-    int   WritebackMode = 1;
-    float MaxPosDelta = 50.f;
-    float MaxRotAngle = 120.f;
-    bool  bLogDiscard = false;
-    bool  bSafeMode = true;
-    int   MinDepth = 25;
-    bool  bAllowTrans = false;
-    bool  bHairOnly = false; // 原 true
-    bool  bLogPre = true;
-    float FollowWarn = 3.0f;
-    bool  bLogWB = false;
-    int   IndexOffset = 1;
-};
-static FMMDPhysConfig GPhysCfg;
-
-void FMMDPhysicsSimulator::SetDebugEnabled(bool bEnable){ GPhysCfg.bDebug = bEnable; }
-
 #pragma region  工具函数
 static constexpr float MMD_SCALE = 0.08f; // PMX->真实米缩放 (1 PMX unit -> 0.08 m)
 static constexpr float UE_CM_PER_M = 100.f;

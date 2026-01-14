@@ -12,16 +12,40 @@
 #include "btBulletDynamicsCommon.h"
 #include "AGN_MMDSkeletalControl.generated.h"
 
-USTRUCT(BlueprintType)
-struct UE5MMDTOOLS_API FMMDPhysicsData
+USTRUCT()
+struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyDataRuntime
 {
     GENERATED_BODY()
 
-
-
+    UPROPERTY() FString Name;
+    UPROPERTY() int32 BoneIndex;
+    UPROPERTY() int32 ShapeType; // Sphere/Box/Capsule
+    UPROPERTY() FVector ShapeSize;
+    UPROPERTY() FVector ShapePosition;
+    UPROPERTY() FRotator ShapeRotation;
+    UPROPERTY() float Mass;
+    UPROPERTY() float Friction;
+    UPROPERTY() float Restitution;
+    UPROPERTY() int32 CollisionGroup;
+    UPROPERTY() int32 CollisionMask;
+    UPROPERTY() int32 PhysicsMode;
 };
-
-
+USTRUCT()
+struct UE5MMDTOOLS_API FMMDPhysicsJointDataRuntime
+{
+    GENERATED_BODY()
+    UPROPERTY() FString Name;
+    UPROPERTY() int32 RigidBodyIndexA;
+    UPROPERTY() int32 RigidBodyIndexB;
+    UPROPERTY() FVector Position;
+    UPROPERTY() FRotator Rotation;
+    UPROPERTY() FVector PositionMin;
+    UPROPERTY() FVector PositionMax;
+    UPROPERTY() FVector RotationMin;
+    UPROPERTY() FVector RotationMax;
+    UPROPERTY() FVector SpringPosition;
+    UPROPERTY() FVector SpringRotation;
+};
 
 USTRUCT(BlueprintInternalUseOnly)
 struct UE5MMDTOOLS_API FAGN_MMDSkeletalControl : public FAnimNode_SkeletalControlBase
@@ -56,7 +80,9 @@ public:
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
     virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
 private:
-    TSharedPtr<FMMDPhysicsSimulator,ESPMode::ThreadSafe> SimulatorStrongPtr;
+	TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> SimulatorStrongPtr;
+
+
     bool bSimulatorInitialized = false;
     static void BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld);
 
