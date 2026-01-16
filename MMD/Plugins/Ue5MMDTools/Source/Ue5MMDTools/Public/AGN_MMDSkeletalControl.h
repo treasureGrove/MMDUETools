@@ -13,36 +13,44 @@
 #include "AGN_MMDSkeletalControl.generated.h"
 
 USTRUCT()
-struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyDataRuntime
+struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyData
 {
     GENERATED_BODY()
 
     UPROPERTY() FString Name;
-    UPROPERTY() int32 BoneIndex;
+    UPROPERTY() FString NameEN;
+    UPROPERTY() int32 RelatedBoneIndex;
     UPROPERTY() int32 ShapeType; // Sphere/Box/Capsule
     UPROPERTY() FVector ShapeSize;
     UPROPERTY() FVector ShapePosition;
-    UPROPERTY() FRotator ShapeRotation;
+    UPROPERTY() FVector ShapeRotation;
     UPROPERTY() float Mass;
     UPROPERTY() float Friction;
     UPROPERTY() float Restitution;
     UPROPERTY() int32 CollisionGroup;
     UPROPERTY() int32 CollisionMask;
     UPROPERTY() int32 PhysicsMode;
+
+    UPROPERTY()
+    float LinearDamping = 0.0f;
+    UPROPERTY()
+    float AngularDamping = 0.0f;
 };
 USTRUCT()
-struct UE5MMDTOOLS_API FMMDPhysicsJointDataRuntime
+struct UE5MMDTOOLS_API FMMDPhysicsJointData
 {
     GENERATED_BODY()
     UPROPERTY() FString Name;
+	UPROPERTY() FString NameEN;
+    UPROPERTY() int32 JointType;
     UPROPERTY() int32 RigidBodyIndexA;
     UPROPERTY() int32 RigidBodyIndexB;
     UPROPERTY() FVector Position;
-    UPROPERTY() FRotator Rotation;
-    UPROPERTY() FVector PositionMin;
-    UPROPERTY() FVector PositionMax;
-    UPROPERTY() FVector RotationMin;
-    UPROPERTY() FVector RotationMax;
+    UPROPERTY() FVector Rotation;
+    UPROPERTY() FVector LimitPositionMin;
+    UPROPERTY() FVector LimitPositionMax;
+    UPROPERTY() FVector LimitRotationMin;
+    UPROPERTY() FVector LimitRotationMax;
     UPROPERTY() FVector SpringPosition;
     UPROPERTY() FVector SpringRotation;
 };
@@ -73,16 +81,19 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
     float FixedTimeStep = 1.f / 60.f;
 
-    PMXDatas PMXData;
+	UPROPERTY(EditAnywhere, Category = "Settings")
+	TArray<FMMDPhysicsRigidBodyData> RigidBodySaveDataArray;
+
+	UPROPERTY(EditAnywhere, Category = "Settings")
+	TArray<FMMDPhysicsJointData> JointSaveDataArray;
 
     //MMD数据
     virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
     virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
     virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
+    virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
 private:
-	TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> SimulatorStrongPtr;
-
-
+	TUniquePtr<FMMDPhysicsSimulator> SimulatorPtr;
     bool bSimulatorInitialized = false;
     static void BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld);
 

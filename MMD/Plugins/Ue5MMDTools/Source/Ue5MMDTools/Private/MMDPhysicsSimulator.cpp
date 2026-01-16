@@ -80,14 +80,14 @@ static FTransform PMXToUETransform(const FVector& P, const FVector& RotRad)
 
     return FTransform(Rot.Quaternion(), PosUE);
 }
-static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
+static btCollisionShape* CreateCollisionShape(const FMMDPhysicsRigidBodyData& Rigid)
 {
     btCollisionShape* Shape = nullptr;
     switch (Rigid.ShapeType)
     {
     case 0: // Sphere
     {
-        const float Radius = Rigid.Size.X* MMD_SCALE;
+        const float Radius = Rigid.ShapeSize.X* MMD_SCALE;
         Shape = new btSphereShape(Radius);
         break;
     }
@@ -97,9 +97,9 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
         // PMX Size = full width/height/depth
         // Bullet box expects half-extents !
         const btVector3 HalfExtents(
-            (Rigid.Size.X * 0.5f* MMD_SCALE),
-            (Rigid.Size.Y * 0.5f* MMD_SCALE),
-            (Rigid.Size.Z * 0.5f* MMD_SCALE)
+            (Rigid.ShapeSize.X * 0.5f* MMD_SCALE),
+            (Rigid.ShapeSize.Y * 0.5f* MMD_SCALE),
+            (Rigid.ShapeSize.Z * 0.5f* MMD_SCALE)
         );
 
         Shape = new btBoxShape(HalfExtents);
@@ -108,8 +108,8 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
 
     case 2: // Capsule
     {
-        const float Radius = Rigid.Size.X* MMD_SCALE;
-        const float Height = Rigid.Size.Y* MMD_SCALE;
+        const float Radius = Rigid.ShapeSize.X* MMD_SCALE;
+        const float Height = Rigid.ShapeSize.Y* MMD_SCALE;
 
         // 在 MMD/Bullet 中：胶囊默认沿 Y 轴
         // 在 UE 中：胶囊沿 Z 轴，但这里我们是创建 Bullet 碰撞体，使用 Bullet 规范即可。
@@ -129,12 +129,12 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
 }
 #pragma endregion
 
-bool FMMDPhysicsSimulator::InitializeFromPMX(const PMXDatas& PMXData, USkeletalMeshComponent* InSkelComp)
+bool FMMDPhysicsSimulator::InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,USkeletalMeshComponent* InSkelComp)
 {
     if(!InSkelComp){ UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: SkeletalMeshComponent null")); return false; }
     if(bInitialized){ UE_LOG(LogTemp, Warning, TEXT("InitializeFromPMX skipped: already initialized")); return true; }
     OwnerSkelComp=InSkelComp;
-    InitializeBulletWorld(); InitializeRigidBody(PMXData); InitializeJoints(PMXData); bInitialized=true; return true;
+    InitializeBulletWorld(); InitializeRigidBody(SaveRigid); InitializeJoints(SaveJoint); bInitialized=true; return true;
 }
 
 void FMMDPhysicsSimulator::InitializeBulletWorld()
@@ -153,31 +153,32 @@ void FMMDPhysicsSimulator::InitializeBulletWorld()
 
     DynamicsWorld->setGravity(btVector3(0.f, -9.8f, 0.f));
 }
-void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid)
 {
     if(!DynamicsWorld) return;
-    if (PMXData.ModelRigids.Num() <= 0)
+    if (SaveRigid.Num() <= 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
+		checkf(false, TEXT("PMXData.ModelRigids is empty!"));
         return;
     }
 
-    for(const FPMXRigid& Rigid: PMXData.ModelRigids)
+    for(const FMMDPhysicsRigidBodyData& Rigid: SaveRigid)
     {
-        BulletRigidBody NewRigidBody;
+        BulletMMDRigidRuntime NewRigidBody;
         NewRigidBody.Shape = CreateCollisionShape(Rigid);
 		NewRigidBody.RelatedBoneIndex = Rigid.RelatedBoneIndex;
         //计算刚体偏移骨骼位置
         FTransform BoneWS=OwnerSkelComp->GetBoneTransform(Rigid.RelatedBoneIndex+1)*OwnerSkelComp->GetComponentTransform();
-        const FVector Rot = Rigid.Rotation; // 弧度
+        const FVector Rot = Rigid.ShapeRotation; // 弧度
         FQuat Qz = FQuat(FVector::UpVector, Rot.Z);
         FQuat Qx = FQuat(FVector::RightVector, Rot.X);
         FQuat Qy = FQuat(FVector::ForwardVector, Rot.Y);
         FQuat ShapeRot = Qy * Qx * Qz;
         FVector ShapePos = FVector(
-            Rigid.Position.X,
-            -Rigid.Position.Z,
-            Rigid.Position.Y
+            Rigid.ShapePosition.X,
+            -Rigid.ShapePosition.Z,
+            Rigid.ShapePosition.Y
 		) * 8.0f;
 		FTransform ShapeOffset = FTransform(ShapeRot, ShapePos)* BoneWS;
 		btTransform boneBT = UEToBullet(ShapeOffset, UE_CM_PER_M);
@@ -246,7 +247,7 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
             break;
         }
         // 碰撞组与掩码
-        const int BulletGroup = 1 << Rigid.Group;
+        const int BulletGroup = 1 << Rigid.CollisionGroup;
         const int BulletMask = Rigid.CollisionMask;
         NewRigidBody.CollisionGroup = BulletGroup;
         NewRigidBody.CollisionMask  = BulletMask;
@@ -261,7 +262,7 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
     }
 }
 
-void FMMDPhysicsSimulator::InitializeJoints(const PMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint)
 {
     if (PMXData.ModelRigids.Num() <= 0)
     {

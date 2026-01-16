@@ -24,12 +24,8 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
 {   
-
-    if (PMXData.ModelRigids.Num() <= 0) {
-        UE_LOG(LogTemp, Verbose, TEXT("[MMDPhysics] No rigid bodies, skipping physics"));
-        return;
-    }
-	if (!bSimulatorInitialized || !SimulatorStrongPtr.IsValid())
+    //if()
+	/*if (!bSimulatorInitialized || !SimulatorStrongPtr.IsValid())
     {
 
 		TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> NewSimulator = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
@@ -52,8 +48,21 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     }
     else {
         checkf(false, TEXT("PMXData is empty at first evaluation!"));
-    }
+    }*/
+}
+void FAGN_MMDSkeletalControl::Initialize_AnyThread(const FAnimationInitializeContext& Context)
+{
+	FAnimNode_SkeletalControlBase::Initialize_AnyThread(Context);
 
+	if (RigidBodySaveDataArray.Num() <= 0||JointSaveDataArray.Num()<=0)
+	{
+		checkf(false, TEXT("RigidBodySaveDataArray or JointSaveDataArray is empty!"));
+	}
+	if (!SimulatorPtr.IsValid())
+	{
+		SimulatorPtr = MakeUnique<FMMDPhysicsSimulator>();
+	}
+    
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {
@@ -215,7 +224,49 @@ UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
     MMDNode->NodePosY = RootNode->NodePosY;
     AnimGraph->AddNode(MMDNode, false, false);
 
-	MMDNode->Node.PMXData = InputPMXData;
+	MMDNode->Node.RigidBodySaveDataArray.Empty();
+	MMDNode->Node.JointSaveDataArray.Empty();
+   /* MMDNode.RigidBodySaveDataArray*/
+#pragma region 设置mmd节点数据
+    for (FPMXRigid Rigid : InputPMXData.ModelRigids) {
+        FMMDPhysicsRigidBodyData SaveRigidData;
+        SaveRigidData.Name = Rigid.NameJP;
+        SaveRigidData.NameEN = Rigid.NameEN;
+        SaveRigidData.RelatedBoneIndex = Rigid.RelatedBoneIndex;
+
+        SaveRigidData.ShapeType = Rigid.ShapeType;
+        SaveRigidData.ShapeSize = Rigid.Size;
+        SaveRigidData.ShapePosition = Rigid.Position;
+        SaveRigidData.ShapeRotation = Rigid.Rotation;
+        SaveRigidData.Mass = Rigid.Mass;
+        SaveRigidData.Friction = Rigid.Friction;
+        SaveRigidData.Restitution = Rigid.Restitution;
+        SaveRigidData.CollisionGroup = Rigid.Group;
+        SaveRigidData.CollisionMask = Rigid.CollisionMask;
+        SaveRigidData.PhysicsMode = Rigid.PhysicsMode;
+        MMDNode->Node.RigidBodySaveDataArray.Add(SaveRigidData);
+    }
+    for (FPMXJoint Joint : InputPMXData.ModelJoints) {
+		FMMDPhysicsJointData SaveJointData;
+		SaveJointData.Name = Joint.NameJP;
+		SaveJointData.NameEN = Joint.NameEN;
+		SaveJointData.JointType = Joint.JointType;
+		SaveJointData.RigidBodyIndexA = Joint.RigidA;
+		SaveJointData.RigidBodyIndexB = Joint.RigidB;
+		SaveJointData.Position = Joint.Position;
+		SaveJointData.Rotation = Joint.Rotation;
+		SaveJointData.LimitPositionMin = Joint.LimitPosLower;
+		SaveJointData.LimitPositionMax = Joint.LimitPosUpper;
+		SaveJointData.LimitRotationMin = Joint.LimitRotLower;
+		SaveJointData.LimitRotationMax = Joint.LimitRotUpper;
+		SaveJointData.SpringPosition = Joint.SpringPos;
+		SaveJointData.SpringRotation = Joint.SpringRot;
+		MMDNode->Node.JointSaveDataArray.Add(SaveJointData);
+    }
+#pragma endregion
+
+	//MMDNode->Node.RigidBodySaveDataArray 
+  
 	MMDNode->MarkPackageDirty();
 
     UAnimGraphNode_ComponentToLocalSpace* ComponentToLocalNode = NewObject<UAnimGraphNode_ComponentToLocalSpace>(

@@ -2,6 +2,21 @@
 #include "CoreMinimal.h"
 #include "btBulletDynamicsCommon.h"    
 #include "TPMXParser.h"
+#include "AGN_MMDSkeletalControl.h"
+
+
+
+struct BulletMMDRigidRuntime
+{
+	btCollisionShape* Shape = nullptr;
+	btRigidBody* Body = nullptr;
+    int RelatedBoneIndex = -1;
+    btTransform ShapeOffset;
+	int32 PhysicsMode = 0; // 0=Kinematic, 1=Dynamic, 2=BoneTracked
+	int CollisionGroup = -1;
+	int CollisionMask = -1;
+
+};
 
 class FMMDMotionState : public btMotionState
 {
@@ -51,13 +66,13 @@ public:
     FMMDPhysicsSimulator() = default;
     ~FMMDPhysicsSimulator() { Shutdown(); }
 
-    bool InitializeFromPMX(const PMXDatas& PMXData,
+	bool InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,
         USkeletalMeshComponent* InSkelComp);
   /*  void GameThreadTick(float DeltaSeconds);*/
 
     void InitializeBulletWorld();
-    void InitializeRigidBody(const PMXDatas& PMXData);
-    void InitializeJoints(const PMXDatas& PMXData);
+    void InitializeRigidBody(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid);
+    void InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint);
     void StepSimulationMMD(float DeltaSeconds);
 
     // MMD Tick Á÷³Ì
@@ -97,6 +112,7 @@ private:
 
     bool bFirstSyncDone = false;
 
+	TArray<BulletMMDRigidRuntime> BulletRigidsRuntime;
     // PMX->UE bone index global offset (handles extra Root added by mesh builder).
     int32 BoneIndexOffset = 0;
 	USkeletalMeshComponent* OwnerSkelComp = nullptr;
