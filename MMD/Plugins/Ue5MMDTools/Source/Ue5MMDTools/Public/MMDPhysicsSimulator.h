@@ -4,20 +4,6 @@
 #include "TPMXParser.h"
 #include "AGN_MMDSkeletalControl.h"
 
-
-
-struct BulletMMDRigidRuntime
-{
-	btCollisionShape* Shape = nullptr;
-	btRigidBody* Body = nullptr;
-    int RelatedBoneIndex = -1;
-    btTransform ShapeOffset;
-	int32 PhysicsMode = 0; // 0=Kinematic, 1=Dynamic, 2=BoneTracked
-	int CollisionGroup = -1;
-	int CollisionMask = -1;
-
-};
-
 class FMMDMotionState : public btMotionState
 {
 public:
@@ -58,6 +44,17 @@ public:
         UEWorldTransform.SetLocation(UEPos);
         UEWorldTransform.SetRotation(UEQuat);
     }
+};
+struct BulletMMDRigidRuntime
+{
+    btCollisionShape* Shape = nullptr;
+    btRigidBody* Body = nullptr;
+    FMMDMotionState* MotionState = nullptr;
+    int RelatedBoneIndex = -1;
+    btTransform ShapeOffset;
+    int32 PhysicsMode = 0; // 0=Kinematic, 1=Dynamic, 2=BoneTracked
+    int CollisionGroup = -1;
+    int CollisionMask = -1;
 };
 
 class FMMDPhysicsSimulator
@@ -113,6 +110,7 @@ private:
     bool bFirstSyncDone = false;
 
 	TArray<BulletMMDRigidRuntime> BulletRigidsRuntime;
+    //TArray<BulletMMDJointsRuntime>
     // PMX->UE bone index global offset (handles extra Root added by mesh builder).
     int32 BoneIndexOffset = 0;
 	USkeletalMeshComponent* OwnerSkelComp = nullptr;

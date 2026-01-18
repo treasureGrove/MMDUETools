@@ -8,15 +8,15 @@
 #include "Animation/AnimBlueprint.h"
 #endif
 #include "TPMXParser.h"
-#include "MMDPhysicsSimulator.h"
 #include "btBulletDynamicsCommon.h"
 #include "AGN_MMDSkeletalControl.generated.h"
+
+class FMMDPhysicsSimulator;
 
 USTRUCT()
 struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyData
 {
     GENERATED_BODY()
-
     UPROPERTY() FString Name;
     UPROPERTY() FString NameEN;
     UPROPERTY() int32 RelatedBoneIndex;
