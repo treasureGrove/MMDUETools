@@ -60,7 +60,7 @@ void FAGN_MMDSkeletalControl::Initialize_AnyThread(const FAnimationInitializeCon
 	}
 	if (!SimulatorPtr.IsValid())
 	{
-		SimulatorPtr = MakeUnique<FMMDPhysicsSimulator>();
+		SimulatorPtr = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
 	}
     
 }

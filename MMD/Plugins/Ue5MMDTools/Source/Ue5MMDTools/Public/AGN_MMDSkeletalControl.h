@@ -93,7 +93,7 @@ public:
     virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
     virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
 private:
-	TUniquePtr<FMMDPhysicsSimulator> SimulatorPtr;
+	TSharedPtr<FMMDPhysicsSimulator, ESPMode::ThreadSafe> SimulatorPtr;
     bool bSimulatorInitialized = false;
     static void BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld);
 

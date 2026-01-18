@@ -61,7 +61,7 @@ class FMMDPhysicsSimulator
 {
 public:
     FMMDPhysicsSimulator() = default;
-    ~FMMDPhysicsSimulator() { Shutdown(); }
+    ~FMMDPhysicsSimulator() { }
 
 	bool InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,
         USkeletalMeshComponent* InSkelComp);
@@ -92,7 +92,7 @@ public:
     //USkeletalMeshComponent* GetOwnerSkelComp() const { return OwnerSkelComp.Get(); }
     bool IsInitialized() const { return bInitialized; }
 
-    void Shutdown();
+    //void Shutdown();
 private:
     btDefaultCollisionConfiguration* CollisionConfiguration = nullptr;
     btCollisionDispatcher* Dispatcher = nullptr;
