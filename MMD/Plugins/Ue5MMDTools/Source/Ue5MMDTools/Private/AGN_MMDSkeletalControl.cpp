@@ -61,7 +61,10 @@ void FAGN_MMDSkeletalControl::Initialize_AnyThread(const FAnimationInitializeCon
 	if (!SimulatorPtr.IsValid())
 	{
 		SimulatorPtr = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
+		SimulatorPtr->InitializeBulletWorld();
 	}
+    
+
     
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
