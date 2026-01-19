@@ -393,7 +393,7 @@ void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& 
 
 void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
-    if (!DynamicsWorld) return;
+    //if (!DynamicsWorld) return;
 
     PreSyncKinematicFromBones(InPose, OutBoneTransforms);
 
