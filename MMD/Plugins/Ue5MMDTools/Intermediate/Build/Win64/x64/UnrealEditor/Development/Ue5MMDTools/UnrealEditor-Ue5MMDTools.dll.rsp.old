@@ -39,6 +39,8 @@
 /NATVIS:"..\Intermediate\Build\Win64\x64\UnrealEditor\Development\RenderCore\RenderCore.natvis"
 "E:\ProjectGithub\MMDUETools\MMD\Intermediate\Build\Win64\x64\MMDEditor\Development\UnrealEd\SharedPCH.UnrealEd.Project.ValApi.Cpp20.h.obj"
 "E:\ProjectGithub\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Module.Ue5MMDTools.cpp.obj"
+"E:\ProjectGithub\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\AGN_MMDSkeletalControl.cpp.obj"
+"E:\ProjectGithub\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\MMDPhysicsSimulator.cpp.obj"
 "E:\ProjectGithub\MMDUETools\MMD\Plugins\Ue5MMDTools\Intermediate\Build\Win64\x64\UnrealEditor\Development\Ue5MMDTools\Default.rc2.res"
 "E:\ProjectGithub\MMDUETools\MMD\Plugins\Ue5MMDTools\ThirdParty\Bullet\lib\BulletCollision.lib"
 "E:\ProjectGithub\MMDUETools\MMD\Plugins\Ue5MMDTools\ThirdParty\Bullet\lib\BulletDynamics.lib"

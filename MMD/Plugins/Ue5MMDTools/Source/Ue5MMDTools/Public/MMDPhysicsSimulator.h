@@ -2,75 +2,7 @@
 #include "CoreMinimal.h"
 #include "btBulletDynamicsCommon.h"    
 #include "TPMXParser.h"
-#include "MMDPhysicsSimulator.generated.h"
-
-// Snapshot of one rigid body state for persistence
-USTRUCT(BlueprintType)
-struct FMMDPhysicsBodyState
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    int32 BodyIndex = INDEX_NONE; // stable index matching PMX order
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    FTransform WorldUE = FTransform::Identity; // UE-space world transform
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    FVector LinearVelocityUE = FVector::ZeroVector; // UE-space linear velocity
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    FVector AngularVelocityUE = FVector::ZeroVector; // UE-space angular velocity (rad/s)
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    bool bKinematic = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    bool bSleeping = false;
-};
-
-USTRUCT(BlueprintType)
-struct FMMDPhysicsSimSnapshot
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    float UnitScale = 10.f; // Bullet unit = 0.1m, UE cm -> /10
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    int32 MaxSubSteps = 5; // baseline
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    float FixedTimeStep = 1.f / 60.f; // baseline
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame)
-    TArray<FMMDPhysicsBodyState> Bodies;
-};
-
-struct BulletRigidBody
-{
-    btCollisionShape* Shape=nullptr;
-    btMotionState* MotionState=nullptr;
-    btRigidBody* Body=nullptr;
-
-    short CollisionGroup = 0;
-    short CollisionMask = -1;
-
-    FTransform UEWorldTransform;
-    btTransform BulletWorldTransform;
-
-    FTransform PrevUEWorldTransform;
-    btTransform PrevBulletWorldTransform;
-
-    int32 RelatedBoneIndex = -1; // UE bone index
-
-    // PMX PhysicsMode: 0=Static(BoneFollow), 1=Dynamic, 2=Dynamic+BoneTracking
-    uint8 PhysicsMode = 0;
-
-    btTransform ShapeOffset =btTransform::getIdentity();
-
-    int32 DebugID = -1;
-};
+#include "AGN_MMDSkeletalControl.h"
 
 class FMMDMotionState : public btMotionState
 {
@@ -113,20 +45,31 @@ public:
         UEWorldTransform.SetRotation(UEQuat);
     }
 };
+struct BulletMMDRigidRuntime
+{
+    btCollisionShape* Shape = nullptr;
+    btRigidBody* Body = nullptr;
+    FMMDMotionState* MotionState = nullptr;
+    int RelatedBoneIndex = -1;
+    btTransform ShapeOffset;
+    int32 PhysicsMode = 0; // 0=Kinematic, 1=Dynamic, 2=BoneTracked
+    int CollisionGroup = -1;
+    int CollisionMask = -1;
+};
 
 class FMMDPhysicsSimulator
 {
 public:
     FMMDPhysicsSimulator() = default;
-    ~FMMDPhysicsSimulator() { Shutdown(); }
+    ~FMMDPhysicsSimulator() { }
 
-    bool InitializeFromPMX(const PMXDatas& PMXData,
+	bool InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,
         USkeletalMeshComponent* InSkelComp);
   /*  void GameThreadTick(float DeltaSeconds);*/
 
     void InitializeBulletWorld();
-    void InitializeRigidBody(const PMXDatas& PMXData);
-    void InitializeJoints(const PMXDatas& PMXData);
+    void InitializeRigidBody(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid);
+    void InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint);
     void StepSimulationMMD(float DeltaSeconds);
 
     // MMD Tick Á÷³Ì
@@ -149,7 +92,7 @@ public:
     //USkeletalMeshComponent* GetOwnerSkelComp() const { return OwnerSkelComp.Get(); }
     bool IsInitialized() const { return bInitialized; }
 
-    void Shutdown();
+    //void Shutdown();
 private:
     btDefaultCollisionConfiguration* CollisionConfiguration = nullptr;
     btCollisionDispatcher* Dispatcher = nullptr;
@@ -157,7 +100,6 @@ private:
     btSequentialImpulseConstraintSolver* Solver = nullptr;
     btDiscreteDynamicsWorld* DynamicsWorld = nullptr;
 
-    TArray<BulletRigidBody> BulletRigidBodies;
     TArray<btGeneric6DofSpring2Constraint*> BulletJoints;
     
     bool bInitialized = false;
@@ -167,6 +109,8 @@ private:
 
     bool bFirstSyncDone = false;
 
+	TArray<BulletMMDRigidRuntime> BulletRigidsRuntime;
+    //TArray<BulletMMDJointsRuntime>
     // PMX->UE bone index global offset (handles extra Root added by mesh builder).
     int32 BoneIndexOffset = 0;
 	USkeletalMeshComponent* OwnerSkelComp = nullptr;

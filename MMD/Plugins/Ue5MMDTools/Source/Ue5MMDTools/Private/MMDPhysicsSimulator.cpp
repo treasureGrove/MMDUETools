@@ -7,35 +7,6 @@
 #include "Animation/AnimTypes.h"
 
 // Internal config (previously console vars). Adjust defaults here instead of console commands.
-struct FMMDPhysConfig
-{
-    bool  bDebug = true;
-    float DebugLife = 0.0f;
-    int   DebugEveryN = 1;
-    bool  bDebugSimple = true;
-    int   DebugMax = 512;
-    bool  bLogMap = true;
-    bool  bNoWriteback = false;
-    bool  bGuessMap = true;
-    bool  bUseWhitelist = false; // 原 true
-    bool  bBlockStructural = false; // 原 true
-    int   WritebackMode = 1;
-    float MaxPosDelta = 50.f;
-    float MaxRotAngle = 120.f;
-    bool  bLogDiscard = false;
-    bool  bSafeMode = true;
-    int   MinDepth = 25;
-    bool  bAllowTrans = false;
-    bool  bHairOnly = false; // 原 true
-    bool  bLogPre = true;
-    float FollowWarn = 3.0f;
-    bool  bLogWB = false;
-    int   IndexOffset = 1;
-};
-static FMMDPhysConfig GPhysCfg;
-
-void FMMDPhysicsSimulator::SetDebugEnabled(bool bEnable){ GPhysCfg.bDebug = bEnable; }
-
 #pragma region  工具函数
 static constexpr float MMD_SCALE = 0.08f; // PMX->真实米缩放 (1 PMX unit -> 0.08 m)
 static constexpr float UE_CM_PER_M = 100.f;
@@ -109,14 +80,14 @@ static FTransform PMXToUETransform(const FVector& P, const FVector& RotRad)
 
     return FTransform(Rot.Quaternion(), PosUE);
 }
-static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
+static btCollisionShape* CreateCollisionShape(const FMMDPhysicsRigidBodyData& Rigid)
 {
     btCollisionShape* Shape = nullptr;
     switch (Rigid.ShapeType)
     {
     case 0: // Sphere
     {
-        const float Radius = Rigid.Size.X* MMD_SCALE;
+        const float Radius = Rigid.ShapeSize.X* MMD_SCALE;
         Shape = new btSphereShape(Radius);
         break;
     }
@@ -126,9 +97,9 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
         // PMX Size = full width/height/depth
         // Bullet box expects half-extents !
         const btVector3 HalfExtents(
-            (Rigid.Size.X * 0.5f* MMD_SCALE),
-            (Rigid.Size.Y * 0.5f* MMD_SCALE),
-            (Rigid.Size.Z * 0.5f* MMD_SCALE)
+            (Rigid.ShapeSize.X * 0.5f* MMD_SCALE),
+            (Rigid.ShapeSize.Y * 0.5f* MMD_SCALE),
+            (Rigid.ShapeSize.Z * 0.5f* MMD_SCALE)
         );
 
         Shape = new btBoxShape(HalfExtents);
@@ -137,8 +108,8 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
 
     case 2: // Capsule
     {
-        const float Radius = Rigid.Size.X* MMD_SCALE;
-        const float Height = Rigid.Size.Y* MMD_SCALE;
+        const float Radius = Rigid.ShapeSize.X* MMD_SCALE;
+        const float Height = Rigid.ShapeSize.Y* MMD_SCALE;
 
         // 在 MMD/Bullet 中：胶囊默认沿 Y 轴
         // 在 UE 中：胶囊沿 Z 轴，但这里我们是创建 Bullet 碰撞体，使用 Bullet 规范即可。
@@ -158,12 +129,12 @@ static btCollisionShape* CreateCollisionShape(const FPMXRigid& Rigid)
 }
 #pragma endregion
 
-bool FMMDPhysicsSimulator::InitializeFromPMX(const PMXDatas& PMXData, USkeletalMeshComponent* InSkelComp)
+bool FMMDPhysicsSimulator::InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,USkeletalMeshComponent* InSkelComp)
 {
     if(!InSkelComp){ UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: SkeletalMeshComponent null")); return false; }
     if(bInitialized){ UE_LOG(LogTemp, Warning, TEXT("InitializeFromPMX skipped: already initialized")); return true; }
     OwnerSkelComp=InSkelComp;
-    InitializeBulletWorld(); InitializeRigidBody(PMXData); InitializeJoints(PMXData); bInitialized=true; return true;
+    InitializeBulletWorld(); InitializeRigidBody(SaveRigid); InitializeJoints(SaveJoint); bInitialized=true; return true;
 }
 
 void FMMDPhysicsSimulator::InitializeBulletWorld()
@@ -182,31 +153,38 @@ void FMMDPhysicsSimulator::InitializeBulletWorld()
 
     DynamicsWorld->setGravity(btVector3(0.f, -9.8f, 0.f));
 }
-void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid)
 {
     if(!DynamicsWorld) return;
-    if (PMXData.ModelRigids.Num() <= 0)
+    if (SaveRigid.Num() <= 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
+		checkf(false, TEXT("PMXData.ModelRigids is empty!"));
         return;
     }
-
-    for(const FPMXRigid& Rigid: PMXData.ModelRigids)
+    if(BulletRigidsRuntime.Num()>0)
     {
-        BulletRigidBody NewRigidBody;
+        UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: Rigid bodies already initialized, skipping"));
+		checkf(false, TEXT("BulletRigidBodies is not empty!"));
+        return;
+	}
+
+    for(const FMMDPhysicsRigidBodyData& Rigid: SaveRigid)
+    {
+        BulletMMDRigidRuntime NewRigidBody;
         NewRigidBody.Shape = CreateCollisionShape(Rigid);
 		NewRigidBody.RelatedBoneIndex = Rigid.RelatedBoneIndex;
         //计算刚体偏移骨骼位置
         FTransform BoneWS=OwnerSkelComp->GetBoneTransform(Rigid.RelatedBoneIndex+1)*OwnerSkelComp->GetComponentTransform();
-        const FVector Rot = Rigid.Rotation; // 弧度
+        const FVector Rot = Rigid.ShapeRotation; // 弧度
         FQuat Qz = FQuat(FVector::UpVector, Rot.Z);
         FQuat Qx = FQuat(FVector::RightVector, Rot.X);
         FQuat Qy = FQuat(FVector::ForwardVector, Rot.Y);
         FQuat ShapeRot = Qy * Qx * Qz;
         FVector ShapePos = FVector(
-            Rigid.Position.X,
-            -Rigid.Position.Z,
-            Rigid.Position.Y
+            Rigid.ShapePosition.X,
+            -Rigid.ShapePosition.Z,
+            Rigid.ShapePosition.Y
 		) * 8.0f;
 		FTransform ShapeOffset = FTransform(ShapeRot, ShapePos)* BoneWS;
 		btTransform boneBT = UEToBullet(ShapeOffset, UE_CM_PER_M);
@@ -275,7 +253,7 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
             break;
         }
         // 碰撞组与掩码
-        const int BulletGroup = 1 << Rigid.Group;
+        const int BulletGroup = 1 << Rigid.CollisionGroup;
         const int BulletMask = Rigid.CollisionMask;
         NewRigidBody.CollisionGroup = BulletGroup;
         NewRigidBody.CollisionMask  = BulletMask;
@@ -284,33 +262,31 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const PMXDatas& PMXData)
         DynamicsWorld->addRigidBody(NewRigidBody.Body, NewRigidBody.CollisionGroup, NewRigidBody.CollisionMask);
 
         // 起始 Bullet 世界 -> UE 世界
-        
-        
-        BulletRigidBodies.Add(NewRigidBody);
+        BulletRigidsRuntime.Add(NewRigidBody);
     }
 }
 
-void FMMDPhysicsSimulator::InitializeJoints(const PMXDatas& PMXData)
+void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint)
 {
-    if (PMXData.ModelRigids.Num() <= 0)
+    if (SaveJoint.Num() <= 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
+		checkf(false, TEXT("PMXData.ModelJoints is empty!"));
         return;
     }
-    for (const FPMXJoint& Joint : PMXData.ModelJoints) {
+    for (const FMMDPhysicsJointData& Joint : SaveJoint) {
 
-        if (Joint.RigidA < 0 || Joint.RigidA >= BulletRigidBodies.Num() ||
-            Joint.RigidB < 0 || Joint.RigidB >= BulletRigidBodies.Num()) {
-            UE_LOG(LogTemp, Error, TEXT("InitializeJoints: Rigid body index out of bounds (RigidA=%d, RigidB=%d, Max=%d), skipping"),
-                Joint.RigidA, Joint.RigidB, BulletRigidBodies.Num());
+        if (Joint.RigidBodyIndexA < 0 || Joint.RigidBodyIndexA >= BulletRigidsRuntime.Num() ||
+            Joint.RigidBodyIndexB < 0 || Joint.RigidBodyIndexB >= BulletRigidsRuntime.Num()) {
+            checkf(false, TEXT("InitializeJoints: Invalid rigid body index for joint (RigidA=%d, RigidB=%d), skipping"),
+				Joint.RigidBodyIndexA, Joint.RigidBodyIndexB);
             continue;
         }
 
-        auto* BodyA = BulletRigidBodies[Joint.RigidA].Body;
-        auto* BodyB = BulletRigidBodies[Joint.RigidB].Body;
+        auto* BodyA = BulletRigidsRuntime[Joint.RigidBodyIndexA].Body;
+        auto* BodyB = BulletRigidsRuntime[Joint.RigidBodyIndexB].Body;
         if (!BodyA || !BodyB) {
-            UE_LOG(LogTemp, Error, TEXT("InitializeJoints: Invalid rigid body pointer for joint (RigidA=%d, RigidB=%d), skipping"),
-                Joint.RigidA, Joint.RigidB);
+			checkf(false, TEXT("InitializeJoints: Null rigid body for joint (RigidA=%d, RigidB=%d), skipping"), BodyA, BodyB);
             continue;
         }
         btVector3 JPos = btVector3(Joint.Position.X, Joint.Position.Y, -Joint.Position.Z) * MMD_SCALE;
@@ -324,28 +300,27 @@ void FMMDPhysicsSimulator::InitializeJoints(const PMXDatas& PMXData)
 
         btGeneric6DofSpringConstraint* Constraint = new btGeneric6DofSpringConstraint(*BodyA, *BodyB, FrameA, FrameB, true);
         Constraint->setLinearLowerLimit(btVector3(
-            Joint.LimitPosLower.X * MMD_SCALE,
-            Joint.LimitPosLower.Y * MMD_SCALE,
-            -Joint.LimitPosLower.Z * MMD_SCALE
+            Joint.LimitPositionMin.X * MMD_SCALE,
+            Joint.LimitPositionMin.Y * MMD_SCALE,
+            -Joint.LimitPositionMin.Z * MMD_SCALE
         ));
         Constraint->setLinearUpperLimit(btVector3(
-            Joint.LimitPosUpper.X * MMD_SCALE,
-            Joint.LimitPosUpper.Y * MMD_SCALE,
-            -Joint.LimitPosUpper.Z * MMD_SCALE
+            Joint.LimitPositionMax.X * MMD_SCALE,
+            Joint.LimitPositionMax.Y * MMD_SCALE,
+            -Joint.LimitPositionMax.Z * MMD_SCALE
         ));
-        Constraint->setAngularLowerLimit(btVector3(Joint.LimitRotLower.X, Joint.LimitRotLower.Y, Joint.LimitRotLower.Z));
-        Constraint->setAngularUpperLimit(btVector3(Joint.LimitRotUpper.X, Joint.LimitRotUpper.Y, Joint.LimitRotUpper.Z));
+        Constraint->setAngularLowerLimit(btVector3(Joint.LimitRotationMin.X, Joint.LimitRotationMin.Y, Joint.LimitRotationMin.Z));
+        Constraint->setAngularUpperLimit(btVector3(Joint.LimitRotationMax.X, Joint.LimitRotationMax.Y, Joint.LimitRotationMax.Z));
         for (int i = 0; i < 3; i++) {
-            if (Joint.SpringPos[i] > 0) {
+            if (Joint.SpringPosition[i] > 0) {
                 Constraint->enableSpring(i, true);
-                Constraint->setStiffness(i, Joint.SpringPos[i]);
+                Constraint->setStiffness(i, Joint.SpringPosition[i]);
             }
-            if (Joint.SpringRot[i] > 0) {
+            if (Joint.SpringPosition[i] > 0) {
                 int rotIndex = i + 3;
                 Constraint->enableSpring(rotIndex, true);
-                Constraint->setStiffness(rotIndex, Joint.SpringRot[i]);
+                Constraint->setStiffness(rotIndex, Joint.SpringPosition[i]);
             }
-
         }
 		DynamicsWorld->addConstraint(Constraint, true);
 		//BulletJoints.Add(Constraint);
@@ -358,7 +333,7 @@ void FMMDPhysicsSimulator::PreSyncKinematicFromBones(FComponentSpacePoseContext&
 	const FBoneContainer& BoneContainer = InPose.AnimInstanceProxy->GetRequiredBones();
     if(!DynamicsWorld) return;
 
-    for (BulletRigidBody& RB : BulletRigidBodies) {
+    for (BulletMMDRigidRuntime& RB : BulletRigidsRuntime) {
         if (!RB.Body || !RB.Body->getMotionState()) continue;
         if (RB.PhysicsMode != 0) continue;
         const int32 BoneIdx = RB.RelatedBoneIndex+1;
@@ -385,9 +360,9 @@ void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& 
 
     const FBoneContainer& BoneContainer = InPose.AnimInstanceProxy->GetRequiredBones();
 
-	const float MaxRotDeg = FMath::Clamp(GPhysCfg.MaxRotAngle, 10.f, 180.f);
+	//const float MaxRotDeg = FMath::Clamp(GPhysCfg.MaxRotAngle, 10.f, 180.f);
 
-    for (const BulletRigidBody& RB : BulletRigidBodies)
+    for (const BulletMMDRigidRuntime& RB : BulletRigidsRuntime)
     {
 		if (!RB.Body || !RB.Body->getMotionState()) continue;
 
@@ -418,7 +393,7 @@ void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& 
 
 void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
-    if (!DynamicsWorld) return;
+    //if (!DynamicsWorld) return;
 
     PreSyncKinematicFromBones(InPose, OutBoneTransforms);
 
@@ -466,12 +441,12 @@ void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TA
 //    return true;
 //}
 
-void FMMDPhysicsSimulator::Shutdown()
-{
-    if(DynamicsWorld){ for(btGeneric6DofSpring2Constraint* C: BulletJoints){ if(C){ DynamicsWorld->removeConstraint(C); delete C; }} }
-    BulletJoints.Empty(); if(DynamicsWorld){ for(BulletRigidBody& RB: BulletRigidBodies){ if(RB.Body){ DynamicsWorld->removeRigidBody(RB.Body); delete RB.Body; } if(RB.MotionState){ delete RB.MotionState; } if(RB.Shape){ delete RB.Shape; } } }
-    BulletRigidBodies.Empty(); if(DynamicsWorld){ delete DynamicsWorld; DynamicsWorld=nullptr; } if(Solver){ delete Solver; Solver=nullptr; } if(Broadphase){ delete Broadphase; Broadphase=nullptr; } if(Dispatcher){ delete Dispatcher; Dispatcher=nullptr; } if(CollisionConfiguration){ delete CollisionConfiguration; CollisionConfiguration=nullptr; } bInitialized=false; bFirstSyncDone=false;
-}
+//void FMMDPhysicsSimulator::Shutdown()
+//{
+//    if(DynamicsWorld){ for(btGeneric6DofSpring2Constraint* C: BulletJoints){ if(C){ DynamicsWorld->removeConstraint(C); delete C; }} }
+//    BulletJoints.Empty(); if(DynamicsWorld){ for(BulletRigidBody& RB: BulletRigidBodies){ if(RB.Body){ DynamicsWorld->removeRigidBody(RB.Body); delete RB.Body; } if(RB.MotionState){ delete RB.MotionState; } if(RB.Shape){ delete RB.Shape; } } }
+//    BulletRigidBodies.Empty(); if(DynamicsWorld){ delete DynamicsWorld; DynamicsWorld=nullptr; } if(Solver){ delete Solver; Solver=nullptr; } if(Broadphase){ delete Broadphase; Broadphase=nullptr; } if(Dispatcher){ delete Dispatcher; Dispatcher=nullptr; } if(CollisionConfiguration){ delete CollisionConfiguration; CollisionConfiguration=nullptr; } bInitialized=false; bFirstSyncDone=false;
+//}
 
 void FMMDPhysicsSimulator::StepSimulationMMD(float DeltaSeconds)
 {
