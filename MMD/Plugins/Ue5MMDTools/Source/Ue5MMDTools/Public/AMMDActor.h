@@ -35,7 +35,7 @@ protected:
     void InitSimulatorForPreviewIfNeeded();
 #endif
 private:
-    //À¶Í¼×é³É
+    //ï¿½ï¿½Í¼ï¿½ï¿½ï¿½
     UPROPERTY(VisibleAnywhere, Category = "MMD")
     USkeletalMeshComponent* SkeletalMeshComponent = nullptr;
 
