@@ -1,5 +1,4 @@
 ﻿#include "MMDPhysicsSimulator.h"
-#include "TPMXParser.h"
 #include <btBulletDynamicsCommon.h>
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -82,14 +81,12 @@ static FTransform PMXToUETransform(const FVector& P, const FVector& RotRad)
 }
 static btCollisionShape* CreateCollisionShape(const FMMDPhysicsRigidBodyData& Rigid)
 {
-    btCollisionShape* Shape = nullptr;
     switch (Rigid.ShapeType)
     {
     case 0: // Sphere
     {
         const float Radius = Rigid.ShapeSize.X* MMD_SCALE;
-        Shape = new btSphereShape(Radius);
-        break;
+        return new btSphereShape(Radius);
     }
 
     case 1: // Box
@@ -102,8 +99,7 @@ static btCollisionShape* CreateCollisionShape(const FMMDPhysicsRigidBodyData& Ri
             (Rigid.ShapeSize.Z * 0.5f* MMD_SCALE)
         );
 
-        Shape = new btBoxShape(HalfExtents);
-        break;
+        return new btBoxShape(HalfExtents);
     }
 
     case 2: // Capsule
@@ -114,18 +110,14 @@ static btCollisionShape* CreateCollisionShape(const FMMDPhysicsRigidBodyData& Ri
         // 在 MMD/Bullet 中：胶囊默认沿 Y 轴
         // 在 UE 中：胶囊沿 Z 轴，但这里我们是创建 Bullet 碰撞体，使用 Bullet 规范即可。
 
-        Shape = new btCapsuleShape(Radius, Height);
-        break;
+        return new btCapsuleShape(Radius, Height);
     }
 
     default:
         // 如果 PMX 数据非法，给个默认球体避免崩溃
         UE_LOG(LogTemp, Error, TEXT("CreateCollisionShape: Unknown shape type %d, using default sphere"), Rigid.ShapeType);
-        Shape = new btSphereShape(1.0f);
-        break;
+        return new btSphereShape(1.0f);
     }
-
-    return Shape;
 }
 #pragma endregion
 

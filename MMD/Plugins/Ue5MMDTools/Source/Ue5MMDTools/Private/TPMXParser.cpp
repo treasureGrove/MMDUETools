@@ -434,7 +434,7 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
                 Reader << PMXInfo.ModelVertices[i].Weight.Weights[j];
             }
             break;
-        case default:
+        default:
             UE_LOG(LogTemp, Warning, TEXT("Unknown PMX Vertex Type"));
             break;
         }
