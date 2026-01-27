@@ -1,4 +1,3 @@
-/.github
 /.vs
 /.vscode
 /Content
@@ -6,5 +5,7 @@
 /Intermediate
 /Saved
 /Scripts
+/Plugins/Ue5MMDTools/Content
+/Plugins/Ue5MMDTools/Docs
 /Plugins/Ue5MMDTools/Intermediate
 /Plugins/Ue5MMDTools/ThirdParty
