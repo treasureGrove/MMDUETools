@@ -434,6 +434,9 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
                 Reader << PMXInfo.ModelVertices[i].Weight.Weights[j];
             }
             break;
+        case default:
+            UE_LOG(LogTemp, Warning, TEXT("Unknown PMX Vertex Type"));
+            break;
         }
         Reader << PMXInfo.ModelVertices[i].Weight.EdgeScale;
         if (i < 5)
@@ -512,8 +515,7 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
         UE_LOG(LogTemp, Error, TEXT("Textures: invalid count=%d (tell=%lld)"), PMXInfo.ModelTextureCount, (int64)Reader.Tell());
         return false;
     }
-
-    PMXInfo.ModelTextureCount = PMXInfo.ModelTextureCount;
+    
     PMXInfo.ModelTexturePaths.SetNum(PMXInfo.ModelTextureCount);
 
     for (int32 i = 0; i < PMXInfo.ModelTextureCount; ++i)
