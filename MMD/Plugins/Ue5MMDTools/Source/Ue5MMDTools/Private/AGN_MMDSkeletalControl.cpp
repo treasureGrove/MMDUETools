@@ -26,6 +26,7 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
 {   
     if (SimulatorPtr.IsValid())
     {
+        SimulatorPtr->ConfigureSimulation(FixedTimeStep, MaxSubSteps);
         SimulatorPtr->TickMMDPhysics(Output, OutBoneTransforms);
         OutBoneTransforms.Sort(FCompareBoneTransformIndex());
     }
@@ -48,6 +49,7 @@ void FAGN_MMDSkeletalControl::Initialize_AnyThread(const FAnimationInitializeCon
 		SimulatorPtr->InitializeBulletWorld();
         SimulatorPtr->InitializeFromPMX(RigidBodySaveDataArray, JointSaveDataArray,
 			Context.AnimInstanceProxy->GetSkelMeshComponent());
+        SimulatorPtr->ConfigureSimulation(FixedTimeStep, MaxSubSteps);
 	}
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
@@ -225,6 +227,8 @@ UAnimGraphNode_MMDSkeletalControl* FMMDAnimGraphHelper::AddMMDNodeToAnimBP(
         SaveRigidData.ShapePosition = Rigid.Position;
         SaveRigidData.ShapeRotation = Rigid.Rotation;
         SaveRigidData.Mass = Rigid.Mass;
+        SaveRigidData.LinearDamping = Rigid.LinearDamping;
+        SaveRigidData.AngularDamping = Rigid.AngularDamping;
         SaveRigidData.Friction = Rigid.Friction;
         SaveRigidData.Restitution = Rigid.Restitution;
         SaveRigidData.CollisionGroup = Rigid.Group;

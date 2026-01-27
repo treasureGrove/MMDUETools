@@ -76,7 +76,7 @@ public:
     float UnitScale = 8.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
-    int32 MaxSubSteps = 1;
+    int32 MaxSubSteps = 4;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
     float FixedTimeStep = 1.f / 60.f;

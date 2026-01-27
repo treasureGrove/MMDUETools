@@ -137,6 +137,13 @@ bool FMMDPhysicsSimulator::InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyDa
     InitializeBulletWorld(); InitializeRigidBody(SaveRigid); InitializeJoints(SaveJoint); bInitialized=true; return true;
 }
 
+void FMMDPhysicsSimulator::ConfigureSimulation(float InFixedTimeStep, int32 InMaxSubSteps)
+{
+    FixedTimeStep = FMath::Max(1.e-4f, InFixedTimeStep);
+    MaxSubSteps = FMath::Clamp(InMaxSubSteps, 1, 16);
+    MaxDeltaSeconds = FMath::Max(1.f / 15.f, FixedTimeStep * MaxSubSteps);
+}
+
 void FMMDPhysicsSimulator::InitializeBulletWorld()
 {
     CollisionConfiguration = new btDefaultCollisionConfiguration();
@@ -376,6 +383,40 @@ void FMMDPhysicsSimulator::PreSyncKinematicFromBones(FComponentSpacePoseContext&
     }
 }
 
+void FMMDPhysicsSimulator::SyncRigidBodiesFromBones(FComponentSpacePoseContext& InPose, bool bResetVelocities)
+{
+    if (!DynamicsWorld) return;
+
+    const FBoneContainer& BoneContainer = InPose.AnimInstanceProxy->GetRequiredBones();
+    const FTransform C2W = InPose.AnimInstanceProxy->GetComponentTransform();
+
+    for (BulletMMDRigidRuntime& RB : BulletRigidsRuntime)
+    {
+        if (!RB.Body || !RB.Body->getMotionState()) continue;
+        if (RB.RelatedBoneIndex < 0) continue;
+
+        const int32 BoneIdx = RB.RelatedBoneIndex + 1;
+        const FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(BoneIdx));
+        if (!CPIndex.IsValid()) continue;
+
+        const FTransform BoneCS = InPose.Pose.GetComponentSpaceTransform(CPIndex);
+        const FTransform BoneWorld = BoneCS * C2W;
+        const btTransform BoneWorldBT = UEToBullet(BoneWorld, UE_CM_PER_M);
+        const btTransform RigidWorldBT = BoneWorldBT * RB.ShapeOffset;
+
+        RB.Body->setWorldTransform(RigidWorldBT);
+        RB.Body->getMotionState()->setWorldTransform(RigidWorldBT);
+
+        if (bResetVelocities)
+        {
+            RB.Body->setLinearVelocity(btVector3(0, 0, 0));
+            RB.Body->setAngularVelocity(btVector3(0, 0, 0));
+            RB.Body->clearForces();
+            RB.Body->activate(true);
+        }
+    }
+}
+
 void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
     if(!DynamicsWorld) return;
@@ -417,6 +458,12 @@ void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& 
 void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
     //if (!DynamicsWorld) return;
+
+    if (!bFirstSyncDone)
+    {
+        SyncRigidBodiesFromBones(InPose, true);
+        bFirstSyncDone = true;
+    }
 
     PreSyncKinematicFromBones(InPose, OutBoneTransforms);
 
@@ -473,5 +520,8 @@ void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TA
 
 void FMMDPhysicsSimulator::StepSimulationMMD(float DeltaSeconds)
 {
-    if (!DynamicsWorld) return; DynamicsWorld->stepSimulation(DeltaSeconds, MaxSubSteps, FixedTimeStep);
+    if (!DynamicsWorld) return;
+    if (DeltaSeconds <= 0.f) return;
+    const float ClampedDelta = (MaxDeltaSeconds > 0.f) ? FMath::Min(DeltaSeconds, MaxDeltaSeconds) : DeltaSeconds;
+    DynamicsWorld->stepSimulation(ClampedDelta, MaxSubSteps, FixedTimeStep);
 }////////

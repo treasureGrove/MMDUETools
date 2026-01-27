@@ -63,6 +63,7 @@ public:
         USkeletalMeshComponent* InSkelComp);
   /*  void GameThreadTick(float DeltaSeconds);*/
 
+    void ConfigureSimulation(float InFixedTimeStep, int32 InMaxSubSteps);
     void InitializeBulletWorld();
     void InitializeRigidBody(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid);
     void InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint);
@@ -90,6 +91,7 @@ public:
 
     //void Shutdown();
 private:
+    void SyncRigidBodiesFromBones(FComponentSpacePoseContext& InPose, bool bResetVelocities);
     btDefaultCollisionConfiguration* CollisionConfiguration = nullptr;
     btCollisionDispatcher* Dispatcher = nullptr;
     btDbvtBroadphase* Broadphase = nullptr;
@@ -100,8 +102,9 @@ private:
     
     bool bInitialized = false;
     static constexpr float UnitScale = 8.f;          // UE cm per PMX unit (mesh builder uses 8)
-    static constexpr int32 MaxSubSteps = 1;           // baseline
-    static constexpr float FixedTimeStep = 1.f / 60.f;// baseline
+    int32 MaxSubSteps = 4;
+    float FixedTimeStep = 1.f / 60.f;
+    float MaxDeltaSeconds = 1.f / 15.f;
 
     bool bFirstSyncDone = false;
 
