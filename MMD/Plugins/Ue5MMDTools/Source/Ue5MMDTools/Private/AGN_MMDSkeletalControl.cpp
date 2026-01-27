@@ -46,6 +46,8 @@ void FAGN_MMDSkeletalControl::Initialize_AnyThread(const FAnimationInitializeCon
 	{
 		SimulatorPtr = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
 		SimulatorPtr->InitializeBulletWorld();
+        SimulatorPtr->InitializeFromPMX(RigidBodySaveDataArray, JointSaveDataArray,
+			Context.AnimInstanceProxy->GetSkelMeshComponent());
 	}
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)

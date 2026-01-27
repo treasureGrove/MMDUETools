@@ -13,7 +13,7 @@
 
 class FMMDPhysicsSimulator;
 
-USTRUCT()
+USTRUCT(BlueprintType)
 struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyData
 {
     GENERATED_BODY()
@@ -36,7 +36,7 @@ struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyData
     UPROPERTY()
     float AngularDamping = 0.0f;
 };
-USTRUCT()
+USTRUCT(BlueprintType)
 struct UE5MMDTOOLS_API FMMDPhysicsJointData
 {
     GENERATED_BODY()

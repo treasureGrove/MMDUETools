@@ -48,10 +48,10 @@ static FTransform PMXDataToUETransform(const FVector& Position, const FVector& R
         Position.Y
     )*UNIT_SCALE;
 
-    FRotator Rot(
-        Rotation.X,
-        Rotation.Z,
-        -Rotation.Y
+    const FRotator Rot(
+        FMath::RadiansToDegrees(Rotation.X),
+        FMath::RadiansToDegrees(Rotation.Z),
+        FMath::RadiansToDegrees(-Rotation.Y)
     );
 
     return FTransform(Rot.Quaternion(), UEPos);
@@ -174,22 +174,32 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBody
         BulletMMDRigidRuntime NewRigidBody;
         NewRigidBody.Shape = CreateCollisionShape(Rigid);
 		NewRigidBody.RelatedBoneIndex = Rigid.RelatedBoneIndex;
-        //计算刚体偏移骨骼位置
-        FTransform BoneWS=OwnerSkelComp->GetBoneTransform(Rigid.RelatedBoneIndex+1)*OwnerSkelComp->GetComponentTransform();
-        const FVector Rot = Rigid.ShapeRotation; // 弧度
-        FQuat Qz = FQuat(FVector::UpVector, Rot.Z);
-        FQuat Qx = FQuat(FVector::RightVector, Rot.X);
-        FQuat Qy = FQuat(FVector::ForwardVector, Rot.Y);
-        FQuat ShapeRot = Qy * Qx * Qz;
-        FVector ShapePos = FVector(
-            Rigid.ShapePosition.X,
-            -Rigid.ShapePosition.Z,
-            Rigid.ShapePosition.Y
-		) * 8.0f;
-		FTransform ShapeOffset = FTransform(ShapeRot, ShapePos)* BoneWS;
-		btTransform boneBT = UEToBullet(ShapeOffset, UE_CM_PER_M);
-        NewRigidBody.ShapeOffset = boneBT;
-		FMMDMotionState* MotionState = new FMMDMotionState(ShapeOffset);
+        // 1) 刚体世界 Transform（UE，cm）——PMX 刚体位置是模型空间（不是骨骼局部）
+        const FTransform RigidCS = PMXDataToUETransform(Rigid.ShapePosition, Rigid.ShapeRotation);
+        const FTransform C2W = OwnerSkelComp->GetComponentTransform();
+        const FTransform RigidWS = RigidCS * C2W;
+
+        // 2) 骨骼世界 Transform（UE，cm）
+        FTransform BoneWS = C2W; // 默认 Root
+        if (Rigid.RelatedBoneIndex >= 0)
+        {
+            const int32 SkelBoneIndex = Rigid.RelatedBoneIndex + 1; // +1 because mesh builder adds Root
+            if (OwnerSkelComp->GetNumBones() > SkelBoneIndex)
+            {
+                BoneWS = OwnerSkelComp->GetBoneTransform(SkelBoneIndex) * C2W;
+            }
+        }
+
+        // 3) UE -> Bullet
+        const btTransform BoneWorldBT = UEToBullet(BoneWS, UE_CM_PER_M);
+        const btTransform RigidWorldBT = UEToBullet(RigidWS, UE_CM_PER_M);
+
+        // 4) ShapeOffset = Bone -> Rigid 的局部偏移（Bullet）
+        NewRigidBody.ShapeOffset = BoneWorldBT.inverse() * RigidWorldBT;
+
+        // 5) MotionState 用“刚体世界初始值”
+        FMMDMotionState* MotionState = new FMMDMotionState(RigidWS);
+        NewRigidBody.MotionState = MotionState;
 
 
         
@@ -289,12 +299,11 @@ void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& 
 			checkf(false, TEXT("InitializeJoints: Null rigid body for joint (RigidA=%d, RigidB=%d), skipping"), BodyA, BodyB);
             continue;
         }
-        btVector3 JPos = btVector3(Joint.Position.X, Joint.Position.Y, -Joint.Position.Z) * MMD_SCALE;
-        btQuaternion JRot;
-        JRot.setEuler(Joint.Rotation.X, Joint.Rotation.Y, Joint.Rotation.Z);
-        JRot.setX(-JRot.x());
-        JRot.setY(-JRot.y()); 
-        btTransform JointTr(JRot, JPos);
+        const FTransform C2W = OwnerSkelComp ? OwnerSkelComp->GetComponentTransform() : FTransform::Identity;
+        const FTransform JointUE = PMXDataToUETransform(Joint.Position, Joint.Rotation) * C2W;
+
+        const btTransform JointTr = UEToBullet(JointUE, UE_CM_PER_M);
+
         btTransform FrameA = BodyA->getWorldTransform().inverse() * JointTr;
         btTransform FrameB = BodyB->getWorldTransform().inverse() * JointTr;
 
@@ -302,12 +311,12 @@ void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& 
         Constraint->setLinearLowerLimit(btVector3(
             Joint.LimitPositionMin.X * MMD_SCALE,
             Joint.LimitPositionMin.Y * MMD_SCALE,
-            -Joint.LimitPositionMin.Z * MMD_SCALE
+            Joint.LimitPositionMin.Z * MMD_SCALE
         ));
         Constraint->setLinearUpperLimit(btVector3(
             Joint.LimitPositionMax.X * MMD_SCALE,
             Joint.LimitPositionMax.Y * MMD_SCALE,
-            -Joint.LimitPositionMax.Z * MMD_SCALE
+            Joint.LimitPositionMax.Z * MMD_SCALE
         ));
         Constraint->setAngularLowerLimit(btVector3(Joint.LimitRotationMin.X, Joint.LimitRotationMin.Y, Joint.LimitRotationMin.Z));
         Constraint->setAngularUpperLimit(btVector3(Joint.LimitRotationMax.X, Joint.LimitRotationMax.Y, Joint.LimitRotationMax.Z));
@@ -316,10 +325,10 @@ void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& 
                 Constraint->enableSpring(i, true);
                 Constraint->setStiffness(i, Joint.SpringPosition[i]);
             }
-            if (Joint.SpringPosition[i] > 0) {
+            if (Joint.SpringRotation[i] > 0) {          
                 int rotIndex = i + 3;
                 Constraint->enableSpring(rotIndex, true);
-                Constraint->setStiffness(rotIndex, Joint.SpringPosition[i]);
+                Constraint->setStiffness(rotIndex, Joint.SpringRotation[i]); 
             }
         }
 		DynamicsWorld->addConstraint(Constraint, true);
@@ -335,9 +344,9 @@ void FMMDPhysicsSimulator::PreSyncKinematicFromBones(FComponentSpacePoseContext&
 
     for (BulletMMDRigidRuntime& RB : BulletRigidsRuntime) {
         if (!RB.Body || !RB.Body->getMotionState()) continue;
-        if (RB.PhysicsMode != 0) continue;
-        const int32 BoneIdx = RB.RelatedBoneIndex+1;
         if (RB.RelatedBoneIndex < 0) continue;
+        if (RB.PhysicsMode != 0 && RB.PhysicsMode != 2) continue;
+        const int32 BoneIdx = RB.RelatedBoneIndex+1;
         
         FCompactPoseBoneIndex CPIndex = BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(BoneIdx));
         if (!CPIndex.IsValid())continue;
@@ -346,11 +355,24 @@ void FMMDPhysicsSimulator::PreSyncKinematicFromBones(FComponentSpacePoseContext&
         const FTransform C2W = InPose.AnimInstanceProxy->GetComponentTransform();
         //ue世界的骨骼坐标
         const FTransform BoneWorld = BoneCS * C2W;
-        const btTransform BoneWorldBT = UEToBullet(BoneWorld);
+        const btTransform BoneWorldBT = UEToBullet(BoneWorld, UE_CM_PER_M);
         const btTransform RigidWorldBT = BoneWorldBT * RB.ShapeOffset;
 
-        RB.Body->setWorldTransform(RigidWorldBT);
-        RB.Body->getMotionState()->setWorldTransform(RigidWorldBT);
+        if (RB.PhysicsMode == 0)
+        {
+            // 0 = Kinematic: fully follow bone.
+            RB.Body->setWorldTransform(RigidWorldBT);
+            RB.Body->getMotionState()->setWorldTransform(RigidWorldBT);
+        }
+        else
+        {
+            // 2 = BoneTracked: lock translation to bone, keep current rotation (physics-driven).
+            btTransform Cur = RB.Body->getWorldTransform();
+            Cur.setOrigin(RigidWorldBT.getOrigin());
+            RB.Body->setWorldTransform(Cur);
+            RB.Body->getMotionState()->setWorldTransform(Cur);
+            RB.Body->setLinearVelocity(btVector3(0, 0, 0));
+        }
     }
 }
 
@@ -368,6 +390,7 @@ void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& 
 
 		if (RB.PhysicsMode == 0) continue; // Kinematic 刚体跳过
 
+        if (RB.RelatedBoneIndex < 0) continue;
 		const int32 BoneIdx = RB.RelatedBoneIndex + 1;
         if (BoneIdx < 0) continue;
 
@@ -382,7 +405,7 @@ void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& 
             btTransform InvOffset = RB.ShapeOffset.inverse();
             BoneWorldBT = RigidWorldBT * InvOffset;
         }
-		const FTransform BoneWorldUE = BulletToUE(BoneWorldBT);
+        const FTransform BoneWorldUE = BulletToUE(BoneWorldBT, UE_CM_PER_M);
 
 		const FTransform C2W = InPose.AnimInstanceProxy->GetComponentTransform();
         FTransform TargetCS=BoneWorldUE * C2W.Inverse();

@@ -7,41 +7,37 @@
 class FMMDMotionState : public btMotionState
 {
 public:
-    // µ±Ç°¸ÕÌåµÄUEÊÀ½ç±ä»»£¨cm£©
+    // ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½UEï¿½ï¿½ï¿½ï¿½ä»»ï¿½ï¿½cmï¿½ï¿½
     FTransform UEWorldTransform;
 
-    // UE(cm) Óë Bullet(m) ×ª»»±ÈÀý£º 1cm = 0.01m
-    static constexpr float UEToBullet = 0.01f;   // cm ¡ú m
-    static constexpr float BulletToUE = 100.0f;  // m ¡ú cm
+    static constexpr float UEToBullet = 0.01f;   // cm ï¿½ï¿½ m
+    static constexpr float BulletToUE = 100.0f;  // m ï¿½ï¿½ cm
 
     FMMDMotionState(const FTransform& InUETransform)
         : UEWorldTransform(InUETransform)
     {
     }
 
-    // Bullet ¡ú UE£¨ÎïÀí¸üÐÂ ¡ú ¶¯»­ÓÃ£©
     virtual void getWorldTransform(btTransform& worldTrans) const override
     {
-        FVector UEPos = UEWorldTransform.GetLocation();      // cm
-        FVector BulletPos = UEPos * UEToBullet;              // -> m
+		FVector UEPos = UEWorldTransform.GetLocation(); // cm
+		btVector3 BtPos = btVector3(UEPos.X * UEToBullet, UEPos.Z * UEToBullet, -UEPos.Y * UEToBullet); // m
 
-        FQuat UEQuat = UEWorldTransform.GetRotation();       // UE×óÊÖ
-        btQuaternion BulletQuat(UEQuat.X, UEQuat.Y, UEQuat.Z, UEQuat.W);
+		worldTrans.setOrigin(BtPos);
 
-        worldTrans.setOrigin(btVector3(BulletPos.X, BulletPos.Y, BulletPos.Z));
-        worldTrans.setRotation(BulletQuat);
+		FQuat UEQuat = UEWorldTransform.GetRotation();
+        worldTrans.setRotation(btQuaternion(UEQuat.X, UEQuat.Z, -UEQuat.Y, UEQuat.W));
     }
 
-    // Bullet ¡ú UE£¨ÎïÀíÇý¶¯¹Ç÷ÀÊ±£©
     virtual void setWorldTransform(const btTransform& worldTrans) override
     {
-        btVector3 P = worldTrans.getOrigin();  // m
-        btQuaternion Q = worldTrans.getRotation();
-
-        FVector UEPos = FVector(P.x(), P.y(), P.z()) * BulletToUE; // m->cm
-        FQuat UEQuat(Q.x(), Q.y(), Q.z(), Q.w());
-
-        UEWorldTransform.SetLocation(UEPos);
+		btVector3 BtPos = worldTrans.getOrigin(); // m
+		FVector UEPos(BtPos.x() * BulletToUE, -BtPos.z() * BulletToUE, BtPos.y() * BulletToUE); // cm
+		UEWorldTransform.SetLocation(UEPos);
+        
+        btQuaternion BulletQuat = worldTrans.getRotation();
+        FQuat UEQuat(BulletQuat.x(), -BulletQuat.z(), BulletQuat.y(), BulletQuat.w());
+        UEQuat.Normalize();
         UEWorldTransform.SetRotation(UEQuat);
     }
 };
@@ -72,7 +68,7 @@ public:
     void InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint);
     void StepSimulationMMD(float DeltaSeconds);
 
-    // MMD Tick Á÷³Ì
+    // MMD Tick ï¿½ï¿½ï¿½ï¿½
     void PreSyncKinematicFromBones(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
     void PostSyncBonesFromPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
     void TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
