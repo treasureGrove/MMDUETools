@@ -21,7 +21,7 @@ FString DecodeSJISToString(const char* SJISStr, int32 Length)
 
 	return FString(WideCharLen, WideChars.GetData());
 }
-bool ReadCharArray(FMemoryReader& Reader, FString& OutString, VMDData& VMDInfo)
+bool ReadCharArray(FMemoryReader& Reader, FString& OutString,const VMDData& VMDInfo)
 {
 	OutString.Reset();
 
@@ -93,7 +93,7 @@ bool ReadVMDBoneKeyframe(FMemoryReader& Reader, VMDData& VMDInfo)
 		KeyFrame.Rotation = FQuat(qx, qy, qz, qw);
 		Reader.Serialize(KeyFrame.Interpolation, 64);
 		VMDInfo.BoneFrames.Add(KeyFrame);
-		if (i < 3) // Ö»´òÓ¡Ç°3¸öÒÔ±ÜÃâÈÕÖ¾¹ý³¤
+		if (i < 3) // Ö»ï¿½ï¿½Ó¡Ç°3ï¿½ï¿½ï¿½Ô±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½
 		{
 			UE_LOG(LogTemp, Log, TEXT("BoneKeyFrame[%d]: Bone=%s, Frame=%d, Pos=(%f,%f,%f), Rot=(%f,%f,%f,%f)"),
 				i, *KeyFrame.BoneName, KeyFrame.FrameNumber,
@@ -122,7 +122,7 @@ bool ReadVMDMorphKeyframe(FMemoryReader& Reader, VMDData& VMDInfo)
 		Reader << KeyFrame.FrameNumber;
 		Reader << KeyFrame.Weight;
 		VMDInfo.MorphFrames.Add(KeyFrame);
-		if (i < 3) // Ö»´òÓ¡Ç°3¸öÒÔ±ÜÃâÈÕÖ¾¹ý³¤
+		if (i < 3) // Ö»ï¿½ï¿½Ó¡Ç°3ï¿½ï¿½ï¿½Ô±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½
 		{
 			UE_LOG(LogTemp, Log, TEXT("MorphKeyFrame[%d]: Frame=%d, MorphName=%s, Weight=%f"),
 				i, KeyFrame.FrameNumber, *KeyFrame.MorphName, KeyFrame.Weight);
@@ -152,7 +152,7 @@ bool ReadVMDCameraKeyframe(FMemoryReader& Reader, VMDData& VMDInfo)
 		Reader << KeyFrame.viewAngle;
 		Reader << KeyFrame.perspective;
 		VMDInfo.CameraFrames.Add(KeyFrame);
-		if (i < 3) // Ö»´òÓ¡Ç°3¸öÒÔ±ÜÃâÈÕÖ¾¹ý³¤
+		if (i < 3) // Ö»ï¿½ï¿½Ó¡Ç°3ï¿½ï¿½ï¿½Ô±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½
 		{
 			UE_LOG(LogTemp, Log, TEXT("CameraKeyFrame[%d]: Frame=%d, Dist=%f, Pos=(%f,%f,%f), Rot=(%f,%f,%f), FOV=%d, Persp=%d"),
 				i, KeyFrame.frameNumber, KeyFrame.distance,
@@ -181,7 +181,7 @@ bool ReadVMDLightKeyframe(FMemoryReader& Reader, VMDData& VMDInfo) {
 		Reader << KeyFrame.ViewAngle;
 		Reader << KeyFrame.Perspective;
 		VMDInfo.LightFrames.Add(KeyFrame);
-		if (i < 3) // Ö»´òÓ¡Ç°3¸öÒÔ±ÜÃâÈÕÖ¾¹ý³¤
+		if (i < 3) // Ö»ï¿½ï¿½Ó¡Ç°3ï¿½ï¿½ï¿½Ô±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½
 		{
 			UE_LOG(LogTemp, Log, TEXT("LightKeyFrame[%d]: Frame=%d, Dist=%f, Pos=(%f,%f,%f), Rot=(%f,%f,%f), ViewAngle=%d, Persp=%d"),
 				i, KeyFrame.FrameNumber, KeyFrame.Distance,
@@ -202,7 +202,7 @@ bool ReadVMDShadowKeyframe(FMemoryReader& Reader, VMDData& VMDInfo) {
 		Reader << KeyFrame.Mode;
 		Reader << KeyFrame.Distance;
 		VMDInfo.ShadowFrames.Add(KeyFrame);
-		if (i < 3) // Ö»´òÓ¡Ç°3¸öÒÔ±ÜÃâÈÕÖ¾¹ý³¤
+		if (i < 3) // Ö»ï¿½ï¿½Ó¡Ç°3ï¿½ï¿½ï¿½Ô±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½
 		{
 			UE_LOG(LogTemp, Log, TEXT("ShadowKeyFrame[%d]: Frame=%d, Mode=%d, Dist=%f"),
 				i, KeyFrame.FrameNumber, KeyFrame.Mode, KeyFrame.Distance);
@@ -232,7 +232,7 @@ bool ReadVMDIKKeyframe(FMemoryReader& Reader, VMDData& VMDInfo) {
 			KeyFrame.IKInfos.Add(TPair<FString, bool>(ikBoneName, enabled != 0));
 		}
 		VMDInfo.IKFrames.Add(KeyFrame);
-		if (i < 3) // Ö»´òÓ¡Ç°3¸öÒÔ±ÜÃâÈÕÖ¾¹ý³¤
+		if (i < 3) // Ö»ï¿½ï¿½Ó¡Ç°3ï¿½ï¿½ï¿½Ô±ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾ï¿½ï¿½ï¿½ï¿½
 		{
 			FString IKInfoStr;
 			for (const auto& Pair : KeyFrame.IKInfos) {
@@ -250,14 +250,14 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	VMDInfo = VMDData();
 	if (!FPaths::FileExists(FilePath))
 	{
-		UE_LOG(LogTemp, Error, TEXT("VMDÎÄ¼þ²»´æÔÚ: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("VMDï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: %s"), *FilePath);
 		return false;
 	}
 
 	TArray<uint8> FileData;
 	if (!FFileHelper::LoadFileToArray(FileData, *FilePath))
 	{
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¼ÓÔØVMDÎÄ¼þ: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½ï¿½ï¿½VMDï¿½Ä¼ï¿½: %s"), *FilePath);
 		return false;
 	}
 	FMemoryReader Reader(FileData, true);
@@ -280,34 +280,34 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡Ä£ÐÍÃû³Æ: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: %s"), *FilePath);
 		return false;
 	}
 	if (!ReadVMDBoneKeyframe(Reader, VMDInfo))
 	{
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡¹Ç÷À¹Ø¼üÖ¡: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½Ø¼ï¿½Ö¡: %s"), *FilePath);
 		return false;
 	}
 	if (!ReadVMDMorphKeyframe(Reader, VMDInfo))
 	{
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡±äÐÎ¹Ø¼üÖ¡: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Î¹Ø¼ï¿½Ö¡: %s"), *FilePath);
 		return false;
 	}
 	if (!ReadVMDCameraKeyframe(Reader, VMDInfo))
 	{
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡ÉãÏñ»ú¹Ø¼üÖ¡: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¼ï¿½Ö¡: %s"), *FilePath);
 		return false;
 	}
 	if (!ReadVMDLightKeyframe(Reader, VMDInfo)) {
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡¹âÕÕ¹Ø¼üÖ¡: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Õ¹Ø¼ï¿½Ö¡: %s"), *FilePath);
 		return false;
 	}
 	if (!ReadVMDShadowKeyframe(Reader, VMDInfo)) {
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡ÒõÓ°¹Ø¼üÖ¡: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡ï¿½ï¿½Ó°ï¿½Ø¼ï¿½Ö¡: %s"), *FilePath);
 		return false;
 	}
 	if (!ReadVMDIKKeyframe(Reader, VMDInfo)) {
-		UE_LOG(LogTemp, Error, TEXT("ÎÞ·¨¶ÁÈ¡IK¹Ø¼üÖ¡: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("ï¿½Þ·ï¿½ï¿½ï¿½È¡IKï¿½Ø¼ï¿½Ö¡: %s"), *FilePath);
 		return false;
 	}
 
