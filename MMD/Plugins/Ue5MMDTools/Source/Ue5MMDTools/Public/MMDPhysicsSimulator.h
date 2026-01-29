@@ -57,7 +57,7 @@ class FMMDPhysicsSimulator
 {
 public:
     FMMDPhysicsSimulator() = default;
-    ~FMMDPhysicsSimulator() { }
+    ~FMMDPhysicsSimulator() { Shutdown(); }
 
 	bool InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,
         USkeletalMeshComponent* InSkelComp);
@@ -68,6 +68,7 @@ public:
     void InitializeRigidBody(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid);
     void InitializeJoints(const TArray<FMMDPhysicsJointData>& SaveJoint);
     void StepSimulationMMD(float DeltaSeconds);
+    void Shutdown();
 
     // MMD Tick ����
     void PreSyncKinematicFromBones(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
@@ -98,7 +99,7 @@ private:
     btSequentialImpulseConstraintSolver* Solver = nullptr;
     btDiscreteDynamicsWorld* DynamicsWorld = nullptr;
 
-    TArray<btGeneric6DofSpring2Constraint*> BulletJoints;
+    TArray<btGeneric6DofSpringConstraint*> BulletJoints;
     
     bool bInitialized = false;
     static constexpr float UnitScale = 8.f;          // UE cm per PMX unit (mesh builder uses 8)

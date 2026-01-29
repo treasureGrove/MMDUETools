@@ -24,6 +24,10 @@ void FAGN_MMDSkeletalControl::EvaluateSkeletalControl_AnyThread(
     FComponentSpacePoseContext& Output,
     TArray<FBoneTransform>& OutBoneTransforms)
 {   
+    if (!bEnablePhysics)
+    {
+        return;
+    }
     if (SimulatorPtr.IsValid())
     {
         SimulatorPtr->ConfigureSimulation(FixedTimeStep, MaxSubSteps);
@@ -46,11 +50,10 @@ void FAGN_MMDSkeletalControl::Initialize_AnyThread(const FAnimationInitializeCon
 	if (!SimulatorPtr.IsValid())
 	{
 		SimulatorPtr = MakeShared<FMMDPhysicsSimulator, ESPMode::ThreadSafe>();
-		SimulatorPtr->InitializeBulletWorld();
-        SimulatorPtr->InitializeFromPMX(RigidBodySaveDataArray, JointSaveDataArray,
-			Context.AnimInstanceProxy->GetSkelMeshComponent());
-        SimulatorPtr->ConfigureSimulation(FixedTimeStep, MaxSubSteps);
 	}
+    SimulatorPtr->InitializeFromPMX(RigidBodySaveDataArray, JointSaveDataArray,
+        Context.AnimInstanceProxy->GetSkelMeshComponent());
+    SimulatorPtr->ConfigureSimulation(FixedTimeStep, MaxSubSteps);
 }
 void FAGN_MMDSkeletalControl::InitializeBoneReferences(const FBoneContainer& RequiredBones)
 {

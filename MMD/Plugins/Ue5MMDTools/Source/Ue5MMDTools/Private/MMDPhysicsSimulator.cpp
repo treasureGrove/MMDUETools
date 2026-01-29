@@ -1,6 +1,7 @@
 ﻿#include "MMDPhysicsSimulator.h"
 #include <btBulletDynamicsCommon.h>
 #include "Animation/AnimInstanceProxy.h"
+#include "Engine/SkeletalMesh.h"
 
 
 // Internal config (previously console vars). Adjust defaults here instead of console commands.
@@ -122,9 +123,14 @@ static btCollisionShape* CreateCollisionShape(const FMMDPhysicsRigidBodyData& Ri
 bool FMMDPhysicsSimulator::InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyData>& SaveRigid, const TArray<FMMDPhysicsJointData>& SaveJoint,USkeletalMeshComponent* InSkelComp)
 {
     if(!InSkelComp){ UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: SkeletalMeshComponent null")); return false; }
-    if(bInitialized){ UE_LOG(LogTemp, Warning, TEXT("InitializeFromPMX skipped: already initialized")); return true; }
+    Shutdown();
     OwnerSkelComp=InSkelComp;
-    InitializeBulletWorld(); InitializeRigidBody(SaveRigid); InitializeJoints(SaveJoint); bInitialized=true; return true;
+    InitializeBulletWorld();
+    InitializeRigidBody(SaveRigid);
+    InitializeJoints(SaveJoint);
+    bInitialized=true;
+    bFirstSyncDone=false;
+    return true;
 }
 
 void FMMDPhysicsSimulator::ConfigureSimulation(float InFixedTimeStep, int32 InMaxSubSteps)
@@ -166,6 +172,24 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBody
         return;
 	}
 
+    const FTransform C2W = OwnerSkelComp ? OwnerSkelComp->GetComponentTransform() : FTransform::Identity;
+    // Build ref-pose component space transforms once to avoid using a transient pose.
+    TArray<FTransform> RefCS;
+    if (OwnerSkelComp)
+    {
+        if (const USkeletalMesh* Mesh = OwnerSkelComp->GetSkeletalMeshAsset())
+        {
+            const FReferenceSkeleton& RefSkel = Mesh->GetRefSkeleton();
+            const TArray<FTransform>& RefLocal = RefSkel.GetRefBonePose();
+            RefCS.SetNum(RefLocal.Num());
+            for (int32 i = 0; i < RefLocal.Num(); ++i)
+            {
+                const int32 Parent = RefSkel.GetParentIndex(i);
+                RefCS[i] = (Parent >= 0) ? (RefLocal[i] * RefCS[Parent]) : RefLocal[i];
+            }
+        }
+    }
+
     for(const FMMDPhysicsRigidBodyData& Rigid: SaveRigid)
     {
         BulletMMDRigidRuntime NewRigidBody;
@@ -173,7 +197,6 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBody
 		NewRigidBody.RelatedBoneIndex = Rigid.RelatedBoneIndex;
         // 1) 刚体世界 Transform（UE，cm）——PMX 刚体位置是模型空间（不是骨骼局部）
         const FTransform RigidCS = PMXDataToUETransform(Rigid.ShapePosition, Rigid.ShapeRotation);
-        const FTransform C2W = OwnerSkelComp->GetComponentTransform();
         const FTransform RigidWS = RigidCS * C2W;
 
         // 2) 骨骼世界 Transform（UE，cm）
@@ -181,7 +204,11 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBody
         if (Rigid.RelatedBoneIndex >= 0)
         {
             const int32 SkelBoneIndex = Rigid.RelatedBoneIndex + 1; // +1 because mesh builder adds Root
-            if (OwnerSkelComp->GetNumBones() > SkelBoneIndex)
+            if (RefCS.IsValidIndex(SkelBoneIndex))
+            {
+                BoneWS = RefCS[SkelBoneIndex] * C2W;
+            }
+            else if (OwnerSkelComp && OwnerSkelComp->GetNumBones() > SkelBoneIndex)
             {
                 BoneWS = OwnerSkelComp->GetBoneTransform(SkelBoneIndex) * C2W;
             }
@@ -329,7 +356,7 @@ void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& 
             }
         }
 		DynamicsWorld->addConstraint(Constraint, true);
-		//BulletJoints.Add(Constraint);
+		BulletJoints.Add(Constraint);
 
     }
 }
@@ -515,3 +542,73 @@ void FMMDPhysicsSimulator::StepSimulationMMD(float DeltaSeconds)
     const float ClampedDelta = (MaxDeltaSeconds > 0.f) ? FMath::Min(DeltaSeconds, MaxDeltaSeconds) : DeltaSeconds;
     DynamicsWorld->stepSimulation(ClampedDelta, MaxSubSteps, FixedTimeStep);
 }////////
+
+void FMMDPhysicsSimulator::Shutdown()
+{
+    if (DynamicsWorld)
+    {
+        for (btGeneric6DofSpringConstraint* C : BulletJoints)
+        {
+            if (C)
+            {
+                DynamicsWorld->removeConstraint(C);
+                delete C;
+            }
+        }
+    }
+    BulletJoints.Empty();
+
+    if (DynamicsWorld)
+    {
+        for (BulletMMDRigidRuntime& RB : BulletRigidsRuntime)
+        {
+            if (RB.Body)
+            {
+                DynamicsWorld->removeRigidBody(RB.Body);
+                delete RB.Body;
+                RB.Body = nullptr;
+            }
+            if (RB.MotionState)
+            {
+                delete RB.MotionState;
+                RB.MotionState = nullptr;
+            }
+            if (RB.Shape)
+            {
+                delete RB.Shape;
+                RB.Shape = nullptr;
+            }
+        }
+    }
+    BulletRigidsRuntime.Empty();
+
+    if (DynamicsWorld)
+    {
+        delete DynamicsWorld;
+        DynamicsWorld = nullptr;
+    }
+    if (Solver)
+    {
+        delete Solver;
+        Solver = nullptr;
+    }
+    if (Broadphase)
+    {
+        delete Broadphase;
+        Broadphase = nullptr;
+    }
+    if (Dispatcher)
+    {
+        delete Dispatcher;
+        Dispatcher = nullptr;
+    }
+    if (CollisionConfiguration)
+    {
+        delete CollisionConfiguration;
+        CollisionConfiguration = nullptr;
+    }
+
+    bInitialized = false;
+    bFirstSyncDone = false;
+    OwnerSkelComp = nullptr;
+}
