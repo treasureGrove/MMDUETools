@@ -14,9 +14,13 @@
 #include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
 #include "TVMDParser.h"
+#include "Animation/AnimSequence.h"
+#include "Animation/AnimData/IAnimationDataController.h"
+#include "Misc/FrameRate.h"
 #if WITH_EDITOR
 #include "Factories/BlueprintFactory.h"
 #include "Editor.h"
+#include "Engine/Selection.h"
 #include "AMMDActor.h"
 #include "Modules/ModuleManager.h" 
 #include "Kismet2/KismetEditorUtilities.h"
@@ -115,7 +119,247 @@ static UAnimationAsset* SaveMMDAnimationAsset(UAnimSequence* AnimSeq, const FStr
 		UE_LOG(LogTemp, Warning, TEXT("SaveMMDAnimationAsset: AnimSeq is null."));
 		return nullptr;
 	}
+	(void)FolderPath;
+	(void)AssetName;
+	if (!AnimSeq->GetOutermost())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SaveMMDAnimationAsset: AnimSeq has no outer package."));
+		return nullptr;
+	}
+#if WITH_EDITOR
+	AnimSeq->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(AnimSeq);
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(
+		AnimSeq->GetOutermost()->GetName(),
+		FPackageName::GetAssetPackageExtension());
+
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+
+	if (!UPackage::SavePackage(AnimSeq->GetOutermost(), AnimSeq, *FilePath, SaveArgs))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SaveMMDAnimationAsset: SavePackage failed: %s"), *FilePath);
+	}
+#endif
+	return AnimSeq;
 }
+
+static FString FixAnimAssetName(const FString& InName)
+{
+	FString Name = InName;
+	Name = Name.Replace(TEXT(" "), TEXT("_"))
+		.Replace(TEXT("."), TEXT("_"))
+		.Replace(TEXT("-"), TEXT("_"))
+		.Replace(TEXT("("), TEXT("_"))
+		.Replace(TEXT(")"), TEXT("_"))
+		.Replace(TEXT("["), TEXT("_"))
+		.Replace(TEXT("]"), TEXT("_"))
+		.Replace(TEXT("<"), TEXT("_"))
+		.Replace(TEXT(">"), TEXT("_"))
+		.Replace(TEXT(":"), TEXT("_"))
+		.Replace(TEXT("*"), TEXT("_"))
+		.Replace(TEXT("?"), TEXT("_"))
+		.Replace(TEXT("\""), TEXT("_"))
+		.Replace(TEXT("|"), TEXT("_"))
+		.Replace(TEXT(","), TEXT("_"))
+		.Replace(TEXT("&"), TEXT("_"))
+		.Replace(TEXT("!"), TEXT("_"))
+		.Replace(TEXT("~"), TEXT("_"))
+		.Replace(TEXT("@"), TEXT("_"))
+		.Replace(TEXT("#"), TEXT("_"))
+		.Replace(TEXT("'"), TEXT("_"));
+	while (Name.Contains(TEXT("__")))
+	{
+		Name = Name.Replace(TEXT("__"), TEXT("_"));
+	}
+	if (Name.IsEmpty())
+	{
+		Name = TEXT("MMD_Anim");
+	}
+	return Name;
+}
+
+static FVector ConvertMMDPositionToUnreal(const FVector& InPos, float Scale)
+{
+	const FVector Scaled(InPos.X * Scale, InPos.Y * Scale, InPos.Z * Scale);
+	return FVector(Scaled.X, -Scaled.Z, Scaled.Y);
+}
+
+static FQuat ConvertMMDQuatToUnreal(const FQuat& InQuat)
+{
+	static const FQuat BasisQuat = FQuat(FMatrix(
+		FPlane(1, 0, 0, 0),
+		FPlane(0, 0, 1, 0),
+		FPlane(0, -1, 0, 0),
+		FPlane(0, 0, 0, 1)));
+	const FQuat Result = BasisQuat * InQuat * BasisQuat.Inverse();
+	return Result.GetNormalized();
+}
+
+#if WITH_EDITOR
+static USkeletalMeshComponent* FindSelectedSkeletalMeshComponent()
+{
+	if (!GEditor)
+	{
+		return nullptr;
+	}
+	USelection* SelectedActors = GEditor->GetSelectedActors();
+	if (!SelectedActors || SelectedActors->Num() == 0)
+	{
+		return nullptr;
+	}
+	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
+	{
+		if (AActor* Actor = Cast<AActor>(*Iter))
+		{
+			if (USkeletalMeshComponent* SkelComp = Actor->FindComponentByClass<USkeletalMeshComponent>())
+			{
+				return SkelComp;
+			}
+		}
+	}
+	return nullptr;
+}
+
+static UAnimSequence* BuildAnimSequenceFromVMD(const VMDData& VMDInfo, USkeletalMesh* SkeletalMesh, const FString& VMDFilePath)
+{
+	if (!SkeletalMesh)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildAnimSequenceFromVMD: SkeletalMesh is null."));
+		return nullptr;
+	}
+	USkeleton* Skeleton = SkeletalMesh->GetSkeleton();
+	if (!Skeleton)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildAnimSequenceFromVMD: Skeleton is null."));
+		return nullptr;
+	}
+
+	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
+	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
+
+	struct FVMDBoneKey
+	{
+		int32 Frame = 0;
+		FVector Position = FVector::ZeroVector;
+		FQuat Rotation = FQuat::Identity;
+	};
+
+	TMap<FName, TArray<FVMDBoneKey>> TrackMap;
+	int32 MaxFrame = 0;
+	const float PositionScale = 8.0f;
+
+	for (const VMDBoneKeyframe& KeyFrame : VMDInfo.BoneFrames)
+	{
+		const FName BoneName(*KeyFrame.BoneName);
+		if (RefSkeleton.FindBoneIndex(BoneName) == INDEX_NONE)
+		{
+			continue;
+		}
+		FVMDBoneKey NewKey;
+		NewKey.Frame = static_cast<int32>(KeyFrame.FrameNumber);
+		NewKey.Position = ConvertMMDPositionToUnreal(KeyFrame.Position, PositionScale);
+		NewKey.Rotation = ConvertMMDQuatToUnreal(KeyFrame.Rotation);
+		TrackMap.FindOrAdd(BoneName).Add(NewKey);
+		MaxFrame = FMath::Max(MaxFrame, NewKey.Frame);
+	}
+
+	if (TrackMap.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildAnimSequenceFromVMD: No matching bone tracks found."));
+		return nullptr;
+	}
+
+	const int32 NumFrames = MaxFrame + 1;
+	if (NumFrames <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildAnimSequenceFromVMD: Invalid frame count."));
+		return nullptr;
+	}
+
+	const FString MeshPackagePath = FPackageName::GetLongPackagePath(SkeletalMesh->GetOutermost()->GetName());
+	const FString AnimFolder = MeshPackagePath / TEXT("Animation");
+	const FString BaseName = FixAnimAssetName(FPaths::GetBaseFilename(VMDFilePath));
+
+	FString UniquePackageName;
+	FString UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		AssetToolsModule.Get().CreateUniqueAssetName(AnimFolder / BaseName, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	UPackage* Package = CreatePackage(*UniquePackageName);
+	if (!Package)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildAnimSequenceFromVMD: CreatePackage failed: %s"), *UniquePackageName);
+		return nullptr;
+	}
+
+	UAnimSequence* AnimSeq = NewObject<UAnimSequence>(Package, *UniqueAssetName, RF_Public | RF_Standalone);
+	if (!AnimSeq)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildAnimSequenceFromVMD: Failed to create AnimSequence."));
+		return nullptr;
+	}
+
+	AnimSeq->SetSkeleton(Skeleton);
+	AnimSeq->SetPreviewMesh(SkeletalMesh);
+
+	IAnimationDataController& Controller = AnimSeq->GetController();
+	Controller.OpenBracket(FText::FromString(TEXT("Import VMD Animation")));
+	Controller.InitializeModel();
+	Controller.SetFrameRate(FFrameRate(30, 1), true);
+	Controller.SetNumberOfFrames(NumFrames, true);
+
+	for (auto& Pair : TrackMap)
+	{
+		const FName BoneName = Pair.Key;
+		TArray<FVMDBoneKey>& Keys = Pair.Value;
+		Keys.Sort([](const FVMDBoneKey& A, const FVMDBoneKey& B)
+			{
+				return A.Frame < B.Frame;
+			});
+
+		const int32 BoneIndex = RefSkeleton.FindBoneIndex(BoneName);
+		const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+		FVector CurrentPos = DefaultTransform.GetTranslation();
+		FQuat CurrentRot = DefaultTransform.GetRotation();
+		FVector CurrentScale = DefaultTransform.GetScale3D();
+
+		TArray<FVector3f> PosKeys;
+		TArray<FQuat4f> RotKeys;
+		TArray<FVector3f> ScaleKeys;
+		PosKeys.SetNum(NumFrames);
+		RotKeys.SetNum(NumFrames);
+		ScaleKeys.SetNum(NumFrames);
+
+		int32 KeyIndex = 0;
+		for (int32 FrameIndex = 0; FrameIndex < NumFrames; ++FrameIndex)
+		{
+			while (KeyIndex < Keys.Num() && Keys[KeyIndex].Frame == FrameIndex)
+			{
+				CurrentPos = Keys[KeyIndex].Position;
+				CurrentRot = Keys[KeyIndex].Rotation;
+				++KeyIndex;
+			}
+			PosKeys[FrameIndex] = FVector3f(CurrentPos);
+			RotKeys[FrameIndex] = FQuat4f(CurrentRot);
+			ScaleKeys[FrameIndex] = FVector3f(CurrentScale);
+		}
+
+		Controller.AddBoneTrack(BoneName);
+		Controller.SetBoneTrackKeys(BoneName, PosKeys, RotKeys, ScaleKeys, false);
+	}
+
+	Controller.CloseBracket();
+	SaveMMDAnimationAsset(AnimSeq, AnimFolder, UniqueAssetName);
+	return AnimSeq;
+}
+#endif
 
 
 TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 静态成员初始化
@@ -355,8 +599,31 @@ void MMDImportSetting::ImportVMDAnimation()
 					*VMDInfo.ModelName, VMDInfo.BoneFrames.Num(), VMDInfo.MorphFrames.Num()),
 					EMMDMessageType::Success);
 
-				// 这里可以将VMD数据传递给你的视口面板或动画系统
-				// ViewPanel->LoadVMDAnimation(VMDInfo);
+#if WITH_EDITOR
+				USkeletalMeshComponent* TargetComp = FindSelectedSkeletalMeshComponent();
+				if (!TargetComp)
+				{
+					ShowImportProgress(TEXT("未找到选中的SkeletalMesh组件，无法生成动画"), EMMDMessageType::Error);
+					return;
+				}
+
+				USkeletalMesh* TargetMesh = TargetComp->GetSkeletalMeshAsset();
+				if (!TargetMesh || !TargetMesh->GetSkeleton())
+				{
+					ShowImportProgress(TEXT("选中的SkeletalMesh无Skeleton，无法生成动画"), EMMDMessageType::Error);
+					return;
+				}
+
+				if (UAnimSequence* AnimSeq = BuildAnimSequenceFromVMD(VMDInfo, TargetMesh, SelectedFile))
+				{
+					ShowImportProgress(FString::Printf(TEXT("VMD动画已生成: %s"), *AnimSeq->GetName()),
+						EMMDMessageType::Success);
+				}
+				else
+				{
+					ShowImportProgress(TEXT("VMD解析成功，但动画生成失败"), EMMDMessageType::Error);
+				}
+#endif
 			}
 			else
 			{

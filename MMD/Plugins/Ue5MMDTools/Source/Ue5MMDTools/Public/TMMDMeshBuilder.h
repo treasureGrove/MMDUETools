@@ -17,5 +17,7 @@ public:
     static UAnimBlueprint* BuildAnimBlueprint(USkeletalMesh* SkeletalMesh,const FString& PMXFilePath);
 
 	static UIKRetargeter* BuildIKRetargeterFromPMX(UIKRigDefinition* IKRigTarget, const FString& PMXFilePath);
+	
+	
 }; 
 
