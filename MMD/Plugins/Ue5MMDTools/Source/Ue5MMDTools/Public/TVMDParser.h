@@ -70,13 +70,9 @@ struct VMDCameraKeyframe
 //   - float[3] direction // 光照方向向量
 struct VMDLightKeyframe
 {
-	uint32 FrameNumber;
-	float Distance;
-	FVector Position;
-	FVector Rotation;
-	uint8 Interpolation[24];
-	uint32 ViewAngle;
-	uint8 Perspective;
+	uint32 FrameNumber = 0;
+	FVector Color = FVector::ZeroVector;    // RGB (0.0-1.0)
+	FVector Direction = FVector::ZeroVector; // light direction vector
 };
 
 // 6) Shadow Keyframes (阴影) - 可能不存在于某些VMD文件
