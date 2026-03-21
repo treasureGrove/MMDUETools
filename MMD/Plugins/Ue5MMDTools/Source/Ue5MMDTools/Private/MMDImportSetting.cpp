@@ -115,6 +115,43 @@ static UAnimationAsset* SaveMMDAnimationAsset(UAnimSequence* AnimSeq, const FStr
 		UE_LOG(LogTemp, Warning, TEXT("SaveMMDAnimationAsset: AnimSeq is null."));
 		return nullptr;
 	}
+#if WITH_EDITOR
+	FString UniquePackageName, UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		const FString TargetLongPackageName = FolderPath / AssetName;
+		AssetToolsModule.Get().CreateUniqueAssetName(TargetLongPackageName, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	UPackage* Package = CreatePackage(*UniquePackageName);
+	if (!Package)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SaveMMDAnimationAsset: CreatePackage failed: %s"), *UniquePackageName);
+		return nullptr;
+	}
+
+	AnimSeq->Rename(*UniqueAssetName, Package, REN_DontCreateRedirectors | REN_ForceNoResetLoaders);
+	AnimSeq->SetFlags(RF_Public | RF_Standalone);
+	AnimSeq->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(AnimSeq);
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+
+	if (!UPackage::SavePackage(Package, AnimSeq, *FilePath, SaveArgs))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SaveMMDAnimationAsset: SavePackage failed: %s"), *FilePath);
+	}
+
+	return AnimSeq;
+#else
+	UE_LOG(LogTemp, Error, TEXT("SaveMMDAnimationAsset: editor-only function"));
+	return nullptr;
+#endif
 }
 
 

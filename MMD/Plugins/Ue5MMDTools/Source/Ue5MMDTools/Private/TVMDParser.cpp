@@ -170,24 +170,19 @@ bool ReadVMDLightKeyframe(FMemoryReader& Reader, VMDData& VMDInfo) {
 	for (uint32 i = 0; i < LightKeyFrameCount; ++i) {
 		VMDLightKeyframe KeyFrame;
 		Reader << KeyFrame.FrameNumber;
-		Reader << KeyFrame.Distance;
-		float px, py, pz;
-		Reader << px << py << pz;
-		KeyFrame.Position = FVector(px, py, pz);
-		float rx, ry, rz;
-		Reader << rx << ry << rz;
-		KeyFrame.Rotation = FVector(rx, ry, rz);
-		Reader.Serialize(KeyFrame.Interpolation, 24);
-		Reader << KeyFrame.ViewAngle;
-		Reader << KeyFrame.Perspective;
+		float r, g, b;
+		Reader << r << g << b;
+		KeyFrame.Color = FVector(r, g, b);
+		float dx, dy, dz;
+		Reader << dx << dy << dz;
+		KeyFrame.Direction = FVector(dx, dy, dz);
 		VMDInfo.LightFrames.Add(KeyFrame);
-		if (i < 3) // ֻ��ӡǰ3���Ա�����־����
+		if (i < 3)
 		{
-			UE_LOG(LogTemp, Log, TEXT("LightKeyFrame[%d]: Frame=%d, Dist=%f, Pos=(%f,%f,%f), Rot=(%f,%f,%f), ViewAngle=%d, Persp=%d"),
-				i, KeyFrame.FrameNumber, KeyFrame.Distance,
-				KeyFrame.Position.X, KeyFrame.Position.Y, KeyFrame.Position.Z,
-				KeyFrame.Rotation.X, KeyFrame.Rotation.Y, KeyFrame.Rotation.Z,
-				KeyFrame.ViewAngle, KeyFrame.Perspective);
+			UE_LOG(LogTemp, Log, TEXT("LightKeyFrame[%d]: Frame=%d, Color=(%f,%f,%f), Dir=(%f,%f,%f)"),
+				i, KeyFrame.FrameNumber,
+				KeyFrame.Color.X, KeyFrame.Color.Y, KeyFrame.Color.Z,
+				KeyFrame.Direction.X, KeyFrame.Direction.Y, KeyFrame.Direction.Z);
 		}
 	}
 	return true;
