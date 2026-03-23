@@ -1,7 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "TPMXParser.h" // 需要获取 PMXDatas 定义
+#include "TPMXParser.h"
+#include "TVMDParser.h"
 #if WITH_EDITOR              
 #include "RetargetEditor/IKRetargeterController.h"    
 #endif
@@ -18,6 +19,6 @@ public:
 
 	static UIKRetargeter* BuildIKRetargeterFromPMX(UIKRigDefinition* IKRigTarget, const FString& PMXFilePath);
 	
-	
+	static UAnimSequence* BuildVMDAnimation(const VMDData &VmdData,const FString& VMDFilePath);
 }; 
 

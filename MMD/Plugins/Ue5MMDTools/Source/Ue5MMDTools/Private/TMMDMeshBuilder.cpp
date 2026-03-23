@@ -1156,5 +1156,12 @@ UIKRetargeter* TMMDMeshBuilder::BuildIKRetargeterFromPMX(UIKRigDefinition* IKRig
 
 	return Retargeter;
 }
+
+UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const FString& VMDFilePath)
+{
+	UAnimSequence* Retargeter = nullptr;
+	
+	return Retargeter;
+}
 #endif
 
