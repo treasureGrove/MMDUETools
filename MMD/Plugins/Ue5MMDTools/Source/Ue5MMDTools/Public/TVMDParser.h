@@ -1,128 +1,133 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UObject/NoExportTypes.h"
 
 // =============================================
-// VMDÎÄ¼ş½âÎö¸ñÊ½
+// VMD æ–‡ä»¶æ ¼å¼ï¼ˆVocaloid Motion Dataï¼‰
 // =============================================
-// VMD file layout ¡ª read order
-
+// äºŒè¿›åˆ¶ã€å°ç«¯ uint32 / floatã€‚å­—ç¬¦ä¸²å›ºå®šå®½åº¦ï¼Œä¸è¶³è¡¥ 0x00ã€‚
+// æ–‡æœ¬ï¼šéª¨éª¼å / Morph å / æ¨¡å‹å ç­‰ä¸º Shift_JIS (CP932)ã€‚
+//
+// VMD file layout â€”â€” ä¸¥æ ¼æŒ‰è¯»å–é¡ºåº
+//
 // 1) Header
-// - char[30] magic // "Vocaloid Motion Data 0002" or "Vocaloid Motion Data file" (older)
-// - char[20] modelName // Ê¹ÓÃSJIS±àÂëµÄÄ£ĞÍÃû³Æ
-
+// - char[30] magic
+//     "Vocaloid Motion Data file"  (æ—§ MMDï¼Œçº¦ 1.30)
+//     "Vocaloid Motion Data 0002"  (å¤šæ¨¡å‹ç‰ˆåŠä»¥å)
+//     ä¸è¶³ 30 å­—èŠ‚ç”¨ 0x00 å¡«å……ï¼›åˆ¤æ–­æ–°æ—§åªçœ‹ ASCII å‰ç¼€ã€‚
+// - char[10] or char[20] modelName  // Shift_JISï¼›æ—§å¤´åæ¥ 10 å­—èŠ‚ï¼Œæ–°å¤´(0002)åæ¥ 20 å­—èŠ‚
+//
 // 2) Bone Keyframes
 // - uint32 boneKeyframeCount
-// - repeat boneKeyframeCount times:
-//   - char[15] boneName // SJIS±àÂëµÄ¹Ç÷ÀÃû³Æ
-//   - uint32 frameNumber // Ö¡ºÅ
-//   - float[3] position // XYZÎ»ÖÃÆ«ÒÆ
-//   - float[4] rotation // XYZWËÄÔªÊıĞı×ª 
-//   - uint8[64] interpolation // ±´Èû¶ûÇúÏß²åÖµ²ÎÊı£¬Ã¿¸ö¹Ç÷À×ø±êºÍĞı×ª¸÷4¸ö²ÎÊı£¬¹²16×é£¬Ã¿×é4×Ö½Ú
-struct VMDBoneKeyframe
-{
-	FString BoneName;
-	uint32 FrameNumber = 0;
-	FVector Position = FVector::ZeroVector;
-	FQuat Rotation = FQuat::Identity;
-	uint8 Interpolation[64] = { 0 };
-};
-
-// 3) Morph Keyframes (±íÇé)
+// - repeat boneKeyframeCount times:  // æ¯æ¡å›ºå®š 111 å­—èŠ‚
+//   - char[15]                // Shift_JIS
+//   - uint32 frameNumber
+//   - float[3] position               // ç›¸å¯¹ bind pose çš„å¹³ç§»å¢é‡ï¼ˆä¸ MMD ä¸€è‡´ï¼‰
+//   - float[4] rotation               // å››å…ƒæ•° x,y,z,w
+//   - uint8[64] interpolation         // MMD è´å¡å°”æ’å€¼å‚æ•°ï¼ˆå¯å…ˆæ•´ä½“ä¿å­˜ï¼‰
+//
+// 3) Morph Keyframes
 // - uint32 morphKeyframeCount
-// - repeat morphKeyframeCount times:
-//   - char[15] morphName // SJIS±àÂëµÄ±íÇéÃû³Æ
-//   - uint32 frameNumber // Ö¡ºÅ
-//   - float weight // ±íÇéÈ¨ÖØ£¬Í¨³£0.0-1.0
-struct VMDMorphKeyframe
-{
-	FString MorphName;
-	uint32 FrameNumber = 0;
-	float Weight = 0.0f;
+// - repeat morphKeyframeCount times:  // æ¯æ¡ 23 å­—èŠ‚
+//   - char[15] morphName
+//   - uint32 frameNumber
+//   - float weight                    // é€šå¸¸ 0.0 ~ 1.0
+//
+// 4) Camera Keyframes
+// - uint32 cameraKeyframeCount
+// - repeat cameraKeyframeCount times: // æ¯æ¡ 61 å­—èŠ‚
+//   - uint32 frameNumber
+//   - float distance                  // ç›¸æœºåˆ°ç›®æ ‡è·ç¦»
+//   - float[3] interest               // ç›®æ ‡ç‚¹ XYZ
+//   - float[3] rotation               // æ¬§æ‹‰è§’ XYZï¼ˆå¼§åº¦ï¼Œé¡ºåºåŒ MMDï¼‰
+//   - uint8[24] interpolation
+//   - float viewAngle                 // è§†è§’ / FOV ç›¸å…³ï¼ˆåº¦æˆ–å¼§åº¦ä¾ MMD çº¦å®šï¼‰
+//   - uint8 perspective               // é€è§†å¼€å…³ 0/1
+//
+// 5) Light Keyframes
+// - uint32 lightKeyframeCount
+// - repeat lightKeyframeCount times:  // æ¯æ¡ 28 å­—èŠ‚
+//   - uint32 frameNumber
+//   - float[3] color                  // RGBï¼Œå¸¸ 0~1
+//   - float[3] position               // å…‰æºä½ç½® XYZï¼ˆä¸ MMD ä¸€è‡´ï¼›éƒ¨åˆ†æ–‡æ¡£ç§° directionï¼Œä»¥ä½ å¯¹ç…§å·¥å…·ä¸ºå‡†ï¼‰
+//
+// 6) Shadow Keyframes
+// - uint32 shadowKeyframeCount
+// - repeat shadowKeyframeCount times: // æ¯æ¡ 9 å­—èŠ‚
+//   - uint32 frameNumber
+//   - uint8 mode
+//   - float distance
+//
+// 7) IK Keyframes
+// - uint32 ikGroupCount
+// - repeat ikGroupCount times:
+//   - uint32 frameNumber
+//   - uint8 display                   // æ˜¾ç¤º/æ€»å¼€å…³ç±»
+//   - uint32 ikInfoCount
+//   - repeat ikInfoCount times:
+//     - char[20] ikBoneName           // IK éª¨å 20 å­—èŠ‚ï¼ˆä¸éª¨éª¼è½¨é“çš„ 15 ä¸åŒï¼‰
+//     - uint8 enabled
+
+struct VMDBoneKeyframe{
+	FString BoneName;
+	uint32 FrameNumber;
+	FVector Position;
+	FQuat Rotation;
+	uint8 Interpolation[64];
 };
 
-// 4) Camera Keyframes (Ïà»ú)
-// - uint32 cameraKeyframeCount
-// - repeat cameraKeyframeCount times:
-//   - uint32 frameNumber // Ö¡ºÅ
-//   - float distance // Ïà»ú¾àÀë
-//   - float[3] position // XYZÎ»ÖÃ
-//   - float[3] rotation // XYZĞı×ª(»¡¶È)
-//   - uint8[24] interpolation // Ïà»ú²åÖµ²ÎÊı
-//   - uint32 viewAngle // ÊÓ½Ç(FOV)
-//   - uint8 perspective // ÊÇ·ñÊ¹ÓÃÍ¸ÊÓÍ¶Ó°
-struct VMDCameraKeyframe
-{
-	uint32 frameNumber;
-	float distance;
-	FVector position;
-	FVector rotation;
-	uint8 interpolation[24];
-	uint32 viewAngle;
-	uint8 perspective;
+struct VMDMorphKeyframe{
+	FString MorphName;
+	uint32 FrameNumber;
+	float Weight;
 };
-// 5) Light Keyframes (¹âÕÕ) - ¿ÉÄÜ²»´æÔÚÓÚÄ³Ğ©VMDÎÄ¼ş
-// - uint32 lightKeyframeCount
-// - repeat lightKeyframeCount times:
-//   - uint32 frameNumber // Ö¡ºÅ
-//   - float[3] color // RGBÑÕÉ« (0.0-1.0)
-//   - float[3] direction // ¹âÕÕ·½ÏòÏòÁ¿
-struct VMDLightKeyframe
-{
+
+struct VMDCameraKeyframe{
 	uint32 FrameNumber;
 	float Distance;
-	FVector Position;
+	FVector Interest;
 	FVector Rotation;
 	uint8 Interpolation[24];
-	uint32 ViewAngle;
+	float ViewAngle;
 	uint8 Perspective;
 };
 
-// 6) Shadow Keyframes (ÒõÓ°) - ¿ÉÄÜ²»´æÔÚÓÚÄ³Ğ©VMDÎÄ¼ş
-// - uint32 shadowKeyframeCount
-// - repeat shadowKeyframeCount times:
-//   - uint32 frameNumber // Ö¡ºÅ
-//   - uint8 mode // ÒõÓ°ÀàĞÍ
-//   - float distance // ÒõÓ°¾àÀë
-struct VMDShadowKeyframe
-{
+struct VMDLightKeyframe{
+	uint32 FrameNumber;
+	FVector Color;
+	FVector Position;
+};
+
+struct VMDShadowKeyframe{
 	uint32 FrameNumber;
 	uint8 Mode;
 	float Distance;
 };
-// 7) IK Keyframes (IK¿ª¹Ø) - ½ö´æÔÚÓÚ½ÏĞÂµÄVMDÎÄ¼ş
-// - uint32 ikKeyframeCount
-// - repeat ikKeyframeCount times:
-//   - uint32 frameNumber // Ö¡ºÅ
-//   - uint8 display // ÏÔÊ¾/Òş²Ø
-//   - uint32 ikCount
-//   - repeat ikCount times:
-//     - char[20] ikBoneName // IK¹Ç÷ÀÃû³Æ
-//     - uint8 enabled // ÊÇ·ñÆôÓÃ
-struct VMDIKKeyframe
-{
-	uint32 FrameNumber = 0;
-	uint8 Display = 0;
-	TArray<TPair<FString, bool>> IKInfos;
+
+struct VMDIKKeyframe{
+	uint32 FrameNumber;
+	uint8 Display;
+	uint32 IKInfoCount;
+	TArray<TPair<FString, uint8>> IKInfos;
 };
-struct  VMDData {
-	FString Header; // "Vocaloid Motion Data 0002"
+
+struct VMDData{
+	FString Header;
 	FString ModelName;
-	int32 NextStringLength = 0;
-	TArray<VMDBoneKeyframe> BoneFrames; 
-	TArray<VMDMorphKeyframe> MorphFrames; 
-	TArray<VMDCameraKeyframe> CameraFrames;
-	TArray<VMDLightKeyframe> LightFrames;
-	TArray<VMDShadowKeyframe> ShadowFrames; 
-	TArray<VMDIKKeyframe> IKFrames;
+
+	bool bNewFormatHeader =true;
+
+	TArray<VMDBoneKeyframe> BoneKeyframes;
+	TArray<VMDMorphKeyframe> MorphKeyframes;
+	TArray<VMDCameraKeyframe> CameraKeyframes;
+	TArray<VMDLightKeyframe> LightKeyframes;
+	TArray<VMDShadowKeyframe> ShadowKeyframes;
+	TArray<VMDIKKeyframe> IKKeyframes;
 };
 
-class UE5MMDTOOLS_API TVMDParser
-{
+class UE5MMDTOOLS_API TVMDParser{
 public:
-
-	bool ParseVMDFile(const FString& FilePath);
+	bool ParseVMDFile(const FString &FilePath);
 
 	VMDData VMDInfo;
 };

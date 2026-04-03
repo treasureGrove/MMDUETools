@@ -48,7 +48,8 @@
     "C_Cpp.default.cppStandard": "c++20",
     "C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
     "C_Cpp.default.compileCommands": "${workspaceFolder:MMD}\\compile_commands.json",
-    "C_Cpp.errorSquiggles": "Enabled"
+    "C_Cpp.errorSquiggles": "Enabled",
+    "dotnet.defaultSolution": "MMD/MMD.sln"
   },
   "extensions": {
     "recommendations": [
