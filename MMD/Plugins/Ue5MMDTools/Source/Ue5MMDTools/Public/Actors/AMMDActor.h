@@ -5,7 +5,7 @@
 #include "TVMDParser.h"
 #include "Components/SkeletalMeshComponent.h" 
 #include "Components/CapsuleComponent.h"
-#include <AGN_MMDSkeletalControl.h>
+#include "AGN_MMDSkeletalControl.h"
 #include "AMMDActor.generated.h"
 
 UCLASS()

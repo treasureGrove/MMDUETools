@@ -7,11 +7,10 @@
 class FMMDMotionState : public btMotionState
 {
 public:
-    // ��ǰ�����UE����任��cm��
     FTransform UEWorldTransform;
 
-    static constexpr float UEToBullet = 0.01f;   // cm �� m
-    static constexpr float BulletToUE = 100.0f;  // m �� cm
+    static constexpr float UEToBullet = 0.01f;   
+    static constexpr float BulletToUE = 100.0f;  
 
     FMMDMotionState(const FTransform& InUETransform)
         : UEWorldTransform(InUETransform)

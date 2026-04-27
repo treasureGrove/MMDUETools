@@ -1,11 +1,26 @@
-﻿using UnrealBuildTool;
+using UnrealBuildTool;
 using System.IO;
+using System.Linq;
 
 public class Ue5MMDTools : ModuleRules
 {
     public Ue5MMDTools(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+
+        string PublicPath = Path.Combine(ModuleDirectory, "Public");
+        string PrivatePath = Path.Combine(ModuleDirectory, "Private");
+
+        PublicIncludePaths.AddRange(
+            Directory.GetDirectories(PublicPath, "*", SearchOption.AllDirectories)
+                .Prepend(PublicPath)
+                .ToArray());
+
+        PrivateIncludePaths.AddRange(
+            Directory.GetDirectories(PrivatePath, "*", SearchOption.AllDirectories)
+                .Prepend(PrivatePath)
+                .ToArray());
+
         PublicDependencyModuleNames.AddRange(new string[]
         {
             "Core",
@@ -21,6 +36,7 @@ public class Ue5MMDTools : ModuleRules
             "BlueprintGraph",
             "KismetCompiler"
         });
+
         PrivateDependencyModuleNames.AddRange(new string[]
         {
             "Projects",
@@ -54,8 +70,9 @@ public class Ue5MMDTools : ModuleRules
         string BulletPath = Path.Combine(PluginPath, "ThirdParty/Bullet");
 
         PublicSystemIncludePaths.Add(Path.Combine(BulletPath, "include"));
-        string LibPath= Path.Combine(BulletPath, "lib");
+        string LibPath = Path.Combine(BulletPath, "lib");
         string LibSuffix = ".lib";
+
         PublicAdditionalLibraries.AddRange(new string[]
         {
             Path.Combine(LibPath, "BulletCollision" + LibSuffix),
@@ -70,6 +87,5 @@ public class Ue5MMDTools : ModuleRules
             "BT_THREADSAFE=0",
             "BT_NO_PROFILE=1"
         });
-
     }
 }

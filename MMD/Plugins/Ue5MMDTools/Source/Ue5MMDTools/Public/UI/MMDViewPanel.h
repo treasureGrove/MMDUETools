@@ -41,6 +41,5 @@ private:
 
 	AActor* PreviewActor = nullptr;
 
-	// Local ModeTools as shared pointer so AsShared() in engine code is valid
 	TSharedPtr<FEditorModeTools> LocalModeTools;
 };
