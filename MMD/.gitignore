@@ -3,6 +3,7 @@
 
 # VSCode user specific files
 .vscode/
+.idea/
 
 # Compiled Object files
 *.slo
@@ -43,6 +44,10 @@
 *.sdf
 *.VC.db
 *.VC.opendb
+*.ipch
+*.rsp
+*.tlog
+*.pdb
 
 # Precompiled Assets
 SourceArt/**/*.png
@@ -71,6 +76,7 @@ Saved/*
 Plugins/**/Saved/*
 Plugins/**/Logs/*
 Plugins/**/DerivedDataCache/*
+Plugins/**/IntermediateBuild*/
 
 # Compiled source files for the engine to use
 Intermediate/*
@@ -78,3 +84,10 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# Generated workspace and compile database artifacts
+compile_commands.json
+.vscode/compileCommands_*/
+
+# Generated logs
+*.log
