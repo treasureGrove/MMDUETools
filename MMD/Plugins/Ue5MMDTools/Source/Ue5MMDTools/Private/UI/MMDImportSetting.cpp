@@ -148,58 +148,6 @@ static UAnimationAsset* SaveMMDAnimationAsset(UAnimSequence* AnimSeq, const FStr
 	return AnimSeq;
 }
 
-static FString FixAnimAssetName(const FString& InName)
-{
-	FString Name = InName;
-	Name = Name.Replace(TEXT(" "), TEXT("_"))
-		.Replace(TEXT("."), TEXT("_"))
-		.Replace(TEXT("-"), TEXT("_"))
-		.Replace(TEXT("("), TEXT("_"))
-		.Replace(TEXT(")"), TEXT("_"))
-		.Replace(TEXT("["), TEXT("_"))
-		.Replace(TEXT("]"), TEXT("_"))
-		.Replace(TEXT("<"), TEXT("_"))
-		.Replace(TEXT(">"), TEXT("_"))
-		.Replace(TEXT(":"), TEXT("_"))
-		.Replace(TEXT("*"), TEXT("_"))
-		.Replace(TEXT("?"), TEXT("_"))
-		.Replace(TEXT("\""), TEXT("_"))
-		.Replace(TEXT("|"), TEXT("_"))
-		.Replace(TEXT(","), TEXT("_"))
-		.Replace(TEXT("&"), TEXT("_"))
-		.Replace(TEXT("!"), TEXT("_"))
-		.Replace(TEXT("~"), TEXT("_"))
-		.Replace(TEXT("@"), TEXT("_"))
-		.Replace(TEXT("#"), TEXT("_"))
-		.Replace(TEXT("'"), TEXT("_"));
-	while (Name.Contains(TEXT("__")))
-	{
-		Name = Name.Replace(TEXT("__"), TEXT("_"));
-	}
-	if (Name.IsEmpty())
-	{
-		Name = TEXT("MMD_Anim");
-	}
-	return Name;
-}
-
-static FVector ConvertMMDPositionToUnreal(const FVector& InPos, float Scale)
-{
-	const FVector Scaled(InPos.X * Scale, InPos.Y * Scale, InPos.Z * Scale);
-	return FVector(Scaled.X, -Scaled.Z, Scaled.Y);
-}
-
-static FQuat ConvertMMDQuatToUnreal(const FQuat& InQuat)
-{
-	static const FQuat BasisQuat = FQuat(FMatrix(
-		FPlane(1, 0, 0, 0),
-		FPlane(0, 0, 1, 0),
-		FPlane(0, -1, 0, 0),
-		FPlane(0, 0, 0, 1)));
-	const FQuat Result = BasisQuat * InQuat * BasisQuat.Inverse();
-	return Result.GetNormalized();
-}
-
 #if WITH_EDITOR
 static USkeletalMeshComponent* FindSelectedSkeletalMeshComponent()
 {
