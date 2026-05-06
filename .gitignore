@@ -84,3 +84,6 @@ MMD/DerivedDataCache/
 
 # Response / live-coding artifacts (UE sometimes writes alongside Intermediate)
 *.rsp.old
+
+# Local MMD model assets
+MMD/Content/MMDModels/
