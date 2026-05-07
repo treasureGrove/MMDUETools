@@ -1,9 +1,11 @@
 #include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
+#include "MMDModelDataAsset.h"
 
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataController.h"
+#include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/Skeleton.h"
 #include "Misc/FrameRate.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -313,7 +315,1186 @@ struct FResolvedVMDBoneKey
 	int32 Frame = 0;
 	FVector Position = FVector::ZeroVector;
 	FQuat Rotation = FQuat::Identity;
+	uint8 Interpolation[64] = {};
 };
+
+struct FVMDWrittenTrackDiagnostic
+{
+	FName BoneName = NAME_None;
+	int32 SourceKeyCount = 0;
+	float MaxTranslationDelta = 0.0f;
+	float MaxRotationDeltaDegrees = 0.0f;
+	bool bSetKeysSucceeded = false;
+};
+
+struct FMMDIKDebugLog
+{
+	int32 Remaining = 96;
+	int32 Suppressed = 0;
+
+	void Log(const FString& Message)
+	{
+		if (Remaining > 0)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[MMD IK Debugger] %s"), *Message);
+			--Remaining;
+		}
+		else
+		{
+			++Suppressed;
+		}
+	}
+
+	void LogAlways(const FString& Message)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MMD IK Debugger] %s"), *Message);
+	}
+
+	void FlushSuppressed()
+	{
+		if (Suppressed > 0)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[MMD IK Debugger] Suppressed %d additional messages."), Suppressed);
+		}
+	}
+};
+
+enum class EVMDInterpolationChannel : uint8
+{
+	PositionX = 0,
+	PositionY = 1,
+	PositionZ = 2,
+	Rotation = 3
+};
+
+struct FMMDIKBakeChain
+{
+	struct FLink
+	{
+		int32 BoneIndex = INDEX_NONE;
+		bool bHasLimit = false;
+		FVector LowerLimitDegrees = FVector::ZeroVector;
+		FVector UpperLimitDegrees = FVector::ZeroVector;
+	};
+
+	FName IKBoneName = NAME_None;
+	FName TargetBoneName = NAME_None;
+	int32 PMXBoneIndex = INDEX_NONE;
+	int32 IKBoneIndex = INDEX_NONE;
+	int32 TargetBoneIndex = INDEX_NONE;
+	TArray<FLink> Links;
+	int32 PMXLoopCount = 0;
+	int32 IterationCount = 0;
+	float AngleLimitRadians = PI;
+	FString InvalidReason;
+};
+
+struct FMMDPMXRuntimeBone
+{
+	int32 PMXBoneIndex = INDEX_NONE;
+	int32 SkeletonBoneIndex = INDEX_NONE;
+	int32 InheritParentSkeletonBoneIndex = INDEX_NONE;
+	int32 DeformLayer = 0;
+	bool bInheritRotation = false;
+	bool bInheritTranslation = false;
+	float InheritInfluence = 0.0f;
+	bool bHasIK = false;
+};
+
+struct FMMDPMXSpaceRuntimeBone
+{
+	int32 PMXBoneIndex = INDEX_NONE;
+	int32 InheritParentPMXBoneIndex = INDEX_NONE;
+	int32 DeformLayer = 0;
+	bool bInheritRotation = false;
+	bool bInheritTranslation = false;
+	float InheritInfluence = 0.0f;
+	bool bHasIK = false;
+};
+
+struct FMMDPMXSpaceIKChain
+{
+	struct FLink
+	{
+		int32 PMXBoneIndex = INDEX_NONE;
+		bool bHasLimit = false;
+		FVector LowerLimitRadians = FVector::ZeroVector;
+		FVector UpperLimitRadians = FVector::ZeroVector;
+	};
+
+	int32 PMXBoneIndex = INDEX_NONE;
+	int32 TargetPMXBoneIndex = INDEX_NONE;
+	TArray<FLink> Links;
+	int32 IterationCount = 0;
+	float AngleLimitRadians = PI;
+};
+
+struct FMMDBoneSpaceConverter
+{
+	FName BoneName = NAME_None;
+	bool bUsesPMXLocalAxis = false;
+	FVector PMXAxisX = FVector::ForwardVector;
+	FVector PMXAxisY = FVector::RightVector;
+	FVector PMXAxisZ = FVector::UpVector;
+
+	FVector ConvertPosition(const FVector& MMDPosition, float Scale) const
+	{
+		return ConvertMMDPositionToUnreal(MMDPosition, Scale);
+	}
+
+	FQuat ConvertRotation(const FQuat& MMDRotation) const
+	{
+		return ConvertMMDQuatToUnreal(MMDRotation).GetNormalized();
+	}
+};
+
+static float EvaluateUnitCubicBezier(float T, float Control1, float Control2)
+{
+	const float InvT = 1.0f - T;
+	return (3.0f * InvT * InvT * T * Control1)
+		+ (3.0f * InvT * T * T * Control2)
+		+ (T * T * T);
+}
+
+static float EvaluateVMDBezierAlpha(const uint8 Interpolation[64], EVMDInterpolationChannel Channel, float LinearAlpha)
+{
+	LinearAlpha = FMath::Clamp(LinearAlpha, 0.0f, 1.0f);
+	const int32 ChannelIndex = static_cast<int32>(Channel);
+	const float X1 = FMath::Clamp(static_cast<float>(Interpolation[ChannelIndex]) / 127.0f, 0.0f, 1.0f);
+	const float Y1 = FMath::Clamp(static_cast<float>(Interpolation[ChannelIndex + 4]) / 127.0f, 0.0f, 1.0f);
+	const float X2 = FMath::Clamp(static_cast<float>(Interpolation[ChannelIndex + 8]) / 127.0f, 0.0f, 1.0f);
+	const float Y2 = FMath::Clamp(static_cast<float>(Interpolation[ChannelIndex + 12]) / 127.0f, 0.0f, 1.0f);
+
+	float Low = 0.0f;
+	float High = 1.0f;
+	float Param = LinearAlpha;
+	for (int32 Iteration = 0; Iteration < 12; ++Iteration)
+	{
+		Param = (Low + High) * 0.5f;
+		const float X = EvaluateUnitCubicBezier(Param, X1, X2);
+		if (X < LinearAlpha)
+		{
+			Low = Param;
+		}
+		else
+		{
+			High = Param;
+		}
+	}
+
+	return FMath::Clamp(EvaluateUnitCubicBezier(Param, Y1, Y2), 0.0f, 1.0f);
+}
+
+static float GetQuatDeltaDegrees(const FQuat& A, const FQuat& B)
+{
+	const float Dot = FMath::Clamp(static_cast<float>(FMath::Abs(A.GetNormalized() | B.GetNormalized())), 0.0f, 1.0f);
+	return FMath::RadiansToDegrees(2.0f * FMath::Acos(Dot));
+}
+
+static void ApplyResolvedVMDKeyToRawTransform(const FResolvedVMDBoneKey& Key, FVector& OutMMDPosition, FQuat& OutMMDRotation)
+{
+	OutMMDPosition = Key.Position;
+	OutMMDRotation = Key.Rotation.GetNormalized();
+}
+
+static void SampleResolvedVMDTrackAtFrame(const TArray<FResolvedVMDBoneKey>& Keys, int32 FrameIndex, FVector& OutMMDPosition, FQuat& OutMMDRotation)
+{
+	if (Keys.Num() == 0)
+	{
+		OutMMDPosition = FVector::ZeroVector;
+		OutMMDRotation = FQuat::Identity;
+		return;
+	}
+
+	int32 NextIndex = 0;
+	while (NextIndex < Keys.Num() && Keys[NextIndex].Frame <= FrameIndex)
+	{
+		++NextIndex;
+	}
+
+	if (NextIndex > 0 && Keys[NextIndex - 1].Frame == FrameIndex)
+	{
+		ApplyResolvedVMDKeyToRawTransform(Keys[NextIndex - 1], OutMMDPosition, OutMMDRotation);
+		return;
+	}
+	if (NextIndex == 0)
+	{
+		OutMMDPosition = FVector::ZeroVector;
+		OutMMDRotation = FQuat::Identity;
+		return;
+	}
+	if (NextIndex >= Keys.Num())
+	{
+		ApplyResolvedVMDKeyToRawTransform(Keys.Last(), OutMMDPosition, OutMMDRotation);
+		return;
+	}
+
+	const FResolvedVMDBoneKey& PreviousKey = Keys[NextIndex - 1];
+	const FResolvedVMDBoneKey& NextKey = Keys[NextIndex];
+	const int32 FrameDelta = NextKey.Frame - PreviousKey.Frame;
+	if (FrameDelta <= 0)
+	{
+		ApplyResolvedVMDKeyToRawTransform(PreviousKey, OutMMDPosition, OutMMDRotation);
+		return;
+	}
+
+	const float LinearAlpha = static_cast<float>(FrameIndex - PreviousKey.Frame) / static_cast<float>(FrameDelta);
+	const FVector InterpolatedPosition(
+		FMath::Lerp(PreviousKey.Position.X, NextKey.Position.X, EvaluateVMDBezierAlpha(NextKey.Interpolation, EVMDInterpolationChannel::PositionX, LinearAlpha)),
+		FMath::Lerp(PreviousKey.Position.Y, NextKey.Position.Y, EvaluateVMDBezierAlpha(NextKey.Interpolation, EVMDInterpolationChannel::PositionY, LinearAlpha)),
+		FMath::Lerp(PreviousKey.Position.Z, NextKey.Position.Z, EvaluateVMDBezierAlpha(NextKey.Interpolation, EVMDInterpolationChannel::PositionZ, LinearAlpha)));
+	const FQuat InterpolatedRotation = FQuat::Slerp(
+		PreviousKey.Rotation,
+		NextKey.Rotation,
+		EvaluateVMDBezierAlpha(NextKey.Interpolation, EVMDInterpolationChannel::Rotation, LinearAlpha)).GetNormalized();
+
+	OutMMDPosition = InterpolatedPosition;
+	OutMMDRotation = InterpolatedRotation;
+}
+
+static int32 FindPMXBoneInRefSkeleton(const FReferenceSkeleton& RefSkeleton, const FPMXBone& Bone)
+{
+	const int32 ExactIndex = RefSkeleton.FindBoneIndex(FName(*Bone.NameJP));
+	if (ExactIndex != INDEX_NONE)
+	{
+		return ExactIndex;
+	}
+
+	const FString SanitizedName = FixMMDName(Bone.NameJP);
+	for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+	{
+		if (FixMMDName(RefSkeleton.GetBoneName(BoneIndex).ToString()) == SanitizedName)
+		{
+			return BoneIndex;
+		}
+	}
+	return INDEX_NONE;
+}
+
+static TArray<int32> BuildPMXToSkeletonBoneMap(const PMXDatas* PMXData, const FReferenceSkeleton& RefSkeleton)
+{
+	TArray<int32> PMXToSkeleton;
+	if (PMXData == nullptr)
+	{
+		return PMXToSkeleton;
+	}
+
+	PMXToSkeleton.SetNum(PMXData->ModelBones.Num());
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < PMXData->ModelBones.Num(); ++PMXBoneIndex)
+	{
+		PMXToSkeleton[PMXBoneIndex] = FindPMXBoneInRefSkeleton(RefSkeleton, PMXData->ModelBones[PMXBoneIndex]);
+	}
+	return PMXToSkeleton;
+}
+
+static FVector GetSafePMXLocalAxis(const FVector& Axis, const FVector& Fallback)
+{
+	const float SizeSquared = Axis.SizeSquared();
+	return SizeSquared > KINDA_SMALL_NUMBER ? Axis * FMath::InvSqrt(SizeSquared) : Fallback;
+}
+
+static TMap<FName, FMMDBoneSpaceConverter> BuildVMDToUEBoneConverters(
+	const PMXDatas* PMXData,
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<int32>& PMXToSkeleton,
+	FMMDIKDebugLog* DebugLog)
+{
+	TMap<FName, FMMDBoneSpaceConverter> Converters;
+	if (PMXData == nullptr)
+	{
+		return Converters;
+	}
+
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < PMXData->ModelBones.Num(); ++PMXBoneIndex)
+	{
+		if (!PMXToSkeleton.IsValidIndex(PMXBoneIndex) || PMXToSkeleton[PMXBoneIndex] == INDEX_NONE)
+		{
+			continue;
+		}
+
+		const FPMXBone& PMXBone = PMXData->ModelBones[PMXBoneIndex];
+		FMMDBoneSpaceConverter Converter;
+		Converter.BoneName = RefSkeleton.GetBoneName(PMXToSkeleton[PMXBoneIndex]);
+		Converter.bUsesPMXLocalAxis = (PMXBone.Flags & 0x0800) != 0;
+		if (Converter.bUsesPMXLocalAxis)
+		{
+			Converter.PMXAxisX = GetSafePMXLocalAxis(PMXBone.LocalAxisX, FVector::ForwardVector);
+			Converter.PMXAxisZ = GetSafePMXLocalAxis(PMXBone.LocalAxisZ, FVector::UpVector);
+			Converter.PMXAxisY = GetSafePMXLocalAxis(FVector::CrossProduct(Converter.PMXAxisZ, Converter.PMXAxisX), FVector::RightVector);
+			Converter.PMXAxisZ = GetSafePMXLocalAxis(FVector::CrossProduct(Converter.PMXAxisX, Converter.PMXAxisY), Converter.PMXAxisZ);
+		}
+
+		Converters.Add(Converter.BoneName, Converter);
+	}
+
+	return Converters;
+}
+
+static void PopulateMMDModelDataAsset(UMMDModelDataAsset* ModelDataAsset, const PMXDatas& PMXInfo, const FReferenceSkeleton& RefSkeleton, const FString& PMXFilePath)
+{
+	if (ModelDataAsset == nullptr)
+	{
+		return;
+	}
+
+	ModelDataAsset->ModelId = FixMMDName(FPaths::GetBaseFilename(PMXFilePath));
+	ModelDataAsset->ModelNameJP = PMXInfo.ModelNameJP;
+	ModelDataAsset->ModelNameEN = PMXInfo.ModelNameEN;
+	ModelDataAsset->Bones.Reset(PMXInfo.ModelBones.Num());
+
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < PMXInfo.ModelBones.Num(); ++PMXBoneIndex)
+	{
+		const FPMXBone& PMXBone = PMXInfo.ModelBones[PMXBoneIndex];
+		FMMDModelBoneData& BoneData = ModelDataAsset->Bones.AddDefaulted_GetRef();
+		BoneData.NameJP = PMXBone.NameJP;
+		BoneData.NameEN = PMXBone.NameEN;
+		BoneData.ParentBoneIndex = PMXBone.ParentBoneIndex;
+		BoneData.Position = PMXBone.Position;
+		BoneData.DeformLayer = PMXBone.DeformLayer;
+		BoneData.Flags = static_cast<int32>(PMXBone.Flags);
+		BoneData.InheritParentIndex = PMXBone.InheritParentIndex;
+		BoneData.InheritInfluence = PMXBone.InheritInfluence;
+		BoneData.FixedAxis = PMXBone.Axis;
+		BoneData.LocalAxisX = PMXBone.LocalAxisX;
+		BoneData.LocalAxisZ = PMXBone.LocalAxisZ;
+		BoneData.IKTargetBoneIndex = PMXBone.IKTargetBoneIndex;
+		BoneData.IKLoopCount = PMXBone.IKLoopCount;
+		BoneData.IKLimitAngle = PMXBone.IKLimitAngle;
+		BoneData.UEBoneIndex = FindPMXBoneInRefSkeleton(RefSkeleton, PMXBone);
+		BoneData.UEBoneName = BoneData.UEBoneIndex != INDEX_NONE ? RefSkeleton.GetBoneName(BoneData.UEBoneIndex) : NAME_None;
+
+		BoneData.IKLinks.Reserve(PMXBone.IKLinks.Num());
+		for (const FPMXIKLink& PMXLink : PMXBone.IKLinks)
+		{
+			FMMDModelIKLinkData& LinkData = BoneData.IKLinks.AddDefaulted_GetRef();
+			LinkData.LinkBoneIndex = PMXLink.LinkBoneIndex;
+			LinkData.bHasLimit = PMXLink.HasLimit != 0;
+			LinkData.LowerLimit = PMXLink.LowerLimit;
+			LinkData.UpperLimit = PMXLink.UpperLimit;
+		}
+	}
+}
+
+static UMMDModelDataAsset* CreateMMDModelDataAssetForMesh(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXInfo, const FReferenceSkeleton& RefSkeleton, const FString& BasePath, const FString& CleanAssetName, const FString& PMXFilePath)
+{
+#if WITH_EDITOR
+	if (SkeletalMesh == nullptr)
+	{
+		return nullptr;
+	}
+
+	const FString DataPath = BasePath + TEXT("Data/");
+	const FString AssetName = CleanAssetName + TEXT("_MMDModelData");
+	const FString PackageName = DataPath + AssetName;
+	UPackage* Package = CreatePackage(*PackageName);
+	if (Package == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MMDModelData: Failed to create package: %s"), *PackageName);
+		return nullptr;
+	}
+
+	UMMDModelDataAsset* ModelDataAsset = NewObject<UMMDModelDataAsset>(Package, *AssetName, RF_Public | RF_Standalone);
+	if (ModelDataAsset == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MMDModelData: Failed to create asset: %s"), *AssetName);
+		return nullptr;
+	}
+
+	PopulateMMDModelDataAsset(ModelDataAsset, PMXInfo, RefSkeleton, PMXFilePath);
+	ModelDataAsset->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(ModelDataAsset);
+
+	UMMDSkeletalMeshUserData* UserData = NewObject<UMMDSkeletalMeshUserData>(SkeletalMesh, UMMDSkeletalMeshUserData::StaticClass(), NAME_None, RF_Public | RF_Transactional);
+	UserData->ModelDataAsset = ModelDataAsset;
+	SkeletalMesh->AddAssetUserData(UserData);
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	if (!UPackage::SavePackage(Package, ModelDataAsset, *FilePath, SaveArgs))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MMDModelData: SavePackage failed: %s"), *FilePath);
+	}
+
+	return ModelDataAsset;
+#else
+	return nullptr;
+#endif
+}
+
+static UMMDModelDataAsset* FindMMDModelDataAsset(USkeletalMesh* SkeletalMesh)
+{
+	if (SkeletalMesh == nullptr)
+	{
+		return nullptr;
+	}
+
+	if (const UMMDSkeletalMeshUserData* UserData = SkeletalMesh->GetAssetUserData<UMMDSkeletalMeshUserData>())
+	{
+		return UserData->ModelDataAsset;
+	}
+	return nullptr;
+}
+
+static TArray<FMMDPMXRuntimeBone> BuildMMDPMXRuntimeBones(const PMXDatas* PMXData, const FReferenceSkeleton& RefSkeleton, const TArray<int32>& PMXToSkeleton, FMMDIKDebugLog* DebugLog)
+{
+	TArray<FMMDPMXRuntimeBone> RuntimeBones;
+	if (PMXData == nullptr)
+	{
+		return RuntimeBones;
+	}
+
+	RuntimeBones.Reserve(PMXData->ModelBones.Num());
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < PMXData->ModelBones.Num(); ++PMXBoneIndex)
+	{
+		if (!PMXToSkeleton.IsValidIndex(PMXBoneIndex) || PMXToSkeleton[PMXBoneIndex] == INDEX_NONE)
+		{
+			continue;
+		}
+
+		const FPMXBone& PMXBone = PMXData->ModelBones[PMXBoneIndex];
+		FMMDPMXRuntimeBone RuntimeBone;
+		RuntimeBone.PMXBoneIndex = PMXBoneIndex;
+		RuntimeBone.SkeletonBoneIndex = PMXToSkeleton[PMXBoneIndex];
+		RuntimeBone.DeformLayer = PMXBone.DeformLayer;
+		RuntimeBone.bInheritRotation = (PMXBone.Flags & 0x0100) != 0;
+		RuntimeBone.bInheritTranslation = (PMXBone.Flags & 0x0200) != 0;
+		RuntimeBone.InheritInfluence = PMXBone.InheritInfluence;
+		RuntimeBone.bHasIK = (PMXBone.Flags & 0x0020) != 0;
+		if (PMXToSkeleton.IsValidIndex(PMXBone.InheritParentIndex))
+		{
+			RuntimeBone.InheritParentSkeletonBoneIndex = PMXToSkeleton[PMXBone.InheritParentIndex];
+		}
+		RuntimeBones.Add(RuntimeBone);
+	}
+
+	RuntimeBones.Sort([](const FMMDPMXRuntimeBone& A, const FMMDPMXRuntimeBone& B)
+	{
+		if (A.DeformLayer != B.DeformLayer)
+		{
+			return A.DeformLayer < B.DeformLayer;
+		}
+		if (A.bHasIK != B.bHasIK)
+		{
+			return !A.bHasIK && B.bHasIK;
+		}
+		return A.PMXBoneIndex < B.PMXBoneIndex;
+	});
+
+	return RuntimeBones;
+}
+
+static int32 ResolveModelDataBoneToSkeletonIndex(const FMMDModelBoneData& BoneData, const FReferenceSkeleton& RefSkeleton)
+{
+	if (BoneData.UEBoneIndex != INDEX_NONE
+		&& BoneData.UEBoneIndex < RefSkeleton.GetNum()
+		&& RefSkeleton.GetBoneName(BoneData.UEBoneIndex) == BoneData.UEBoneName)
+	{
+		return BoneData.UEBoneIndex;
+	}
+
+	if (BoneData.UEBoneName != NAME_None)
+	{
+		return RefSkeleton.FindBoneIndex(BoneData.UEBoneName);
+	}
+
+	return INDEX_NONE;
+}
+
+static TArray<int32> BuildModelDataToSkeletonBoneMap(const UMMDModelDataAsset* ModelDataAsset, const FReferenceSkeleton& RefSkeleton)
+{
+	TArray<int32> ModelDataToSkeleton;
+	if (ModelDataAsset == nullptr)
+	{
+		return ModelDataToSkeleton;
+	}
+
+	ModelDataToSkeleton.SetNum(ModelDataAsset->Bones.Num());
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
+	{
+		ModelDataToSkeleton[PMXBoneIndex] = ResolveModelDataBoneToSkeletonIndex(ModelDataAsset->Bones[PMXBoneIndex], RefSkeleton);
+	}
+	return ModelDataToSkeleton;
+}
+
+static TArray<FMMDPMXRuntimeBone> BuildMMDModelDataRuntimeBones(const UMMDModelDataAsset* ModelDataAsset, const FReferenceSkeleton& RefSkeleton, const TArray<int32>& ModelDataToSkeleton)
+{
+	TArray<FMMDPMXRuntimeBone> RuntimeBones;
+	if (ModelDataAsset == nullptr)
+	{
+		return RuntimeBones;
+	}
+
+	RuntimeBones.Reserve(ModelDataAsset->Bones.Num());
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
+	{
+		if (!ModelDataToSkeleton.IsValidIndex(PMXBoneIndex) || ModelDataToSkeleton[PMXBoneIndex] == INDEX_NONE)
+		{
+			continue;
+		}
+
+		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+		FMMDPMXRuntimeBone RuntimeBone;
+		RuntimeBone.PMXBoneIndex = PMXBoneIndex;
+		RuntimeBone.SkeletonBoneIndex = ModelDataToSkeleton[PMXBoneIndex];
+		RuntimeBone.DeformLayer = BoneData.DeformLayer;
+		RuntimeBone.bInheritRotation = (BoneData.Flags & 0x0100) != 0;
+		RuntimeBone.bInheritTranslation = (BoneData.Flags & 0x0200) != 0;
+		RuntimeBone.InheritInfluence = BoneData.InheritInfluence;
+		RuntimeBone.bHasIK = (BoneData.Flags & 0x0020) != 0;
+		if (ModelDataToSkeleton.IsValidIndex(BoneData.InheritParentIndex))
+		{
+			RuntimeBone.InheritParentSkeletonBoneIndex = ModelDataToSkeleton[BoneData.InheritParentIndex];
+		}
+		RuntimeBones.Add(RuntimeBone);
+	}
+
+	RuntimeBones.Sort([](const FMMDPMXRuntimeBone& A, const FMMDPMXRuntimeBone& B)
+	{
+		if (A.DeformLayer != B.DeformLayer)
+		{
+			return A.DeformLayer < B.DeformLayer;
+		}
+		if (A.bHasIK != B.bHasIK)
+		{
+			return !A.bHasIK && B.bHasIK;
+		}
+		return A.PMXBoneIndex < B.PMXBoneIndex;
+	});
+
+	return RuntimeBones;
+}
+
+static void BuildComponentSpacePoseForFrame(const FReferenceSkeleton& RefSkeleton, const TArray<TArray<FTransform>>& LocalTransforms, int32 FrameIndex, TArray<FTransform>& OutComponentTransforms)
+{
+	const int32 NumBones = RefSkeleton.GetNum();
+	OutComponentTransforms.SetNum(NumBones);
+	for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+	{
+		const FTransform& LocalTransform = LocalTransforms[BoneIndex][FrameIndex];
+		const int32 ParentIndex = RefSkeleton.GetParentIndex(BoneIndex);
+		OutComponentTransforms[BoneIndex] = ParentIndex != INDEX_NONE
+			? LocalTransform * OutComponentTransforms[ParentIndex]
+			: LocalTransform;
+	}
+}
+
+static void ConvertMMDIKLimitToUnrealDegrees(const FVector& LowerRadians, const FVector& UpperRadians, FVector& OutLowerDegrees, FVector& OutUpperDegrees)
+{
+	const FVector LowerAxes(LowerRadians.X, -UpperRadians.Z, LowerRadians.Y);
+	const FVector UpperAxes(UpperRadians.X, -LowerRadians.Z, UpperRadians.Y);
+	OutLowerDegrees = FVector(FMath::RadiansToDegrees(LowerAxes.X), FMath::RadiansToDegrees(LowerAxes.Y), FMath::RadiansToDegrees(LowerAxes.Z));
+	OutUpperDegrees = FVector(FMath::RadiansToDegrees(UpperAxes.X), FMath::RadiansToDegrees(UpperAxes.Y), FMath::RadiansToDegrees(UpperAxes.Z));
+}
+
+static FQuat ClampLocalRotationByMMDIKLimit(const FQuat& LocalRotation, const FQuat& ReferenceLocalRotation, const FMMDIKBakeChain::FLink& Link)
+{
+	if (!Link.bHasLimit)
+	{
+		return LocalRotation.GetNormalized();
+	}
+
+	const FQuat DeltaFromRef = (ReferenceLocalRotation.Inverse() * LocalRotation).GetNormalized();
+	const FRotator DeltaRotator = DeltaFromRef.Rotator();
+	const FVector ClampedAxisDegrees(
+		FMath::ClampAngle(DeltaRotator.Roll, Link.LowerLimitDegrees.X, Link.UpperLimitDegrees.X),
+		FMath::ClampAngle(DeltaRotator.Pitch, Link.LowerLimitDegrees.Y, Link.UpperLimitDegrees.Y),
+		FMath::ClampAngle(DeltaRotator.Yaw, Link.LowerLimitDegrees.Z, Link.UpperLimitDegrees.Z));
+	const FQuat ClampedDelta = FRotator(ClampedAxisDegrees.Y, ClampedAxisDegrees.Z, ClampedAxisDegrees.X).Quaternion();
+	return (ReferenceLocalRotation * ClampedDelta).GetNormalized();
+}
+
+static TArray<FMMDIKBakeChain> BuildMMDIKBakeChains(const PMXDatas* PMXData, const FReferenceSkeleton& RefSkeleton, const TArray<int32>& PMXToSkeleton, TSet<FName>& InOutTracksToWrite, FMMDIKDebugLog* DebugLog)
+{
+	TArray<FMMDIKBakeChain> Chains;
+	if (PMXData == nullptr)
+	{
+		return Chains;
+	}
+
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < PMXData->ModelBones.Num(); ++PMXBoneIndex)
+	{
+		const FPMXBone& PMXBone = PMXData->ModelBones[PMXBoneIndex];
+		if ((PMXBone.Flags & 0x0020) == 0 || PMXBone.IKLinks.Num() == 0)
+		{
+			continue;
+		}
+		if (!PMXToSkeleton.IsValidIndex(PMXBoneIndex) || !PMXToSkeleton.IsValidIndex(PMXBone.IKTargetBoneIndex))
+		{
+			continue;
+		}
+
+		FMMDIKBakeChain Chain;
+		Chain.PMXBoneIndex = PMXBoneIndex;
+		Chain.IKBoneIndex = PMXToSkeleton[PMXBoneIndex];
+		Chain.TargetBoneIndex = PMXToSkeleton[PMXBone.IKTargetBoneIndex];
+		if (Chain.IKBoneIndex == INDEX_NONE || Chain.TargetBoneIndex == INDEX_NONE)
+		{
+			continue;
+		}
+
+		Chain.IKBoneName = RefSkeleton.GetBoneName(Chain.IKBoneIndex);
+		Chain.TargetBoneName = RefSkeleton.GetBoneName(Chain.TargetBoneIndex);
+		Chain.PMXLoopCount = PMXBone.IKLoopCount;
+		Chain.IterationCount = FMath::Clamp(FMath::Max(PMXBone.IKLoopCount, 64), 1, 256);
+		Chain.AngleLimitRadians = PMXBone.IKLimitAngle > SMALL_NUMBER ? PMXBone.IKLimitAngle : PI;
+
+		int32 FirstLinkIndex = 0;
+		if (PMXBone.IKLinks[0].LinkBoneIndex == PMXBone.IKTargetBoneIndex && PMXBone.IKLinks.Num() > 1)
+		{
+			FirstLinkIndex = 1;
+		}
+
+		bool bValidChain = true;
+		int32 ExpectedChildBoneIndex = Chain.TargetBoneIndex;
+		for (int32 LinkIndex = FirstLinkIndex; LinkIndex < PMXBone.IKLinks.Num(); ++LinkIndex)
+		{
+			const FPMXIKLink& Link = PMXBone.IKLinks[LinkIndex];
+			if (!PMXToSkeleton.IsValidIndex(Link.LinkBoneIndex))
+			{
+				Chain.InvalidReason = FString::Printf(TEXT("link PMX index out of range: %d"), Link.LinkBoneIndex);
+				bValidChain = false;
+				break;
+			}
+
+			const int32 LinkBoneIndex = PMXToSkeleton[Link.LinkBoneIndex];
+			if (LinkBoneIndex == INDEX_NONE)
+			{
+				Chain.InvalidReason = FString::Printf(TEXT("link bone is not in target skeleton: %d"), Link.LinkBoneIndex);
+				bValidChain = false;
+				break;
+			}
+			if (RefSkeleton.GetParentIndex(ExpectedChildBoneIndex) != LinkBoneIndex)
+			{
+				Chain.InvalidReason = FString::Printf(TEXT("invalid parent chain: expected parent of %s to be %s"),
+					*RefSkeleton.GetBoneName(ExpectedChildBoneIndex).ToString(),
+					*RefSkeleton.GetBoneName(LinkBoneIndex).ToString());
+				bValidChain = false;
+				break;
+			}
+
+			FMMDIKBakeChain::FLink ChainLink;
+			ChainLink.BoneIndex = LinkBoneIndex;
+			ChainLink.bHasLimit = Link.HasLimit != 0;
+			if (ChainLink.bHasLimit)
+			{
+				ConvertMMDIKLimitToUnrealDegrees(Link.LowerLimit, Link.UpperLimit, ChainLink.LowerLimitDegrees, ChainLink.UpperLimitDegrees);
+			}
+
+			Chain.Links.Add(ChainLink);
+			InOutTracksToWrite.Add(RefSkeleton.GetBoneName(LinkBoneIndex));
+			ExpectedChildBoneIndex = LinkBoneIndex;
+		}
+
+		if (!bValidChain)
+		{
+			if (DebugLog != nullptr)
+			{
+				DebugLog->Log(FString::Printf(TEXT("IK chain skipped: %s -> %s | %s"),
+					*Chain.IKBoneName.ToString(),
+					*Chain.TargetBoneName.ToString(),
+					*Chain.InvalidReason));
+			}
+			continue;
+		}
+
+		if (Chain.Links.Num() > 0)
+		{
+			InOutTracksToWrite.Add(Chain.IKBoneName);
+			InOutTracksToWrite.Add(Chain.TargetBoneName);
+			Chains.Add(MoveTemp(Chain));
+		}
+	}
+
+	return Chains;
+}
+
+static TArray<FMMDIKBakeChain> BuildMMDModelDataIKBakeChains(const UMMDModelDataAsset* ModelDataAsset, const FReferenceSkeleton& RefSkeleton, const TArray<int32>& ModelDataToSkeleton, TSet<FName>& InOutTracksToWrite, FMMDIKDebugLog* DebugLog)
+{
+	TArray<FMMDIKBakeChain> Chains;
+	if (ModelDataAsset == nullptr)
+	{
+		return Chains;
+	}
+
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
+	{
+		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+		if ((BoneData.Flags & 0x0020) == 0 || BoneData.IKLinks.Num() == 0)
+		{
+			continue;
+		}
+		if (!ModelDataToSkeleton.IsValidIndex(PMXBoneIndex) || !ModelDataToSkeleton.IsValidIndex(BoneData.IKTargetBoneIndex))
+		{
+			continue;
+		}
+
+		FMMDIKBakeChain Chain;
+		Chain.PMXBoneIndex = PMXBoneIndex;
+		Chain.IKBoneIndex = ModelDataToSkeleton[PMXBoneIndex];
+		Chain.TargetBoneIndex = ModelDataToSkeleton[BoneData.IKTargetBoneIndex];
+		if (Chain.IKBoneIndex == INDEX_NONE || Chain.TargetBoneIndex == INDEX_NONE)
+		{
+			continue;
+		}
+
+		Chain.IKBoneName = RefSkeleton.GetBoneName(Chain.IKBoneIndex);
+		Chain.TargetBoneName = RefSkeleton.GetBoneName(Chain.TargetBoneIndex);
+		Chain.PMXLoopCount = BoneData.IKLoopCount;
+		Chain.IterationCount = FMath::Clamp(FMath::Max(BoneData.IKLoopCount, 64), 1, 256);
+		Chain.AngleLimitRadians = BoneData.IKLimitAngle > SMALL_NUMBER ? BoneData.IKLimitAngle : PI;
+
+		int32 FirstLinkIndex = 0;
+		if (BoneData.IKLinks[0].LinkBoneIndex == BoneData.IKTargetBoneIndex && BoneData.IKLinks.Num() > 1)
+		{
+			FirstLinkIndex = 1;
+		}
+
+		bool bValidChain = true;
+		int32 ExpectedChildBoneIndex = Chain.TargetBoneIndex;
+		for (int32 LinkIndex = FirstLinkIndex; LinkIndex < BoneData.IKLinks.Num(); ++LinkIndex)
+		{
+			const FMMDModelIKLinkData& Link = BoneData.IKLinks[LinkIndex];
+			if (!ModelDataToSkeleton.IsValidIndex(Link.LinkBoneIndex))
+			{
+				Chain.InvalidReason = FString::Printf(TEXT("link PMX index out of range: %d"), Link.LinkBoneIndex);
+				bValidChain = false;
+				break;
+			}
+
+			const int32 LinkBoneIndex = ModelDataToSkeleton[Link.LinkBoneIndex];
+			if (LinkBoneIndex == INDEX_NONE)
+			{
+				Chain.InvalidReason = FString::Printf(TEXT("link bone is not in target skeleton: %d"), Link.LinkBoneIndex);
+				bValidChain = false;
+				break;
+			}
+			if (RefSkeleton.GetParentIndex(ExpectedChildBoneIndex) != LinkBoneIndex)
+			{
+				Chain.InvalidReason = FString::Printf(TEXT("invalid parent chain: expected parent of %s to be %s"),
+					*RefSkeleton.GetBoneName(ExpectedChildBoneIndex).ToString(),
+					*RefSkeleton.GetBoneName(LinkBoneIndex).ToString());
+				bValidChain = false;
+				break;
+			}
+
+			FMMDIKBakeChain::FLink ChainLink;
+			ChainLink.BoneIndex = LinkBoneIndex;
+			ChainLink.bHasLimit = Link.bHasLimit;
+			if (ChainLink.bHasLimit)
+			{
+				ConvertMMDIKLimitToUnrealDegrees(Link.LowerLimit, Link.UpperLimit, ChainLink.LowerLimitDegrees, ChainLink.UpperLimitDegrees);
+			}
+
+			Chain.Links.Add(ChainLink);
+			InOutTracksToWrite.Add(RefSkeleton.GetBoneName(LinkBoneIndex));
+			ExpectedChildBoneIndex = LinkBoneIndex;
+		}
+
+		if (!bValidChain)
+		{
+			if (DebugLog != nullptr)
+			{
+				DebugLog->Log(FString::Printf(TEXT("ModelData IK chain skipped: %s -> %s | %s"),
+					*Chain.IKBoneName.ToString(),
+					*Chain.TargetBoneName.ToString(),
+					*Chain.InvalidReason));
+			}
+			continue;
+		}
+
+		if (Chain.Links.Num() > 0)
+		{
+			InOutTracksToWrite.Add(Chain.IKBoneName);
+			InOutTracksToWrite.Add(Chain.TargetBoneName);
+			Chains.Add(MoveTemp(Chain));
+		}
+	}
+
+	return Chains;
+}
+
+static void SolveMMDIKChainForFrame(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& RefPose, const FMMDIKBakeChain& Chain, TArray<TArray<FTransform>>& LocalTransforms, int32 FrameIndex, TArray<FTransform>& ComponentTransforms)
+{
+	for (int32 IterationIndex = 0; IterationIndex < Chain.IterationCount; ++IterationIndex)
+	{
+		for (const FMMDIKBakeChain::FLink& Link : Chain.Links)
+		{
+			if (!ComponentTransforms.IsValidIndex(Link.BoneIndex)
+				|| !ComponentTransforms.IsValidIndex(Chain.TargetBoneIndex)
+				|| !ComponentTransforms.IsValidIndex(Chain.IKBoneIndex)
+				|| !RefPose.IsValidIndex(Link.BoneIndex))
+			{
+				continue;
+			}
+
+			const FVector LinkPosition = ComponentTransforms[Link.BoneIndex].GetTranslation();
+			const FVector EffectorVector = ComponentTransforms[Chain.TargetBoneIndex].GetTranslation() - LinkPosition;
+			const FVector GoalVector = ComponentTransforms[Chain.IKBoneIndex].GetTranslation() - LinkPosition;
+			if (EffectorVector.SizeSquared() <= KINDA_SMALL_NUMBER || GoalVector.SizeSquared() <= KINDA_SMALL_NUMBER)
+			{
+				continue;
+			}
+
+			FQuat DeltaRotation = FQuat::FindBetweenNormals(EffectorVector.GetSafeNormal(), GoalVector.GetSafeNormal());
+			float DeltaAngle = 0.0f;
+			FVector DeltaAxis = FVector::ForwardVector;
+			DeltaRotation.ToAxisAndAngle(DeltaAxis, DeltaAngle);
+			DeltaAngle = FMath::UnwindRadians(DeltaAngle);
+			DeltaRotation = FQuat(DeltaAxis.GetSafeNormal(), FMath::Clamp(DeltaAngle, -Chain.AngleLimitRadians, Chain.AngleLimitRadians)).GetNormalized();
+
+			FTransform NewComponentTransform = ComponentTransforms[Link.BoneIndex];
+			NewComponentTransform.SetRotation((DeltaRotation * ComponentTransforms[Link.BoneIndex].GetRotation()).GetNormalized());
+			const int32 ParentIndex = RefSkeleton.GetParentIndex(Link.BoneIndex);
+			FTransform NewLocalTransform = ParentIndex != INDEX_NONE
+				? NewComponentTransform.GetRelativeTransform(ComponentTransforms[ParentIndex])
+				: NewComponentTransform;
+			// PMX link limits are expressed in MMD local bone axes. The current UE Euler clamp is not equivalent
+			// and can collapse the leg chain on models with custom leg axes, so keep the CCD solution unclamped here.
+			NewLocalTransform.SetRotation(NewLocalTransform.GetRotation().GetNormalized());
+			LocalTransforms[Link.BoneIndex][FrameIndex].SetRotation(NewLocalTransform.GetRotation().GetNormalized());
+			BuildComponentSpacePoseForFrame(RefSkeleton, LocalTransforms, FrameIndex, ComponentTransforms);
+		}
+	}
+}
+
+static void ApplyMMDAppendAndIKByTransformOrder(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& RefPose, const TArray<FMMDPMXRuntimeBone>& RuntimeBones, const TArray<FMMDIKBakeChain>& IKChains, TArray<TArray<FTransform>>& LocalTransforms, int32 NumKeys)
+{
+	TMap<int32, const FMMDIKBakeChain*> IKChainByPMXBone;
+	for (const FMMDIKBakeChain& Chain : IKChains)
+	{
+		IKChainByPMXBone.Add(Chain.PMXBoneIndex, &Chain);
+	}
+
+	TArray<FTransform> ComponentTransforms;
+	for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+	{
+		BuildComponentSpacePoseForFrame(RefSkeleton, LocalTransforms, FrameIndex, ComponentTransforms);
+		for (const FMMDPMXRuntimeBone& RuntimeBone : RuntimeBones)
+		{
+			const int32 BoneIndex = RuntimeBone.SkeletonBoneIndex;
+			const int32 InheritParentIndex = RuntimeBone.InheritParentSkeletonBoneIndex;
+			if ((RuntimeBone.bInheritRotation || RuntimeBone.bInheritTranslation)
+				&& LocalTransforms.IsValidIndex(BoneIndex)
+				&& LocalTransforms.IsValidIndex(InheritParentIndex)
+				&& RefPose.IsValidIndex(BoneIndex)
+				&& RefPose.IsValidIndex(InheritParentIndex))
+			{
+				FTransform& BoneLocal = LocalTransforms[BoneIndex][FrameIndex];
+				const FTransform& ParentLocal = LocalTransforms[InheritParentIndex][FrameIndex];
+				const FTransform& ParentRefLocal = RefPose[InheritParentIndex];
+				if (RuntimeBone.bInheritTranslation)
+				{
+					BoneLocal.AddToTranslation((ParentLocal.GetTranslation() - ParentRefLocal.GetTranslation()) * RuntimeBone.InheritInfluence);
+				}
+				if (RuntimeBone.bInheritRotation)
+				{
+					const FQuat ParentRotationDelta = (ParentRefLocal.GetRotation().Inverse() * ParentLocal.GetRotation()).GetNormalized();
+					const FQuat WeightedDelta = FQuat::Slerp(FQuat::Identity, ParentRotationDelta, FMath::Clamp(RuntimeBone.InheritInfluence, 0.0f, 1.0f)).GetNormalized();
+					BoneLocal.SetRotation((BoneLocal.GetRotation() * WeightedDelta).GetNormalized());
+				}
+				BuildComponentSpacePoseForFrame(RefSkeleton, LocalTransforms, FrameIndex, ComponentTransforms);
+			}
+
+			if (const FMMDIKBakeChain* const* Chain = IKChainByPMXBone.Find(RuntimeBone.PMXBoneIndex))
+			{
+				SolveMMDIKChainForFrame(RefSkeleton, RefPose, **Chain, LocalTransforms, FrameIndex, ComponentTransforms);
+			}
+		}
+	}
+}
+
+static void LogVMDControlTrackStats(const TMap<FName, TArray<FResolvedVMDBoneKey>>& BoneTrackMap, FMMDIKDebugLog& DebugLog)
+{
+	const FName ControlBones[] = {
+		FName(TEXT("\u5168\u3066\u306e\u89aa")),
+		FName(TEXT("\u64cd\u4f5c\u4e2d\u5fc3")),
+		FName(TEXT("\u30bb\u30f3\u30bf\u30fc")),
+		FName(TEXT("\u30b0\u30eb\u30fc\u30d6")),
+		FName(TEXT("\u8170")),
+		FName(TEXT("\u53f3\u8db3\uff29\uff2b")),
+		FName(TEXT("\u5de6\u8db3\uff29\uff2b")),
+		FName(TEXT("\u53f3\u3064\u307e\u5148\uff29\uff2b")),
+		FName(TEXT("\u5de6\u3064\u307e\u5148\uff29\uff2b")),
+		FName(TEXT("\u53f3\u8db3IK\u89aa")),
+		FName(TEXT("\u5de6\u8db3IK\u89aa")),
+		FName(TEXT("\u4e21\u8db3IK\u89aa"))
+	};
+
+	for (const FName& BoneName : ControlBones)
+	{
+		const TArray<FResolvedVMDBoneKey>* Keys = BoneTrackMap.Find(BoneName);
+		if (Keys == nullptr || Keys->Num() == 0)
+		{
+			DebugLog.Log(FString::Printf(TEXT("Track stats: %s | Keys=0"), *BoneName.ToString()));
+			continue;
+		}
+		int32 MaxGap = 0;
+		for (int32 KeyIndex = 1; KeyIndex < Keys->Num(); ++KeyIndex)
+		{
+			MaxGap = FMath::Max(MaxGap, (*Keys)[KeyIndex].Frame - (*Keys)[KeyIndex - 1].Frame);
+		}
+		DebugLog.Log(FString::Printf(TEXT("Track stats: %s | Keys=%d | First=%d | Last=%d | MaxGap=%d | VMDBezier=1"),
+			*BoneName.ToString(),
+			Keys->Num(),
+			(*Keys)[0].Frame,
+			Keys->Last().Frame,
+			MaxGap));
+	}
+}
+
+static float GetComponentSpaceBoneDistance(
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<TArray<FTransform>>& LocalTransforms,
+	int32 FrameIndex,
+	const FName& BoneA,
+	const FName& BoneB)
+{
+	const int32 BoneIndexA = RefSkeleton.FindBoneIndex(BoneA);
+	const int32 BoneIndexB = RefSkeleton.FindBoneIndex(BoneB);
+	if (BoneIndexA == INDEX_NONE || BoneIndexB == INDEX_NONE)
+	{
+		return -1.0f;
+	}
+
+	TArray<FTransform> ComponentTransforms;
+	BuildComponentSpacePoseForFrame(RefSkeleton, LocalTransforms, FrameIndex, ComponentTransforms);
+	if (!ComponentTransforms.IsValidIndex(BoneIndexA) || !ComponentTransforms.IsValidIndex(BoneIndexB))
+	{
+		return -1.0f;
+	}
+
+	return static_cast<float>(FVector::Dist(ComponentTransforms[BoneIndexA].GetTranslation(), ComponentTransforms[BoneIndexB].GetTranslation()));
+}
+
+static FVector GetComponentSpaceBonePosition(
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<TArray<FTransform>>& LocalTransforms,
+	int32 FrameIndex,
+	const FName& BoneName,
+	bool& bOutFound)
+{
+	bOutFound = false;
+	const int32 BoneIndex = RefSkeleton.FindBoneIndex(BoneName);
+	if (BoneIndex == INDEX_NONE)
+	{
+		return FVector::ZeroVector;
+	}
+
+	TArray<FTransform> ComponentTransforms;
+	BuildComponentSpacePoseForFrame(RefSkeleton, LocalTransforms, FrameIndex, ComponentTransforms);
+	if (!ComponentTransforms.IsValidIndex(BoneIndex))
+	{
+		return FVector::ZeroVector;
+	}
+
+	bOutFound = true;
+	return ComponentTransforms[BoneIndex].GetTranslation();
+}
+
+static FVector SampleRawVMDPositionForBone(const TMap<FName, TArray<FResolvedVMDBoneKey>>& BoneTrackMap, const FName& BoneName, int32 FrameIndex)
+{
+	const TArray<FResolvedVMDBoneKey>* Keys = BoneTrackMap.Find(BoneName);
+	if (Keys == nullptr)
+	{
+		return FVector::ZeroVector;
+	}
+
+	FVector RawMMDPosition = FVector::ZeroVector;
+	FQuat RawMMDRotation = FQuat::Identity;
+	SampleResolvedVMDTrackAtFrame(*Keys, FrameIndex, RawMMDPosition, RawMMDRotation);
+	return RawMMDPosition;
+}
+
+static void LogMMDIKTargetFrameProbe(
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<TArray<FTransform>>& LocalTransforms,
+	const TMap<FName, TArray<FResolvedVMDBoneKey>>& BoneTrackMap,
+	int32 FrameIndex,
+	FMMDIKDebugLog& DebugLog)
+{
+	const FName RightIK(TEXT("\u53f3\u8db3\uff29\uff2b"));
+	const FName LeftIK(TEXT("\u5de6\u8db3\uff29\uff2b"));
+	const FName RightIKParent(TEXT("\u53f3\u8db3IK\u89aa"));
+	const FName LeftIKParent(TEXT("\u5de6\u8db3IK\u89aa"));
+	const FName Center(TEXT("\u30bb\u30f3\u30bf\u30fc"));
+	const FName Groove(TEXT("\u30b0\u30eb\u30fc\u30d6"));
+
+	bool bFoundRightIK = false;
+	bool bFoundLeftIK = false;
+	bool bFoundRightParent = false;
+	bool bFoundLeftParent = false;
+	const FVector RightIKPos = GetComponentSpaceBonePosition(RefSkeleton, LocalTransforms, FrameIndex, RightIK, bFoundRightIK);
+	const FVector LeftIKPos = GetComponentSpaceBonePosition(RefSkeleton, LocalTransforms, FrameIndex, LeftIK, bFoundLeftIK);
+	const FVector RightParentPos = GetComponentSpaceBonePosition(RefSkeleton, LocalTransforms, FrameIndex, RightIKParent, bFoundRightParent);
+	const FVector LeftParentPos = GetComponentSpaceBonePosition(RefSkeleton, LocalTransforms, FrameIndex, LeftIKParent, bFoundLeftParent);
+
+	const FVector RightIKRaw = SampleRawVMDPositionForBone(BoneTrackMap, RightIK, FrameIndex);
+	const FVector LeftIKRaw = SampleRawVMDPositionForBone(BoneTrackMap, LeftIK, FrameIndex);
+	const FVector RightParentRaw = SampleRawVMDPositionForBone(BoneTrackMap, RightIKParent, FrameIndex);
+	const FVector LeftParentRaw = SampleRawVMDPositionForBone(BoneTrackMap, LeftIKParent, FrameIndex);
+	const FVector CenterRaw = SampleRawVMDPositionForBone(BoneTrackMap, Center, FrameIndex);
+	const FVector GrooveRaw = SampleRawVMDPositionForBone(BoneTrackMap, Groove, FrameIndex);
+
+	DebugLog.LogAlways(FString::Printf(TEXT("IK target frame @%d | RIK%s=(%.3f, %.3f, %.3f) LIK%s=(%.3f, %.3f, %.3f) | RIKParent%s=(%.3f, %.3f, %.3f) LIKParent%s=(%.3f, %.3f, %.3f)"),
+		FrameIndex,
+		bFoundRightIK ? TEXT("") : TEXT("?"),
+		RightIKPos.X,
+		RightIKPos.Y,
+		RightIKPos.Z,
+		bFoundLeftIK ? TEXT("") : TEXT("?"),
+		LeftIKPos.X,
+		LeftIKPos.Y,
+		LeftIKPos.Z,
+		bFoundRightParent ? TEXT("") : TEXT("?"),
+		RightParentPos.X,
+		RightParentPos.Y,
+		RightParentPos.Z,
+		bFoundLeftParent ? TEXT("") : TEXT("?"),
+		LeftParentPos.X,
+		LeftParentPos.Y,
+		LeftParentPos.Z));
+	DebugLog.LogAlways(FString::Printf(TEXT("IK target raw @%d | RIK=(%.3f, %.3f, %.3f) LIK=(%.3f, %.3f, %.3f) | RIKParent=(%.3f, %.3f, %.3f) LIKParent=(%.3f, %.3f, %.3f) | Center=(%.3f, %.3f, %.3f) Groove=(%.3f, %.3f, %.3f)"),
+		FrameIndex,
+		RightIKRaw.X,
+		RightIKRaw.Y,
+		RightIKRaw.Z,
+		LeftIKRaw.X,
+		LeftIKRaw.Y,
+		LeftIKRaw.Z,
+		RightParentRaw.X,
+		RightParentRaw.Y,
+		RightParentRaw.Z,
+		LeftParentRaw.X,
+		LeftParentRaw.Y,
+		LeftParentRaw.Z,
+		CenterRaw.X,
+		CenterRaw.Y,
+		CenterRaw.Z,
+		GrooveRaw.X,
+		GrooveRaw.Y,
+		GrooveRaw.Z));
+}
+
+static void LogMMDIKCrossDistanceProbe(
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<TArray<FTransform>>& LocalTransforms,
+	int32 FrameIndex,
+	const TCHAR* Phase,
+	FMMDIKDebugLog& DebugLog)
+{
+	const FName RightIK(TEXT("\u53f3\u8db3\uff29\uff2b"));
+	const FName LeftIK(TEXT("\u5de6\u8db3\uff29\uff2b"));
+	const FName RightAnkle(TEXT("\u53f3\u8db3\u9996"));
+	const FName LeftAnkle(TEXT("\u5de6\u8db3\u9996"));
+
+	DebugLog.LogAlways(FString::Printf(TEXT("IK cross %s @%d | RAnkle-RIK=%.3f RAnkle-LIK=%.3f | LAnkle-LIK=%.3f LAnkle-RIK=%.3f"),
+		Phase,
+		FrameIndex,
+		GetComponentSpaceBoneDistance(RefSkeleton, LocalTransforms, FrameIndex, RightAnkle, RightIK),
+		GetComponentSpaceBoneDistance(RefSkeleton, LocalTransforms, FrameIndex, RightAnkle, LeftIK),
+		GetComponentSpaceBoneDistance(RefSkeleton, LocalTransforms, FrameIndex, LeftAnkle, LeftIK),
+		GetComponentSpaceBoneDistance(RefSkeleton, LocalTransforms, FrameIndex, LeftAnkle, RightIK)));
+}
+
+static float GetRefPoseComponentSpaceBoneDistance(
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<FTransform>& RefPose,
+	const FName& BoneA,
+	const FName& BoneB)
+{
+	const int32 BoneIndexA = RefSkeleton.FindBoneIndex(BoneA);
+	const int32 BoneIndexB = RefSkeleton.FindBoneIndex(BoneB);
+	if (BoneIndexA == INDEX_NONE || BoneIndexB == INDEX_NONE)
+	{
+		return -1.0f;
+	}
+
+	TArray<FTransform> ComponentTransforms;
+	ComponentTransforms.SetNum(RefSkeleton.GetNum());
+	for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+	{
+		const FTransform& LocalTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+		const int32 ParentIndex = RefSkeleton.GetParentIndex(BoneIndex);
+		ComponentTransforms[BoneIndex] = ParentIndex != INDEX_NONE
+			? LocalTransform * ComponentTransforms[ParentIndex]
+			: LocalTransform;
+	}
+
+	return static_cast<float>(FVector::Dist(ComponentTransforms[BoneIndexA].GetTranslation(), ComponentTransforms[BoneIndexB].GetTranslation()));
+}
+
+static void LogMMDIKSeparationProbe(
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<FTransform>& RefPose,
+	const TArray<TArray<FTransform>>& LocalTransforms,
+	const TMap<FName, TArray<FResolvedVMDBoneKey>>& BoneTrackMap,
+	int32 NumKeys,
+	const TCHAR* Phase,
+	FMMDIKDebugLog& DebugLog)
+{
+	const FName RightIK(TEXT("\u53f3\u8db3\uff29\uff2b"));
+	const FName LeftIK(TEXT("\u5de6\u8db3\uff29\uff2b"));
+	const FName RightAnkle(TEXT("\u53f3\u8db3\u9996"));
+	const FName LeftAnkle(TEXT("\u5de6\u8db3\u9996"));
+
+	float MinIKDistance = TNumericLimits<float>::Max();
+	int32 MinIKFrame = 0;
+	float MinAnkleDistance = TNumericLimits<float>::Max();
+	int32 MinAnkleFrame = 0;
+	TArray<float> IKDistances;
+	TArray<float> AnkleDistances;
+	IKDistances.SetNum(NumKeys);
+	AnkleDistances.SetNum(NumKeys);
+
+	for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+	{
+		const float IKDistance = GetComponentSpaceBoneDistance(RefSkeleton, LocalTransforms, FrameIndex, RightIK, LeftIK);
+		IKDistances[FrameIndex] = IKDistance;
+		if (IKDistance >= 0.0f && IKDistance < MinIKDistance)
+		{
+			MinIKDistance = IKDistance;
+			MinIKFrame = FrameIndex;
+		}
+
+		const float AnkleDistance = GetComponentSpaceBoneDistance(RefSkeleton, LocalTransforms, FrameIndex, RightAnkle, LeftAnkle);
+		AnkleDistances[FrameIndex] = AnkleDistance;
+		if (AnkleDistance >= 0.0f && AnkleDistance < MinAnkleDistance)
+		{
+			MinAnkleDistance = AnkleDistance;
+			MinAnkleFrame = FrameIndex;
+		}
+	}
+
+	const float RefIKDistance = GetRefPoseComponentSpaceBoneDistance(RefSkeleton, RefPose, RightIK, LeftIK);
+	const float RefAnkleDistance = GetRefPoseComponentSpaceBoneDistance(RefSkeleton, RefPose, RightAnkle, LeftAnkle);
+	const float AnkleAtMinIK = AnkleDistances.IsValidIndex(MinIKFrame) ? AnkleDistances[MinIKFrame] : -1.0f;
+	const float IKAtMinAnkle = IKDistances.IsValidIndex(MinAnkleFrame) ? IKDistances[MinAnkleFrame] : -1.0f;
+
+	DebugLog.LogAlways(FString::Printf(TEXT("IK probe %s | RefIK=%.3f RefAnkle=%.3f | MinIK=%.3f@%d AnkleAtMinIK=%.3f | MinAnkle=%.3f@%d IKAtMinAnkle=%.3f"),
+		Phase,
+		RefIKDistance,
+		RefAnkleDistance,
+		MinIKDistance == TNumericLimits<float>::Max() ? -1.0f : MinIKDistance,
+		MinIKFrame,
+		AnkleAtMinIK,
+		MinAnkleDistance == TNumericLimits<float>::Max() ? -1.0f : MinAnkleDistance,
+		MinAnkleFrame,
+		IKAtMinAnkle));
+	LogMMDIKCrossDistanceProbe(RefSkeleton, LocalTransforms, MinAnkleFrame, Phase, DebugLog);
+	if (FCString::Strcmp(Phase, TEXT("BeforeBake")) == 0)
+	{
+		LogMMDIKTargetFrameProbe(RefSkeleton, LocalTransforms, BoneTrackMap, 0, DebugLog);
+		LogMMDIKTargetFrameProbe(RefSkeleton, LocalTransforms, BoneTrackMap, MinIKFrame, DebugLog);
+		if (MinAnkleFrame != MinIKFrame)
+		{
+			LogMMDIKTargetFrameProbe(RefSkeleton, LocalTransforms, BoneTrackMap, MinAnkleFrame, DebugLog);
+		}
+	}
+}
 
 bool BuildResolvedBoneKeyMap(const VMDData& VmdData, const FMMDAnimationImportReport& Report, const FMMDAnimationImportSettings& Settings, TMap<FName, TArray<FResolvedVMDBoneKey>>& OutTrackMap)
 {
@@ -338,8 +1519,9 @@ bool BuildResolvedBoneKeyMap(const VMDData& VmdData, const FMMDAnimationImportRe
 
 		FResolvedVMDBoneKey ResolvedKey;
 		ResolvedKey.Frame = static_cast<int32>(Keyframe.FrameNumber);
-		ResolvedKey.Position = ConvertMMDPositionToUnreal(Keyframe.Position, Settings.PositionScale);
-		ResolvedKey.Rotation = ConvertMMDQuatToUnreal(Keyframe.Rotation).GetNormalized();
+		ResolvedKey.Position = Keyframe.Position;
+		ResolvedKey.Rotation = Keyframe.Rotation.GetNormalized();
+		FMemory::Memcpy(ResolvedKey.Interpolation, Keyframe.Interpolation, UE_ARRAY_COUNT(ResolvedKey.Interpolation));
 		OutTrackMap.FindOrAdd(*TargetBoneName).Add(MoveTemp(ResolvedKey));
 	}
 
@@ -352,6 +1534,585 @@ bool BuildResolvedBoneKeyMap(const VMDData& VmdData, const FMMDAnimationImportRe
 	}
 
 	return OutTrackMap.Num() > 0;
+}
+
+static bool BuildPMXResolvedBoneKeyMap(const VMDData& VmdData, const UMMDModelDataAsset* ModelDataAsset, TMap<int32, TArray<FResolvedVMDBoneKey>>& OutTrackMap)
+{
+	OutTrackMap.Reset();
+	if (ModelDataAsset == nullptr)
+	{
+		return false;
+	}
+
+	TMap<FString, int32> NameToPMXBoneIndex;
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
+	{
+		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+		if (!BoneData.NameJP.IsEmpty())
+		{
+			NameToPMXBoneIndex.FindOrAdd(BoneData.NameJP, PMXBoneIndex);
+		}
+		if (!BoneData.NameEN.IsEmpty())
+		{
+			NameToPMXBoneIndex.FindOrAdd(BoneData.NameEN, PMXBoneIndex);
+		}
+	}
+
+	for (const VMDBoneKeyframe& Keyframe : VmdData.BoneKeyframes)
+	{
+		const int32* PMXBoneIndex = NameToPMXBoneIndex.Find(Keyframe.BoneName);
+		if (PMXBoneIndex == nullptr)
+		{
+			continue;
+		}
+
+		FResolvedVMDBoneKey ResolvedKey;
+		ResolvedKey.Frame = static_cast<int32>(Keyframe.FrameNumber);
+		ResolvedKey.Position = Keyframe.Position;
+		ResolvedKey.Rotation = Keyframe.Rotation.GetNormalized();
+		FMemory::Memcpy(ResolvedKey.Interpolation, Keyframe.Interpolation, UE_ARRAY_COUNT(ResolvedKey.Interpolation));
+		OutTrackMap.FindOrAdd(*PMXBoneIndex).Add(MoveTemp(ResolvedKey));
+	}
+
+	for (TPair<int32, TArray<FResolvedVMDBoneKey>>& Pair : OutTrackMap)
+	{
+		Pair.Value.Sort([](const FResolvedVMDBoneKey& A, const FResolvedVMDBoneKey& B)
+		{
+			return A.Frame < B.Frame;
+		});
+	}
+
+	return OutTrackMap.Num() > 0;
+}
+
+static FVector ConvertMMDLocalTranslationWithAxis(const FVector& RawMMDPosition, const FMMDModelBoneData& BoneData, float Scale)
+{
+	return ConvertMMDPositionToUnreal(RawMMDPosition, Scale);
+}
+
+static FQuat ConvertMMDLocalRotationWithAxis(const FQuat& RawMMDRotation, const FMMDModelBoneData& BoneData)
+{
+	return ConvertMMDQuatToUnreal(RawMMDRotation).GetNormalized();
+}
+
+static FVector ConvertMMDLocalTranslationToPMXSpace(const FVector& RawMMDPosition, const FMMDModelBoneData& BoneData)
+{
+	return RawMMDPosition;
+}
+
+static FQuat ConvertMMDLocalRotationToPMXSpace(const FQuat& RawMMDRotation, const FMMDModelBoneData& BoneData)
+{
+	return RawMMDRotation.GetNormalized();
+}
+
+static FVector GetPMXRestLocalTranslation(const UMMDModelDataAsset* ModelDataAsset, int32 PMXBoneIndex)
+{
+	if (ModelDataAsset == nullptr || !ModelDataAsset->Bones.IsValidIndex(PMXBoneIndex))
+	{
+		return FVector::ZeroVector;
+	}
+
+	const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+	if (ModelDataAsset->Bones.IsValidIndex(BoneData.ParentBoneIndex))
+	{
+		return BoneData.Position - ModelDataAsset->Bones[BoneData.ParentBoneIndex].Position;
+	}
+	return BoneData.Position;
+}
+
+static void BuildPMXSpaceComponentPoseForFrame(const UMMDModelDataAsset* ModelDataAsset, const TArray<TArray<FTransform>>& PMXLocalTransforms, int32 FrameIndex, TArray<FTransform>& OutComponentTransforms)
+{
+	const int32 NumPMXBones = ModelDataAsset ? ModelDataAsset->Bones.Num() : 0;
+	OutComponentTransforms.SetNum(NumPMXBones);
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < NumPMXBones; ++PMXBoneIndex)
+	{
+		const FTransform& LocalTransform = PMXLocalTransforms[PMXBoneIndex][FrameIndex];
+		const int32 ParentIndex = ModelDataAsset->Bones[PMXBoneIndex].ParentBoneIndex;
+		OutComponentTransforms[PMXBoneIndex] = ModelDataAsset->Bones.IsValidIndex(ParentIndex)
+			? LocalTransform * OutComponentTransforms[ParentIndex]
+			: LocalTransform;
+	}
+}
+
+static TArray<FMMDPMXSpaceRuntimeBone> BuildPMXSpaceRuntimeBones(const UMMDModelDataAsset* ModelDataAsset)
+{
+	TArray<FMMDPMXSpaceRuntimeBone> RuntimeBones;
+	if (ModelDataAsset == nullptr)
+	{
+		return RuntimeBones;
+	}
+
+	RuntimeBones.Reserve(ModelDataAsset->Bones.Num());
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
+	{
+		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+		FMMDPMXSpaceRuntimeBone RuntimeBone;
+		RuntimeBone.PMXBoneIndex = PMXBoneIndex;
+		RuntimeBone.InheritParentPMXBoneIndex = BoneData.InheritParentIndex;
+		RuntimeBone.DeformLayer = BoneData.DeformLayer;
+		RuntimeBone.bInheritRotation = (BoneData.Flags & 0x0100) != 0;
+		RuntimeBone.bInheritTranslation = (BoneData.Flags & 0x0200) != 0;
+		RuntimeBone.InheritInfluence = BoneData.InheritInfluence;
+		RuntimeBone.bHasIK = (BoneData.Flags & 0x0020) != 0;
+		RuntimeBones.Add(RuntimeBone);
+	}
+
+	RuntimeBones.Sort([](const FMMDPMXSpaceRuntimeBone& A, const FMMDPMXSpaceRuntimeBone& B)
+	{
+		if (A.DeformLayer != B.DeformLayer)
+		{
+			return A.DeformLayer < B.DeformLayer;
+		}
+		if (A.bHasIK != B.bHasIK)
+		{
+			return !A.bHasIK && B.bHasIK;
+		}
+		return A.PMXBoneIndex < B.PMXBoneIndex;
+	});
+
+	return RuntimeBones;
+}
+
+static TArray<FMMDPMXSpaceIKChain> BuildPMXSpaceIKChains(const UMMDModelDataAsset* ModelDataAsset)
+{
+	TArray<FMMDPMXSpaceIKChain> Chains;
+	if (ModelDataAsset == nullptr)
+	{
+		return Chains;
+	}
+
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
+	{
+		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+		if ((BoneData.Flags & 0x0020) == 0 || BoneData.IKLinks.Num() == 0 || !ModelDataAsset->Bones.IsValidIndex(BoneData.IKTargetBoneIndex))
+		{
+			continue;
+		}
+
+		FMMDPMXSpaceIKChain Chain;
+		Chain.PMXBoneIndex = PMXBoneIndex;
+		Chain.TargetPMXBoneIndex = BoneData.IKTargetBoneIndex;
+		Chain.IterationCount = FMath::Clamp(FMath::Max(BoneData.IKLoopCount, 64), 1, 256);
+		Chain.AngleLimitRadians = BoneData.IKLimitAngle > SMALL_NUMBER ? BoneData.IKLimitAngle : PI;
+
+		int32 FirstLinkIndex = 0;
+		if (BoneData.IKLinks[0].LinkBoneIndex == BoneData.IKTargetBoneIndex && BoneData.IKLinks.Num() > 1)
+		{
+			FirstLinkIndex = 1;
+		}
+
+		for (int32 LinkIndex = FirstLinkIndex; LinkIndex < BoneData.IKLinks.Num(); ++LinkIndex)
+		{
+			const FMMDModelIKLinkData& SourceLink = BoneData.IKLinks[LinkIndex];
+			if (!ModelDataAsset->Bones.IsValidIndex(SourceLink.LinkBoneIndex))
+			{
+				Chain.Links.Reset();
+				break;
+			}
+
+			FMMDPMXSpaceIKChain::FLink Link;
+			Link.PMXBoneIndex = SourceLink.LinkBoneIndex;
+			Link.bHasLimit = SourceLink.bHasLimit;
+			Link.LowerLimitRadians = SourceLink.LowerLimit;
+			Link.UpperLimitRadians = SourceLink.UpperLimit;
+			Chain.Links.Add(Link);
+		}
+
+		if (Chain.Links.Num() > 0)
+		{
+			Chains.Add(MoveTemp(Chain));
+		}
+	}
+
+	return Chains;
+}
+
+static bool IsStandardMMDLegIKBoneName(const FString& BoneName)
+{
+	return BoneName == TEXT("\u53f3\u8db3\uff29\uff2b")
+		|| BoneName == TEXT("\u5de6\u8db3\uff29\uff2b")
+		|| BoneName == TEXT("\u53f3\u3064\u307e\u5148\uff29\uff2b")
+		|| BoneName == TEXT("\u5de6\u3064\u307e\u5148\uff29\uff2b");
+}
+
+static bool IsStandardMMDLegIKBone(const UMMDModelDataAsset* ModelDataAsset, int32 PMXBoneIndex)
+{
+	if (ModelDataAsset == nullptr || !ModelDataAsset->Bones.IsValidIndex(PMXBoneIndex))
+	{
+		return false;
+	}
+
+	const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+	return IsStandardMMDLegIKBoneName(BoneData.NameJP) || IsStandardMMDLegIKBoneName(BoneData.NameEN);
+}
+
+static bool IsMMDArmOrHandBoneName(const FString& BoneName)
+{
+	return BoneName.Contains(TEXT("\u8155"))
+		|| BoneName.Contains(TEXT("\u3072\u3058"))
+		|| BoneName.Contains(TEXT("\u624b"))
+		|| BoneName.Contains(TEXT("\u6307"))
+		|| BoneName.Contains(TEXT("arm"), ESearchCase::IgnoreCase)
+		|| BoneName.Contains(TEXT("elbow"), ESearchCase::IgnoreCase)
+		|| BoneName.Contains(TEXT("hand"), ESearchCase::IgnoreCase)
+		|| BoneName.Contains(TEXT("finger"), ESearchCase::IgnoreCase);
+}
+
+static bool IsMMDArmOrHandBone(const UMMDModelDataAsset* ModelDataAsset, int32 PMXBoneIndex)
+{
+	if (ModelDataAsset == nullptr || !ModelDataAsset->Bones.IsValidIndex(PMXBoneIndex))
+	{
+		return false;
+	}
+
+	const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+	return IsMMDArmOrHandBoneName(BoneData.NameJP) || IsMMDArmOrHandBoneName(BoneData.NameEN);
+}
+
+static void SolvePMXSpaceIKChainForFrame(const UMMDModelDataAsset* ModelDataAsset, const FMMDPMXSpaceIKChain& Chain, TArray<TArray<FTransform>>& PMXLocalTransforms, int32 FrameIndex, TArray<FTransform>& PMXComponentTransforms)
+{
+	for (int32 IterationIndex = 0; IterationIndex < Chain.IterationCount; ++IterationIndex)
+	{
+		for (const FMMDPMXSpaceIKChain::FLink& Link : Chain.Links)
+		{
+			if (!PMXComponentTransforms.IsValidIndex(Link.PMXBoneIndex)
+				|| !PMXComponentTransforms.IsValidIndex(Chain.TargetPMXBoneIndex)
+				|| !PMXComponentTransforms.IsValidIndex(Chain.PMXBoneIndex))
+			{
+				continue;
+			}
+
+			const FVector LinkPosition = PMXComponentTransforms[Link.PMXBoneIndex].GetTranslation();
+			const FVector EffectorVector = PMXComponentTransforms[Chain.TargetPMXBoneIndex].GetTranslation() - LinkPosition;
+			const FVector GoalVector = PMXComponentTransforms[Chain.PMXBoneIndex].GetTranslation() - LinkPosition;
+			if (EffectorVector.SizeSquared() <= KINDA_SMALL_NUMBER || GoalVector.SizeSquared() <= KINDA_SMALL_NUMBER)
+			{
+				continue;
+			}
+
+			FQuat DeltaRotation = FQuat::FindBetweenNormals(EffectorVector.GetSafeNormal(), GoalVector.GetSafeNormal());
+			float DeltaAngle = 0.0f;
+			FVector DeltaAxis = FVector::ForwardVector;
+			DeltaRotation.ToAxisAndAngle(DeltaAxis, DeltaAngle);
+			DeltaAngle = FMath::UnwindRadians(DeltaAngle);
+			DeltaRotation = FQuat(DeltaAxis.GetSafeNormal(), FMath::Clamp(DeltaAngle, -Chain.AngleLimitRadians, Chain.AngleLimitRadians)).GetNormalized();
+
+			FTransform NewComponentTransform = PMXComponentTransforms[Link.PMXBoneIndex];
+			NewComponentTransform.SetRotation((DeltaRotation * NewComponentTransform.GetRotation()).GetNormalized());
+			const int32 ParentIndex = ModelDataAsset->Bones[Link.PMXBoneIndex].ParentBoneIndex;
+			FTransform NewLocalTransform = ModelDataAsset->Bones.IsValidIndex(ParentIndex)
+				? NewComponentTransform.GetRelativeTransform(PMXComponentTransforms[ParentIndex])
+				: NewComponentTransform;
+			NewLocalTransform.SetRotation(NewLocalTransform.GetRotation().GetNormalized());
+			PMXLocalTransforms[Link.PMXBoneIndex][FrameIndex].SetRotation(NewLocalTransform.GetRotation());
+			BuildPMXSpaceComponentPoseForFrame(ModelDataAsset, PMXLocalTransforms, FrameIndex, PMXComponentTransforms);
+		}
+	}
+}
+
+static void ApplyPMXSpaceAppendAndIK(
+	const UMMDModelDataAsset* ModelDataAsset,
+	const TArray<FMMDPMXSpaceRuntimeBone>& RuntimeBones,
+	const TArray<FMMDPMXSpaceIKChain>& IKChains,
+	const TSet<int32>& PMXAppendBonesToEvaluate,
+	TArray<TArray<FTransform>>& PMXLocalTransforms,
+	int32 NumKeys)
+{
+	TMap<int32, const FMMDPMXSpaceIKChain*> IKChainByPMXBone;
+	for (const FMMDPMXSpaceIKChain& Chain : IKChains)
+	{
+		if (IsStandardMMDLegIKBone(ModelDataAsset, Chain.PMXBoneIndex))
+		{
+			IKChainByPMXBone.Add(Chain.PMXBoneIndex, &Chain);
+		}
+	}
+
+	TArray<FTransform> PMXComponentTransforms;
+	for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+	{
+		BuildPMXSpaceComponentPoseForFrame(ModelDataAsset, PMXLocalTransforms, FrameIndex, PMXComponentTransforms);
+		for (const FMMDPMXSpaceRuntimeBone& RuntimeBone : RuntimeBones)
+		{
+			if ((RuntimeBone.bInheritRotation || RuntimeBone.bInheritTranslation)
+				&& PMXAppendBonesToEvaluate.Contains(RuntimeBone.PMXBoneIndex)
+				&& PMXLocalTransforms.IsValidIndex(RuntimeBone.PMXBoneIndex)
+				&& PMXLocalTransforms.IsValidIndex(RuntimeBone.InheritParentPMXBoneIndex))
+			{
+				FTransform& BoneLocal = PMXLocalTransforms[RuntimeBone.PMXBoneIndex][FrameIndex];
+				const FVector ParentRestTranslation = GetPMXRestLocalTranslation(ModelDataAsset, RuntimeBone.InheritParentPMXBoneIndex);
+				const FTransform& ParentLocal = PMXLocalTransforms[RuntimeBone.InheritParentPMXBoneIndex][FrameIndex];
+				if (RuntimeBone.bInheritTranslation)
+				{
+					BoneLocal.AddToTranslation((ParentLocal.GetTranslation() - ParentRestTranslation) * RuntimeBone.InheritInfluence);
+				}
+				if (RuntimeBone.bInheritRotation)
+				{
+					const FQuat WeightedDelta = FQuat::Slerp(FQuat::Identity, ParentLocal.GetRotation(), FMath::Clamp(RuntimeBone.InheritInfluence, 0.0f, 1.0f)).GetNormalized();
+					BoneLocal.SetRotation((BoneLocal.GetRotation() * WeightedDelta).GetNormalized());
+				}
+				BuildPMXSpaceComponentPoseForFrame(ModelDataAsset, PMXLocalTransforms, FrameIndex, PMXComponentTransforms);
+			}
+
+			if (const FMMDPMXSpaceIKChain* const* Chain = IKChainByPMXBone.Find(RuntimeBone.PMXBoneIndex))
+			{
+				SolvePMXSpaceIKChainForFrame(ModelDataAsset, **Chain, PMXLocalTransforms, FrameIndex, PMXComponentTransforms);
+			}
+		}
+	}
+}
+
+static void BuildReferenceComponentTransforms(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& RefPose, TArray<FTransform>& OutComponentTransforms)
+{
+	const int32 NumBones = RefSkeleton.GetNum();
+	OutComponentTransforms.SetNum(NumBones);
+	for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+	{
+		const FTransform& LocalTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+		const int32 ParentIndex = RefSkeleton.GetParentIndex(BoneIndex);
+		OutComponentTransforms[BoneIndex] = ParentIndex != INDEX_NONE
+			? LocalTransform * OutComponentTransforms[ParentIndex]
+			: LocalTransform;
+	}
+}
+
+static FTransform ConvertPMXComponentTransformToUE(const FTransform& PMXComponentTransform, float Scale)
+{
+	const FVector UETranslation = ConvertMMDPositionToUnreal(PMXComponentTransform.GetTranslation(), Scale);
+	const FQuat UERotation = ConvertMMDQuatToUnreal(PMXComponentTransform.GetRotation()).GetNormalized();
+	return FTransform(UERotation, UETranslation, FVector::OneVector);
+}
+
+static bool EvaluateMMDModelDataPoseToLocalTransforms(
+	const VMDData& VmdData,
+	const UMMDModelDataAsset* ModelDataAsset,
+	const FReferenceSkeleton& RefSkeleton,
+	const TArray<FTransform>& RefPose,
+	const FMMDAnimationImportSettings& Settings,
+	int32 NumKeys,
+	TArray<TArray<FTransform>>& OutLocalTransforms,
+	TSet<FName>& OutTracksToWrite,
+	FMMDIKDebugLog* DebugLog)
+{
+	if (ModelDataAsset == nullptr || ModelDataAsset->Bones.Num() == 0)
+	{
+		return false;
+	}
+
+	TMap<int32, TArray<FResolvedVMDBoneKey>> PMXTrackMap;
+	if (!BuildPMXResolvedBoneKeyMap(VmdData, ModelDataAsset, PMXTrackMap))
+	{
+		return false;
+	}
+
+	OutTracksToWrite.Reset();
+	const int32 NumBones = RefSkeleton.GetNum();
+	const int32 NumPMXBones = ModelDataAsset->Bones.Num();
+
+	TArray<TArray<FTransform>> PMXLocalTransforms;
+	PMXLocalTransforms.SetNum(NumPMXBones);
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < NumPMXBones; ++PMXBoneIndex)
+	{
+		const FVector RestLocalTranslation = GetPMXRestLocalTranslation(ModelDataAsset, PMXBoneIndex);
+		PMXLocalTransforms[PMXBoneIndex].SetNum(NumKeys);
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+		{
+			PMXLocalTransforms[PMXBoneIndex][FrameIndex] = FTransform(FQuat::Identity, RestLocalTranslation, FVector::OneVector);
+		}
+	}
+
+	int32 MappedTrackCount = 0;
+	int32 MissingUETrackCount = 0;
+	TArray<int32> PMXToSkeleton;
+	PMXToSkeleton.SetNum(NumPMXBones);
+	for (int32 PMXBoneIndex = 0; PMXBoneIndex < NumPMXBones; ++PMXBoneIndex)
+	{
+		PMXToSkeleton[PMXBoneIndex] = ResolveModelDataBoneToSkeletonIndex(ModelDataAsset->Bones[PMXBoneIndex], RefSkeleton);
+	}
+
+	for (const TPair<int32, TArray<FResolvedVMDBoneKey>>& Pair : PMXTrackMap)
+	{
+		const int32 PMXBoneIndex = Pair.Key;
+		if (!ModelDataAsset->Bones.IsValidIndex(PMXBoneIndex))
+		{
+			continue;
+		}
+
+		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
+		const int32 UEBoneIndex = PMXToSkeleton.IsValidIndex(PMXBoneIndex) ? PMXToSkeleton[PMXBoneIndex] : INDEX_NONE;
+		if (UEBoneIndex == INDEX_NONE)
+		{
+			++MissingUETrackCount;
+			continue;
+		}
+
+		const TArray<FResolvedVMDBoneKey>& Keys = Pair.Value;
+		const FVector RestLocalTranslation = GetPMXRestLocalTranslation(ModelDataAsset, PMXBoneIndex);
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+		{
+			FVector RawMMDPosition = FVector::ZeroVector;
+			FQuat RawMMDRotation = FQuat::Identity;
+			SampleResolvedVMDTrackAtFrame(Keys, FrameIndex, RawMMDPosition, RawMMDRotation);
+			const FVector PMXTranslation = RestLocalTranslation + ConvertMMDLocalTranslationToPMXSpace(RawMMDPosition, BoneData);
+			const FQuat PMXRotation = ConvertMMDLocalRotationToPMXSpace(RawMMDRotation, BoneData);
+			PMXLocalTransforms[PMXBoneIndex][FrameIndex].SetTranslation(PMXTranslation);
+			PMXLocalTransforms[PMXBoneIndex][FrameIndex].SetRotation(PMXRotation.GetNormalized());
+		}
+		++MappedTrackCount;
+	}
+
+	const TArray<FMMDPMXSpaceRuntimeBone> PMXRuntimeBones = Settings.bBakeMMDIKToFK
+		? BuildPMXSpaceRuntimeBones(ModelDataAsset)
+		: TArray<FMMDPMXSpaceRuntimeBone>();
+	const TArray<FMMDPMXSpaceIKChain> PMXIKChains = Settings.bBakeMMDIKToFK
+		? BuildPMXSpaceIKChains(ModelDataAsset)
+		: TArray<FMMDPMXSpaceIKChain>();
+	TSet<int32> PMXLegIKAffectedBones;
+	for (const FMMDPMXSpaceIKChain& Chain : PMXIKChains)
+	{
+		if (!IsStandardMMDLegIKBone(ModelDataAsset, Chain.PMXBoneIndex))
+		{
+			continue;
+		}
+
+		PMXLegIKAffectedBones.Add(Chain.PMXBoneIndex);
+		PMXLegIKAffectedBones.Add(Chain.TargetPMXBoneIndex);
+		for (const FMMDPMXSpaceIKChain::FLink& Link : Chain.Links)
+		{
+			PMXLegIKAffectedBones.Add(Link.PMXBoneIndex);
+		}
+	}
+
+	TSet<int32> PMXIKAppendBones;
+	for (const FMMDPMXSpaceRuntimeBone& RuntimeBone : PMXRuntimeBones)
+	{
+		if ((RuntimeBone.bInheritRotation || RuntimeBone.bInheritTranslation)
+			&& PMXLegIKAffectedBones.Contains(RuntimeBone.InheritParentPMXBoneIndex))
+		{
+			PMXIKAppendBones.Add(RuntimeBone.PMXBoneIndex);
+		}
+	}
+
+	if (Settings.bBakeMMDIKToFK)
+	{
+		ApplyPMXSpaceAppendAndIK(ModelDataAsset, PMXRuntimeBones, PMXIKChains, PMXIKAppendBones, PMXLocalTransforms, NumKeys);
+	}
+
+	OutLocalTransforms.SetNum(NumBones);
+	for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+	{
+		const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+		OutLocalTransforms[BoneIndex].SetNum(NumKeys);
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+		{
+			OutLocalTransforms[BoneIndex][FrameIndex] = DefaultTransform;
+		}
+	}
+
+	TArray<FTransform> RefComponentTransforms;
+	BuildReferenceComponentTransforms(RefSkeleton, RefPose, RefComponentTransforms);
+	TArray<FTransform> PMXComponentTransforms;
+	TArray<FTransform> UEComponentTransforms;
+	TArray<bool> bHasUEComponent;
+	UEComponentTransforms.SetNum(NumBones);
+	bHasUEComponent.SetNum(NumBones);
+
+	for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+	{
+		BuildPMXSpaceComponentPoseForFrame(ModelDataAsset, PMXLocalTransforms, FrameIndex, PMXComponentTransforms);
+		for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+		{
+			UEComponentTransforms[BoneIndex] = RefComponentTransforms.IsValidIndex(BoneIndex) ? RefComponentTransforms[BoneIndex] : FTransform::Identity;
+			bHasUEComponent[BoneIndex] = false;
+		}
+
+		for (int32 PMXBoneIndex = 0; PMXBoneIndex < NumPMXBones; ++PMXBoneIndex)
+		{
+			const int32 UEBoneIndex = PMXToSkeleton.IsValidIndex(PMXBoneIndex) ? PMXToSkeleton[PMXBoneIndex] : INDEX_NONE;
+			if (UEBoneIndex == INDEX_NONE || !PMXComponentTransforms.IsValidIndex(PMXBoneIndex))
+			{
+				continue;
+			}
+
+			UEComponentTransforms[UEBoneIndex] = ConvertPMXComponentTransformToUE(PMXComponentTransforms[PMXBoneIndex], Settings.PositionScale);
+			bHasUEComponent[UEBoneIndex] = true;
+		}
+
+		for (int32 PMXBoneIndex = 0; PMXBoneIndex < NumPMXBones; ++PMXBoneIndex)
+		{
+			const int32 UEBoneIndex = PMXToSkeleton.IsValidIndex(PMXBoneIndex) ? PMXToSkeleton[PMXBoneIndex] : INDEX_NONE;
+			if (UEBoneIndex == INDEX_NONE || !bHasUEComponent.IsValidIndex(UEBoneIndex) || !bHasUEComponent[UEBoneIndex])
+			{
+				continue;
+			}
+
+			const int32 ParentUEBoneIndex = RefSkeleton.GetParentIndex(UEBoneIndex);
+			const FTransform& ParentComponent = ParentUEBoneIndex != INDEX_NONE && UEComponentTransforms.IsValidIndex(ParentUEBoneIndex)
+				? UEComponentTransforms[ParentUEBoneIndex]
+				: FTransform::Identity;
+			OutLocalTransforms[UEBoneIndex][FrameIndex] = UEComponentTransforms[UEBoneIndex].GetRelativeTransform(ParentComponent);
+		}
+	}
+
+	TSet<int32> PMXBonesToWrite;
+	for (const TPair<int32, TArray<FResolvedVMDBoneKey>>& Pair : PMXTrackMap)
+	{
+		PMXBonesToWrite.Add(Pair.Key);
+	}
+
+	TSet<int32> PMXIKAffectedBones = PMXLegIKAffectedBones;
+	for (const int32 PMXBoneIndex : PMXIKAppendBones)
+	{
+		PMXIKAffectedBones.Add(PMXBoneIndex);
+	}
+
+	for (const int32 PMXBoneIndex : PMXIKAffectedBones)
+	{
+		PMXBonesToWrite.Add(PMXBoneIndex);
+	}
+
+	int32 ArmHandOriginalTrackCount = 0;
+	int32 ArmHandExtraWriteCount = 0;
+	for (const int32 PMXBoneIndex : PMXBonesToWrite)
+	{
+		if (!IsMMDArmOrHandBone(ModelDataAsset, PMXBoneIndex))
+		{
+			continue;
+		}
+		if (PMXTrackMap.Contains(PMXBoneIndex))
+		{
+			++ArmHandOriginalTrackCount;
+		}
+		else
+		{
+			++ArmHandExtraWriteCount;
+		}
+	}
+
+	for (const int32 PMXBoneIndex : PMXBonesToWrite)
+	{
+		const int32 UEBoneIndex = PMXToSkeleton.IsValidIndex(PMXBoneIndex) ? PMXToSkeleton[PMXBoneIndex] : INDEX_NONE;
+		if (UEBoneIndex != INDEX_NONE)
+		{
+			OutTracksToWrite.Add(RefSkeleton.GetBoneName(UEBoneIndex));
+		}
+	}
+
+	if (DebugLog != nullptr)
+	{
+		DebugLog->LogAlways(FString::Printf(TEXT("MMD ModelData PMX-space evaluator | PMXBones=%d | PMXTracks=%d | MappedTracks=%d | MissingUETracks=%d | PMXRuntime=%d | PMXIK=%d | WriteSelectedBones=%d | IKAppendBones=%d | ArmHandTracks=%d | ArmHandExtra=%d"),
+			ModelDataAsset->Bones.Num(),
+			PMXTrackMap.Num(),
+			MappedTrackCount,
+			MissingUETrackCount,
+			PMXRuntimeBones.Num(),
+			PMXIKChains.Num(),
+			OutTracksToWrite.Num(),
+			PMXIKAffectedBones.Num(),
+			ArmHandOriginalTrackCount,
+			ArmHandExtraWriteCount));
+	}
+
+	return OutTracksToWrite.Num() > 0;
 }
 
 int32 BuildMorphTargetsFromPMX(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXInfo)
@@ -1030,7 +2791,8 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo, const FString& PackagePath, const FString& AssetName, const FString& PMXFilePath)
 {
 	FString PMXModelName = FixMMDName(FPaths::GetBaseFilename(PMXFilePath));
-	FString CleanAssetName = FixMMDName(AssetName);
+	const FString PreferredAssetName = AssetName.IsEmpty() ? FPaths::GetBaseFilename(PMXFilePath) : AssetName;
+	FString CleanAssetName = FixMMDName(PreferredAssetName);
 
 	UE_LOG(LogTemp, Warning, TEXT("=== 开始构建骨骼网格：%s -> %s ==="), *AssetName, *CleanAssetName);
 
@@ -1160,6 +2922,12 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 	if (ImportedMorphTargets > 0)
 	{
 		UE_LOG(LogTemp, Log, TEXT("SkeletalMesh morph targets registered: %d"), ImportedMorphTargets);
+	}
+
+	UMMDModelDataAsset* ModelDataAsset = CreateMMDModelDataAssetForMesh(SkeletalMesh, PMXInfo, RefSkeleton, BasePath, CleanAssetName, PMXFilePath);
+	if (ModelDataAsset != nullptr)
+	{
+		UE_LOG(LogTemp, Log, TEXT("MMDModelData asset created: %s | Bones=%d"), *ModelDataAsset->GetPathName(), ModelDataAsset->Bones.Num());
 	}
 
 	const TArray<FMatrix44f>& RefBasesInvMatrix = SkeletalMesh->GetRefBasesInvMatrix();
@@ -1677,6 +3445,7 @@ bool TMMDMeshBuilder::BuildAnimationImportContext(USkeletalMesh* SkeletalMesh, c
 	OutContext = FMMDAnimationImportContext{};
 	OutContext.SkeletalMesh = SkeletalMesh;
 	OutContext.PMXData = PMXData;
+	OutContext.ModelDataAsset = FindMMDModelDataAsset(SkeletalMesh);
 	OutContext.SourcePMXFilePath = PMXFilePath;
 	OutContext.SourceVMDFilePath = VMDFilePath;
 	OutContext.Skeleton = SkeletalMesh ? SkeletalMesh->GetSkeleton() : nullptr;
@@ -1890,17 +3659,138 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 
 	const FReferenceSkeleton& RefSkeleton = Context.Skeleton->GetReferenceSkeleton();
 	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
-	const int32 NumFrames = FMath::Max(LocalReport.MaxFrame + 1, 1);
+	const int32 NumFrames = FMath::Max(LocalReport.MaxFrame, 1);
+	const int32 NumKeys = NumFrames + 1;
+	const int32 NumBones = RefSkeleton.GetNum();
+
+	FMMDIKDebugLog IKDebugLog;
+	const TArray<int32> PMXToSkeleton = Settings.bBakeMMDIKToFK || Context.PMXData != nullptr
+		? BuildPMXToSkeletonBoneMap(Context.PMXData, RefSkeleton)
+		: TArray<int32>();
+	const TArray<int32> ModelDataToSkeleton = Settings.bBakeMMDIKToFK || Context.ModelDataAsset != nullptr
+		? BuildModelDataToSkeletonBoneMap(Context.ModelDataAsset, RefSkeleton)
+		: TArray<int32>();
+	const TMap<FName, FMMDBoneSpaceConverter> BoneConverters = BuildVMDToUEBoneConverters(Context.PMXData, RefSkeleton, PMXToSkeleton, Settings.bBakeMMDIKToFK ? &IKDebugLog : nullptr);
+	if (Settings.bBakeMMDIKToFK)
+	{
+		IKDebugLog.LogAlways(FString::Printf(TEXT("Begin | PMXData=%s | ModelData=%s | SourceVMD=%s | MaxFrame=%d | SkeletonBones=%d"),
+			Context.PMXData ? TEXT("true") : TEXT("false"),
+			Context.ModelDataAsset ? TEXT("true") : TEXT("false"),
+			*Context.SourceVMDFilePath,
+			LocalReport.MaxFrame,
+			NumBones));
+		LogVMDControlTrackStats(BoneTrackMap, IKDebugLog);
+	}
+
+	TArray<TArray<FTransform>> LocalTransforms;
+	TSet<FName> TracksToWrite;
+	int32 ConverterFallbackTrackCount = 0;
+	const bool bUsedModelDataEvaluator = EvaluateMMDModelDataPoseToLocalTransforms(
+		VmdData,
+		Context.ModelDataAsset,
+		RefSkeleton,
+		RefPose,
+		Settings,
+		NumKeys,
+		LocalTransforms,
+		TracksToWrite,
+		Settings.bBakeMMDIKToFK ? &IKDebugLog : nullptr);
+	if (!bUsedModelDataEvaluator)
+	{
+		LocalTransforms.SetNum(NumBones);
+		for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+		{
+			const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+			LocalTransforms[BoneIndex].SetNum(NumKeys);
+			for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+			{
+				LocalTransforms[BoneIndex][FrameIndex] = DefaultTransform;
+			}
+		}
+
+		for (const TPair<FName, TArray<FResolvedVMDBoneKey>>& Pair : BoneTrackMap)
+		{
+			const FName BoneName = Pair.Key;
+			const int32 BoneIndex = RefSkeleton.FindBoneIndex(BoneName);
+			if (BoneIndex == INDEX_NONE)
+			{
+				continue;
+			}
+
+			TracksToWrite.Add(BoneName);
+			const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+			const TArray<FResolvedVMDBoneKey>& Keys = Pair.Value;
+			const FMMDBoneSpaceConverter* Converter = BoneConverters.Find(BoneName);
+			if (Converter == nullptr)
+			{
+				++ConverterFallbackTrackCount;
+			}
+			for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+			{
+				FVector RawMMDPosition = FVector::ZeroVector;
+				FQuat RawMMDRotation = FQuat::Identity;
+				SampleResolvedVMDTrackAtFrame(Keys, FrameIndex, RawMMDPosition, RawMMDRotation);
+				const FVector ConvertedPosition = Converter != nullptr
+					? Converter->ConvertPosition(RawMMDPosition, Settings.PositionScale)
+					: ConvertMMDPositionToUnreal(RawMMDPosition, Settings.PositionScale);
+				const FQuat ConvertedRotation = Converter != nullptr
+					? Converter->ConvertRotation(RawMMDRotation)
+					: ConvertMMDQuatToUnreal(RawMMDRotation).GetNormalized();
+				const FVector CurrentPos = DefaultTransform.GetTranslation() + ConvertedPosition;
+				const FQuat CurrentRot = (DefaultTransform.GetRotation() * ConvertedRotation).GetNormalized();
+				LocalTransforms[BoneIndex][FrameIndex].SetTranslation(CurrentPos);
+				LocalTransforms[BoneIndex][FrameIndex].SetRotation(CurrentRot);
+			}
+		}
+	}
+	const bool bUseModelDataRuntime = Settings.bBakeMMDIKToFK && !bUsedModelDataEvaluator && Context.ModelDataAsset != nullptr && ModelDataToSkeleton.Num() > 0;
+	const TArray<FMMDPMXRuntimeBone> RuntimeBones = Settings.bBakeMMDIKToFK && !bUsedModelDataEvaluator
+		? (bUseModelDataRuntime
+			? BuildMMDModelDataRuntimeBones(Context.ModelDataAsset, RefSkeleton, ModelDataToSkeleton)
+			: BuildMMDPMXRuntimeBones(Context.PMXData, RefSkeleton, PMXToSkeleton, &IKDebugLog))
+		: TArray<FMMDPMXRuntimeBone>();
+	const TArray<FMMDIKBakeChain> IKChains = Settings.bBakeMMDIKToFK && !bUsedModelDataEvaluator
+		? (bUseModelDataRuntime
+			? BuildMMDModelDataIKBakeChains(Context.ModelDataAsset, RefSkeleton, ModelDataToSkeleton, TracksToWrite, &IKDebugLog)
+			: BuildMMDIKBakeChains(Context.PMXData, RefSkeleton, PMXToSkeleton, TracksToWrite, &IKDebugLog))
+		: TArray<FMMDIKBakeChain>();
+	if (Settings.bBakeMMDIKToFK)
+	{
+		LogMMDIKSeparationProbe(RefSkeleton, RefPose, LocalTransforms, BoneTrackMap, NumKeys, TEXT("BeforeBake"), IKDebugLog);
+		if (!bUsedModelDataEvaluator)
+		{
+			ApplyMMDAppendAndIKByTransformOrder(RefSkeleton, RefPose, RuntimeBones, IKChains, LocalTransforms, NumKeys);
+		}
+		LogMMDIKSeparationProbe(RefSkeleton, RefPose, LocalTransforms, BoneTrackMap, NumKeys, TEXT("AfterBake"), IKDebugLog);
+		const TCHAR* BakeRuntimeSource = bUsedModelDataEvaluator ? TEXT("ModelDataPMXSpace") : (bUseModelDataRuntime ? TEXT("ModelData") : (Context.PMXData ? TEXT("PMXData") : TEXT("None")));
+		IKDebugLog.LogAlways(FString::Printf(TEXT("Bake summary | BakeRuntime=%s | PMXData=%s | ModelData=%s | RuntimeBones=%d | Chains=%d | TracksToWrite=%d"),
+			BakeRuntimeSource,
+			Context.PMXData ? TEXT("true") : TEXT("false"),
+			Context.ModelDataAsset ? TEXT("true") : TEXT("false"),
+			RuntimeBones.Num(),
+			IKChains.Num(),
+			TracksToWrite.Num()));
+		IKDebugLog.LogAlways(FString::Printf(TEXT("VMD converter summary | ModelDataEvaluator=%s | Converters=%d | FallbackTracks=%d"),
+			bUsedModelDataEvaluator ? TEXT("true") : TEXT("false"),
+			BoneConverters.Num(),
+			ConverterFallbackTrackCount));
+		IKDebugLog.FlushSuppressed();
+	}
 
 	IAnimationDataController& Controller = AnimSequence->GetController();
 	Controller.OpenBracket(FText::FromString(TEXT("Import VMD Bone Animation")));
 	Controller.InitializeModel();
 	Controller.SetFrameRate(FFrameRate(FMath::RoundToInt32(Settings.FrameRate), 1), true);
-	Controller.SetNumberOfFrames(NumFrames, true);
+	Controller.SetNumberOfFrames(FFrameNumber(NumFrames), true);
 
-	for (const TPair<FName, TArray<FResolvedVMDBoneKey>>& Pair : BoneTrackMap)
+	TArray<FVMDWrittenTrackDiagnostic> TrackDiagnostics;
+	TrackDiagnostics.Reserve(TracksToWrite.Num());
+	int32 WrittenTrackCount = 0;
+	int32 StaticTrackCount = 0;
+	int32 FailedTrackCount = 0;
+
+	for (const FName BoneName : TracksToWrite)
 	{
-		const FName BoneName = Pair.Key;
 		const int32 BoneIndex = RefSkeleton.FindBoneIndex(BoneName);
 		if (BoneIndex == INDEX_NONE)
 		{
@@ -1908,38 +3798,71 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 		}
 
 		const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
-		FVector CurrentPos = DefaultTransform.GetTranslation();
-		FQuat CurrentRot = DefaultTransform.GetRotation();
-		const FVector CurrentScale = DefaultTransform.GetScale3D();
-
 		TArray<FVector3f> PosKeys;
 		TArray<FQuat4f> RotKeys;
 		TArray<FVector3f> ScaleKeys;
-		PosKeys.SetNum(NumFrames);
-		RotKeys.SetNum(NumFrames);
-		ScaleKeys.SetNum(NumFrames);
+		PosKeys.SetNum(NumKeys);
+		RotKeys.SetNum(NumKeys);
+		ScaleKeys.SetNum(NumKeys);
 
-		const TArray<FResolvedVMDBoneKey>& Keys = Pair.Value;
-		int32 KeyIndex = 0;
-		for (int32 FrameIndex = 0; FrameIndex < NumFrames; ++FrameIndex)
+		const TArray<FResolvedVMDBoneKey>* SourceKeys = BoneTrackMap.Find(BoneName);
+		FVMDWrittenTrackDiagnostic Diagnostic;
+		Diagnostic.BoneName = BoneName;
+		Diagnostic.SourceKeyCount = SourceKeys ? SourceKeys->Num() : 0;
+
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
 		{
-			while (KeyIndex < Keys.Num() && Keys[KeyIndex].Frame == FrameIndex)
-			{
-				CurrentPos = DefaultTransform.GetTranslation() + Keys[KeyIndex].Position;
-				CurrentRot = (DefaultTransform.GetRotation() * Keys[KeyIndex].Rotation).GetNormalized();
-				++KeyIndex;
-			}
-
-			PosKeys[FrameIndex] = FVector3f(CurrentPos);
-			RotKeys[FrameIndex] = FQuat4f(CurrentRot);
-			ScaleKeys[FrameIndex] = FVector3f(CurrentScale);
+			const FTransform& LocalTransform = LocalTransforms[BoneIndex][FrameIndex];
+			PosKeys[FrameIndex] = FVector3f(LocalTransform.GetTranslation());
+			RotKeys[FrameIndex] = FQuat4f(LocalTransform.GetRotation());
+			ScaleKeys[FrameIndex] = FVector3f(LocalTransform.GetScale3D());
+			Diagnostic.MaxTranslationDelta = FMath::Max(
+				Diagnostic.MaxTranslationDelta,
+				static_cast<float>(FVector::Dist(LocalTransform.GetTranslation(), DefaultTransform.GetTranslation())));
+			Diagnostic.MaxRotationDeltaDegrees = FMath::Max(
+				Diagnostic.MaxRotationDeltaDegrees,
+				GetQuatDeltaDegrees(LocalTransform.GetRotation(), DefaultTransform.GetRotation()));
 		}
 
-		Controller.AddBoneTrack(BoneName);
-		Controller.SetBoneTrackKeys(BoneName, PosKeys, RotKeys, ScaleKeys, false);
+		if (!Controller.AddBoneCurve(BoneName, false))
+		{
+			AppendUniqueMessage(LocalReport.Warnings, FString::Printf(TEXT("Failed to add VMD bone curve: %s"), *BoneName.ToString()));
+			++FailedTrackCount;
+			TrackDiagnostics.Add(MoveTemp(Diagnostic));
+			continue;
+		}
+
+		Diagnostic.bSetKeysSucceeded = Controller.SetBoneTrackKeys(BoneName, PosKeys, RotKeys, ScaleKeys, false);
+		if (!Diagnostic.bSetKeysSucceeded)
+		{
+			AppendUniqueMessage(LocalReport.Warnings, FString::Printf(TEXT("Failed to write VMD bone track keys: %s"), *BoneName.ToString()));
+			++FailedTrackCount;
+		}
+		else
+		{
+			++WrittenTrackCount;
+			if (Diagnostic.MaxTranslationDelta <= KINDA_SMALL_NUMBER && Diagnostic.MaxRotationDeltaDegrees <= KINDA_SMALL_NUMBER)
+			{
+				++StaticTrackCount;
+			}
+		}
+		TrackDiagnostics.Add(MoveTemp(Diagnostic));
 	}
 
+	Controller.NotifyPopulated();
 	Controller.CloseBracket();
+	const IAnimationDataModel* DataModel = AnimSequence->GetDataModel();
+	UE_LOG(LogTemp, Warning, TEXT("VMD AnimSequence data model: Tracks=%d/%d Keys=%d/%d Frames=%d Length=%.3f Written=%d Static=%d Failed=%d"),
+		DataModel ? DataModel->GetNumBoneTracks() : 0,
+		TracksToWrite.Num(),
+		DataModel ? DataModel->GetNumberOfKeys() : 0,
+		NumKeys,
+		NumFrames,
+		DataModel ? DataModel->GetPlayLength() : 0.0f,
+		WrittenTrackCount,
+		StaticTrackCount,
+		FailedTrackCount);
+
 	AnimSequence->PostEditChange();
 	AnimSequence->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(AnimSequence);

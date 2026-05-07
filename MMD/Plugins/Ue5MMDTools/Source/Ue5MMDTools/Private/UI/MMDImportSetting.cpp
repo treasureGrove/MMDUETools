@@ -173,6 +173,70 @@ static USkeletalMeshComponent* FindSelectedSkeletalMeshComponent()
 	return nullptr;
 }
 
+struct FMMDSelectedAnimationTarget
+{
+	USkeletalMeshComponent* SkeletalMeshComponent = nullptr;
+	USkeletalMesh* SkeletalMesh = nullptr;
+	FString SourcePMXFilePath;
+};
+
+static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget, FString& OutError)
+{
+	OutTarget = FMMDSelectedAnimationTarget{};
+	OutError.Reset();
+
+	if (!GEditor)
+	{
+		OutError = TEXT("GEditor is unavailable.");
+		return false;
+	}
+
+	USelection* SelectedActors = GEditor->GetSelectedActors();
+	if (!SelectedActors || SelectedActors->Num() == 0)
+	{
+		OutError = TEXT("请先在关卡中选中一个 MMD Actor 或带 SkeletalMesh 的 Actor。");
+		return false;
+	}
+
+	for (FSelectionIterator Iter(*SelectedActors); Iter; ++Iter)
+	{
+		AActor* Actor = Cast<AActor>(*Iter);
+		if (!Actor)
+		{
+			continue;
+		}
+
+		if (AMMDActor* MMDActor = Cast<AMMDActor>(Actor))
+		{
+			OutTarget.SkeletalMeshComponent = MMDActor->GetMeshComponent();
+			OutTarget.SourcePMXFilePath = MMDActor->SourcePMXFilePath;
+		}
+		else if (USkeletalMeshComponent* SkelComp = Actor->FindComponentByClass<USkeletalMeshComponent>())
+		{
+			OutTarget.SkeletalMeshComponent = SkelComp;
+			if (Actor->GetClass())
+			{
+				if (const AMMDActor* CDO = Cast<AMMDActor>(Actor->GetClass()->GetDefaultObject()))
+				{
+					OutTarget.SourcePMXFilePath = CDO->SourcePMXFilePath;
+				}
+			}
+		}
+
+		if (OutTarget.SkeletalMeshComponent)
+		{
+			OutTarget.SkeletalMesh = OutTarget.SkeletalMeshComponent->GetSkeletalMeshAsset();
+			if (OutTarget.SkeletalMesh)
+			{
+				return true;
+			}
+		}
+	}
+
+	OutError = TEXT("选中的 Actor 没有可用的 SkeletalMesh。");
+	return false;
+}
+
 static UAnimSequence* BuildAnimSequenceFromVMD(const VMDData& VMDInfo, USkeletalMesh* SkeletalMesh, const FString& VMDFilePath)
 {
 	//if (!SkeletalMesh)
@@ -200,6 +264,7 @@ static UAnimSequence* BuildAnimSequenceFromVMD(const VMDData& VMDInfo, USkeletal
 	//TMap<FName, TArray<FVMDBoneKey>> TrackMap;
 	//int32 MaxFrame = 0;
 	//const float PositionScale = 8.0f;
+
 
 	////for (const VMDBoneKeyframe& KeyFrame : VMDInfo.BoneFrames)
 	////{
@@ -516,74 +581,143 @@ void MMDImportSetting::ImportStaticMesh()
 }
 void MMDImportSetting::ImportVMDAnimation()
 {
-//	ShowImportProgress(TEXT("打开VMD动画选择对话框..."));
-//	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-//	if (DesktopPlatform)
-//	{
-//		TArray<FString> OpenedFiles;
-//		const FString FileTypes = TEXT("VMD Files (*.vmd)|*.vmd|All Files (*.*)|*.*");
-//
-//		bool bOpened = DesktopPlatform->OpenFileDialog(
-//			FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
-//			TEXT("导入VMD动画"),
-//			TEXT(""),
-//			TEXT(""),
-//			FileTypes,
-//			EFileDialogFlags::None,
-//			OpenedFiles);
-//
-//		if (bOpened && OpenedFiles.Num() > 0)
-//		{
-//			FString SelectedFile = OpenedFiles[0];
-//			FString FileName = FPaths::GetCleanFilename(SelectedFile);
-//
-//			ShowImportProgress(FString::Printf(TEXT("已选择VMD文件: %s"), *FileName));
-//
-//			// 调用你的 VMD 解析器
-////			TVMDParser VMDParser;
-////			if (VMDParser.ParseVMDFile(SelectedFile))
-////			{
-////				const VMDData& VMDInfo = VMDParser.VMDInfo;
-////				ShowImportProgress(FString::Printf(TEXT("VMD解析成功: %s, 骨骼帧:%d, 表情帧:%d"),
-////					*VMDInfo.ModelName, VMDInfo.BoneFrames.Num(), VMDInfo.MorphFrames.Num()),
-////					EMMDMessageType::Success);
-////
-////#if WITH_EDITOR
-////				USkeletalMeshComponent* TargetComp = FindSelectedSkeletalMeshComponent();
-////				if (!TargetComp)
-////				{
-////					ShowImportProgress(TEXT("未找到选中的SkeletalMesh组件，无法生成动画"), EMMDMessageType::Error);
-////					return;
-////				}
-////
-////				USkeletalMesh* TargetMesh = TargetComp->GetSkeletalMeshAsset();
-////				if (!TargetMesh || !TargetMesh->GetSkeleton())
-////				{
-////					ShowImportProgress(TEXT("选中的SkeletalMesh无Skeleton，无法生成动画"), EMMDMessageType::Error);
-////					return;
-////				}
-////
-////				if (UAnimSequence* AnimSeq = BuildAnimSequenceFromVMD(VMDInfo, TargetMesh, SelectedFile))
-////				{
-////					ShowImportProgress(FString::Printf(TEXT("VMD动画已生成: %s"), *AnimSeq->GetName()),
-////						EMMDMessageType::Success);
-////				}
-////				else
-////				{
-////					ShowImportProgress(TEXT("VMD解析成功，但动画生成失败"), EMMDMessageType::Error);
-////				}
-////#endif
-//			}
-//			else
-//			{
-//				ShowImportProgress(TEXT("VMD文件解析失败"), EMMDMessageType::Error);
-//			}
-//		}
-//		else
-//		{
-//			ShowImportProgress(TEXT("导入已取消"));
-//		}
-//	}
+	ShowImportProgress(TEXT("打开VMD动画选择对话框..."));
+
+	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+	if (!DesktopPlatform)
+	{
+		ShowImportProgress(TEXT("无法打开文件选择对话框。"), EMMDMessageType::Error);
+		return;
+	}
+
+	TArray<FString> OpenedFiles;
+	const FString FileTypes = TEXT("VMD Files (*.vmd)|*.vmd|All Files (*.*)|*.*");
+	const bool bOpened = DesktopPlatform->OpenFileDialog(
+		FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+		TEXT("导入VMD动画"),
+		TEXT(""),
+		TEXT(""),
+		FileTypes,
+		EFileDialogFlags::None,
+		OpenedFiles);
+
+	if (!bOpened || OpenedFiles.Num() == 0)
+	{
+		ShowImportProgress(TEXT("已取消导入VMD动画。"), EMMDMessageType::Warning);
+		return;
+	}
+
+	const FString SelectedFile = OpenedFiles[0];
+	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
+	ShowImportProgress(FString::Printf(TEXT("正在解析VMD文件: %s"), *FileName));
+
+	TVMDParser VMDParser;
+	if (!VMDParser.ParseVMDFile(SelectedFile))
+	{
+		ShowImportProgress(TEXT("VMD文件解析失败。"), EMMDMessageType::Error);
+		return;
+	}
+
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	FString TargetError;
+	if (!TryGetSelectedAnimationTarget(Target, TargetError))
+	{
+		ShowImportProgress(TargetError, EMMDMessageType::Error);
+		return;
+	}
+
+	if (!Target.SkeletalMesh || !Target.SkeletalMesh->GetSkeleton())
+	{
+		ShowImportProgress(TEXT("选中的 SkeletalMesh 没有关联 Skeleton，无法导入VMD。"), EMMDMessageType::Error);
+		return;
+	}
+
+	TPMXParser PMXParser;
+	const PMXDatas* PMXData = nullptr;
+	if (!Target.SourcePMXFilePath.IsEmpty() && FPaths::FileExists(Target.SourcePMXFilePath))
+	{
+		if (PMXParser.ParsePMXFile(Target.SourcePMXFilePath))
+		{
+			PMXData = &PMXParser.PMXInfo;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Failed to parse source PMX for IK bake: %s"), *Target.SourcePMXFilePath);
+		}
+	}
+
+	FMMDAnimationImportContext ImportContext;
+	FMMDAnimationImportReport ImportReport;
+	if (!TMMDMeshBuilder::BuildAnimationImportContext(Target.SkeletalMesh, PMXData, Target.SourcePMXFilePath, SelectedFile, ImportContext, &ImportReport))
+	{
+		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("VMD导入上下文创建失败。");
+		ShowImportProgress(ErrorMessage, EMMDMessageType::Error);
+		return;
+	}
+
+	FMMDAnimationImportSettings ImportSettings;
+	ImportSettings.bImportBoneTracks = true;
+	ImportSettings.bImportMorphCurves = false;
+
+	UAnimSequence* AnimSequence = TMMDMeshBuilder::BuildVMDAnimation(VMDParser.VMDInfo, ImportContext, ImportSettings, &ImportReport);
+	if (!AnimSequence)
+	{
+		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("VMD骨骼动画生成失败。");
+		ShowImportProgress(ErrorMessage, EMMDMessageType::Error);
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Generated %s | Bone matched %d/%d | MaxFrame=%d"),
+		*AnimSequence->GetPathName(),
+		ImportReport.MatchedBoneTrackCount,
+		ImportReport.SourceBoneTrackCount,
+		ImportReport.MaxFrame);
+
+	int32 LoggedMatchedTracks = 0;
+	int32 LoggedUnmatchedTracks = 0;
+	for (const FMMDResolvedBoneTrack& Track : ImportReport.BoneTracks)
+	{
+		if (Track.bMatched && LoggedMatchedTracks < 12)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Matched bone: %s -> %s (%d keys)"),
+				*Track.SourceBoneName,
+				*Track.TargetBoneName.ToString(),
+				Track.KeyCount);
+			++LoggedMatchedTracks;
+		}
+		else if (!Track.bMatched && LoggedUnmatchedTracks < 24)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Unmatched bone: %s (%d keys)"),
+				*Track.SourceBoneName,
+				Track.KeyCount);
+			++LoggedUnmatchedTracks;
+		}
+	}
+
+	if (Target.SkeletalMeshComponent)
+	{
+		Target.SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		Target.SkeletalMeshComponent->SetAnimation(AnimSequence);
+		Target.SkeletalMeshComponent->Play(true);
+	}
+
+	for (const FString& Warning : ImportReport.Warnings)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[VMD Import] %s"), *Warning);
+	}
+
+	ShowImportProgress(
+		FString::Printf(
+			TEXT("VMD骨骼动画导入并播放: %s | Bone %d/%d | MaxFrame=%d"),
+			*AnimSequence->GetPathName(),
+			ImportReport.MatchedBoneTrackCount,
+			ImportReport.SourceBoneTrackCount,
+			ImportReport.MaxFrame),
+		EMMDMessageType::Success);
+#else
+	ShowImportProgress(TEXT("VMD导入仅支持编辑器环境。"), EMMDMessageType::Error);
+#endif
 }
 void MMDImportSetting::ShowImportProgress(const FString& Message, EMMDMessageType Type)
 {

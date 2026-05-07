@@ -44,17 +44,36 @@ namespace
 
 	bool ReadVector3(FMemoryReader& Reader, FVector& OutVector, const TCHAR* Context)
 	{
-		return ReadValue(Reader, OutVector.X, Context)
-			&& ReadValue(Reader, OutVector.Y, Context)
-			&& ReadValue(Reader, OutVector.Z, Context);
+		float X = 0.0f;
+		float Y = 0.0f;
+		float Z = 0.0f;
+		if (!ReadValue(Reader, X, Context)
+			|| !ReadValue(Reader, Y, Context)
+			|| !ReadValue(Reader, Z, Context))
+		{
+			return false;
+		}
+
+		OutVector = FVector(X, Y, Z);
+		return true;
 	}
 
 	bool ReadQuat(FMemoryReader& Reader, FQuat& OutQuat, const TCHAR* Context)
 	{
-		return ReadValue(Reader, OutQuat.X, Context)
-			&& ReadValue(Reader, OutQuat.Y, Context)
-			&& ReadValue(Reader, OutQuat.Z, Context)
-			&& ReadValue(Reader, OutQuat.W, Context);
+		float X = 0.0f;
+		float Y = 0.0f;
+		float Z = 0.0f;
+		float W = 1.0f;
+		if (!ReadValue(Reader, X, Context)
+			|| !ReadValue(Reader, Y, Context)
+			|| !ReadValue(Reader, Z, Context)
+			|| !ReadValue(Reader, W, Context))
+		{
+			return false;
+		}
+
+		OutQuat = FQuat(X, Y, Z, W);
+		return true;
 	}
 
 	bool ReadCount(FMemoryReader& Reader, uint32& OutCount, uint32 MinRecordSize, const TCHAR* Context)

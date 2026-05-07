@@ -10,6 +10,7 @@ class UIKRigDefinition;
 class USkeleton;
 class USkeletalMesh;
 class UAnimSequence;
+class UMMDModelDataAsset;
 
 struct FMMDResolvedBoneTrack
 {
@@ -34,6 +35,7 @@ struct FMMDAnimationImportSettings
 	float PositionScale = 8.0f;
 	bool bImportBoneTracks = true;
 	bool bImportMorphCurves = true;
+	bool bBakeMMDIKToFK = true;
 	bool bSkipUnmatchedTracks = true;
 };
 
@@ -42,6 +44,7 @@ struct FMMDAnimationImportContext
 	USkeletalMesh* SkeletalMesh = nullptr;
 	USkeleton* Skeleton = nullptr;
 	const PMXDatas* PMXData = nullptr;
+	TObjectPtr<UMMDModelDataAsset> ModelDataAsset = nullptr;
 	FString SourcePMXFilePath;
 	FString SourceVMDFilePath;
 };
