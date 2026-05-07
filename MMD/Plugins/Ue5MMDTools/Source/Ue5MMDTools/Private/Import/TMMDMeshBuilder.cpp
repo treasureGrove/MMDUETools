@@ -2483,13 +2483,19 @@ static FVector3f SanitizePMXNormal(const FVector3f& Normal, const FVector3f& Fal
 		return FallbackFaceNormal;
 	}
 
-	FVector3f Result = Normal * FMath::InvSqrt(LenSq);
-	if (FVector3f::DotProduct(Result, FallbackFaceNormal) < -0.85f)
+	return Normal * FMath::InvSqrt(LenSq);
+}
+
+static FVector3f MakeStableTangentX(const FVector3f& Normal)
+{
+	const FVector3f Up = FMath::Abs(Normal.Z) < 0.95f ? FVector3f(0.0f, 0.0f, 1.0f) : FVector3f(0.0f, 1.0f, 0.0f);
+	FVector3f Tangent = FVector3f::CrossProduct(Up, Normal);
+	const float LenSq = Tangent.SizeSquared();
+	if (!FMath::IsFinite(LenSq) || LenSq <= KINDA_SMALL_NUMBER)
 	{
-		++OutFlippedCount;
-		Result = -Result;
+		return FVector3f(1.0f, 0.0f, 0.0f);
 	}
-	return Result;
+	return Tangent * FMath::InvSqrt(LenSq);
 }
 
 static int32 AddPMXWedge(FSkeletalMeshImportData& ImportData, const FPMXVertex& Vertex, int32 VertexIndex)
@@ -2514,7 +2520,7 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 	FString PMXPath = FPaths::GetPath(PMXFilePath);
 	FString PMXModelName = FPaths::GetBaseFilename(PMXFilePath);
 	PMXImportData.bHasNormals = true;
-	PMXImportData.bHasTangents = false;
+	PMXImportData.bHasTangents = true;
 	PMXImportData.bHasVertexColors = false;
 	PMXImportData.NumTexCoords = 1 + PMXInfo.PMXGlobals.ExtraUV; // 主UV加上额外的UV
 	PMXImportData.MaxMaterialIndex = PMXInfo.ModelMaterialCount;
@@ -2634,6 +2640,12 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 			Tri.TangentZ[0] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N0), FaceNormal, ZeroNormalCount, FlippedNormalCount);
 			Tri.TangentZ[1] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N1), FaceNormal, ZeroNormalCount, FlippedNormalCount);
 			Tri.TangentZ[2] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N2), FaceNormal, ZeroNormalCount, FlippedNormalCount);
+			Tri.TangentX[0] = MakeStableTangentX(Tri.TangentZ[0]);
+			Tri.TangentX[1] = MakeStableTangentX(Tri.TangentZ[1]);
+			Tri.TangentX[2] = MakeStableTangentX(Tri.TangentZ[2]);
+			Tri.TangentY[0] = FVector3f::CrossProduct(Tri.TangentZ[0], Tri.TangentX[0]).GetSafeNormal();
+			Tri.TangentY[1] = FVector3f::CrossProduct(Tri.TangentZ[1], Tri.TangentX[1]).GetSafeNormal();
+			Tri.TangentY[2] = FVector3f::CrossProduct(Tri.TangentZ[2], Tri.TangentX[2]).GetSafeNormal();
 
 			PMXImportData.Faces.Add(Tri);
 		}
@@ -2837,8 +2849,8 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 		LODInfo.LODHysteresis = 0.02f;
 
 		LODInfo.BuildSettings.bRecomputeNormals = false;
-		LODInfo.BuildSettings.bRecomputeTangents = true;
-		LODInfo.BuildSettings.bUseMikkTSpace = true;
+		LODInfo.BuildSettings.bRecomputeTangents = false;
+		LODInfo.BuildSettings.bUseMikkTSpace = false;
 		LODInfo.BuildSettings.bComputeWeightedNormals = false;
 		LODInfo.BuildSettings.bRemoveDegenerates = true;
 		LODInfo.BuildSettings.bUseFullPrecisionUVs = false;
@@ -2868,8 +2880,8 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 
 	IMeshUtilities::MeshBuildOptions BuildOptions;
 	BuildOptions.bComputeNormals = false;
-	BuildOptions.bComputeTangents = true;
-	BuildOptions.bUseMikkTSpace = true;
+	BuildOptions.bComputeTangents = false;
+	BuildOptions.bUseMikkTSpace = false;
 	BuildOptions.bComputeWeightedNormals = false;
 	BuildOptions.bRemoveDegenerateTriangles = true;
 
