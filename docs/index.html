@@ -192,14 +192,6 @@
       background: #fbfcfe;
     }
 
-    .todo {
-      border: 1px dashed #9aa8b8;
-      border-radius: 8px;
-      padding: 14px;
-      color: var(--muted);
-      background: #fbfcfe;
-    }
-
     footer {
       color: var(--muted);
       text-align: center;
@@ -248,7 +240,7 @@
   <main>
     <section id="demo">
       <h2>演示视频</h2>
-      <p>下面是当前插件导入 PMX + VMD 后在 UE5 中播放 MMD 动作的演示视频。</p>
+      <p>下面是 Ue5MMDTools 导入 PMX + VMD 后在 UE5 中播放 MMD 动作的演示视频。</p>
       <div class="video-frame">
         <iframe
           src="https://player.bilibili.com/player.html?isOutside=true&aid=116544877107416&bvid=BV1M2RXBPExk&cid=38217778776&p=1"
@@ -304,13 +296,11 @@
           <h3>5. 导入 VMD 动作</h3>
           <p>选中已经导入的 MMD 角色或对应的 SkeletalMesh，然后点击“导入 VMD 动画”，选择 <code>.vmd</code> 文件。</p>
           <p>导入成功后会生成 UE <code>AnimSequence</code>，其中包含骨骼动画轨道和表情 Morph 曲线。如果当前场景里有对应角色，插件会尝试直接播放该动画。</p>
-          <div class="todo">TODO: 这里建议补一张“导入 VMD 动画按钮/选择 VMD 文件”的截图。</div>
         </div>
 
         <div class="step">
           <h3>6. 播放 MMD 动画</h3>
           <p>导入 VMD 后，角色可以在 UE 中播放 MMD 动作。正常情况下应能看到身体骨骼动作、root / center 位移、眨眼、嘴型、眉毛和表情变化。</p>
-          <div class="todo">TODO: 这里建议补一张最终播放截图，最好是带表情的视口画面。</div>
         </div>
       </div>
     </section>
@@ -378,14 +368,26 @@
       </div>
     </section>
 
-    <section id="media">
-      <h2>后续建议补充的素材</h2>
-      <ul>
-        <li>导入 VMD 的截图：放在“导入 VMD 动作”步骤。</li>
-        <li>AnimSequence 曲线截图：展示 <code>あ</code>、<code>い</code>、<code>う</code>、<code>まばたき</code>、<code>笑い</code> 等曲线。</li>
-        <li>最终播放截图：展示角色全身动作和面部表情。</li>
-        <li>近景表情截图：展示嘴型、眨眼或表情变化。</li>
-      </ul>
+    <section id="workflow">
+      <h2>工作流总结</h2>
+      <p>Ue5MMDTools 会把 MMD 资源尽量转换为 UE 原生资产，便于在编辑器里检查、播放和继续制作。</p>
+      <pre><code>PMX 模型
+  -> SkeletalMesh
+  -> Skeleton
+  -> MorphTarget
+  -> Materials
+  -> MMD Actor
+
+VMD 动作
+  -> AnimSequence bone tracks
+  -> AnimSequence morph curves
+
+播放结果
+  -> 骨骼动作
+  -> root / center 位移
+  -> 眨眼
+  -> 嘴型
+  -> 表情变化</code></pre>
     </section>
   </main>
 

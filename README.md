@@ -4,17 +4,7 @@ Ue5MMDTools 是一个用于 Unreal Engine 5 的 MMD 导入和播放插件，用�
 
 完整介绍、使用教程和 B 站内嵌演示视频请查看 GitHub Pages：
 
-```text
-https://<your-github-name>.github.io/MMDUETools/
-```
-
-启用 GitHub Pages 时，请在仓库设置中选择：
-
-```text
-Settings -> Pages -> Build and deployment -> Source: Deploy from a branch
-Branch: main
-Folder: /docs
-```
+https://treasureGrove.github.io/MMDUETools/
 
 当前基础流程：
 
