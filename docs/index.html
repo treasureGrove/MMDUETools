@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ue5MMDTools</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #171a1f;
+      --muted: #5f6875;
+      --line: #d9dee7;
+      --accent: #0b6fcb;
+      --accent-dark: #084f91;
+      --code: #eef2f7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    header {
+      background: #101820;
+      color: white;
+      padding: 56px 24px 42px;
+    }
+
+    header .inner,
+    main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 42px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: 28px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--accent-dark);
+      text-decoration: underline;
+    }
+
+    .lead {
+      max-width: 820px;
+      color: #d6dde7;
+      font-size: 18px;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .flow span {
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #eef4fb;
+      font-size: 14px;
+    }
+
+    main {
+      padding: 34px 0 56px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 22px;
+    }
+
+    .video-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      border: 1px solid var(--line);
+    }
+
+    .video-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .steps {
+      display: grid;
+      gap: 22px;
+    }
+
+    .step {
+      border-top: 1px solid var(--line);
+      padding-top: 22px;
+    }
+
+    .step:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      margin: 14px 0 4px;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    code,
+    pre {
+      font-family: "Cascadia Code", Consolas, monospace;
+    }
+
+    pre {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      overflow-x: auto;
+      margin: 14px 0;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .feature {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      background: #fbfcfe;
+    }
+
+    .todo {
+      border: 1px dashed #9aa8b8;
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--muted);
+      background: #fbfcfe;
+    }
+
+    footer {
+      color: var(--muted);
+      text-align: center;
+      padding: 8px 20px 36px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 760px) {
+      header {
+        padding: 40px 20px 32px;
+      }
+
+      header .inner,
+      main {
+        width: min(100% - 28px, 1120px);
+      }
+
+      h1 {
+        font-size: 34px;
+      }
+
+      section {
+        padding: 20px;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Ue5MMDTools</h1>
+      <p class="lead">用于 Unreal Engine 5 的 MMD 导入和播放插件，把 PMX 模型、VMD 动作和表情数据转换到 UE 的原生资产流程中。</p>
+      <div class="flow" aria-label="基础流程">
+        <span>PMX -> SkeletalMesh</span>
+        <span>VMD -> AnimSequence</span>
+        <span>Morph -> MorphTarget</span>
+        <span>UE 视口播放</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="demo">
+      <h2>演示视频</h2>
+      <p>下面是当前插件导入 PMX + VMD 后在 UE5 中播放 MMD 动作的演示视频。</p>
+      <div class="video-frame">
+        <iframe
+          src="https://player.bilibili.com/player.html?isOutside=true&aid=116544877107416&bvid=BV1M2RXBPExk&cid=38217778776&p=1"
+          scrolling="no"
+          allowfullscreen="true">
+        </iframe>
+      </div>
+      <p class="note">如果播放器没有显示，可以直接打开 <a href="https://www.bilibili.com/video/BV1M2RXBPExk/" target="_blank" rel="noreferrer">Bilibili 演示视频 BV1M2RXBPExk</a>。</p>
+    </section>
+
+    <section id="guide">
+      <h2>使用教程</h2>
+      <div class="steps">
+        <div class="step">
+          <h3>1. 安装插件</h3>
+          <p>下载后，把插件目录放到 UE 项目的 <code>Plugins</code> 文件夹下。</p>
+          <pre><code>YourProject/
+  Plugins/
+    Ue5MMDTools/</code></pre>
+          <p>然后打开 UE5，在插件面板中启用该插件。</p>
+          <img width="2556" height="507" alt="Enable plugin" src="https://github.com/user-attachments/assets/34db6af7-8de2-455e-8c66-3fe83762a915">
+        </div>
+
+        <div class="step">
+          <h3>2. 打开插件面板</h3>
+          <p>启用插件后，在 UE5 插件面板中打开 Ue5MMDTools 的导入界面。</p>
+          <img width="798" height="792" alt="Ue5MMDTools panel" src="https://github.com/user-attachments/assets/1c5c4d43-480d-4a4e-91a9-e905e94f4fc4">
+        </div>
+
+        <div class="step">
+          <h3>3. 导入 PMX 模型</h3>
+          <p>点击“导入模型”，选择需要导入的 <code>.pmx</code> 文件。</p>
+          <img width="1626" height="648" alt="Import PMX model" src="https://github.com/user-attachments/assets/078f6b85-bc5c-4959-ae0c-669c37bb0079">
+          <p>导入完成后，插件会生成 MMD 角色相关资产，并在面板和蓝图中可以看到对应的 Actor。</p>
+          <img width="1914" height="1026" alt="Imported MMD actor" src="https://github.com/user-attachments/assets/9ab3b650-4054-4ed4-8882-56c2c63d848c">
+        </div>
+
+        <div class="step">
+          <h3>4. 查看生成的资产</h3>
+          <p>导入 PMX 后，会生成对应的角色 Actor、骨骼资产和 IK 重定向相关资产。</p>
+          <img width="1611" height="621" alt="Generated actor and retarget assets" src="https://github.com/user-attachments/assets/a37aea3c-5c72-418b-9920-711de3a3d9f8">
+          <ul>
+            <li><code>SkeletalMesh</code> 和 <code>Skeleton</code></li>
+            <li>材质和材质实例</li>
+            <li><code>MorphTarget</code></li>
+            <li>MMD Actor 和 <code>AnimBlueprint</code></li>
+            <li>IK Rig / IK Retargeter</li>
+            <li>MMD ModelData 辅助资产</li>
+          </ul>
+        </div>
+
+        <div class="step">
+          <h3>5. 导入 VMD 动作</h3>
+          <p>选中已经导入的 MMD 角色或对应的 SkeletalMesh，然后点击“导入 VMD 动画”，选择 <code>.vmd</code> 文件。</p>
+          <p>导入成功后会生成 UE <code>AnimSequence</code>，其中包含骨骼动画轨道和表情 Morph 曲线。如果当前场景里有对应角色，插件会尝试直接播放该动画。</p>
+          <div class="todo">TODO: 这里建议补一张“导入 VMD 动画按钮/选择 VMD 文件”的截图。</div>
+        </div>
+
+        <div class="step">
+          <h3>6. 播放 MMD 动画</h3>
+          <p>导入 VMD 后，角色可以在 UE 中播放 MMD 动作。正常情况下应能看到身体骨骼动作、root / center 位移、眨眼、嘴型、眉毛和表情变化。</p>
+          <div class="todo">TODO: 这里建议补一张最终播放截图，最好是带表情的视口画面。</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>插件功能说明</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <h3>PMX 模型导入</h3>
+          <ul>
+            <li>解析 PMX 顶点、索引、法线、UV、材质和骨骼。</li>
+            <li>生成 UE <code>SkeletalMesh</code> 和 <code>Skeleton</code>。</li>
+            <li>创建基础 MMD 材质和材质实例。</li>
+            <li>保存 MMD ModelData 辅助数据。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>MorphTarget / 表情</h3>
+          <ul>
+            <li>PMX vertex morph 导入为 UE <code>MorphTarget</code>。</li>
+            <li>修正 PMX 顶点到 UE 渲染顶点的映射，避免表情扭曲。</li>
+            <li>VMD 表情写入 <code>AnimSequence</code> float curves。</li>
+            <li>支持 Group / Flip Morph 展开，嘴型和眨眼可正常播放。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>VMD 动作导入</h3>
+          <ul>
+            <li>解析 VMD 骨骼关键帧和 Morph 关键帧。</li>
+            <li>骨骼轨道写入 <code>AnimSequence</code>。</li>
+            <li>表情轨道写入 Morph curves。</li>
+            <li>支持 MMD 到 UE 坐标系转换和 IK / 追加骨骼烘焙。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Actor / AnimBlueprint / IK</h3>
+          <ul>
+            <li>自动创建 MMD Actor。</li>
+            <li>自动生成 <code>AnimBlueprint</code>。</li>
+            <li>提供 MMD Skeletal Control 动画节点。</li>
+            <li>生成 IK Rig 和 IK Retargeter。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>物理模拟</h3>
+          <ul>
+            <li>读取 PMX 刚体和 Joint 数据。</li>
+            <li>基于 Bullet 初始化 MMD 风格物理模拟器。</li>
+            <li>物理功能仍在实验阶段，适合继续调试和扩展。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>当前限制</h3>
+          <ul>
+            <li>Material Morph 尚未完整驱动 UE 材质参数。</li>
+            <li>Bone Morph / UV Morph 还没有作为完整动画通道实现。</li>
+            <li>不同模型的骨骼命名、IK 结构和特殊 Morph 组合可能需要继续适配。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="media">
+      <h2>后续建议补充的素材</h2>
+      <ul>
+        <li>导入 VMD 的截图：放在“导入 VMD 动作”步骤。</li>
+        <li>AnimSequence 曲线截图：展示 <code>あ</code>、<code>い</code>、<code>う</code>、<code>まばたき</code>、<code>笑い</code> 等曲线。</li>
+        <li>最终播放截图：展示角色全身动作和面部表情。</li>
+        <li>近景表情截图：展示嘴型、眨眼或表情变化。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    Ue5MMDTools - PMX / VMD import and playback for Unreal Engine 5
+  </footer>
+</body>
+</html>
