@@ -658,7 +658,7 @@ void MMDImportSetting::ImportVMDAnimation()
 
 	FMMDAnimationImportSettings ImportSettings;
 	ImportSettings.bImportBoneTracks = true;
-	ImportSettings.bImportMorphCurves = false;
+	ImportSettings.bImportMorphCurves = true;
 
 	UAnimSequence* AnimSequence = TMMDMeshBuilder::BuildVMDAnimation(VMDParser.VMDInfo, ImportContext, ImportSettings, &ImportReport);
 	if (!AnimSequence)
@@ -668,10 +668,12 @@ void MMDImportSetting::ImportVMDAnimation()
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Generated %s | Bone matched %d/%d | MaxFrame=%d"),
+	UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Generated %s | Bone matched %d/%d | Morph matched %d/%d | MaxFrame=%d"),
 		*AnimSequence->GetPathName(),
 		ImportReport.MatchedBoneTrackCount,
 		ImportReport.SourceBoneTrackCount,
+		ImportReport.MatchedMorphTrackCount,
+		ImportReport.SourceMorphTrackCount,
 		ImportReport.MaxFrame);
 
 	int32 LoggedMatchedTracks = 0;
@@ -709,10 +711,12 @@ void MMDImportSetting::ImportVMDAnimation()
 
 	ShowImportProgress(
 		FString::Printf(
-			TEXT("VMD骨骼动画导入并播放: %s | Bone %d/%d | MaxFrame=%d"),
+			TEXT("VMD骨骼/表情动画导入并播放: %s | Bone %d/%d | Morph %d/%d | MaxFrame=%d"),
 			*AnimSequence->GetPathName(),
 			ImportReport.MatchedBoneTrackCount,
 			ImportReport.SourceBoneTrackCount,
+			ImportReport.MatchedMorphTrackCount,
+			ImportReport.SourceMorphTrackCount,
 			ImportReport.MaxFrame),
 		EMMDMessageType::Success);
 #else

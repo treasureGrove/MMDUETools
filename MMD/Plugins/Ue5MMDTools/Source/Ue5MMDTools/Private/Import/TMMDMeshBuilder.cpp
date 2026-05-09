@@ -6,7 +6,10 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataController.h"
 #include "Animation/AnimData/IAnimationDataModel.h"
+#include "Animation/AnimData/CurveIdentifier.h"
+#include "Animation/AnimCurveTypes.h"
 #include "Animation/Skeleton.h"
+#include "Curves/RichCurve.h"
 #include "Misc/FrameRate.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/PackageName.h"
@@ -304,6 +307,130 @@ bool TryResolveMorphTargetName(const USkeletalMesh* SkeletalMesh, const FString&
 	return false;
 }
 
+const FPMXMorph* FindPMXMorphByName(const PMXDatas* PMXData, const FString& SourceName, int32* OutMorphIndex = nullptr)
+{
+	if (PMXData == nullptr)
+	{
+		return nullptr;
+	}
+
+	for (int32 MorphIndex = 0; MorphIndex < PMXData->ModelMorphs.Num(); ++MorphIndex)
+	{
+		const FPMXMorph& Morph = PMXData->ModelMorphs[MorphIndex];
+		const bool bNameMatches =
+			Morph.NameJP == SourceName ||
+			Morph.NameEN == SourceName ||
+			FixMMDName(Morph.NameJP) == FixMMDName(SourceName) ||
+			FixMMDName(Morph.NameEN) == FixMMDName(SourceName);
+		if (bNameMatches)
+		{
+			if (OutMorphIndex != nullptr)
+			{
+				*OutMorphIndex = MorphIndex;
+			}
+			return &Morph;
+		}
+	}
+
+	return nullptr;
+}
+
+struct FMMDMorphTargetContribution
+{
+	FName TargetMorphName = NAME_None;
+	float WeightScale = 1.0f;
+};
+
+void AddMorphTargetContribution(TArray<FMMDMorphTargetContribution>& Contributions, FName TargetMorphName, float WeightScale)
+{
+	if (TargetMorphName == NAME_None || FMath::IsNearlyZero(WeightScale))
+	{
+		return;
+	}
+
+	for (FMMDMorphTargetContribution& Contribution : Contributions)
+	{
+		if (Contribution.TargetMorphName == TargetMorphName)
+		{
+			Contribution.WeightScale += WeightScale;
+			return;
+		}
+	}
+
+	FMMDMorphTargetContribution NewContribution;
+	NewContribution.TargetMorphName = TargetMorphName;
+	NewContribution.WeightScale = WeightScale;
+	Contributions.Add(NewContribution);
+}
+
+void ResolvePMXMorphContributionsRecursive(
+	const USkeletalMesh* SkeletalMesh,
+	const PMXDatas* PMXData,
+	int32 MorphIndex,
+	float WeightScale,
+	TSet<int32>& VisitingMorphs,
+	TArray<FMMDMorphTargetContribution>& OutContributions)
+{
+	if (SkeletalMesh == nullptr || PMXData == nullptr || !PMXData->ModelMorphs.IsValidIndex(MorphIndex) || FMath::IsNearlyZero(WeightScale))
+	{
+		return;
+	}
+
+	if (VisitingMorphs.Contains(MorphIndex))
+	{
+		return;
+	}
+	VisitingMorphs.Add(MorphIndex);
+
+	const FPMXMorph& Morph = PMXData->ModelMorphs[MorphIndex];
+	const FString PreferredName = !Morph.NameJP.IsEmpty() ? Morph.NameJP : Morph.NameEN;
+	if (Morph.MorphType == 1)
+	{
+		FName TargetMorphName = NAME_None;
+		if (TryResolveMorphTargetName(SkeletalMesh, PreferredName, TargetMorphName))
+		{
+			AddMorphTargetContribution(OutContributions, TargetMorphName, WeightScale);
+		}
+	}
+	else if (Morph.MorphType == 0)
+	{
+		for (const FPMXMorphGroup& Group : Morph.Groups)
+		{
+			ResolvePMXMorphContributionsRecursive(SkeletalMesh, PMXData, Group.MorphIndex, WeightScale * Group.Weight, VisitingMorphs, OutContributions);
+		}
+	}
+	else if (Morph.MorphType == 9)
+	{
+		for (const FPMXMorphFlip& Flip : Morph.Flips)
+		{
+			ResolvePMXMorphContributionsRecursive(SkeletalMesh, PMXData, Flip.MorphIndex, WeightScale * Flip.Weight, VisitingMorphs, OutContributions);
+		}
+	}
+
+	VisitingMorphs.Remove(MorphIndex);
+}
+
+TArray<FMMDMorphTargetContribution> ResolveMorphTargetContributions(const USkeletalMesh* SkeletalMesh, const PMXDatas* PMXData, const FString& SourceName)
+{
+	TArray<FMMDMorphTargetContribution> Contributions;
+
+	FName DirectMorphName = NAME_None;
+	if (TryResolveMorphTargetName(SkeletalMesh, SourceName, DirectMorphName))
+	{
+		AddMorphTargetContribution(Contributions, DirectMorphName, 1.0f);
+		return Contributions;
+	}
+
+	int32 PMXMorphIndex = INDEX_NONE;
+	if (FindPMXMorphByName(PMXData, SourceName, &PMXMorphIndex) != nullptr)
+	{
+		TSet<int32> VisitingMorphs;
+		ResolvePMXMorphContributionsRecursive(SkeletalMesh, PMXData, PMXMorphIndex, 1.0f, VisitingMorphs, Contributions);
+	}
+
+	return Contributions;
+}
+
 template<typename TReportArray>
 void AppendUniqueMessage(TReportArray& Messages, const FString& Message)
 {
@@ -324,6 +451,13 @@ struct FVMDWrittenTrackDiagnostic
 	int32 SourceKeyCount = 0;
 	float MaxTranslationDelta = 0.0f;
 	float MaxRotationDeltaDegrees = 0.0f;
+	bool bSetKeysSucceeded = false;
+};
+
+struct FVMDMorphCurveDiagnostic
+{
+	FName MorphName = NAME_None;
+	int32 SourceKeyCount = 0;
 	bool bSetKeysSucceeded = false;
 };
 
@@ -2134,8 +2268,49 @@ int32 BuildMorphTargetsFromPMX(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXI
 	const FSkeletalMeshLODInfo* LODInfo = SkeletalMesh->GetLODInfo(0);
 	const float PositionThreshold = LODInfo ? LODInfo->BuildSettings.MorphThresholdPosition : UE_THRESH_POINTS_ARE_NEAR;
 
+	TArray<TArray<uint32>> PMXVertexToRenderVertices;
+	PMXVertexToRenderVertices.SetNum(PMXInfo.ModelVertices.Num());
+	const int32 BaseVertexCount = BaseLODModel.NumVertices;
+	int32 MappedRenderVertexCount = 0;
+
+	if (BaseLODModel.MeshToImportVertexMap.Num() == BaseVertexCount)
+	{
+		for (int32 RenderVertexIndex = 0; RenderVertexIndex < BaseLODModel.MeshToImportVertexMap.Num(); ++RenderVertexIndex)
+		{
+			const int32 PMXVertexIndex = BaseLODModel.MeshToImportVertexMap[RenderVertexIndex];
+			if (PMXVertexToRenderVertices.IsValidIndex(PMXVertexIndex))
+			{
+				PMXVertexToRenderVertices[PMXVertexIndex].Add(static_cast<uint32>(RenderVertexIndex));
+				++MappedRenderVertexCount;
+			}
+		}
+	}
+	else if (BaseLODModel.GetRawPointIndices().Num() == BaseVertexCount)
+	{
+		const TArray<uint32>& RawPointIndices = BaseLODModel.GetRawPointIndices();
+		for (int32 RenderVertexIndex = 0; RenderVertexIndex < RawPointIndices.Num(); ++RenderVertexIndex)
+		{
+			const int32 PMXVertexIndex = static_cast<int32>(RawPointIndices[RenderVertexIndex]);
+			if (PMXVertexToRenderVertices.IsValidIndex(PMXVertexIndex))
+			{
+				PMXVertexToRenderVertices[PMXVertexIndex].Add(static_cast<uint32>(RenderVertexIndex));
+				++MappedRenderVertexCount;
+			}
+		}
+	}
+
+	if (MappedRenderVertexCount == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PMX Morph: no LOD import-vertex map found; falling back to raw PMX vertex indices. Morphs may deform incorrectly."));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("PMX Morph: mapped %d render vertices back to %d PMX vertices."), MappedRenderVertexCount, PMXInfo.ModelVertices.Num());
+	}
+
 	int32 ImportedMorphCount = 0;
 	int32 SkippedMorphCount = 0;
+	int32 MissingMappedVertexCount = 0;
 	bool bNeedInitMorphTargets = false;
 	auto ConvertMorphOffsetToUnreal = [](const FVector& PMXVector) -> FVector3f
 	{
@@ -2159,7 +2334,8 @@ int32 BuildMorphTargetsFromPMX(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXI
 		}
 
 		TArray<FMorphTargetDelta> Deltas;
-		Deltas.Reserve(Morph.Vertices.Num());
+		Deltas.Reserve(Morph.Vertices.Num() * 2);
+		TSet<uint32> AddedSourceIndices;
 
 		for (const FPMXMorphVertex& MorphVertex : Morph.Vertices)
 		{
@@ -2168,14 +2344,40 @@ int32 BuildMorphTargetsFromPMX(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXI
 				continue;
 			}
 
-			FMorphTargetDelta Delta;
-			Delta.SourceIdx = static_cast<uint32>(MorphVertex.VertexIndex);
-			Delta.PositionDelta = ConvertMorphOffsetToUnreal(MorphVertex.PositionOffset);
-			Delta.TangentZDelta = FVector3f::ZeroVector;
-
-			if (!Delta.PositionDelta.IsNearlyZero())
+			const FVector3f PositionDelta = ConvertMorphOffsetToUnreal(MorphVertex.PositionOffset);
+			if (PositionDelta.IsNearlyZero())
 			{
+				continue;
+			}
+
+			TArray<uint32> RenderVertexIndices;
+			if (PMXVertexToRenderVertices.IsValidIndex(MorphVertex.VertexIndex))
+			{
+				RenderVertexIndices = PMXVertexToRenderVertices[MorphVertex.VertexIndex];
+			}
+
+			if (RenderVertexIndices.Num() == 0)
+			{
+				++MissingMappedVertexCount;
+				if (MorphVertex.VertexIndex < BaseVertexCount)
+				{
+					RenderVertexIndices.Add(static_cast<uint32>(MorphVertex.VertexIndex));
+				}
+			}
+
+			for (const uint32 RenderVertexIndex : RenderVertexIndices)
+			{
+				if (AddedSourceIndices.Contains(RenderVertexIndex))
+				{
+					continue;
+				}
+
+				FMorphTargetDelta Delta;
+				Delta.SourceIdx = RenderVertexIndex;
+				Delta.PositionDelta = PositionDelta;
+				Delta.TangentZDelta = FVector3f::ZeroVector;
 				Deltas.Add(Delta);
+				AddedSourceIndices.Add(RenderVertexIndex);
 			}
 		}
 
@@ -2215,7 +2417,7 @@ int32 BuildMorphTargetsFromPMX(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXI
 		SkeletalMesh->InitMorphTargetsAndRebuildRenderData();
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("PMX Morph: imported %d vertex morph targets, skipped %d non-imported morphs."), ImportedMorphCount, SkippedMorphCount);
+	UE_LOG(LogTemp, Log, TEXT("PMX Morph: imported %d vertex morph targets, skipped %d non-imported morphs, missing mapped vertices %d."), ImportedMorphCount, SkippedMorphCount, MissingMappedVertexCount);
 	return ImportedMorphCount;
 #else
 	(void)SkeletalMesh;
@@ -3572,7 +3774,12 @@ bool TMMDMeshBuilder::AnalyzeVMDAnimationImport(const VMDData& VmdData, const FM
 			FMMDResolvedMorphTrack Track;
 			Track.SourceMorphName = Pair.Key;
 			Track.KeyCount = Pair.Value;
-			Track.bMatched = TryResolveMorphTargetName(Context.SkeletalMesh, Pair.Key, Track.TargetMorphName);
+			const TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Pair.Key);
+			Track.bMatched = Contributions.Num() > 0;
+			if (Contributions.Num() == 1)
+			{
+				Track.TargetMorphName = Contributions[0].TargetMorphName;
+			}
 			if (Track.bMatched)
 			{
 				++OutReport.MatchedMorphTrackCount;
@@ -3790,7 +3997,7 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 	}
 
 	IAnimationDataController& Controller = AnimSequence->GetController();
-	Controller.OpenBracket(FText::FromString(TEXT("Import VMD Bone Animation")));
+	Controller.OpenBracket(FText::FromString(TEXT("Import VMD Animation")));
 	Controller.InitializeModel();
 	Controller.SetFrameRate(FFrameRate(FMath::RoundToInt32(Settings.FrameRate), 1), true);
 	Controller.SetNumberOfFrames(FFrameNumber(NumFrames), true);
@@ -3861,10 +4068,109 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 		TrackDiagnostics.Add(MoveTemp(Diagnostic));
 	}
 
+	TMap<FString, TArray<FMMDMorphTargetContribution>> ResolvedMorphContributions;
+	ResolvedMorphContributions.Reserve(LocalReport.MorphTracks.Num());
+	for (const FMMDResolvedMorphTrack& Track : LocalReport.MorphTracks)
+	{
+		TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Track.SourceMorphName);
+		if (Contributions.Num() > 0)
+		{
+			ResolvedMorphContributions.Add(Track.SourceMorphName, MoveTemp(Contributions));
+		}
+	}
+
+	TMap<FName, TArray<FRichCurveKey>> MorphCurveKeys;
+	TMap<FName, int32> MorphSourceKeyCounts;
+	int32 ExpandedMorphTrackCount = 0;
+	if (Settings.bImportMorphCurves && ResolvedMorphContributions.Num() > 0)
+	{
+		for (const VMDMorphKeyframe& Keyframe : VmdData.MorphKeyframes)
+		{
+			const TArray<FMMDMorphTargetContribution>* Contributions = ResolvedMorphContributions.Find(Keyframe.MorphName);
+			if (Contributions == nullptr || Contributions->Num() == 0)
+			{
+				continue;
+			}
+
+			const float Time = static_cast<float>(Keyframe.FrameNumber) / FMath::Max(Settings.FrameRate, KINDA_SMALL_NUMBER);
+			for (const FMMDMorphTargetContribution& Contribution : *Contributions)
+			{
+				if (Contribution.TargetMorphName == NAME_None)
+				{
+					continue;
+				}
+
+				FRichCurveKey CurveKey(Time, Keyframe.Weight * Contribution.WeightScale);
+				CurveKey.InterpMode = RCIM_Linear;
+				MorphCurveKeys.FindOrAdd(Contribution.TargetMorphName).Add(CurveKey);
+				++MorphSourceKeyCounts.FindOrAdd(Contribution.TargetMorphName);
+			}
+		}
+
+		for (const TPair<FString, TArray<FMMDMorphTargetContribution>>& Pair : ResolvedMorphContributions)
+		{
+			if (Pair.Value.Num() > 1 || (Pair.Value.Num() == 1 && Pair.Value[0].TargetMorphName.ToString() != Pair.Key))
+			{
+				++ExpandedMorphTrackCount;
+			}
+		}
+	}
+
+	TArray<FVMDMorphCurveDiagnostic> MorphCurveDiagnostics;
+	MorphCurveDiagnostics.Reserve(MorphCurveKeys.Num());
+	int32 WrittenMorphCurveCount = 0;
+	int32 FailedMorphCurveCount = 0;
+	for (TPair<FName, TArray<FRichCurveKey>>& Pair : MorphCurveKeys)
+	{
+		const FName MorphName = Pair.Key;
+		TArray<FRichCurveKey>& CurveKeys = Pair.Value;
+		CurveKeys.Sort([](const FRichCurveKey& A, const FRichCurveKey& B)
+		{
+			return A.Time < B.Time;
+		});
+
+		TArray<FRichCurveKey> UniqueCurveKeys;
+		UniqueCurveKeys.Reserve(CurveKeys.Num());
+		for (const FRichCurveKey& CurveKey : CurveKeys)
+		{
+			if (UniqueCurveKeys.Num() > 0 && FMath::IsNearlyEqual(UniqueCurveKeys.Last().Time, CurveKey.Time))
+			{
+				UniqueCurveKeys.Last() = CurveKey;
+			}
+			else
+			{
+				UniqueCurveKeys.Add(CurveKey);
+			}
+		}
+
+		FVMDMorphCurveDiagnostic Diagnostic;
+		Diagnostic.MorphName = MorphName;
+		Diagnostic.SourceKeyCount = MorphSourceKeyCounts.FindRef(MorphName);
+
+		const FAnimationCurveIdentifier CurveId(MorphName, ERawCurveTrackTypes::RCT_Float);
+		if (AnimSequence->GetDataModel()->FindCurve(CurveId) == nullptr)
+		{
+			Controller.AddCurve(CurveId, AACF_DefaultCurve | AACF_DriveMorphTarget_DEPRECATED, false);
+		}
+		Context.Skeleton->AccumulateCurveMetaData(MorphName, false, true);
+
+		Diagnostic.bSetKeysSucceeded = Controller.SetCurveKeys(CurveId, UniqueCurveKeys, false);
+		if (Diagnostic.bSetKeysSucceeded)
+		{
+			++WrittenMorphCurveCount;
+		}
+		else
+		{
+			AppendUniqueMessage(LocalReport.Warnings, FString::Printf(TEXT("Failed to write VMD morph curve keys: %s"), *MorphName.ToString()));
+			++FailedMorphCurveCount;
+		}
+		MorphCurveDiagnostics.Add(MoveTemp(Diagnostic));
+	}
+
 	Controller.NotifyPopulated();
 	Controller.CloseBracket();
 	const IAnimationDataModel* DataModel = AnimSequence->GetDataModel();
-	UE_LOG(LogTemp, Warning, TEXT("VMD AnimSequence data model: Tracks=%d/%d Keys=%d/%d Frames=%d Length=%.3f Written=%d Static=%d Failed=%d"),
+	UE_LOG(LogTemp, Warning, TEXT("VMD AnimSequence data model: Tracks=%d/%d Keys=%d/%d Frames=%d Length=%.3f Written=%d Static=%d Failed=%d MorphCurves=%d/%d MorphExpanded=%d MorphFailed=%d"),
 		DataModel ? DataModel->GetNumBoneTracks() : 0,
 		TracksToWrite.Num(),
 		DataModel ? DataModel->GetNumberOfKeys() : 0,
@@ -3873,7 +4179,11 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 		DataModel ? DataModel->GetPlayLength() : 0.0f,
 		WrittenTrackCount,
 		StaticTrackCount,
-		FailedTrackCount);
+		FailedTrackCount,
+		WrittenMorphCurveCount,
+		LocalReport.MatchedMorphTrackCount,
+		ExpandedMorphTrackCount,
+		FailedMorphCurveCount);
 
 	AnimSequence->PostEditChange();
 	AnimSequence->MarkPackageDirty();
@@ -3892,10 +4202,6 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 
 	LocalReport.PackagePath = UniquePackageName;
 	LocalReport.AssetName = UniqueAssetName;
-	if (Settings.bImportMorphCurves && LocalReport.MatchedMorphTrackCount > 0)
-	{
-		AppendUniqueMessage(LocalReport.Warnings, TEXT("Morph curves were analyzed but are not written yet. Bone animation is imported; facial animation is still pending PMX MorphTarget + curve import."));
-	}
 
 	if (OutReport != nullptr)
 	{
