@@ -51,6 +51,7 @@ public class Ue5MMDTools : ModuleRules
             "DesktopPlatform",
             "AssetTools",
             "AssetRegistry",
+            "PropertyEditor",
             "ApplicationCore",
             "SkeletalMeshUtilitiesCommon",
             "MeshUtilities",
@@ -62,6 +63,11 @@ public class Ue5MMDTools : ModuleRules
             "IKRigDeveloper",
             "Persona",
             "SkeletonEditor",
+            "LevelSequence",
+            "LevelSequenceEditor",
+            "MovieScene",
+            "MovieSceneTracks",
+            "Sequencer",
             "Json",
             "JsonUtilities"
         });

@@ -281,17 +281,19 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 		for (uint32 Index = 0; Index < CameraKeyframeCount; ++Index)
 		{
 			VMDCameraKeyframe Keyframe{};
+			uint32 ViewAngle = 0;
 			if (!ReadValue(Reader, Keyframe.FrameNumber, TEXT("CameraFrame"))
 				|| !ReadValue(Reader, Keyframe.Distance, TEXT("CameraDistance"))
 				|| !ReadVector3(Reader, Keyframe.Interest, TEXT("CameraInterest"))
 				|| !ReadVector3(Reader, Keyframe.Rotation, TEXT("CameraRotation"))
 				|| !ReadBytes(Reader, Keyframe.Interpolation, UE_ARRAY_COUNT(Keyframe.Interpolation), TEXT("CameraInterpolation"))
-				|| !ReadValue(Reader, Keyframe.ViewAngle, TEXT("CameraViewAngle"))
+				|| !ReadValue(Reader, ViewAngle, TEXT("CameraViewAngle"))
 				|| !ReadValue(Reader, Keyframe.Perspective, TEXT("CameraPerspective")))
 			{
 				UE_LOG(LogTemp, Error, TEXT("VMD: Failed to read camera keyframe %u"), Index);
 				return false;
 			}
+			Keyframe.ViewAngle = static_cast<float>(ViewAngle);
 			VMDInfo.CameraKeyframes.Add(MoveTemp(Keyframe));
 		}
 	}

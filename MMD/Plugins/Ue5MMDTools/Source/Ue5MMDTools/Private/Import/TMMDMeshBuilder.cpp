@@ -686,16 +686,20 @@ static void SampleResolvedVMDTrackAtFrame(const TArray<FResolvedVMDBoneKey>& Key
 	OutMMDRotation = InterpolatedRotation;
 }
 
-static int32 FindPMXBoneInRefSkeleton(const FReferenceSkeleton& RefSkeleton, const FPMXBone& Bone)
+static int32 FindBoneInRefSkeletonSkippingImportRoot(const FReferenceSkeleton& RefSkeleton, const FString& BoneName)
 {
-	const int32 ExactIndex = RefSkeleton.FindBoneIndex(FName(*Bone.NameJP));
-	if (ExactIndex != INDEX_NONE)
+	const int32 StartIndex = RefSkeleton.GetNum() > 0 && RefSkeleton.GetBoneName(0) == TEXT("Root") ? 1 : 0;
+	const FName ExactName(*BoneName);
+	for (int32 BoneIndex = StartIndex; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
 	{
-		return ExactIndex;
+		if (RefSkeleton.GetBoneName(BoneIndex) == ExactName)
+		{
+			return BoneIndex;
+		}
 	}
 
-	const FString SanitizedName = FixMMDName(Bone.NameJP);
-	for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+	const FString SanitizedName = FixMMDName(BoneName);
+	for (int32 BoneIndex = StartIndex; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
 	{
 		if (FixMMDName(RefSkeleton.GetBoneName(BoneIndex).ToString()) == SanitizedName)
 		{
@@ -703,6 +707,36 @@ static int32 FindPMXBoneInRefSkeleton(const FReferenceSkeleton& RefSkeleton, con
 		}
 	}
 	return INDEX_NONE;
+}
+
+static int32 FindPMXBoneInRefSkeleton(const FReferenceSkeleton& RefSkeleton, const FPMXBone& Bone, int32 PMXBoneIndex)
+{
+	const int32 ExpectedSkeletonIndex = PMXBoneIndex + 1;
+	if (RefSkeleton.GetNum() > 0
+		&& RefSkeleton.GetBoneName(0) == TEXT("Root")
+		&& ExpectedSkeletonIndex < RefSkeleton.GetNum())
+	{
+		const FString ExpectedBoneName = RefSkeleton.GetBoneName(ExpectedSkeletonIndex).ToString();
+		if (ExpectedBoneName == Bone.NameJP || FixMMDName(ExpectedBoneName) == FixMMDName(Bone.NameJP))
+		{
+			return ExpectedSkeletonIndex;
+		}
+		if (!Bone.NameEN.IsEmpty() && (ExpectedBoneName == Bone.NameEN || FixMMDName(ExpectedBoneName) == FixMMDName(Bone.NameEN)))
+		{
+			return ExpectedSkeletonIndex;
+		}
+	}
+
+	int32 BoneIndex = FindBoneInRefSkeletonSkippingImportRoot(RefSkeleton, Bone.NameJP);
+	if (BoneIndex != INDEX_NONE)
+	{
+		return BoneIndex;
+	}
+	if (!Bone.NameEN.IsEmpty())
+	{
+		BoneIndex = FindBoneInRefSkeletonSkippingImportRoot(RefSkeleton, Bone.NameEN);
+	}
+	return BoneIndex;
 }
 
 static TArray<int32> BuildPMXToSkeletonBoneMap(const PMXDatas* PMXData, const FReferenceSkeleton& RefSkeleton)
@@ -716,7 +750,7 @@ static TArray<int32> BuildPMXToSkeletonBoneMap(const PMXDatas* PMXData, const FR
 	PMXToSkeleton.SetNum(PMXData->ModelBones.Num());
 	for (int32 PMXBoneIndex = 0; PMXBoneIndex < PMXData->ModelBones.Num(); ++PMXBoneIndex)
 	{
-		PMXToSkeleton[PMXBoneIndex] = FindPMXBoneInRefSkeleton(RefSkeleton, PMXData->ModelBones[PMXBoneIndex]);
+		PMXToSkeleton[PMXBoneIndex] = FindPMXBoneInRefSkeleton(RefSkeleton, PMXData->ModelBones[PMXBoneIndex], PMXBoneIndex);
 	}
 	return PMXToSkeleton;
 }
@@ -794,7 +828,7 @@ static void PopulateMMDModelDataAsset(UMMDModelDataAsset* ModelDataAsset, const 
 		BoneData.IKTargetBoneIndex = PMXBone.IKTargetBoneIndex;
 		BoneData.IKLoopCount = PMXBone.IKLoopCount;
 		BoneData.IKLimitAngle = PMXBone.IKLimitAngle;
-		BoneData.UEBoneIndex = FindPMXBoneInRefSkeleton(RefSkeleton, PMXBone);
+		BoneData.UEBoneIndex = FindPMXBoneInRefSkeleton(RefSkeleton, PMXBone, PMXBoneIndex);
 		BoneData.UEBoneName = BoneData.UEBoneIndex != INDEX_NONE ? RefSkeleton.GetBoneName(BoneData.UEBoneIndex) : NAME_None;
 
 		BoneData.IKLinks.Reserve(PMXBone.IKLinks.Num());
@@ -925,6 +959,7 @@ static int32 ResolveModelDataBoneToSkeletonIndex(const FMMDModelBoneData& BoneDa
 {
 	if (BoneData.UEBoneIndex != INDEX_NONE
 		&& BoneData.UEBoneIndex < RefSkeleton.GetNum()
+		&& BoneData.UEBoneIndex != 0
 		&& RefSkeleton.GetBoneName(BoneData.UEBoneIndex) == BoneData.UEBoneName)
 	{
 		return BoneData.UEBoneIndex;
@@ -932,10 +967,24 @@ static int32 ResolveModelDataBoneToSkeletonIndex(const FMMDModelBoneData& BoneDa
 
 	if (BoneData.UEBoneName != NAME_None)
 	{
-		return RefSkeleton.FindBoneIndex(BoneData.UEBoneName);
+		const int32 BoneIndex = FindBoneInRefSkeletonSkippingImportRoot(RefSkeleton, BoneData.UEBoneName.ToString());
+		if (BoneIndex != INDEX_NONE)
+		{
+			return BoneIndex;
+		}
 	}
 
-	return INDEX_NONE;
+	int32 BoneIndex = FindBoneInRefSkeletonSkippingImportRoot(RefSkeleton, BoneData.NameJP);
+	if (BoneIndex != INDEX_NONE)
+	{
+		return BoneIndex;
+	}
+	if (!BoneData.NameEN.IsEmpty())
+	{
+		BoneIndex = FindBoneInRefSkeletonSkippingImportRoot(RefSkeleton, BoneData.NameEN);
+	}
+
+	return BoneIndex;
 }
 
 static TArray<int32> BuildModelDataToSkeletonBoneMap(const UMMDModelDataAsset* ModelDataAsset, const FReferenceSkeleton& RefSkeleton)
@@ -3727,34 +3776,29 @@ bool TMMDMeshBuilder::AnalyzeVMDAnimationImport(const VMDData& VmdData, const FM
 			Track.SourceBoneName = Pair.Key;
 			Track.KeyCount = Pair.Value;
 
-			const FName ExactName(*Pair.Key);
-			Track.TargetBoneIndex = RefSkeleton.FindBoneIndex(ExactName);
+			Track.TargetBoneIndex = FindBoneInRefSkeletonSkippingImportRoot(RefSkeleton, Pair.Key);
 			if (Track.TargetBoneIndex != INDEX_NONE)
 			{
-				Track.TargetBoneName = ExactName;
+				Track.TargetBoneName = RefSkeleton.GetBoneName(Track.TargetBoneIndex);
 				Track.bMatched = true;
 				++OutReport.MatchedBoneTrackCount;
-			}
-			else
-			{
-				const FString SanitizedSource = FixMMDName(Pair.Key);
-				for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
-				{
-					const FName CandidateName = RefSkeleton.GetBoneName(BoneIndex);
-					if (FixMMDName(CandidateName.ToString()) == SanitizedSource)
-					{
-						Track.TargetBoneIndex = BoneIndex;
-						Track.TargetBoneName = CandidateName;
-						Track.bMatched = true;
-						++OutReport.MatchedBoneTrackCount;
-						break;
-					}
-				}
 			}
 
 			if (!Track.bMatched)
 			{
 				AppendUniqueMessage(OutReport.Warnings, FString::Printf(TEXT("Unmatched VMD bone track: %s"), *Track.SourceBoneName));
+			}
+			else if (Track.SourceBoneName == TEXT("Root")
+				|| Track.SourceBoneName == TEXT("root")
+				|| Track.SourceBoneName == TEXT("\u30bb\u30f3\u30bf\u30fc")
+				|| Track.SourceBoneName == TEXT("Center")
+				|| Track.SourceBoneName == TEXT("\u4e0a\u534a\u8eab")
+				|| Track.SourceBoneName == TEXT("Spine"))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[VMD Import] Control bone map: %s -> %s (index %d)"),
+					*Track.SourceBoneName,
+					*Track.TargetBoneName.ToString(),
+					Track.TargetBoneIndex);
 			}
 
 			OutReport.BoneTracks.Add(MoveTemp(Track));

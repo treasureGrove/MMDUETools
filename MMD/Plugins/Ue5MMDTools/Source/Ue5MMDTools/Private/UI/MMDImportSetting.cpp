@@ -7,8 +7,11 @@
 #include "IDesktopPlatform.h"
 #include "Engine/Engine.h"
 #include "Framework/Application/SlateApplication.h"
+#include "IPropertyUtilities.h"
+#include "PropertyCustomizationHelpers.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SBorder.h"
+#include "Widgets/SWindow.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/Paths.h"
 #include "TMMDMeshBuilder.h"
@@ -18,15 +21,38 @@
 #include "Animation/AnimData/IAnimationDataController.h"
 #include "Misc/FrameRate.h"
 #if WITH_EDITOR
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
+#include "Channels/MovieSceneChannelHandle.h"
+#include "Channels/MovieSceneChannelProxy.h"
+#include "Channels/MovieSceneDoubleChannel.h"
+#include "Channels/MovieSceneFloatChannel.h"
 #include "Factories/BlueprintFactory.h"
 #include "Editor.h"
 #include "Engine/Selection.h"
+#include "Engine/World.h"
+#include "LevelSequence.h"
 #include "AMMDActor.h"
+#include "IMovieSceneObjectSpawner.h"
+#include "Misc/LevelSequenceEditorSpawnRegister.h"
+#include "MovieScene.h"
+#include "MovieSceneObjectBindingID.h"
+#include "MovieScenePossessable.h"
+#include "MovieSceneSpawnable.h"
 #include "Modules/ModuleManager.h" 
 #include "Kismet2/KismetEditorUtilities.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
+#include "Sections/MovieScene3DTransformSection.h"
+#include "Sections/MovieSceneCameraCutSection.h"
+#include "Sections/MovieSceneFloatSection.h"
+#include "Subsystems/AssetEditorSubsystem.h"
+#include "Tracks/MovieScene3DTransformTrack.h"
+#include "Tracks/MovieSceneCameraCutTrack.h"
+#include "Tracks/MovieSceneFloatTrack.h"
+#include "Tracks/MovieSceneSkeletalAnimationTrack.h"
+#include "Tracks/MovieSceneSpawnTrack.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 #include "Misc/PackageName.h"
@@ -149,6 +175,101 @@ static UAnimationAsset* SaveMMDAnimationAsset(UAnimSequence* AnimSeq, const FStr
 }
 
 #if WITH_EDITOR
+static FString SanitizeMMDAssetName(const FString& InName)
+{
+	FString Result = InName;
+	const TCHAR InvalidChars[] = TEXT(" .,:;!@#$%^&*()+={}[]|\\/'\"<>?");
+	for (const TCHAR InvalidChar : InvalidChars)
+	{
+		if (InvalidChar == TEXT('\0'))
+		{
+			break;
+		}
+		Result.ReplaceCharInline(InvalidChar, TEXT('_'));
+	}
+	return Result.IsEmpty() ? TEXT("VMD") : Result;
+}
+
+static FVector ConvertMMDPositionToUnrealCamera(const FVector& InPosition, double Scale)
+{
+	return FVector(InPosition.X * Scale, -InPosition.Z * Scale, InPosition.Y * Scale);
+}
+
+static FVector ConvertMMDDirectionToUnrealCamera(const FVector& InDirection)
+{
+	return FVector(InDirection.X, -InDirection.Z, InDirection.Y);
+}
+
+static FQuat MakeMMDCameraOrbitRotation(const FVector& InRotationRadians)
+{
+	const FQuat RotationX(FVector(1.0, 0.0, 0.0), InRotationRadians.X);
+	const FQuat RotationY(FVector(0.0, 1.0, 0.0), InRotationRadians.Y);
+	const FQuat RotationZ(FVector(0.0, 0.0, 1.0), InRotationRadians.Z);
+	return (RotationZ * RotationY * RotationX).GetNormalized();
+}
+
+static FTransform ConvertVMDCameraKeyToUnrealTransform(const VMDCameraKeyframe& Keyframe, double Scale)
+{
+	const FVector TargetMMD = Keyframe.Interest;
+	const FQuat CameraOrbitRotationMMD = MakeMMDCameraOrbitRotation(Keyframe.Rotation);
+	const FVector CameraOffsetMMD = CameraOrbitRotationMMD.RotateVector(FVector(0.0, 0.0, Keyframe.Distance));
+	const FVector CameraPositionMMD = TargetMMD + CameraOffsetMMD;
+
+	const FVector Location = ConvertMMDPositionToUnrealCamera(CameraPositionMMD, Scale);
+	const FVector Target = ConvertMMDPositionToUnrealCamera(TargetMMD, Scale);
+	const FVector Forward = (Target - Location).GetSafeNormal();
+	const FVector Up = ConvertMMDDirectionToUnrealCamera(CameraOrbitRotationMMD.RotateVector(FVector(0.0, 1.0, 0.0))).GetSafeNormal();
+	const FRotator Rotation = Forward.IsNearlyZero()
+		? FRotator::ZeroRotator
+		: FRotationMatrix::MakeFromXZ(Forward, Up.IsNearlyZero() ? FVector::UpVector : Up).Rotator();
+
+	return FTransform(Rotation, Location, FVector::OneVector);
+}
+
+static void AddDoubleKey(TMovieSceneChannelHandle<FMovieSceneDoubleChannel> ChannelHandle, FFrameNumber Frame, double Value)
+{
+	if (FMovieSceneDoubleChannel* Channel = ChannelHandle.Get())
+	{
+		Channel->AddCubicKey(Frame, Value);
+	}
+}
+
+static void AddCameraTransformKey(UMovieScene3DTransformSection* Section, FFrameNumber Frame, const FTransform& Transform)
+{
+	if (!Section)
+	{
+		return;
+	}
+
+	const FVector Location = Transform.GetLocation();
+	const FRotator Rotation = Transform.Rotator();
+	FMovieSceneChannelProxy& ChannelProxy = Section->GetChannelProxy();
+
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Location.X")), Frame, Location.X);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Location.Y")), Frame, Location.Y);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Location.Z")), Frame, Location.Z);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Rotation.X")), Frame, Rotation.Roll);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Rotation.Y")), Frame, Rotation.Pitch);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Rotation.Z")), Frame, Rotation.Yaw);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Scale.X")), Frame, 1.0);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Scale.Y")), Frame, 1.0);
+	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Scale.Z")), Frame, 1.0);
+}
+
+static void ConfigureMMDMovieSceneTiming(UMovieScene* MovieScene, int32 DurationFrames)
+{
+	if (!MovieScene)
+	{
+		return;
+	}
+
+	const FFrameRate FrameRate(30, 1);
+	MovieScene->SetDisplayRate(FrameRate);
+	MovieScene->SetTickResolutionDirectly(FrameRate);
+	MovieScene->SetEvaluationType(EMovieSceneEvaluationType::FrameLocked);
+	MovieScene->SetPlaybackRange(FFrameNumber(0), FMath::Max(DurationFrames, 1));
+}
+
 static USkeletalMeshComponent* FindSelectedSkeletalMeshComponent()
 {
 	if (!GEditor)
@@ -396,6 +517,22 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 			SNew(SButton)
 				.Text(FText::FromString(TEXT("导入VMD动画")))
 				.OnClicked(this, &MMDImportSetting::OnImportVMDClicked)
+		] + SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(5.0f, 2.0f)
+		[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("导入VMD相机")))
+				.ToolTipText(FText::FromString(TEXT("导入 VMD 相机动画，生成跨关卡可用的 Spawnable 相机 LevelSequence")))
+				.OnClicked(this, &MMDImportSetting::OnImportVMDCameraClicked)
+		] + SHorizontalBox::Slot()
+		.AutoWidth()
+		.Padding(5.0f, 2.0f)
+		[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Compose Sequence")))
+				.ToolTipText(FText::FromString(TEXT("Select a model actor, an AnimSequence, and a camera LevelSequence, then create a master LevelSequence.")))
+				.OnClicked(this, &MMDImportSetting::OnOpenSequenceComposerClicked)
 		] + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入静态网格"))).ToolTipText(FText::FromString(TEXT("导入.fbx/.obj等静态网格文件"))).OnClicked_Lambda([this]() -> FReply
 			{
 				ImportStaticMesh();
@@ -434,6 +571,16 @@ FReply MMDImportSetting::OnImportModelClicked()
 FReply MMDImportSetting::OnImportVMDClicked()
 {
 	ImportVMDAnimation();
+	return FReply::Handled();
+}
+FReply MMDImportSetting::OnImportVMDCameraClicked()
+{
+	ImportVMDCameraAnimation();
+	return FReply::Handled();
+}
+FReply MMDImportSetting::OnOpenSequenceComposerClicked()
+{
+	OpenSequenceComposerWindow();
 	return FReply::Handled();
 }
 void MMDImportSetting::ImportMMDModel()
@@ -721,6 +868,840 @@ void MMDImportSetting::ImportVMDAnimation()
 		EMMDMessageType::Success);
 #else
 	ShowImportProgress(TEXT("VMD导入仅支持编辑器环境。"), EMMDMessageType::Error);
+#endif
+}
+
+#if WITH_EDITOR
+static UObject* GetFirstSelectedEditorObjectOfClass(UClass* Class)
+{
+	if (!GEditor || !Class)
+	{
+		return nullptr;
+	}
+
+	USelection* SelectedObjects = GEditor->GetSelectedObjects();
+	if (!SelectedObjects)
+	{
+		return nullptr;
+	}
+
+	for (FSelectionIterator Iter(*SelectedObjects); Iter; ++Iter)
+	{
+		UObject* Object = *Iter;
+		if (Object && Object->IsA(Class))
+		{
+			return Object;
+		}
+	}
+	return nullptr;
+}
+
+static void CopyMovieSceneBindingTracks(
+	UMovieScene* SourceMovieScene,
+	const FGuid& SourceGuid,
+	UMovieScene* TargetMovieScene,
+	const FGuid& TargetGuid)
+{
+	if (!SourceMovieScene || !TargetMovieScene)
+	{
+		return;
+	}
+
+	const FMovieSceneBinding* SourceBinding = SourceMovieScene->FindBinding(SourceGuid);
+	FMovieSceneBinding* TargetBinding = TargetMovieScene->FindBinding(TargetGuid);
+	if (!SourceBinding || !TargetBinding)
+	{
+		return;
+	}
+
+	for (UMovieSceneTrack* SourceTrack : SourceBinding->GetTracks())
+	{
+		if (!SourceTrack)
+		{
+			continue;
+		}
+
+		UMovieSceneTrack* NewTrack = DuplicateObject<UMovieSceneTrack>(SourceTrack, TargetMovieScene);
+		if (NewTrack)
+		{
+			if (UMovieSceneSpawnTrack* SpawnTrack = Cast<UMovieSceneSpawnTrack>(NewTrack))
+			{
+				SpawnTrack->SetObjectId(TargetGuid);
+			}
+			TargetBinding->AddTrack(*NewTrack, TargetMovieScene);
+		}
+	}
+}
+
+static FMovieSceneDoubleChannel* FindTransformDoubleChannel(UMovieScene3DTransformSection* Section, const TCHAR* ChannelName)
+{
+	return Section ? Section->GetChannelProxy().GetChannelByName<FMovieSceneDoubleChannel>(ChannelName).Get() : nullptr;
+}
+
+static double GetDoubleChannelValueAtIndex(FMovieSceneDoubleChannel* Channel, int32 Index, double DefaultValue)
+{
+	if (!Channel)
+	{
+		return DefaultValue;
+	}
+
+	TArrayView<FMovieSceneDoubleValue> Values = Channel->GetData().GetValues();
+	return Index >= 0 && Index < Values.Num() ? Values[Index].Value : DefaultValue;
+}
+
+static void SetDoubleChannelValueAtIndex(FMovieSceneDoubleChannel* Channel, int32 Index, double Value)
+{
+	if (!Channel)
+	{
+		return;
+	}
+
+	TArrayView<FMovieSceneDoubleValue> Values = Channel->GetData().GetValues();
+	if (Index >= 0 && Index < Values.Num())
+	{
+		Values[Index].Value = Value;
+	}
+}
+
+static void ApplyRootTransformToCameraTransformTracks(UMovieScene* MovieScene, const FGuid& CameraGuid, const FTransform& RootTransform)
+{
+	if (!MovieScene || RootTransform.Equals(FTransform::Identity))
+	{
+		return;
+	}
+
+	FMovieSceneBinding* CameraBinding = MovieScene->FindBinding(CameraGuid);
+	if (!CameraBinding)
+	{
+		return;
+	}
+
+	for (UMovieSceneTrack* Track : CameraBinding->GetTracks())
+	{
+		UMovieScene3DTransformTrack* TransformTrack = Cast<UMovieScene3DTransformTrack>(Track);
+		if (!TransformTrack)
+		{
+			continue;
+		}
+
+		for (UMovieSceneSection* Section : TransformTrack->GetAllSections())
+		{
+			UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(Section);
+			if (!TransformSection)
+			{
+				continue;
+			}
+
+			FMovieSceneDoubleChannel* LocationX = FindTransformDoubleChannel(TransformSection, TEXT("Location.X"));
+			FMovieSceneDoubleChannel* LocationY = FindTransformDoubleChannel(TransformSection, TEXT("Location.Y"));
+			FMovieSceneDoubleChannel* LocationZ = FindTransformDoubleChannel(TransformSection, TEXT("Location.Z"));
+			FMovieSceneDoubleChannel* RotationX = FindTransformDoubleChannel(TransformSection, TEXT("Rotation.X"));
+			FMovieSceneDoubleChannel* RotationY = FindTransformDoubleChannel(TransformSection, TEXT("Rotation.Y"));
+			FMovieSceneDoubleChannel* RotationZ = FindTransformDoubleChannel(TransformSection, TEXT("Rotation.Z"));
+			if (!LocationX || !LocationY || !LocationZ || !RotationX || !RotationY || !RotationZ)
+			{
+				continue;
+			}
+
+			const int32 KeyCount = LocationX->GetData().GetValues().Num();
+			for (int32 KeyIndex = 0; KeyIndex < KeyCount; ++KeyIndex)
+			{
+				const FVector LocalLocation(
+					GetDoubleChannelValueAtIndex(LocationX, KeyIndex, 0.0),
+					GetDoubleChannelValueAtIndex(LocationY, KeyIndex, 0.0),
+					GetDoubleChannelValueAtIndex(LocationZ, KeyIndex, 0.0));
+				const FRotator LocalRotation(
+					GetDoubleChannelValueAtIndex(RotationY, KeyIndex, 0.0),
+					GetDoubleChannelValueAtIndex(RotationZ, KeyIndex, 0.0),
+					GetDoubleChannelValueAtIndex(RotationX, KeyIndex, 0.0));
+				const FTransform WorldTransform = FTransform(LocalRotation, LocalLocation, FVector::OneVector) * RootTransform;
+				const FRotator WorldRotation = WorldTransform.Rotator();
+
+				SetDoubleChannelValueAtIndex(LocationX, KeyIndex, WorldTransform.GetLocation().X);
+				SetDoubleChannelValueAtIndex(LocationY, KeyIndex, WorldTransform.GetLocation().Y);
+				SetDoubleChannelValueAtIndex(LocationZ, KeyIndex, WorldTransform.GetLocation().Z);
+				SetDoubleChannelValueAtIndex(RotationX, KeyIndex, WorldRotation.Roll);
+				SetDoubleChannelValueAtIndex(RotationY, KeyIndex, WorldRotation.Pitch);
+				SetDoubleChannelValueAtIndex(RotationZ, KeyIndex, WorldRotation.Yaw);
+			}
+		}
+	}
+}
+
+static bool InlineCameraSequenceIntoMaster(ULevelSequence* CameraSequence, ULevelSequence* MasterSequence, int32 DurationFrames, const FTransform& RootTransform, FString& OutError)
+{
+	OutError.Reset();
+	if (!CameraSequence || !MasterSequence)
+	{
+		OutError = TEXT("Invalid camera or master LevelSequence.");
+		return false;
+	}
+
+	UMovieScene* SourceMovieScene = CameraSequence->GetMovieScene();
+	UMovieScene* TargetMovieScene = MasterSequence->GetMovieScene();
+	if (!SourceMovieScene || !TargetMovieScene)
+	{
+		OutError = TEXT("Camera or master sequence has no MovieScene.");
+		return false;
+	}
+
+	FGuid SourceCameraGuid;
+	const FMovieSceneSpawnable* SourceCameraSpawnable = nullptr;
+	for (int32 Index = 0; Index < SourceMovieScene->GetSpawnableCount(); ++Index)
+	{
+		const FMovieSceneSpawnable& Spawnable = SourceMovieScene->GetSpawnable(Index);
+		if (Spawnable.GetObjectTemplate() && Spawnable.GetObjectTemplate()->IsA<ACameraActor>())
+		{
+			SourceCameraGuid = Spawnable.GetGuid();
+			SourceCameraSpawnable = &Spawnable;
+			break;
+		}
+	}
+
+	if (!SourceCameraSpawnable || !SourceCameraGuid.IsValid())
+	{
+		OutError = TEXT("Selected camera LevelSequence has no spawnable CameraActor.");
+		return false;
+	}
+
+	UObject* SourceTemplate = const_cast<UObject*>(SourceCameraSpawnable->GetObjectTemplate());
+	UObject* NewTemplate = SourceTemplate ? DuplicateObject<UObject>(SourceTemplate, TargetMovieScene) : nullptr;
+	if (!NewTemplate)
+	{
+		OutError = TEXT("Failed to copy camera spawnable template.");
+		return false;
+	}
+
+	const FGuid TargetCameraGuid = TargetMovieScene->AddSpawnable(SourceCameraSpawnable->GetName(), *NewTemplate);
+	if (!TargetCameraGuid.IsValid())
+	{
+		OutError = TEXT("Failed to add camera spawnable to master sequence.");
+		return false;
+	}
+
+	CopyMovieSceneBindingTracks(SourceMovieScene, SourceCameraGuid, TargetMovieScene, TargetCameraGuid);
+	ApplyRootTransformToCameraTransformTracks(TargetMovieScene, TargetCameraGuid, RootTransform);
+
+	FMovieSceneSpawnable* TargetCameraSpawnable = TargetMovieScene->FindSpawnable(TargetCameraGuid);
+	ACameraActor* TargetCameraTemplateActor = Cast<ACameraActor>(NewTemplate);
+	if (TargetCameraSpawnable && TargetCameraTemplateActor)
+	{
+		for (const FGuid& SourceChildGuid : SourceCameraSpawnable->GetChildPossessables())
+		{
+			const FMovieScenePossessable* SourceChildPossessable = SourceMovieScene->FindPossessable(SourceChildGuid);
+			if (!SourceChildPossessable)
+			{
+				continue;
+			}
+
+			const FGuid TargetChildGuid = TargetMovieScene->AddPossessable(SourceChildPossessable->GetName(), const_cast<UClass*>(SourceChildPossessable->GetPossessedObjectClass()));
+			if (!TargetChildGuid.IsValid())
+			{
+				continue;
+			}
+
+			if (FMovieScenePossessable* TargetChildPossessable = TargetMovieScene->FindPossessable(TargetChildGuid))
+			{
+				TargetChildPossessable->SetParent(TargetCameraGuid, TargetMovieScene);
+			}
+			TargetCameraSpawnable->AddChildPossessable(TargetChildGuid);
+
+			if (UCameraComponent* CameraTemplateComponent = TargetCameraTemplateActor->GetCameraComponent())
+			{
+				MasterSequence->BindPossessableObject(TargetChildGuid, *CameraTemplateComponent, TargetCameraTemplateActor);
+			}
+
+			CopyMovieSceneBindingTracks(SourceMovieScene, SourceChildGuid, TargetMovieScene, TargetChildGuid);
+		}
+	}
+
+	if (UMovieSceneCameraCutTrack* CameraCutTrack = Cast<UMovieSceneCameraCutTrack>(TargetMovieScene->AddCameraCutTrack(UMovieSceneCameraCutTrack::StaticClass())))
+	{
+		if (UMovieSceneCameraCutSection* CameraCutSection = CameraCutTrack->AddNewCameraCut(UE::MovieScene::FRelativeObjectBindingID(TargetCameraGuid), FFrameNumber(0)))
+		{
+			CameraCutSection->SetRange(TRange<FFrameNumber>(
+				TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)),
+				TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
+		}
+	}
+
+	return true;
+}
+#endif
+
+void MMDImportSetting::OpenSequenceComposerWindow()
+{
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	FString TargetError;
+	if (TryGetSelectedAnimationTarget(Target, TargetError))
+	{
+		ComposerActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+		ComposerSkeletalMeshComponent = Target.SkeletalMeshComponent;
+	}
+
+	if (UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass())))
+	{
+		ComposerAnimSequence = SelectedAnim;
+	}
+	if (ULevelSequence* SelectedCameraSequence = Cast<ULevelSequence>(GetFirstSelectedEditorObjectOfClass(ULevelSequence::StaticClass())))
+	{
+		ComposerCameraSequence = SelectedCameraSequence;
+	}
+
+	TSharedRef<SWindow> Window = SNew(SWindow)
+		.Title(FText::FromString(TEXT("MMD Sequence Composer")))
+		.ClientSize(FVector2D(560.0f, 240.0f))
+		.SupportsMaximize(false)
+		.SupportsMinimize(false);
+
+	Window->SetContent(
+		SNew(SBorder)
+		.Padding(12.0f)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 10.0f)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Create a master LevelSequence from explicit selections.")))
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(TEXT("Model")))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[
+					SNew(SObjectPropertyEntryBox)
+					.AllowedClass(AActor::StaticClass())
+					.ObjectPath(this, &MMDImportSetting::GetComposerActorPath)
+					.OnObjectChanged(this, &MMDImportSetting::OnComposerActorChanged)
+				]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("Use Selected")))
+					.OnClicked(this, &MMDImportSetting::CaptureSequenceComposerActor)
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(TEXT("Animation")))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[
+					SNew(SObjectPropertyEntryBox)
+					.AllowedClass(UAnimSequence::StaticClass())
+					.ObjectPath(this, &MMDImportSetting::GetComposerAnimationPath)
+					.OnObjectChanged(this, &MMDImportSetting::OnComposerAnimationChanged)
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(TEXT("Camera")))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[
+					SNew(SObjectPropertyEntryBox)
+					.AllowedClass(ULevelSequence::StaticClass())
+					.ObjectPath(this, &MMDImportSetting::GetComposerCameraPath)
+					.OnObjectChanged(this, &MMDImportSetting::OnComposerCameraChanged)
+				]
+			]
+			+ SVerticalBox::Slot().FillHeight(1.0f)
+			[
+				SNew(SSpacer)
+			]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Create Master Sequence")))
+				.OnClicked(this, &MMDImportSetting::CreateComposedLevelSequence)
+			]
+		]);
+
+	RefreshSequenceComposerLabels();
+	FSlateApplication::Get().AddWindow(Window);
+#else
+	ShowImportProgress(TEXT("Sequence composer is editor-only."), EMMDMessageType::Error);
+#endif
+}
+
+FReply MMDImportSetting::CaptureSequenceComposerActor()
+{
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	FString TargetError;
+	if (!TryGetSelectedAnimationTarget(Target, TargetError))
+	{
+		ShowImportProgress(TargetError, EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	ComposerSkeletalMeshComponent = Target.SkeletalMeshComponent;
+	ComposerActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+	RefreshSequenceComposerLabels();
+#endif
+	return FReply::Handled();
+}
+
+FReply MMDImportSetting::CaptureSequenceComposerAnimation()
+{
+#if WITH_EDITOR
+	ComposerAnimSequence = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass()));
+	if (!ComposerAnimSequence.IsValid())
+	{
+		ShowImportProgress(TEXT("Select an AnimSequence asset in the Content Browser first."), EMMDMessageType::Warning);
+	}
+	RefreshSequenceComposerLabels();
+#endif
+	return FReply::Handled();
+}
+
+FReply MMDImportSetting::CaptureSequenceComposerCamera()
+{
+#if WITH_EDITOR
+	ComposerCameraSequence = Cast<ULevelSequence>(GetFirstSelectedEditorObjectOfClass(ULevelSequence::StaticClass()));
+	if (!ComposerCameraSequence.IsValid())
+	{
+		ShowImportProgress(TEXT("Select a camera LevelSequence asset in the Content Browser first."), EMMDMessageType::Warning);
+	}
+	RefreshSequenceComposerLabels();
+#endif
+	return FReply::Handled();
+}
+
+void MMDImportSetting::OnComposerActorChanged(const FAssetData& AssetData)
+{
+#if WITH_EDITOR
+	AActor* Actor = Cast<AActor>(AssetData.GetAsset());
+	if (!Actor)
+	{
+		ComposerActor.Reset();
+		ComposerSkeletalMeshComponent.Reset();
+		RefreshSequenceComposerLabels();
+		return;
+	}
+
+	ComposerActor = Actor;
+	ComposerSkeletalMeshComponent = Actor->FindComponentByClass<USkeletalMeshComponent>();
+	if (!ComposerSkeletalMeshComponent.IsValid())
+	{
+		ShowImportProgress(TEXT("Selected actor has no SkeletalMeshComponent."), EMMDMessageType::Warning);
+	}
+	RefreshSequenceComposerLabels();
+#endif
+}
+
+void MMDImportSetting::OnComposerAnimationChanged(const FAssetData& AssetData)
+{
+	ComposerAnimSequence = Cast<UAnimSequence>(AssetData.GetAsset());
+	RefreshSequenceComposerLabels();
+}
+
+void MMDImportSetting::OnComposerCameraChanged(const FAssetData& AssetData)
+{
+	ComposerCameraSequence = Cast<ULevelSequence>(AssetData.GetAsset());
+	RefreshSequenceComposerLabels();
+}
+
+FString MMDImportSetting::GetComposerActorPath() const
+{
+	return ComposerActor.IsValid() ? ComposerActor->GetPathName() : FString();
+}
+
+FString MMDImportSetting::GetComposerAnimationPath() const
+{
+	return ComposerAnimSequence.IsValid() ? ComposerAnimSequence->GetPathName() : FString();
+}
+
+FString MMDImportSetting::GetComposerCameraPath() const
+{
+	return ComposerCameraSequence.IsValid() ? ComposerCameraSequence->GetPathName() : FString();
+}
+
+void MMDImportSetting::RefreshSequenceComposerLabels()
+{
+	if (ComposerActorText.IsValid())
+	{
+		const FString Label = ComposerSkeletalMeshComponent.IsValid()
+			? FString::Printf(TEXT("Model: %s"), *ComposerSkeletalMeshComponent->GetOwner()->GetActorLabel())
+			: TEXT("Model: none");
+		ComposerActorText->SetText(FText::FromString(Label));
+	}
+	if (ComposerAnimText.IsValid())
+	{
+		const FString Label = ComposerAnimSequence.IsValid()
+			? FString::Printf(TEXT("Animation: %s"), *ComposerAnimSequence->GetPathName())
+			: TEXT("Animation: none");
+		ComposerAnimText->SetText(FText::FromString(Label));
+	}
+	if (ComposerCameraText.IsValid())
+	{
+		const FString Label = ComposerCameraSequence.IsValid()
+			? FString::Printf(TEXT("Camera: %s"), *ComposerCameraSequence->GetPathName())
+			: TEXT("Camera: none");
+		ComposerCameraText->SetText(FText::FromString(Label));
+	}
+}
+
+FReply MMDImportSetting::CreateComposedLevelSequence()
+{
+#if WITH_EDITOR
+	USkeletalMeshComponent* SkelComp = ComposerSkeletalMeshComponent.Get();
+	UAnimSequence* AnimSequence = ComposerAnimSequence.Get();
+	ULevelSequence* CameraSequence = ComposerCameraSequence.Get();
+	if (!SkelComp || !SkelComp->GetOwner() || !AnimSequence || !CameraSequence)
+	{
+		ShowImportProgress(TEXT("Select model actor, AnimSequence, and camera LevelSequence before composing."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	if (!EditorWorld)
+	{
+		ShowImportProgress(TEXT("No active editor world found."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	FString UniquePackageName;
+	FString UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		const FString BaseAssetPath = FString(TEXT("/Game/MMDSequences/LS_")) + SanitizeMMDAssetName(AnimSequence->GetName()) + TEXT("_Master");
+		AssetToolsModule.Get().CreateUniqueAssetName(BaseAssetPath, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	UPackage* Package = CreatePackage(*UniquePackageName);
+	ULevelSequence* MasterSequence = Package
+		? NewObject<ULevelSequence>(Package, *UniqueAssetName, RF_Public | RF_Standalone)
+		: nullptr;
+	if (!MasterSequence)
+	{
+		ShowImportProgress(TEXT("Failed to create master LevelSequence."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	MasterSequence->Initialize();
+
+	UMovieScene* MovieScene = MasterSequence->GetMovieScene();
+	if (!MovieScene)
+	{
+		ShowImportProgress(TEXT("Failed to create master MovieScene."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	const int32 AnimDurationFrames = FMath::Max(1, FMath::CeilToInt(AnimSequence->GetPlayLength() * 30.0f));
+	int32 CameraDurationFrames = AnimDurationFrames;
+	if (UMovieScene* CameraMovieScene = CameraSequence->GetMovieScene())
+	{
+		const TRange<FFrameNumber> CameraRange = CameraMovieScene->GetPlaybackRange();
+		if (CameraRange.HasLowerBound() && CameraRange.HasUpperBound())
+		{
+			CameraDurationFrames = FMath::Max(1, CameraRange.GetUpperBoundValue().Value - CameraRange.GetLowerBoundValue().Value);
+		}
+	}
+	const int32 DurationFrames = FMath::Max(AnimDurationFrames, CameraDurationFrames);
+	ConfigureMMDMovieSceneTiming(MovieScene, DurationFrames);
+
+	AActor* OwnerActor = SkelComp->GetOwner();
+	const FGuid ActorGuid = MovieScene->AddPossessable(OwnerActor->GetActorLabel(), OwnerActor->GetClass());
+	MasterSequence->BindPossessableObject(ActorGuid, *OwnerActor, EditorWorld);
+
+	const FGuid SkelCompGuid = MovieScene->AddPossessable(SkelComp->GetName(), SkelComp->GetClass());
+	if (FMovieScenePossessable* SkelCompPossessable = MovieScene->FindPossessable(SkelCompGuid))
+	{
+		SkelCompPossessable->SetParent(ActorGuid, MovieScene);
+	}
+	MasterSequence->BindPossessableObject(SkelCompGuid, *SkelComp, OwnerActor);
+
+	if (UMovieSceneSkeletalAnimationTrack* AnimTrack = MovieScene->AddTrack<UMovieSceneSkeletalAnimationTrack>(SkelCompGuid))
+	{
+		if (UMovieSceneSection* AnimSection = AnimTrack->AddNewAnimation(FFrameNumber(0), AnimSequence))
+		{
+			AnimSection->SetRange(TRange<FFrameNumber>(
+				TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)),
+				TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(AnimDurationFrames))));
+		}
+	}
+
+	FString CameraInlineError;
+	const FTransform ModelRootTransform = OwnerActor->GetActorTransform();
+	if (!InlineCameraSequenceIntoMaster(CameraSequence, MasterSequence, CameraDurationFrames, ModelRootTransform, CameraInlineError))
+	{
+		ShowImportProgress(CameraInlineError, EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	FAssetRegistryModule::AssetCreated(MasterSequence);
+	MasterSequence->MarkPackageDirty();
+	Package->MarkPackageDirty();
+
+	const FString PackageFilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	UPackage::SavePackage(Package, MasterSequence, *PackageFilePath, SaveArgs);
+
+	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
+	{
+		AssetEditorSubsystem->OpenEditorForAsset(MasterSequence);
+	}
+
+	ShowImportProgress(FString::Printf(TEXT("Master Sequence created: %s"), *MasterSequence->GetPathName()), EMMDMessageType::Success);
+#endif
+	return FReply::Handled();
+}
+
+void MMDImportSetting::ImportVMDCameraAnimation()
+{
+	ShowImportProgress(TEXT("Opening VMD camera file dialog..."));
+
+	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+	if (!DesktopPlatform)
+	{
+		ShowImportProgress(TEXT("Cannot open file dialog."), EMMDMessageType::Error);
+		return;
+	}
+
+	TArray<FString> OpenedFiles;
+	const FString FileTypes = TEXT("VMD Files (*.vmd)|*.vmd|All Files (*.*)|*.*");
+	const bool bOpened = DesktopPlatform->OpenFileDialog(
+		FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+		TEXT("Import VMD Camera"),
+		TEXT(""),
+		TEXT(""),
+		FileTypes,
+		EFileDialogFlags::None,
+		OpenedFiles);
+
+	if (!bOpened || OpenedFiles.Num() == 0)
+	{
+		ShowImportProgress(TEXT("VMD camera import canceled."), EMMDMessageType::Warning);
+		return;
+	}
+
+	const FString SelectedFile = OpenedFiles[0];
+	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
+	ShowImportProgress(FString::Printf(TEXT("Parsing VMD camera: %s"), *FileName));
+
+	TVMDParser VMDParser;
+	if (!VMDParser.ParseVMDFile(SelectedFile))
+	{
+		ShowImportProgress(TEXT("Failed to parse VMD file."), EMMDMessageType::Error);
+		return;
+	}
+
+#if WITH_EDITOR
+	if (VMDParser.VMDInfo.CameraKeyframes.Num() == 0)
+	{
+		ShowImportProgress(TEXT("This VMD file has no camera keyframes."), EMMDMessageType::Warning);
+		return;
+	}
+
+	TArray<VMDCameraKeyframe> CameraKeys = VMDParser.VMDInfo.CameraKeyframes;
+	CameraKeys.Sort([](const VMDCameraKeyframe& A, const VMDCameraKeyframe& B)
+	{
+		return A.FrameNumber < B.FrameNumber;
+	});
+
+	int32 MaxFrame = 0;
+	for (const VMDCameraKeyframe& Keyframe : CameraKeys)
+	{
+		MaxFrame = FMath::Max(MaxFrame, static_cast<int32>(Keyframe.FrameNumber));
+	}
+	const int32 DurationFrames = FMath::Max(MaxFrame + 1, 1);
+	const FString CleanBaseName = SanitizeMMDAssetName(FPaths::GetBaseFilename(SelectedFile));
+
+	UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	if (!EditorWorld)
+	{
+		ShowImportProgress(TEXT("No active editor level found for VMD camera import."), EMMDMessageType::Error);
+		return;
+	}
+
+	FString UniquePackageName;
+	FString UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		const FString BaseAssetPath = FString(TEXT("/Game/MMDSequences/LS_")) + CleanBaseName + TEXT("_Camera");
+		AssetToolsModule.Get().CreateUniqueAssetName(BaseAssetPath, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	UPackage* Package = CreatePackage(*UniquePackageName);
+	if (!Package)
+	{
+		ShowImportProgress(TEXT("Failed to create LevelSequence package."), EMMDMessageType::Error);
+		return;
+	}
+
+	ULevelSequence* LevelSequence = NewObject<ULevelSequence>(Package, *UniqueAssetName, RF_Public | RF_Standalone);
+	if (!LevelSequence)
+	{
+		ShowImportProgress(TEXT("Failed to create LevelSequence asset."), EMMDMessageType::Error);
+		return;
+	}
+	LevelSequence->Initialize();
+
+	UMovieScene* MovieScene = LevelSequence->GetMovieScene();
+	if (!MovieScene)
+	{
+		ShowImportProgress(TEXT("Failed to create MovieScene."), EMMDMessageType::Error);
+		return;
+	}
+
+	ConfigureMMDMovieSceneTiming(MovieScene, DurationFrames);
+
+	const FTransform FirstTransform = ConvertVMDCameraKeyToUnrealTransform(CameraKeys[0], 8.0);
+
+	{
+		FActorSpawnParameters CameraSpawnParams;
+		CameraSpawnParams.Name = MakeUniqueObjectName(EditorWorld->GetCurrentLevel(), ACameraActor::StaticClass(), FName(*FString::Printf(TEXT("MMD_%s_Camera"), *CleanBaseName)));
+		CameraSpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
+		CameraSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		CameraSpawnParams.ObjectFlags = RF_Transient | RF_Transactional;
+
+		ACameraActor* CameraActor = EditorWorld->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FirstTransform, CameraSpawnParams);
+		if (!CameraActor)
+		{
+			ShowImportProgress(TEXT("Failed to create camera actor."), EMMDMessageType::Error);
+			return;
+		}
+		CameraActor->SetActorLabel(FString::Printf(TEXT("MMD_%s_Camera"), *CleanBaseName));
+
+		UCameraComponent* CameraComponent = CameraActor->GetCameraComponent();
+		if (!CameraComponent)
+		{
+			ShowImportProgress(TEXT("Failed to find camera component."), EMMDMessageType::Error);
+			return;
+		}
+		CameraComponent->SetFieldOfView(CameraKeys[0].ViewAngle);
+
+		FLevelSequenceEditorSpawnRegister SpawnRegister;
+		TValueOrError<FNewSpawnable, FText> SpawnableResult = SpawnRegister.CreateNewSpawnableType(*CameraActor, *MovieScene);
+
+		const bool bNetForce = false;
+		const bool bShouldModifyLevel = false;
+		EditorWorld->DestroyActor(CameraActor, bNetForce, bShouldModifyLevel);
+		CameraActor = nullptr;
+
+		if (!SpawnableResult.IsValid())
+		{
+			ShowImportProgress(SpawnableResult.GetError().ToString(), EMMDMessageType::Error);
+			return;
+		}
+
+		FNewSpawnable& NewSpawnable = SpawnableResult.GetValue();
+		ACameraActor* CameraTemplateActor = Cast<ACameraActor>(NewSpawnable.ObjectTemplate);
+		if (!CameraTemplateActor)
+		{
+			ShowImportProgress(TEXT("Failed to create spawnable camera template."), EMMDMessageType::Error);
+			return;
+		}
+
+		const FGuid CameraGuid = MovieScene->AddSpawnable(NewSpawnable.Name, *NewSpawnable.ObjectTemplate);
+		if (!CameraGuid.IsValid())
+		{
+			ShowImportProgress(TEXT("Failed to create spawnable camera binding."), EMMDMessageType::Error);
+			return;
+		}
+
+		if (UMovieSceneSpawnTrack* SpawnTrack = MovieScene->AddTrack<UMovieSceneSpawnTrack>(CameraGuid))
+		{
+			SpawnTrack->SetObjectId(CameraGuid);
+			if (UMovieSceneSection* SpawnSection = SpawnTrack->CreateNewSection())
+			{
+				SpawnTrack->AddSection(*SpawnSection);
+				SpawnSection->SetRange(TRange<FFrameNumber>(TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)), TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
+			}
+		}
+
+		UMovieScene3DTransformSection* TransformSection = nullptr;
+		if (UMovieScene3DTransformTrack* TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(CameraGuid))
+		{
+			TransformTrack->SetPropertyNameAndPath(TEXT("Transform"), TEXT("Transform"));
+			TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->CreateNewSection());
+			if (TransformSection)
+			{
+				TransformTrack->AddSection(*TransformSection);
+				TransformSection->SetRange(TRange<FFrameNumber>(TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)), TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
+			}
+		}
+
+		UMovieSceneFloatSection* FOVSection = nullptr;
+		if (UCameraComponent* CameraTemplateComponent = CameraTemplateActor->GetCameraComponent())
+		{
+			const FGuid CameraComponentGuid = MovieScene->AddPossessable(CameraTemplateComponent->GetName(), CameraTemplateComponent->GetClass());
+			if (FMovieScenePossessable* CameraComponentPossessable = MovieScene->FindPossessable(CameraComponentGuid))
+			{
+				CameraComponentPossessable->SetParent(CameraGuid, MovieScene);
+			}
+			LevelSequence->BindPossessableObject(CameraComponentGuid, *CameraTemplateComponent, CameraTemplateActor);
+
+			if (UMovieSceneFloatTrack* FOVTrack = MovieScene->AddTrack<UMovieSceneFloatTrack>(CameraComponentGuid))
+			{
+				FOVTrack->SetPropertyNameAndPath(TEXT("FieldOfView"), TEXT("FieldOfView"));
+				FOVSection = Cast<UMovieSceneFloatSection>(FOVTrack->CreateNewSection());
+				if (FOVSection)
+				{
+					FOVTrack->AddSection(*FOVSection);
+					FOVSection->SetRange(TRange<FFrameNumber>(TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)), TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
+				}
+			}
+		}
+
+		for (const VMDCameraKeyframe& Keyframe : CameraKeys)
+		{
+			const FFrameNumber Frame(static_cast<int32>(Keyframe.FrameNumber));
+			AddCameraTransformKey(TransformSection, Frame, ConvertVMDCameraKeyToUnrealTransform(Keyframe, 8.0));
+			if (FOVSection)
+			{
+				FOVSection->GetChannel().AddCubicKey(Frame, Keyframe.ViewAngle);
+			}
+		}
+
+		if (UMovieSceneCameraCutTrack* CameraCutTrack = Cast<UMovieSceneCameraCutTrack>(MovieScene->AddCameraCutTrack(UMovieSceneCameraCutTrack::StaticClass())))
+		{
+			if (UMovieSceneCameraCutSection* CameraCutSection = CameraCutTrack->AddNewCameraCut(UE::MovieScene::FRelativeObjectBindingID(CameraGuid), FFrameNumber(0)))
+			{
+				CameraCutSection->SetRange(TRange<FFrameNumber>(TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)), TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
+			}
+		}
+	}
+
+	FAssetRegistryModule::AssetCreated(LevelSequence);
+	LevelSequence->MarkPackageDirty();
+	Package->MarkPackageDirty();
+
+	const FString PackageFilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	UPackage::SavePackage(Package, LevelSequence, *PackageFilePath, SaveArgs);
+
+	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
+	{
+		AssetEditorSubsystem->OpenEditorForAsset(LevelSequence);
+	}
+
+	ShowImportProgress(
+		FString::Printf(TEXT("VMD camera imported: %s | CameraKeys=%d | MaxFrame=%d"), *LevelSequence->GetPathName(), CameraKeys.Num(), MaxFrame),
+		EMMDMessageType::Success);
+#else
+	ShowImportProgress(TEXT("VMD camera import is editor-only."), EMMDMessageType::Error);
 #endif
 }
 void MMDImportSetting::ShowImportProgress(const FString& Message, EMMDMessageType Type)
