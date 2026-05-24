@@ -17,9 +17,16 @@
 #include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
 #include "TVMDParser.h"
+#include "MMDPhysicsSimulator.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataController.h"
+#include "Animation/AnimData/IAnimationDataModel.h"
+#include "Animation/AnimData/CurveIdentifier.h"
+#include "Animation/AnimCurveTypes.h"
+#include "Curves/RichCurve.h"
 #include "Misc/FrameRate.h"
+#include "Misc/ScopedSlowTask.h"
+#include "Widgets/Input/SNumericEntryBox.h"
 #if WITH_EDITOR
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -494,6 +501,228 @@ static UAnimSequence* BuildAnimSequenceFromVMD(const VMDData& VMDInfo, USkeletal
 	//return AnimSeq;
 return nullptr;
 }
+
+static void ConvertPMXPhysicsToAnimNodeData(const PMXDatas& PMXData, TArray<FMMDPhysicsRigidBodyData>& OutRigids, TArray<FMMDPhysicsJointData>& OutJoints)
+{
+	OutRigids.Reset(PMXData.ModelRigids.Num());
+	for (const FPMXRigid& Rigid : PMXData.ModelRigids)
+	{
+		FMMDPhysicsRigidBodyData& RigidData = OutRigids.AddDefaulted_GetRef();
+		RigidData.Name = Rigid.NameJP;
+		RigidData.NameEN = Rigid.NameEN;
+		RigidData.RelatedBoneIndex = Rigid.RelatedBoneIndex;
+		RigidData.ShapeType = Rigid.ShapeType;
+		RigidData.ShapeSize = Rigid.Size;
+		RigidData.ShapePosition = Rigid.Position;
+		RigidData.ShapeRotation = Rigid.Rotation;
+		RigidData.Mass = Rigid.Mass;
+		RigidData.Friction = Rigid.Friction;
+		RigidData.Restitution = Rigid.Restitution;
+		RigidData.CollisionGroup = Rigid.Group;
+		RigidData.CollisionMask = Rigid.CollisionMask;
+		RigidData.PhysicsMode = Rigid.PhysicsMode;
+		RigidData.LinearDamping = Rigid.LinearDamping;
+		RigidData.AngularDamping = Rigid.AngularDamping;
+	}
+
+	OutJoints.Reset(PMXData.ModelJoints.Num());
+	for (const FPMXJoint& Joint : PMXData.ModelJoints)
+	{
+		FMMDPhysicsJointData& JointData = OutJoints.AddDefaulted_GetRef();
+		JointData.Name = Joint.NameJP;
+		JointData.NameEN = Joint.NameEN;
+		JointData.JointType = Joint.JointType;
+		JointData.RigidBodyIndexA = Joint.RigidA;
+		JointData.RigidBodyIndexB = Joint.RigidB;
+		JointData.Position = Joint.Position;
+		JointData.Rotation = Joint.Rotation;
+		JointData.LimitPositionMin = Joint.LimitPosLower;
+		JointData.LimitPositionMax = Joint.LimitPosUpper;
+		JointData.LimitRotationMin = Joint.LimitRotLower;
+		JointData.LimitRotationMax = Joint.LimitRotUpper;
+		JointData.SpringPosition = Joint.SpringPos;
+		JointData.SpringRotation = Joint.SpringRot;
+	}
+}
+
+static bool BuildLocalTransformsFromAnimSequence(UAnimSequence* AnimSequence, const FReferenceSkeleton& RefSkeleton, float BakeFrameRate, int32 NumKeys, TArray<TArray<FTransform>>& OutLocalTransforms, FString& OutError)
+{
+	const IAnimationDataModel* DataModel = AnimSequence ? AnimSequence->GetDataModel() : nullptr;
+	if (!DataModel)
+	{
+		OutError = TEXT("Input AnimSequence has no data model.");
+		return false;
+	}
+
+	const int32 NumBones = RefSkeleton.GetNum();
+	const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
+	OutLocalTransforms.SetNum(NumBones);
+	for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+	{
+		const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+		OutLocalTransforms[BoneIndex].SetNum(NumKeys);
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+		{
+			OutLocalTransforms[BoneIndex][FrameIndex] = DefaultTransform;
+		}
+	}
+
+	const float SourceLength = FMath::Max(DataModel->GetPlayLength(), KINDA_SMALL_NUMBER);
+	TArray<FName> TrackNames;
+	DataModel->GetBoneTrackNames(TrackNames);
+	for (const FName& BoneName : TrackNames)
+	{
+		const int32 BoneIndex = RefSkeleton.FindBoneIndex(BoneName);
+		if (BoneIndex == INDEX_NONE)
+		{
+			continue;
+		}
+
+		const FTransform DefaultTransform = RefPose.IsValidIndex(BoneIndex) ? RefPose[BoneIndex] : FTransform::Identity;
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+		{
+			const double Time = FMath::Clamp(
+				static_cast<double>(FrameIndex) / FMath::Max(static_cast<double>(BakeFrameRate), static_cast<double>(KINDA_SMALL_NUMBER)),
+				0.0,
+				static_cast<double>(SourceLength));
+			OutLocalTransforms[BoneIndex][FrameIndex] = DataModel->EvaluateBoneTrackTransform(
+				BoneName,
+				DataModel->GetFrameRate().AsFrameTime(Time),
+				EAnimInterpolationType::Linear);
+			if (OutLocalTransforms[BoneIndex][FrameIndex].ContainsNaN())
+			{
+				OutLocalTransforms[BoneIndex][FrameIndex] = DefaultTransform;
+			}
+		}
+	}
+
+	return true;
+}
+
+static void BuildComponentTransformsForFrame(const FReferenceSkeleton& RefSkeleton, const TArray<TArray<FTransform>>& LocalTransforms, int32 FrameIndex, TArray<FTransform>& OutComponentTransforms)
+{
+	const int32 NumBones = RefSkeleton.GetNum();
+	OutComponentTransforms.SetNum(NumBones);
+	for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+	{
+		const FTransform& LocalTransform = LocalTransforms[BoneIndex][FrameIndex];
+		const int32 ParentIndex = RefSkeleton.GetParentIndex(BoneIndex);
+		OutComponentTransforms[BoneIndex] = ParentIndex != INDEX_NONE
+			? LocalTransform * OutComponentTransforms[ParentIndex]
+			: LocalTransform;
+	}
+}
+
+static void WriteComponentTransformsToLocalFrame(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& ComponentTransforms, int32 FrameIndex, TArray<TArray<FTransform>>& InOutLocalTransforms)
+{
+	for (int32 BoneIndex = 0; BoneIndex < ComponentTransforms.Num(); ++BoneIndex)
+	{
+		const int32 ParentIndex = RefSkeleton.GetParentIndex(BoneIndex);
+		InOutLocalTransforms[BoneIndex][FrameIndex] = ParentIndex != INDEX_NONE && ComponentTransforms.IsValidIndex(ParentIndex)
+			? ComponentTransforms[BoneIndex].GetRelativeTransform(ComponentTransforms[ParentIndex])
+			: ComponentTransforms[BoneIndex];
+	}
+}
+
+static UAnimSequence* CreatePhysicsBakedAnimSequence(UAnimSequence* SourceAnim, USkeletalMesh* SkeletalMesh, const FReferenceSkeleton& RefSkeleton, const TArray<TArray<FTransform>>& LocalTransforms, float BakeFrameRate, int32 NumFrames, FString& OutError)
+{
+	if (!SourceAnim || !SkeletalMesh || !SkeletalMesh->GetSkeleton())
+	{
+		OutError = TEXT("Invalid source animation or skeletal mesh.");
+		return nullptr;
+	}
+
+	FString UniquePackageName;
+	FString UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		const FString SourcePath = FPackageName::GetLongPackagePath(SourceAnim->GetOutermost()->GetName());
+		const FString BaseAssetPath = SourcePath / (SourceAnim->GetName() + TEXT("_MMDPhys"));
+		AssetToolsModule.Get().CreateUniqueAssetName(BaseAssetPath, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	UPackage* Package = CreatePackage(*UniquePackageName);
+	UAnimSequence* BakedAnim = Package ? NewObject<UAnimSequence>(Package, *UniqueAssetName, RF_Public | RF_Standalone) : nullptr;
+	if (!BakedAnim)
+	{
+		OutError = TEXT("Failed to create baked AnimSequence package.");
+		return nullptr;
+	}
+
+	BakedAnim->SetSkeleton(SkeletalMesh->GetSkeleton());
+	BakedAnim->SetPreviewMesh(SkeletalMesh);
+
+	IAnimationDataController& Controller = BakedAnim->GetController();
+	Controller.OpenBracket(FText::FromString(TEXT("Bake MMD Physics")));
+	Controller.InitializeModel();
+	Controller.SetFrameRate(FFrameRate(FMath::RoundToInt32(BakeFrameRate), 1), true);
+	Controller.SetNumberOfFrames(FFrameNumber(NumFrames), true);
+
+	const int32 NumKeys = NumFrames + 1;
+	for (int32 BoneIndex = 0; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+	{
+		const FName BoneName = RefSkeleton.GetBoneName(BoneIndex);
+		TArray<FVector3f> PosKeys;
+		TArray<FQuat4f> RotKeys;
+		TArray<FVector3f> ScaleKeys;
+		PosKeys.SetNum(NumKeys);
+		RotKeys.SetNum(NumKeys);
+		ScaleKeys.SetNum(NumKeys);
+
+		for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+		{
+			const FTransform& LocalTransform = LocalTransforms[BoneIndex][FrameIndex];
+			PosKeys[FrameIndex] = FVector3f(LocalTransform.GetTranslation());
+			RotKeys[FrameIndex] = FQuat4f(LocalTransform.GetRotation().GetNormalized());
+			ScaleKeys[FrameIndex] = FVector3f(LocalTransform.GetScale3D());
+		}
+
+		Controller.AddBoneCurve(BoneName, false);
+		Controller.SetBoneTrackKeys(BoneName, PosKeys, RotKeys, ScaleKeys, false);
+	}
+
+	if (const IAnimationDataModel* SourceDataModel = SourceAnim->GetDataModel())
+	{
+		for (const FFloatCurve& FloatCurve : SourceDataModel->GetFloatCurves())
+		{
+			const FName CurveName = FloatCurve.GetName();
+			if (CurveName == NAME_None)
+			{
+				continue;
+			}
+
+			const FAnimationCurveIdentifier CurveId(CurveName, ERawCurveTrackTypes::RCT_Float);
+			Controller.AddCurve(CurveId, FloatCurve.GetCurveTypeFlags(), false);
+			Controller.SetCurveKeys(CurveId, FloatCurve.FloatCurve.GetConstRefOfKeys(), false);
+			if (USkeleton* Skeleton = SkeletalMesh->GetSkeleton())
+			{
+				Skeleton->AccumulateCurveMetaData(CurveName, false, true);
+			}
+		}
+	}
+
+	Controller.NotifyPopulated();
+	Controller.CloseBracket();
+
+	BakedAnim->PostEditChange();
+	BakedAnim->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(BakedAnim);
+	Package->MarkPackageDirty();
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	if (!UPackage::SavePackage(Package, BakedAnim, *FilePath, SaveArgs))
+	{
+		OutError = FString::Printf(TEXT("Failed to save baked animation: %s"), *FilePath);
+		return nullptr;
+	}
+
+	return BakedAnim;
+}
 #endif
 
 
@@ -533,6 +762,12 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				.Text(FText::FromString(TEXT("Compose Sequence")))
 				.ToolTipText(FText::FromString(TEXT("Select a model actor, an AnimSequence, and a camera LevelSequence, then create a master LevelSequence.")))
 				.OnClicked(this, &MMDImportSetting::OnOpenSequenceComposerClicked)
+		] + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)
+		[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Bake Physics")))
+				.ToolTipText(FText::FromString(TEXT("Bake MMD physics into a new AnimSequence for Sequencer.")))
+				.OnClicked(this, &MMDImportSetting::OnOpenPhysicsBakeClicked)
 		] + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入静态网格"))).ToolTipText(FText::FromString(TEXT("导入.fbx/.obj等静态网格文件"))).OnClicked_Lambda([this]() -> FReply
 			{
 				ImportStaticMesh();
@@ -583,6 +818,13 @@ FReply MMDImportSetting::OnOpenSequenceComposerClicked()
 	OpenSequenceComposerWindow();
 	return FReply::Handled();
 }
+
+FReply MMDImportSetting::OnOpenPhysicsBakeClicked()
+{
+	OpenPhysicsBakeWindow();
+	return FReply::Handled();
+}
+
 void MMDImportSetting::ImportMMDModel()
 {
 	ShowImportProgress(TEXT("打开文件选择对话框..."));
@@ -1129,6 +1371,131 @@ static bool InlineCameraSequenceIntoMaster(ULevelSequence* CameraSequence, ULeve
 }
 #endif
 
+void MMDImportSetting::OpenPhysicsBakeWindow()
+{
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	FString TargetError;
+	if (TryGetSelectedAnimationTarget(Target, TargetError))
+	{
+		PhysicsBakeSkeletalMeshComponent = Target.SkeletalMeshComponent;
+		PhysicsBakeActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+	}
+
+	if (UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass())))
+	{
+		PhysicsBakeAnimSequence = SelectedAnim;
+	}
+
+	TSharedRef<SWindow> Window = SNew(SWindow)
+		.Title(FText::FromString(TEXT("MMD Physics Bake")))
+		.ClientSize(FVector2D(620.0f, 260.0f))
+		.SupportsMaximize(false)
+		.SupportsMinimize(false);
+
+	Window->SetContent(
+		SNew(SBorder)
+		.Padding(12.0f)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, 10.0f)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Bake MMD rigid body physics into a deterministic AnimSequence for LevelSequence.")))
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock).Text(FText::FromString(TEXT("Model")))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[
+					SAssignNew(PhysicsBakeActorText, STextBlock)
+					.Text(FText::FromString(TEXT("Model: none")))
+				]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("Use Selected")))
+					.ToolTipText(FText::FromString(TEXT("Use the selected level MMD actor. The actor must keep its source PMX path.")))
+					.OnClicked(this, &MMDImportSetting::CapturePhysicsBakeActor)
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock).Text(FText::FromString(TEXT("Animation")))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[
+					SNew(SObjectPropertyEntryBox)
+					.AllowedClass(UAnimSequence::StaticClass())
+					.ObjectPath(this, &MMDImportSetting::GetPhysicsBakeAnimationPath)
+					.OnObjectChanged(this, &MMDImportSetting::OnPhysicsBakeAnimationChanged)
+				]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("Use Selected")))
+					.OnClicked(this, &MMDImportSetting::CapturePhysicsBakeAnimation)
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock).Text(FText::FromString(TEXT("Frame Rate")))
+				]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SNumericEntryBox<float>)
+					.MinValue(1.0f)
+					.MaxValue(240.0f)
+					.Value(this, &MMDImportSetting::GetPhysicsBakeFrameRate)
+					.OnValueChanged(this, &MMDImportSetting::OnPhysicsBakeFrameRateChanged)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(18.0f, 0.0f, 8.0f, 0.0f)
+				[
+					SNew(STextBlock).Text(FText::FromString(TEXT("Warmup Frames")))
+				]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SNumericEntryBox<int32>)
+					.MinValue(0)
+					.MaxValue(300)
+					.Value(this, &MMDImportSetting::GetPhysicsBakeWarmupFrames)
+					.OnValueChanged(this, &MMDImportSetting::OnPhysicsBakeWarmupFramesChanged)
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 8.0f)
+			[
+				SAssignNew(PhysicsBakeAnimText, STextBlock)
+				.Text(FText::FromString(TEXT("Animation: none")))
+			]
+			+ SVerticalBox::Slot().FillHeight(1.0f)
+			[
+				SNew(SSpacer)
+			]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Bake AnimSequence")))
+				.OnClicked(this, &MMDImportSetting::BakePhysicsAnimation)
+			]
+		]);
+
+	RefreshPhysicsBakeLabels();
+	FSlateApplication::Get().AddWindow(Window);
+#else
+	ShowImportProgress(TEXT("Physics bake is editor-only."), EMMDMessageType::Error);
+#endif
+}
+
 void MMDImportSetting::OpenSequenceComposerWindow()
 {
 #if WITH_EDITOR
@@ -1353,6 +1720,254 @@ void MMDImportSetting::RefreshSequenceComposerLabels()
 			: TEXT("Camera: none");
 		ComposerCameraText->SetText(FText::FromString(Label));
 	}
+}
+
+FReply MMDImportSetting::CapturePhysicsBakeActor()
+{
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	FString TargetError;
+	if (!TryGetSelectedAnimationTarget(Target, TargetError))
+	{
+		ShowImportProgress(TargetError, EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	PhysicsBakeSkeletalMeshComponent = Target.SkeletalMeshComponent;
+	PhysicsBakeActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+	RefreshPhysicsBakeLabels();
+#endif
+	return FReply::Handled();
+}
+
+FReply MMDImportSetting::CapturePhysicsBakeAnimation()
+{
+#if WITH_EDITOR
+	PhysicsBakeAnimSequence = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass()));
+	if (!PhysicsBakeAnimSequence.IsValid())
+	{
+		ShowImportProgress(TEXT("Select an AnimSequence asset in the Content Browser first."), EMMDMessageType::Warning);
+	}
+	RefreshPhysicsBakeLabels();
+#endif
+	return FReply::Handled();
+}
+
+void MMDImportSetting::OnPhysicsBakeAnimationChanged(const FAssetData& AssetData)
+{
+	PhysicsBakeAnimSequence = Cast<UAnimSequence>(AssetData.GetAsset());
+	RefreshPhysicsBakeLabels();
+}
+
+FString MMDImportSetting::GetPhysicsBakeAnimationPath() const
+{
+	return PhysicsBakeAnimSequence.IsValid() ? PhysicsBakeAnimSequence->GetPathName() : FString();
+}
+
+TOptional<float> MMDImportSetting::GetPhysicsBakeFrameRate() const
+{
+	return PhysicsBakeFrameRate;
+}
+
+void MMDImportSetting::OnPhysicsBakeFrameRateChanged(float NewValue)
+{
+	PhysicsBakeFrameRate = FMath::Clamp(NewValue, 1.0f, 240.0f);
+}
+
+TOptional<int32> MMDImportSetting::GetPhysicsBakeWarmupFrames() const
+{
+	return PhysicsBakeWarmupFrames;
+}
+
+void MMDImportSetting::OnPhysicsBakeWarmupFramesChanged(int32 NewValue)
+{
+	PhysicsBakeWarmupFrames = FMath::Clamp(NewValue, 0, 300);
+}
+
+void MMDImportSetting::RefreshPhysicsBakeLabels()
+{
+	if (PhysicsBakeActorText.IsValid())
+	{
+		const FString Label = PhysicsBakeSkeletalMeshComponent.IsValid()
+			? FString::Printf(TEXT("Model: %s"), *PhysicsBakeSkeletalMeshComponent->GetOwner()->GetActorLabel())
+			: TEXT("Model: none");
+		PhysicsBakeActorText->SetText(FText::FromString(Label));
+	}
+	if (PhysicsBakeAnimText.IsValid())
+	{
+		const FString Label = PhysicsBakeAnimSequence.IsValid()
+			? FString::Printf(TEXT("Animation: %s"), *PhysicsBakeAnimSequence->GetPathName())
+			: TEXT("Animation: none");
+		PhysicsBakeAnimText->SetText(FText::FromString(Label));
+	}
+}
+
+FReply MMDImportSetting::BakePhysicsAnimation()
+{
+#if WITH_EDITOR
+	USkeletalMeshComponent* SkelComp = PhysicsBakeSkeletalMeshComponent.Get();
+	UAnimSequence* SourceAnim = PhysicsBakeAnimSequence.Get();
+	if (!SkelComp || !SkelComp->GetOwner() || !SkelComp->GetSkeletalMeshAsset() || !SourceAnim)
+	{
+		ShowImportProgress(TEXT("Select a model actor and an AnimSequence before baking."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	FMMDSelectedAnimationTarget Target;
+	FString TargetError;
+	if (!TryGetSelectedAnimationTarget(Target, TargetError) && PhysicsBakeActor.IsValid())
+	{
+		Target.SkeletalMeshComponent = SkelComp;
+		Target.SkeletalMesh = SkelComp->GetSkeletalMeshAsset();
+		if (AMMDActor* MMDActor = Cast<AMMDActor>(PhysicsBakeActor.Get()))
+		{
+			Target.SourcePMXFilePath = MMDActor->SourcePMXFilePath;
+		}
+		else if (PhysicsBakeActor->GetClass())
+		{
+			if (const AMMDActor* CDO = Cast<AMMDActor>(PhysicsBakeActor->GetClass()->GetDefaultObject()))
+			{
+				Target.SourcePMXFilePath = CDO->SourcePMXFilePath;
+			}
+		}
+	}
+
+	if (Target.SourcePMXFilePath.IsEmpty() || !FPaths::FileExists(Target.SourcePMXFilePath))
+	{
+		ShowImportProgress(TEXT("The selected model has no valid source PMX path for physics data."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	TPMXParser Parser;
+	if (!Parser.ParsePMXFile(Target.SourcePMXFilePath))
+	{
+		ShowImportProgress(TEXT("Failed to parse PMX physics data."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	TArray<FMMDPhysicsRigidBodyData> Rigids;
+	TArray<FMMDPhysicsJointData> Joints;
+	ConvertPMXPhysicsToAnimNodeData(Parser.PMXInfo, Rigids, Joints);
+	if (Rigids.Num() == 0 || Joints.Num() == 0)
+	{
+		ShowImportProgress(TEXT("PMX has no rigid body or joint data to bake."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	USkeletalMesh* SkeletalMesh = SkelComp->GetSkeletalMeshAsset();
+	USkeleton* Skeleton = SkeletalMesh ? SkeletalMesh->GetSkeleton() : nullptr;
+	if (!Skeleton)
+	{
+		ShowImportProgress(TEXT("Selected SkeletalMesh has no Skeleton."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
+	const float BakeRate = FMath::Clamp(PhysicsBakeFrameRate, 1.0f, 240.0f);
+	const int32 NumFrames = FMath::Max(1, FMath::CeilToInt(SourceAnim->GetPlayLength() * BakeRate));
+	const int32 NumKeys = NumFrames + 1;
+
+	TArray<TArray<FTransform>> LocalTransforms;
+	FString Error;
+	if (!BuildLocalTransformsFromAnimSequence(SourceAnim, RefSkeleton, BakeRate, NumKeys, LocalTransforms, Error))
+	{
+		ShowImportProgress(Error, EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	FMMDPhysicsSimulator Simulator;
+	if (!Simulator.InitializeFromPMX(Rigids, Joints, SkelComp))
+	{
+		ShowImportProgress(TEXT("Failed to initialize MMD physics simulator."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	constexpr float MMDPhysicsFixedTimeStep = 1.0f / 60.0f;
+	const int32 MMDPhysicsMaxSubSteps = FMath::Clamp(FMath::CeilToInt((1.0f / BakeRate) / MMDPhysicsFixedTimeStep) + 1, 4, 16);
+	Simulator.ConfigureSimulation(MMDPhysicsFixedTimeStep, MMDPhysicsMaxSubSteps);
+
+	FScopedSlowTask SlowTask(static_cast<float>(NumKeys + PhysicsBakeWarmupFrames), FText::FromString(TEXT("Baking MMD physics")));
+	SlowTask.MakeDialog(true);
+
+	TArray<FTransform> ComponentTransforms;
+	const FTransform ComponentToWorld = SkelComp->GetComponentTransform();
+	const bool bPreviewBake = ViewPanel.IsValid();
+	if (bPreviewBake)
+	{
+		ViewPanel->BeginPhysicsBakePreview(SkeletalMesh);
+	}
+	auto PumpBakePreview = [this, bPreviewBake, &RefSkeleton](const TArray<FTransform>& PreviewComponentTransforms, int32 FrameIndex)
+	{
+		if (!bPreviewBake || !ViewPanel.IsValid())
+		{
+			return;
+		}
+
+		const int32 PreviewStride = 2;
+		if ((FrameIndex % PreviewStride) != 0)
+		{
+			return;
+		}
+
+		ViewPanel->PreviewPhysicsBakeFrame(RefSkeleton, PreviewComponentTransforms);
+		FSlateApplication::Get().PumpMessages();
+		FSlateApplication::Get().Tick();
+	};
+
+	BuildComponentTransformsForFrame(RefSkeleton, LocalTransforms, 0, ComponentTransforms);
+	for (int32 WarmupIndex = 0; WarmupIndex < PhysicsBakeWarmupFrames; ++WarmupIndex)
+	{
+		if (SlowTask.ShouldCancel())
+		{
+			if (bPreviewBake && ViewPanel.IsValid())
+			{
+				ViewPanel->EndPhysicsBakePreview();
+			}
+			ShowImportProgress(TEXT("Physics bake canceled."), EMMDMessageType::Warning);
+			return FReply::Handled();
+		}
+		SlowTask.EnterProgressFrame(1.0f);
+		Simulator.TickMMDPhysicsOnComponentTransforms(ComponentTransforms, ComponentToWorld, 1.0f / BakeRate);
+		PumpBakePreview(ComponentTransforms, WarmupIndex);
+	}
+
+	for (int32 FrameIndex = 0; FrameIndex < NumKeys; ++FrameIndex)
+	{
+		if (SlowTask.ShouldCancel())
+		{
+			if (bPreviewBake && ViewPanel.IsValid())
+			{
+				ViewPanel->EndPhysicsBakePreview();
+			}
+			ShowImportProgress(TEXT("Physics bake canceled."), EMMDMessageType::Warning);
+			return FReply::Handled();
+		}
+		SlowTask.EnterProgressFrame(1.0f);
+		BuildComponentTransformsForFrame(RefSkeleton, LocalTransforms, FrameIndex, ComponentTransforms);
+		Simulator.TickMMDPhysicsOnComponentTransforms(ComponentTransforms, ComponentToWorld, 1.0f / BakeRate);
+		WriteComponentTransformsToLocalFrame(RefSkeleton, ComponentTransforms, FrameIndex, LocalTransforms);
+		PumpBakePreview(ComponentTransforms, FrameIndex);
+	}
+
+	UAnimSequence* BakedAnim = CreatePhysicsBakedAnimSequence(SourceAnim, SkeletalMesh, RefSkeleton, LocalTransforms, BakeRate, NumFrames, Error);
+	if (bPreviewBake && ViewPanel.IsValid())
+	{
+		ViewPanel->EndPhysicsBakePreview();
+	}
+	if (!BakedAnim)
+	{
+		ShowImportProgress(Error.IsEmpty() ? TEXT("Failed to create baked AnimSequence.") : Error, EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
+	{
+		AssetEditorSubsystem->OpenEditorForAsset(BakedAnim);
+	}
+
+	ShowImportProgress(FString::Printf(TEXT("Physics baked: %s"), *BakedAnim->GetPathName()), EMMDMessageType::Success);
+#else
+	ShowImportProgress(TEXT("Physics bake is editor-only."), EMMDMessageType::Error);
+#endif
+	return FReply::Handled();
 }
 
 FReply MMDImportSetting::CreateComposedLevelSequence()

@@ -46,6 +46,8 @@ private:
 
     FReply OnOpenSequenceComposerClicked();
 
+    FReply OnOpenPhysicsBakeClicked();
+
     /** 导入MMD模型文件 */
     void ImportMMDModel();
 
@@ -57,6 +59,8 @@ private:
     void ImportVMDCameraAnimation();
 
     void OpenSequenceComposerWindow();
+
+    void OpenPhysicsBakeWindow();
 
     FReply CaptureSequenceComposerActor();
 
@@ -80,6 +84,26 @@ private:
 
     void RefreshSequenceComposerLabels();
 
+    FReply CapturePhysicsBakeActor();
+
+    FReply CapturePhysicsBakeAnimation();
+
+    void OnPhysicsBakeAnimationChanged(const FAssetData& AssetData);
+
+    FString GetPhysicsBakeAnimationPath() const;
+
+    TOptional<float> GetPhysicsBakeFrameRate() const;
+
+    void OnPhysicsBakeFrameRateChanged(float NewValue);
+
+    TOptional<int32> GetPhysicsBakeWarmupFrames() const;
+
+    void OnPhysicsBakeWarmupFramesChanged(int32 NewValue);
+
+    FReply BakePhysicsAnimation();
+
+    void RefreshPhysicsBakeLabels();
+
    
 
 private:
@@ -96,6 +120,14 @@ private:
     TSharedPtr<STextBlock> ComposerActorText;
     TSharedPtr<STextBlock> ComposerAnimText;
     TSharedPtr<STextBlock> ComposerCameraText;
+
+    TWeakObjectPtr<AActor> PhysicsBakeActor;
+    TWeakObjectPtr<USkeletalMeshComponent> PhysicsBakeSkeletalMeshComponent;
+    TWeakObjectPtr<UAnimSequence> PhysicsBakeAnimSequence;
+    TSharedPtr<STextBlock> PhysicsBakeActorText;
+    TSharedPtr<STextBlock> PhysicsBakeAnimText;
+    float PhysicsBakeFrameRate = 30.0f;
+    int32 PhysicsBakeWarmupFrames = 0;
         
     // 🔧 添加静态成员，保存当前实例的弱引用
     static TWeakPtr<MMDImportSetting> CurrentInstance;

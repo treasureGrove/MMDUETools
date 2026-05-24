@@ -434,6 +434,35 @@ void FMMDPhysicsSimulator::SyncRigidBodiesFromBones(FComponentSpacePoseContext& 
     }
 }
 
+void FMMDPhysicsSimulator::SyncRigidBodiesFromComponentTransforms(const TArray<FTransform>& ComponentTransforms, const FTransform& ComponentToWorld, bool bResetVelocities)
+{
+    if (!DynamicsWorld) return;
+
+    for (BulletMMDRigidRuntime& RB : BulletRigidsRuntime)
+    {
+        if (!RB.Body || !RB.Body->getMotionState()) continue;
+        if (RB.RelatedBoneIndex < 0) continue;
+
+        const int32 BoneIdx = RB.RelatedBoneIndex + 1;
+        if (!ComponentTransforms.IsValidIndex(BoneIdx)) continue;
+
+        const FTransform BoneWorld = ComponentTransforms[BoneIdx] * ComponentToWorld;
+        const btTransform BoneWorldBT = UEToBullet(BoneWorld, UE_CM_PER_M);
+        const btTransform RigidWorldBT = BoneWorldBT * RB.ShapeOffset;
+
+        RB.Body->setWorldTransform(RigidWorldBT);
+        RB.Body->getMotionState()->setWorldTransform(RigidWorldBT);
+
+        if (bResetVelocities)
+        {
+            RB.Body->setLinearVelocity(btVector3(0, 0, 0));
+            RB.Body->setAngularVelocity(btVector3(0, 0, 0));
+            RB.Body->clearForces();
+            RB.Body->activate(true);
+        }
+    }
+}
+
 void FMMDPhysicsSimulator::PostSyncBonesFromPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms)
 {
     if(!DynamicsWorld) return;
@@ -488,6 +517,66 @@ void FMMDPhysicsSimulator::TickMMDPhysics(FComponentSpacePoseContext& InPose, TA
     StepSimulationMMD(DeltaTime);
 
     PostSyncBonesFromPhysics(InPose, OutBoneTransforms);
+}
+
+void FMMDPhysicsSimulator::TickMMDPhysicsOnComponentTransforms(TArray<FTransform>& InOutComponentTransforms, const FTransform& ComponentToWorld, float DeltaSeconds)
+{
+    if (!DynamicsWorld) return;
+
+    if (!bFirstSyncDone)
+    {
+        SyncRigidBodiesFromComponentTransforms(InOutComponentTransforms, ComponentToWorld, true);
+        bFirstSyncDone = true;
+    }
+
+    for (BulletMMDRigidRuntime& RB : BulletRigidsRuntime)
+    {
+        if (!RB.Body || !RB.Body->getMotionState()) continue;
+        if (RB.RelatedBoneIndex < 0) continue;
+        if (RB.PhysicsMode != 0 && RB.PhysicsMode != 2) continue;
+
+        const int32 BoneIdx = RB.RelatedBoneIndex + 1;
+        if (!InOutComponentTransforms.IsValidIndex(BoneIdx)) continue;
+
+        const FTransform BoneWorld = InOutComponentTransforms[BoneIdx] * ComponentToWorld;
+        const btTransform BoneWorldBT = UEToBullet(BoneWorld, UE_CM_PER_M);
+        const btTransform RigidWorldBT = BoneWorldBT * RB.ShapeOffset;
+
+        if (RB.PhysicsMode == 0)
+        {
+            RB.Body->setWorldTransform(RigidWorldBT);
+            RB.Body->getMotionState()->setWorldTransform(RigidWorldBT);
+        }
+        else
+        {
+            btTransform Cur = RB.Body->getWorldTransform();
+            Cur.setOrigin(RigidWorldBT.getOrigin());
+            RB.Body->setWorldTransform(Cur);
+            RB.Body->getMotionState()->setWorldTransform(Cur);
+            RB.Body->setLinearVelocity(btVector3(0, 0, 0));
+        }
+    }
+
+    StepSimulationMMD(DeltaSeconds);
+
+    for (const BulletMMDRigidRuntime& RB : BulletRigidsRuntime)
+    {
+        if (!RB.Body || !RB.Body->getMotionState()) continue;
+        if (RB.PhysicsMode == 0) continue;
+        if (RB.RelatedBoneIndex < 0) continue;
+
+        const int32 BoneIdx = RB.RelatedBoneIndex + 1;
+        if (!InOutComponentTransforms.IsValidIndex(BoneIdx)) continue;
+
+        btTransform BoneWorldBT = RB.Body->getWorldTransform();
+        if (RB.ShapeOffset.getBasis().determinant() != 0)
+        {
+            BoneWorldBT = BoneWorldBT * RB.ShapeOffset.inverse();
+        }
+
+        const FTransform BoneWorldUE = BulletToUE(BoneWorldBT, UE_CM_PER_M);
+        InOutComponentTransforms[BoneIdx] = BoneWorldUE * ComponentToWorld.Inverse();
+    }
 }
 
 //void FMMDPhysicsSimulator::DebugDraw()

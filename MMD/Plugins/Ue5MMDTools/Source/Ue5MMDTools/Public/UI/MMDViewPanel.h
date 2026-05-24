@@ -7,6 +7,8 @@
 #include "AMMDActor.h"
 
 class FEditorModeTools; // forward declare editor type
+class UPoseableMeshComponent;
+struct FReferenceSkeleton;
 
 class UE5MMDTOOLS_API MMDViewPanel : public SEditorViewport
 {
@@ -21,6 +23,9 @@ public:
 
 	void ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh);
 	bool CreatePreviewActor(UClass* ActorClass);
+	void BeginPhysicsBakePreview(class USkeletalMesh* SkeletalMesh);
+	void PreviewPhysicsBakeFrame(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& ComponentTransforms);
+	void EndPhysicsBakePreview();
 
 	// destructor to clean up editor-only pointers
 	virtual ~MMDViewPanel();
@@ -40,6 +45,7 @@ private:
 	FVector WidgetLocation;
 
 	AActor* PreviewActor = nullptr;
+	UPoseableMeshComponent* PhysicsBakePreviewComponent = nullptr;
 
 	TSharedPtr<FEditorModeTools> LocalModeTools;
 };

@@ -28,6 +28,7 @@
 #include "HAL/PlatformFilemanager.h"
 #include "TPMXParser.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/PoseableMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimationAsset.h"
@@ -424,6 +425,7 @@ void MMDViewPanel::Construct(const FArguments &InArgs)
 
 MMDViewPanel::~MMDViewPanel()
 {
+    EndPhysicsBakePreview();
     LocalModeTools.Reset();
 }
 
@@ -633,6 +635,90 @@ bool MMDViewPanel::CreatePreviewActor(UClass* InActorClass)
 
     UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Success %s"), *PreviewActor->GetName());
     return true;
+}
+
+void MMDViewPanel::BeginPhysicsBakePreview(USkeletalMesh* SkeletalMesh)
+{
+    if (!PreviewScene.IsValid() || !PreviewScene->GetWorld() || !SkeletalMesh)
+    {
+        return;
+    }
+
+    EndPhysicsBakePreview();
+
+    PhysicsBakePreviewComponent = NewObject<UPoseableMeshComponent>(GetTransientPackage(), NAME_None, RF_Transient);
+    if (!PhysicsBakePreviewComponent)
+    {
+        return;
+    }
+
+    PhysicsBakePreviewComponent->SetSkeletalMesh(SkeletalMesh);
+    PhysicsBakePreviewComponent->SetMobility(EComponentMobility::Movable);
+    PhysicsBakePreviewComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    PhysicsBakePreviewComponent->SetVisibility(true);
+    PreviewScene->AddComponent(PhysicsBakePreviewComponent, FTransform::Identity);
+
+    if (IsValid(PreviewActor))
+    {
+        PreviewActor->SetActorHiddenInGame(true);
+        PreviewActor->SetIsTemporarilyHiddenInEditor(true);
+    }
+
+    if (FMMDViewportClient* VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
+    {
+        const FBoxSphereBounds Bounds = SkeletalMesh->GetBounds();
+        VC->FocusViewportOnBox(FBox::BuildAABB(Bounds.Origin, Bounds.BoxExtent));
+        VC->Invalidate();
+    }
+}
+
+void MMDViewPanel::PreviewPhysicsBakeFrame(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& ComponentTransforms)
+{
+    if (!PhysicsBakePreviewComponent)
+    {
+        return;
+    }
+
+    const int32 NumBones = FMath::Min(RefSkeleton.GetNum(), ComponentTransforms.Num());
+    for (int32 BoneIndex = 0; BoneIndex < NumBones; ++BoneIndex)
+    {
+        PhysicsBakePreviewComponent->SetBoneTransformByName(
+            RefSkeleton.GetBoneName(BoneIndex),
+            ComponentTransforms[BoneIndex],
+            EBoneSpaces::ComponentSpace);
+    }
+
+    PhysicsBakePreviewComponent->RefreshBoneTransforms();
+    PhysicsBakePreviewComponent->MarkRenderDynamicDataDirty();
+
+    if (CustomViewportClient.IsValid())
+    {
+        CustomViewportClient->Invalidate();
+    }
+}
+
+void MMDViewPanel::EndPhysicsBakePreview()
+{
+    if (PhysicsBakePreviewComponent)
+    {
+        if (PreviewScene.IsValid())
+        {
+            PreviewScene->RemoveComponent(PhysicsBakePreviewComponent);
+        }
+        PhysicsBakePreviewComponent->DestroyComponent();
+        PhysicsBakePreviewComponent = nullptr;
+    }
+
+    if (IsValid(PreviewActor))
+    {
+        PreviewActor->SetActorHiddenInGame(false);
+        PreviewActor->SetIsTemporarilyHiddenInEditor(false);
+    }
+
+    if (CustomViewportClient.IsValid())
+    {
+        CustomViewportClient->Invalidate();
+    }
 }
 
 void MMDViewPanel::ImportModelClicked()

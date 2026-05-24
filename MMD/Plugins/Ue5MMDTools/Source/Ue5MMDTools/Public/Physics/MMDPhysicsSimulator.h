@@ -73,6 +73,7 @@ public:
     void PreSyncKinematicFromBones(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
     void PostSyncBonesFromPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
     void TickMMDPhysics(FComponentSpacePoseContext& InPose, TArray<FBoneTransform>& OutBoneTransforms);
+    void TickMMDPhysicsOnComponentTransforms(TArray<FTransform>& InOutComponentTransforms, const FTransform& ComponentToWorld, float DeltaSeconds);
 
     //void CaptureSnapshot(FMMDPhysicsSimSnapshot& OutSnapshot) const;
     //bool ApplySnapshot(const FMMDPhysicsSimSnapshot& InSnapshot, bool bRespectKinematic = true);
@@ -92,6 +93,7 @@ public:
     //void Shutdown();
 private:
     void SyncRigidBodiesFromBones(FComponentSpacePoseContext& InPose, bool bResetVelocities);
+    void SyncRigidBodiesFromComponentTransforms(const TArray<FTransform>& ComponentTransforms, const FTransform& ComponentToWorld, bool bResetVelocities);
     btDefaultCollisionConfiguration* CollisionConfiguration = nullptr;
     btCollisionDispatcher* Dispatcher = nullptr;
     btDbvtBroadphase* Broadphase = nullptr;
