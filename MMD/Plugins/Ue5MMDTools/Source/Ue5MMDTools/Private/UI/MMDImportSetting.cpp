@@ -1,6 +1,10 @@
-#include "MMDImportSetting.h"
+﻿#include "MMDImportSetting.h"
 #include "MMDViewPanel.h"
+#include "UI/MMDToolPanelWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/SNullWidget.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Text/STextBlock.h"
 #include "DesktopPlatformModule.h"
@@ -74,15 +78,15 @@ static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& Fol
 		return nullptr;
 	}
 #if WITH_EDITOR
-	// 1) 生成唯一包名和资源名
+	// 1) 鐢熸垚鍞竴鍖呭悕鍜岃祫婧愬悕
 	FString UniquePackageName, UniqueAssetName;
 	{
 		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
-		const FString TargetLongPackageName = FolderPath / AssetName; // 例如 /Game/MMDModels/Foo
+		const FString TargetLongPackageName = FolderPath / AssetName; // 渚嬪 /Game/MMDModels/Foo
 		AssetToolsModule.Get().CreateUniqueAssetName(TargetLongPackageName, TEXT(""), UniquePackageName, UniqueAssetName);
 	}
 
-	// 2) 创建包与蓝图（使用 CreateBlueprint，规避 CreateBlueprintFromActor 的重载差异）
+	// 2) 鍒涘缓鍖呬笌钃濆浘锛堜娇鐢?CreateBlueprint锛岃閬?CreateBlueprintFromActor 鐨勯噸杞藉樊寮傦級
 	UPackage* Package = CreatePackage(*UniquePackageName);
 	if (!Package)
 	{
@@ -91,10 +95,10 @@ static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& Fol
 	}
 
 	UBlueprint* NewBP = FKismetEditorUtilities::CreateBlueprint(
-		TargetActor->GetClass(),      // 父类：与实例相同
-		Package,                      // 外部：包
-		*UniqueAssetName,             // 资源名
-		BPTYPE_Normal,                // 蓝图类型
+		TargetActor->GetClass(),      // 鐖剁被锛氫笌瀹炰緥鐩稿悓
+		Package,                      // 澶栭儴锛氬寘
+		*UniqueAssetName,             // 璧勬簮鍚?
+		BPTYPE_Normal,                // 钃濆浘绫诲瀷
 		UBlueprint::StaticClass(),
 		UBlueprintGeneratedClass::StaticClass()
 	);
@@ -104,31 +108,31 @@ static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& Fol
 		return nullptr;
 	}
 
-	// 3) 编译，确保 GeneratedClass/CDO 可用
+	// 3) 缂栬瘧锛岀‘淇?GeneratedClass/CDO 鍙敤
 	FKismetEditorUtilities::CompileBlueprint(NewBP);
 
-	// 4) 将实例属性复制到蓝图 CDO（参数顺序：Old=实例，New=CDO）
+	// 4) 灏嗗疄渚嬪睘鎬у鍒跺埌钃濆浘 CDO锛堝弬鏁伴『搴忥細Old=瀹炰緥锛孨ew=CDO锛?
 	if (UClass* GenClass = NewBP->GeneratedClass)
 	{
 		if (UObject* BPCDO = GenClass->GetDefaultObject(/*bCreateIfNeeded*/true))
 		{
-			UEngine::FCopyPropertiesForUnrelatedObjectsParams Params; // 按现有 API，移除不存在的字段设置
+			UEngine::FCopyPropertiesForUnrelatedObjectsParams Params; // 鎸夌幇鏈?API锛岀Щ闄や笉瀛樺湪鐨勫瓧娈佃缃?
 			UEngine::CopyPropertiesForUnrelatedObjects(/*OldObject=*/TargetActor, /*NewObject=*/BPCDO, Params);
 		}
 	}
 
-	// 5) 标记和注册
+	// 5) 鏍囪鍜屾敞鍐?
 	NewBP->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(NewBP);
 
-	// 6) 保存（使用 FSavePackageArgs 新 API）
+	// 6) 淇濆瓨锛堜娇鐢?FSavePackageArgs 鏂?API锛?
 	const EObjectFlags TopLevelFlags = RF_Public | RF_Standalone;
 	const FString FilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
 
 	FSavePackageArgs SaveArgs;
 	SaveArgs.TopLevelFlags = TopLevelFlags;
-	SaveArgs.SaveFlags = SAVE_None;               // 视需要设置 SAVE_NoError 等
-	SaveArgs.Error = GError;                      // 错误输出
+	SaveArgs.SaveFlags = SAVE_None;               // 瑙嗛渶瑕佽缃?SAVE_NoError 绛?
+	SaveArgs.Error = GError;                      // 閿欒杈撳嚭
 	SaveArgs.bWarnOfLongFilename = false;
 
 	if (!UPackage::SavePackage(Package, /*InBase*/nullptr, *FilePath, SaveArgs))
@@ -136,7 +140,7 @@ static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& Fol
 		UE_LOG(LogTemp, Warning, TEXT("SavePackage failed: %s"), *FilePath);
 	}
 
-	// 7) 关注蓝图
+	// 7) 鍏虫敞钃濆浘
 	FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(NewBP);
 	return NewBP;
 #else
@@ -322,7 +326,7 @@ static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget
 	USelection* SelectedActors = GEditor->GetSelectedActors();
 	if (!SelectedActors || SelectedActors->Num() == 0)
 	{
-		OutError = TEXT("请先在关卡中选中一个 MMD Actor 或带 SkeletalMesh 的 Actor。");
+		OutError = TEXT("Please select an MMD Actor or an Actor with SkeletalMesh in the level.");
 		return false;
 	}
 
@@ -361,7 +365,7 @@ static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget
 		}
 	}
 
-	OutError = TEXT("选中的 Actor 没有可用的 SkeletalMesh。");
+	OutError = TEXT("Selected Actor has no usable SkeletalMesh.");
 	return false;
 }
 
@@ -726,7 +730,7 @@ static UAnimSequence* CreatePhysicsBakedAnimSequence(UAnimSequence* SourceAnim, 
 #endif
 
 
-TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 静态成员初始化
+TWeakPtr<MMDImportSetting> MMDImportSetting::CurrentInstance = nullptr; // 闈欐€佹垚鍛樺垵濮嬪寲
 
 void MMDImportSetting::RegisterInstance(const TSharedRef<MMDImportSetting>& InstanceRef)
 {
@@ -735,69 +739,89 @@ void MMDImportSetting::RegisterInstance(const TSharedRef<MMDImportSetting>& Inst
 
 void MMDImportSetting::Construct(const FArguments& InArgs)
 {
-	// 保存ViewPanel引用
 	ViewPanel = InArgs._ViewPanel;
-	// 不要在 Construct 里调用 SharedThis(this)，避免 TSharedFromThis 断言
-	ChildSlot
-		[SNew(SHorizontalBox) + SHorizontalBox::Slot().FillWidth(1.0f)[SNew(SVerticalBox) + SVerticalBox::Slot().AutoHeight().Padding(2.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("设置区 - MMD模型导入"))).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))] + SVerticalBox::Slot().AutoHeight().Padding(2.0f)[SAssignNew(StatusText, STextBlock).Text(FText::FromString(TEXT("准备就绪..."))).ColorAndOpacity(FSlateColor(FLinearColor::Green))]] + SHorizontalBox::Slot().AutoWidth()[SNew(SHorizontalBox) + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入MMD模型"))).ToolTipText(FText::FromString(TEXT("导入.pmx/.pmd/.fbx等MMD模型文件"))).OnClicked(this, &MMDImportSetting::OnImportModelClicked)] + SHorizontalBox::Slot()  // 改为 SHorizontalBox::Slot()
-		.AutoWidth()
-		.Padding(5.0f, 2.0f)
-		[
-			SNew(SButton)
-				.Text(FText::FromString(TEXT("导入VMD动画")))
-				.OnClicked(this, &MMDImportSetting::OnImportVMDClicked)
-		] + SHorizontalBox::Slot()
-		.AutoWidth()
-		.Padding(5.0f, 2.0f)
-		[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("导入VMD相机")))
-				.ToolTipText(FText::FromString(TEXT("导入 VMD 相机动画，生成跨关卡可用的 Spawnable 相机 LevelSequence")))
-				.OnClicked(this, &MMDImportSetting::OnImportVMDCameraClicked)
-		] + SHorizontalBox::Slot()
-		.AutoWidth()
-		.Padding(5.0f, 2.0f)
-		[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("Compose Sequence")))
-				.ToolTipText(FText::FromString(TEXT("Select a model actor, an AnimSequence, and a camera LevelSequence, then create a master LevelSequence.")))
-				.OnClicked(this, &MMDImportSetting::OnOpenSequenceComposerClicked)
-		] + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)
-		[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("Bake Physics")))
-				.ToolTipText(FText::FromString(TEXT("Bake MMD physics into a new AnimSequence for Sequencer.")))
-				.OnClicked(this, &MMDImportSetting::OnOpenPhysicsBakeClicked)
-		] + SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("导入静态网格"))).ToolTipText(FText::FromString(TEXT("导入.fbx/.obj等静态网格文件"))).OnClicked_Lambda([this]() -> FReply
-			{
-				ImportStaticMesh();
-				return FReply::Handled(); })] +
-				SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("选中"))).ToolTipText(FText::FromString(TEXT("切换到选择模式"))).OnClicked_Lambda([this]() -> FReply
-					{
-						if (ViewPanel.IsValid())
-						{
-							// 通知视口切换到选择模式
-							ShowImportProgress(TEXT("切换到选择模式"));
-						}
-						return FReply::Handled(); })] +
-					SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("移动"))).ToolTipText(FText::FromString(TEXT("切换到移动模式"))).OnClicked_Lambda([this]() -> FReply
-						{
-							if (ViewPanel.IsValid())
-							{
-								// 通知视口切换到移动模式
-								ShowImportProgress(TEXT("切换到移动模式"));
-							}
-							return FReply::Handled(); })] +
-							SHorizontalBox::Slot().AutoWidth().Padding(5.0f, 2.0f)[SNew(SButton).Text(FText::FromString(TEXT("缩放"))).ToolTipText(FText::FromString(TEXT("切换到缩放模式"))).OnClicked_Lambda([this]() -> FReply
-								{
-									if (ViewPanel.IsValid())
-									{
-										// 通知视口切换到缩放模式
-										ShowImportProgress(TEXT("切换到缩放模式"));
-									}
-									return FReply::Handled(); })]]];
-}
 
+	UMMDToolPanelWidget* CreatedToolPanel = nullptr;
+#if WITH_EDITOR
+	UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	if (EditorWorld)
+	{
+		static const TCHAR* ToolPanelWidgetPath = TEXT("/Ue5MMDTools/UI/WBP_MMDToolPanel.WBP_MMDToolPanel_C");
+		UClass* ToolPanelClass = StaticLoadClass(UMMDToolPanelWidget::StaticClass(), nullptr, ToolPanelWidgetPath);
+		if (ToolPanelClass)
+		{
+			CreatedToolPanel = CreateWidget<UMMDToolPanelWidget>(EditorWorld, ToolPanelClass);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MMD tool panel widget not found: %s"), ToolPanelWidgetPath);
+		}
+	}
+#endif
+
+	if (!CreatedToolPanel)
+	{
+		ChildSlot
+		[
+			SNullWidget::NullWidget
+		];
+		return;
+	}
+
+	ToolPanelWidget.Reset(CreatedToolPanel);
+	CreatedToolPanel->OnImportModelRequested = [this]()
+	{
+		ImportMMDModel();
+	};
+	CreatedToolPanel->OnImportVMDRequested = [this]()
+	{
+		ImportVMDAnimation();
+	};
+	CreatedToolPanel->OnImportCameraRequested = [this]()
+	{
+		ImportVMDCameraAnimation();
+	};
+	CreatedToolPanel->OnComposeSequenceRequested = [this]()
+	{
+		OpenSequenceComposerWindow();
+	};
+	CreatedToolPanel->OnBakePhysicsRequested = [this]()
+	{
+		OpenPhysicsBakeWindow();
+	};
+	CreatedToolPanel->OnSelectModeRequested = [this]()
+	{
+		ShowImportProgress(TEXT("Select mode"));
+	};
+	CreatedToolPanel->OnMoveModeRequested = [this]()
+	{
+		ShowImportProgress(TEXT("Move mode"));
+	};
+	CreatedToolPanel->OnRotateModeRequested = [this]()
+	{
+		ShowImportProgress(TEXT("Rotate mode"));
+	};
+	CreatedToolPanel->OnScaleModeRequested = [this]()
+	{
+		ShowImportProgress(TEXT("Scale mode"));
+	};
+	CreatedToolPanel->OnPreviewPlayRequested = [this]()
+	{
+		ShowImportProgress(TEXT("Preview play"));
+	};
+
+	ChildSlot
+	.HAlign(HAlign_Fill)
+	.VAlign(VAlign_Fill)
+	[
+		SNew(SBox)
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Fill)
+		[
+			CreatedToolPanel->TakeWidget()
+		]
+	];
+}
 FReply MMDImportSetting::OnImportModelClicked()
 {
 	ImportMMDModel();
@@ -827,9 +851,9 @@ FReply MMDImportSetting::OnOpenPhysicsBakeClicked()
 
 void MMDImportSetting::ImportMMDModel()
 {
-	ShowImportProgress(TEXT("打开文件选择对话框..."));
+	ShowImportProgress(TEXT("鎵撳紑鏂囦欢閫夋嫨瀵硅瘽妗?.."));
 
-	// 使用文件对话框选择MMD模型文件
+	// 浣跨敤鏂囦欢瀵硅瘽妗嗛€夋嫨MMD妯″瀷鏂囦欢
 	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
 	if (DesktopPlatform)
 	{
@@ -838,9 +862,9 @@ void MMDImportSetting::ImportMMDModel()
 
 		bool bOpened = DesktopPlatform->OpenFileDialog(
 			FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
-			TEXT("导入MMD模型"),
-			TEXT(""), // 默认路径
-			TEXT(""), // 默认文件名
+			TEXT("瀵煎叆MMD妯″瀷"),
+			TEXT(""), // 榛樿璺緞
+			TEXT(""), // 榛樿鏂囦欢鍚?
 			FileTypes,
 			EFileDialogFlags::None,
 			OpenedFiles);
@@ -850,21 +874,21 @@ void MMDImportSetting::ImportMMDModel()
 			FString SelectedFile = OpenedFiles[0];
 			FString FileName = FPaths::GetCleanFilename(SelectedFile);
 
-			ShowImportProgress(FString::Printf(TEXT("已选择文件: %s"), *FileName));
+			ShowImportProgress(FString::Printf(TEXT("宸查€夋嫨鏂囦欢: %s"), *FileName));
 
 			if (ViewPanel.IsValid())
 			{
 				ViewPanel->LoadMMDModel(SelectedFile);
-				ShowImportProgress(FString::Printf(TEXT("正在加载模型: %s"), *FileName));
+				ShowImportProgress(FString::Printf(TEXT("姝ｅ湪鍔犺浇妯″瀷: %s"), *FileName));
 
 				if (SelectedFile.EndsWith(TEXT(".pmx")))
 				{
-					ShowImportProgress(TEXT("开始解析PMX文件..."));
-					UE_LOG(LogTemp, Warning, TEXT("开始解析PMX文件: %s"), *SelectedFile);
+					ShowImportProgress(TEXT("寮€濮嬭В鏋怭MX鏂囦欢..."));
+					UE_LOG(LogTemp, Warning, TEXT("寮€濮嬭В鏋怭MX鏂囦欢: %s"), *SelectedFile);
 #if WITH_EDITOR
 					UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 					if (!EditorWorld) {
-						ShowImportProgress(TEXT("未找到编辑器世界，无法生成Actor"), EMMDMessageType::Error);
+						ShowImportProgress(TEXT("鏈壘鍒扮紪杈戝櫒涓栫晫锛屾棤娉曠敓鎴怉ctor"), EMMDMessageType::Error);
 						return;
 					}
 					FActorSpawnParameters SpawnParams;
@@ -873,32 +897,32 @@ void MMDImportSetting::ImportMMDModel()
 					AMMDActor* NewMMDActor = EditorWorld->SpawnActor<AMMDActor>(AMMDActor::StaticClass(), FTransform::Identity, SpawnParams);
 					if (!NewMMDActor)
 					{
-						ShowImportProgress(TEXT("生成AMMDActor失败"), EMMDMessageType::Error);
+						ShowImportProgress(TEXT("鐢熸垚AMMDActor澶辫触"), EMMDMessageType::Error);
 						return;
 					}
 					NewMMDActor->SetupComponents(SelectedFile);
-					// 保存为蓝图资产
+					// 淇濆瓨涓鸿摑鍥捐祫浜?
 					FString AssetFolder = TEXT("/Game/MMDModels");
 					FString AssetName = FPaths::GetBaseFilename(FileName);
 					if (UBlueprint* NewBP = SaveMMDBlueprintAsset(NewMMDActor, AssetFolder + TEXT("/") + AssetName + TEXT("/BluePrint"), AssetName, true))
 					{
 						if (UClass* GenClass = NewBP->GeneratedClass)
 						{
-							// 关键：把 PMX 源路径设置到蓝图 CDO，保证蓝图实例 OnConstruction 能拿到
+							// 鍏抽敭锛氭妸 PMX 婧愯矾寰勮缃埌钃濆浘 CDO锛屼繚璇佽摑鍥惧疄渚?OnConstruction 鑳芥嬁鍒?
 							if (AActor* CDOActor = Cast<AActor>(GenClass->GetDefaultObject()))
 							{
 								if (AMMDActor* CDO = Cast<AMMDActor>(CDOActor))
 								{
-									CDO->SourcePMXFilePath = SelectedFile; // 绝对路径
+									CDO->SourcePMXFilePath = SelectedFile; // 缁濆璺緞
 									CDO->Modify(true);
 									UE_LOG(LogTemp, Log, TEXT("[Import] Set CDO SourcePMXFilePath: %s"), *SelectedFile);
 								}
 							}
 
-							// 重新编译，使默认值生效
+							// 閲嶆柊缂栬瘧锛屼娇榛樿鍊肩敓鏁?
 							FKismetEditorUtilities::CompileBlueprint(NewBP);
 
-							// 预览中生成实例（其 OnConstruction 将基于 CDO 的路径自动初始化）
+							// 棰勮涓敓鎴愬疄渚嬶紙鍏?OnConstruction 灏嗗熀浜?CDO 鐨勮矾寰勮嚜鍔ㄥ垵濮嬪寲锛?
 							ViewPanel->CreatePreviewActor(GenClass);
 						}
 					}
@@ -908,28 +932,28 @@ void MMDImportSetting::ImportMMDModel()
 					GEditor->MoveViewportCamerasToActor(*NewMMDActor, false);
 
 
-					ShowImportProgress(TEXT("已在关卡中生成AMMDActor并加载PMX"), EMMDMessageType::Success);
+					ShowImportProgress(TEXT("宸插湪鍏冲崱涓敓鎴怉MMDActor骞跺姞杞絇MX"), EMMDMessageType::Success);
 
 #else
-					ShowImportProgress(TEXT("仅在编辑器中可生成Actor"), EMMDMessageType::Warning);
+					ShowImportProgress(TEXT("浠呭湪缂栬緫鍣ㄤ腑鍙敓鎴怉ctor"), EMMDMessageType::Warning);
 #endif
 				}
 				else
 				{
-					ShowImportProgress(FString::Printf(TEXT("文件类型: %s (非PMX)"), *FPaths::GetExtension(SelectedFile)));
+					ShowImportProgress(FString::Printf(TEXT("鏂囦欢绫诲瀷: %s (闈濸MX)"), *FPaths::GetExtension(SelectedFile)));
 				}
 			}
 		}
 	}
 	else
 	{
-		ShowImportProgress(TEXT("无法打开文件对话框"));
+		ShowImportProgress(TEXT("Cannot open file dialog."));
 	}
 }
 
 void MMDImportSetting::ImportStaticMesh()
 {
-	ShowImportProgress(TEXT("打开静态网格选择对话框..."));
+	ShowImportProgress(TEXT("鎵撳紑闈欐€佺綉鏍奸€夋嫨瀵硅瘽妗?.."));
 
 	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
 	if (DesktopPlatform)
@@ -939,7 +963,7 @@ void MMDImportSetting::ImportStaticMesh()
 
 		bool bOpened = DesktopPlatform->OpenFileDialog(
 			FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
-			TEXT("导入静态网格"),
+			TEXT("Import Static Mesh"),
 			TEXT(""),
 			TEXT(""),
 			FileTypes,
@@ -951,7 +975,7 @@ void MMDImportSetting::ImportStaticMesh()
 			FString SelectedFile = OpenedFiles[0];
 			FString FileName = FPaths::GetCleanFilename(SelectedFile);
 
-			ShowImportProgress(FString::Printf(TEXT("已选择静态网格: %s"), *FileName));
+			ShowImportProgress(FString::Printf(TEXT("宸查€夋嫨闈欐€佺綉鏍? %s"), *FileName));
 
 			if (GEngine)
 			{
@@ -959,23 +983,23 @@ void MMDImportSetting::ImportStaticMesh()
 					-1,
 					10.0f,
 					FColor::Blue,
-					FString::Printf(TEXT("静态网格导入: %s"), *SelectedFile));
+					FString::Printf(TEXT("闈欐€佺綉鏍煎鍏? %s"), *SelectedFile));
 			}
 		}
 		else
 		{
-			ShowImportProgress(TEXT("导入已取消"));
+			ShowImportProgress(TEXT("Import canceled."));
 		}
 	}
 }
 void MMDImportSetting::ImportVMDAnimation()
 {
-	ShowImportProgress(TEXT("打开VMD动画选择对话框..."));
+	ShowImportProgress(TEXT("鎵撳紑VMD鍔ㄧ敾閫夋嫨瀵硅瘽妗?.."));
 
 	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
 	if (!DesktopPlatform)
 	{
-		ShowImportProgress(TEXT("无法打开文件选择对话框。"), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Cannot open file selection dialog."), EMMDMessageType::Error);
 		return;
 	}
 
@@ -983,7 +1007,7 @@ void MMDImportSetting::ImportVMDAnimation()
 	const FString FileTypes = TEXT("VMD Files (*.vmd)|*.vmd|All Files (*.*)|*.*");
 	const bool bOpened = DesktopPlatform->OpenFileDialog(
 		FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
-		TEXT("导入VMD动画"),
+		TEXT("瀵煎叆VMD鍔ㄧ敾"),
 		TEXT(""),
 		TEXT(""),
 		FileTypes,
@@ -992,18 +1016,18 @@ void MMDImportSetting::ImportVMDAnimation()
 
 	if (!bOpened || OpenedFiles.Num() == 0)
 	{
-		ShowImportProgress(TEXT("已取消导入VMD动画。"), EMMDMessageType::Warning);
+		ShowImportProgress(TEXT("VMD animation import canceled."), EMMDMessageType::Warning);
 		return;
 	}
 
 	const FString SelectedFile = OpenedFiles[0];
 	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
-	ShowImportProgress(FString::Printf(TEXT("正在解析VMD文件: %s"), *FileName));
+	ShowImportProgress(FString::Printf(TEXT("姝ｅ湪瑙ｆ瀽VMD鏂囦欢: %s"), *FileName));
 
 	TVMDParser VMDParser;
 	if (!VMDParser.ParseVMDFile(SelectedFile))
 	{
-		ShowImportProgress(TEXT("VMD文件解析失败。"), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Failed to parse VMD file."), EMMDMessageType::Error);
 		return;
 	}
 
@@ -1018,7 +1042,7 @@ void MMDImportSetting::ImportVMDAnimation()
 
 	if (!Target.SkeletalMesh || !Target.SkeletalMesh->GetSkeleton())
 	{
-		ShowImportProgress(TEXT("选中的 SkeletalMesh 没有关联 Skeleton，无法导入VMD。"), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Selected SkeletalMesh has no Skeleton, cannot import VMD."), EMMDMessageType::Error);
 		return;
 	}
 
@@ -1040,7 +1064,7 @@ void MMDImportSetting::ImportVMDAnimation()
 	FMMDAnimationImportReport ImportReport;
 	if (!TMMDMeshBuilder::BuildAnimationImportContext(Target.SkeletalMesh, PMXData, Target.SourcePMXFilePath, SelectedFile, ImportContext, &ImportReport))
 	{
-		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("VMD导入上下文创建失败。");
+		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("Failed to create VMD import context.");
 		ShowImportProgress(ErrorMessage, EMMDMessageType::Error);
 		return;
 	}
@@ -1052,7 +1076,7 @@ void MMDImportSetting::ImportVMDAnimation()
 	UAnimSequence* AnimSequence = TMMDMeshBuilder::BuildVMDAnimation(VMDParser.VMDInfo, ImportContext, ImportSettings, &ImportReport);
 	if (!AnimSequence)
 	{
-		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("VMD骨骼动画生成失败。");
+		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("Failed to generate VMD skeletal animation.");
 		ShowImportProgress(ErrorMessage, EMMDMessageType::Error);
 		return;
 	}
@@ -1100,7 +1124,7 @@ void MMDImportSetting::ImportVMDAnimation()
 
 	ShowImportProgress(
 		FString::Printf(
-			TEXT("VMD骨骼/表情动画导入并播放: %s | Bone %d/%d | Morph %d/%d | MaxFrame=%d"),
+			TEXT("VMD楠ㄩ/琛ㄦ儏鍔ㄧ敾瀵煎叆骞舵挱鏀? %s | Bone %d/%d | Morph %d/%d | MaxFrame=%d"),
 			*AnimSequence->GetPathName(),
 			ImportReport.MatchedBoneTrackCount,
 			ImportReport.SourceBoneTrackCount,
@@ -1109,7 +1133,7 @@ void MMDImportSetting::ImportVMDAnimation()
 			ImportReport.MaxFrame),
 		EMMDMessageType::Success);
 #else
-	ShowImportProgress(TEXT("VMD导入仅支持编辑器环境。"), EMMDMessageType::Error);
+	ShowImportProgress(TEXT("VMD import is editor-only."), EMMDMessageType::Error);
 #endif
 }
 
@@ -2321,6 +2345,27 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 }
 void MMDImportSetting::ShowImportProgress(const FString& Message, EMMDMessageType Type)
 {
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		FLinearColor MessageColor = FLinearColor(0.09f, 0.72f, 0.82f, 1.0f);
+		switch (Type)
+		{
+		case EMMDMessageType::Warning:
+			MessageColor = FLinearColor(1.0f, 0.70f, 0.16f, 1.0f);
+			break;
+		case EMMDMessageType::Error:
+			MessageColor = FLinearColor(1.0f, 0.24f, 0.32f, 1.0f);
+			break;
+		case EMMDMessageType::Success:
+			MessageColor = FLinearColor(0.12f, 0.74f, 0.46f, 1.0f);
+			break;
+		case EMMDMessageType::Info:
+		default:
+			break;
+		}
+		ToolPanel->SetStatusText(FText::FromString(Message), MessageColor);
+	}
+
 	if (StatusText.IsValid())
 	{
 		switch (Type)
@@ -2357,27 +2402,28 @@ void MMDImportSetting::ShowGlobalImportProgress(const FString& Message, EMMDMess
 
 	if (Instance.IsValid())
 	{
-		// 如果实例存在，调用实例方法
+		// 濡傛灉瀹炰緥瀛樺湪锛岃皟鐢ㄥ疄渚嬫柟娉?
 		Instance->ShowImportProgress(Message, Type);
 	}
 	else
 	{
-		// 如果实例不存在，至少输出到日志
+		// 濡傛灉瀹炰緥涓嶅瓨鍦紝鑷冲皯杈撳嚭鍒版棩蹇?
 		switch (Type)
 		{
 		case EMMDMessageType::Info:
-			UE_LOG(LogTemp, Log, TEXT("[MMD导入] %s"), *Message);
+			UE_LOG(LogTemp, Log, TEXT("[MMD瀵煎叆] %s"), *Message);
 			break;
 		case EMMDMessageType::Warning:
-			UE_LOG(LogTemp, Warning, TEXT("[MMD导入] %s"), *Message);
+			UE_LOG(LogTemp, Warning, TEXT("[MMD瀵煎叆] %s"), *Message);
 			break;
 		case EMMDMessageType::Error:
-			UE_LOG(LogTemp, Error, TEXT("[MMD导入] %s"), *Message);
+			UE_LOG(LogTemp, Error, TEXT("[MMD瀵煎叆] %s"), *Message);
 			break;
 		case EMMDMessageType::Success:
-			UE_LOG(LogTemp, Warning, TEXT("[MMD导入成功] %s"), *Message);
+			UE_LOG(LogTemp, Warning, TEXT("[MMD瀵煎叆鎴愬姛] %s"), *Message);
 			break;
 		}
 	}
 }
+
 

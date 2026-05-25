@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UI/MMDToolPanelWidget.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Text/STextBlock.h"
@@ -112,6 +114,7 @@ private:
 
     /** 状态文本显示 */
     TSharedPtr<STextBlock> StatusText;
+    TStrongObjectPtr<UMMDToolPanelWidget> ToolPanelWidget;
 
     TWeakObjectPtr<AActor> ComposerActor;
     TWeakObjectPtr<USkeletalMeshComponent> ComposerSkeletalMeshComponent;
