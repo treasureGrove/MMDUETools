@@ -1,46 +1,52 @@
-# UE5 MMD/PMX/VMD ¼¯³ÉÖ¸µ¼ÎÄµµ
+ï»¿# UE5 MMD/PMX/VMD é›†æˆæŒ‡å¯¼æ–‡æ¡£
 
-> Ä¿µÄ£ºÎªÊµÏÖÓë MMD ±à¼­Æ÷ÐÐÎªÒ»ÖÂµÄ **Ä£ÐÍµ¼Èë (PMX)**¡¢**¶¯×÷/±íÇé²¥·Å (VMD)**¡¢**ÎïÀíÄ£Äâ** ¼° **Sequencer Ê±¼äÏß¿ØÖÆ** Ìá¹©¼Ü¹¹Óë²Ù×÷Á÷³Ì²Î¿¼¡£
+> ç›®çš„ï¼šä¸ºå®žçŽ°ä¸Ž MMD ç¼–è¾‘å™¨è¡Œä¸ºä¸€è‡´çš„ **æ¨¡åž‹å¯¼å…¥ (PMX)**ã€**åŠ¨ä½œ/è¡¨æƒ…æ’­æ”¾ (VMD)**ã€**ç‰©ç†æ¨¡æ‹Ÿ** åŠ **Sequencer æ—¶é—´çº¿æŽ§åˆ¶** æä¾›æž¶æž„ä¸Žæ“ä½œæµç¨‹å‚è€ƒã€‚
 
----
-## 1. ×ÜÌåÄ¿±ê
-- PMX ³õÊ¼»¯Êý¾ÝÒ»´Î½âÎöºó³Ö¾Ã»¯£¬±ÜÃâÖØ¸´¶ÁÎÄ¼þ¡£
-- VMD ×÷ÎªÊ±¼äÇý¶¯×Ê²ú£¨¹Ç÷À¹ì¼£ + Morph È¨ÖØ£©£¬¿ÉÏñÆÕÍ¨¶¯»­ÄÇÑùÒýÓÃ»òÔÚ Sequencer ÖÐÍÏ×§¡£
-- ¶¯»­À¶Í¼ÖÐ°´È·¶¨Ë³Ðò£º¹Ç÷À¶¯»­ ¡ú IK/Ô¼Êø ¡ú Morph ¡ú ÎïÀí¡£
-- Ê±¼äÏßÌø×ª / Scrub Ê±£ºÎïÀí×´Ì¬ÖØÖÃ£¬µ±Ç°Ö¡ÈÔÖ´ÐÐÒ»´ÎÎïÀí²½½ø£¨¼´Ê±¿ÉÊÓ»¯£©¡£
-- ±£Ö¤¶àÖ¡È·¶¨ÐÔ£¨¹Ì¶¨²½³¤ + ÖØÖÃ²ßÂÔ£©£¬ÐÐÎªÓë MMD ½Ó½ü£º²»ÑÓÐø¿çÌø×ªµÄÎïÀí×´Ì¬¡£
+## å½“å‰é˜¶æ®µä»»åŠ¡
+
+- UI æ•´ç†ï¼šç”¨ UMG å·¥å…·é¢æ¿æ›¿ä»£æ—§ Slate æ‹¼æŽ¥ç•Œé¢ï¼Œç»Ÿä¸€å·¥å…·çª—å£å¸ƒå±€ã€è§†è§‰å±‚çº§ä¸Ž RT é¢„è§ˆåŒºåŸŸã€‚
+- å·¥å…·äº¤äº’é€»è¾‘ä¼˜åŒ–ï¼šæ¢³ç†å¯¼å…¥ã€åŠ¨ä½œåŠ è½½ã€ç‰©ç†çƒ˜ç„™ã€é¢„è§ˆæ’­æ”¾ã€çŠ¶æ€åé¦ˆç­‰æ“ä½œå…¥å£ï¼Œä½¿æŒ‰é’®è¡Œä¸ºå’Œå·¥å…·æµç¨‹æ›´æ¸…æ™°ã€‚
+- æš‚ç¼“åº•å±‚ç®—æ³•æ‰©å±•ï¼šå½“å‰é˜¶æ®µä¼˜å…ˆä¿è¯å·¥å…·çª—å£å¯ç”¨æ€§ã€äº¤äº’é—­çŽ¯å’Œé¢„è§ˆä½“éªŒï¼Œç‰©ç†/åŠ¨ç”»ç®—æ³•åªåšå¿…è¦æŽ¥å…¥ä¸ŽéªŒè¯ã€‚
 
 ---
-## 2. ×Ê²ú²ãÉè¼Æ
-| ×Ê²ú | ÄÚÈÝ | ËµÃ÷ |
+## 1. æ€»ä½“ç›®æ ‡
+- PMX åˆå§‹åŒ–æ•°æ®ä¸€æ¬¡è§£æžåŽæŒä¹…åŒ–ï¼Œé¿å…é‡å¤è¯»æ–‡ä»¶ã€‚
+- VMD ä½œä¸ºæ—¶é—´é©±åŠ¨èµ„äº§ï¼ˆéª¨éª¼è½¨è¿¹ + Morph æƒé‡ï¼‰ï¼Œå¯åƒæ™®é€šåŠ¨ç”»é‚£æ ·å¼•ç”¨æˆ–åœ¨ Sequencer ä¸­æ‹–æ‹½ã€‚
+- åŠ¨ç”»è“å›¾ä¸­æŒ‰ç¡®å®šé¡ºåºï¼šéª¨éª¼åŠ¨ç”» â†’ IK/çº¦æŸ â†’ Morph â†’ ç‰©ç†ã€‚
+- æ—¶é—´çº¿è·³è½¬ / Scrub æ—¶ï¼šç‰©ç†çŠ¶æ€é‡ç½®ï¼Œå½“å‰å¸§ä»æ‰§è¡Œä¸€æ¬¡ç‰©ç†æ­¥è¿›ï¼ˆå³æ—¶å¯è§†åŒ–ï¼‰ã€‚
+- ä¿è¯å¤šå¸§ç¡®å®šæ€§ï¼ˆå›ºå®šæ­¥é•¿ + é‡ç½®ç­–ç•¥ï¼‰ï¼Œè¡Œä¸ºä¸Ž MMD æŽ¥è¿‘ï¼šä¸å»¶ç»­è·¨è·³è½¬çš„ç‰©ç†çŠ¶æ€ã€‚
+
+---
+## 2. èµ„äº§å±‚è®¾è®¡
+| èµ„äº§ | å†…å®¹ | è¯´æ˜Ž |
 |------|------|------|
-| `UMMDPmxPhysicsAsset` | Rigids + Joints ¾«¼ò²ÎÊý | ÎïÀí³õÊ¼»¯£»²»º¬¶¥µã/²ÄÖÊµÈ´óÊý¾Ý |
-| `UMMDPmxMorphAsset` | Morph Í¨µÀ£¨ÀàÐÍ¡¢¹Ç÷ÀÔöÁ¿¡¢UE MorphTarget Ó³Éä£© | ±íÇé/¹Ç÷À/²ÄÖÊÀ©Õ¹»ù´¡ |
-| `UVMDMotion` | ¹Ç÷À¹ì¼£¡¢Morph ¹ì¼£¡¢Ê±³¤¡¢Ö¡ÂÊ¡¢Loop¡¢(¿ÉÑ¡Ïà»ú/µÆ¹â) | VMD Êý¾ÝÔ´£¨²»ºæ±º³É `UAnimSequence`£© |
+| `UMMDPmxPhysicsAsset` | Rigids + Joints ç²¾ç®€å‚æ•° | ç‰©ç†åˆå§‹åŒ–ï¼›ä¸å«é¡¶ç‚¹/æè´¨ç­‰å¤§æ•°æ® |
+| `UMMDPmxMorphAsset` | Morph é€šé“ï¼ˆç±»åž‹ã€éª¨éª¼å¢žé‡ã€UE MorphTarget æ˜ å°„ï¼‰ | è¡¨æƒ…/éª¨éª¼/æè´¨æ‰©å±•åŸºç¡€ |
+| `UVMDMotion` | éª¨éª¼è½¨è¿¹ã€Morph è½¨è¿¹ã€æ—¶é•¿ã€å¸§çŽ‡ã€Loopã€(å¯é€‰ç›¸æœº/ç¯å…‰) | VMD æ•°æ®æºï¼ˆä¸çƒ˜ç„™æˆ `UAnimSequence`ï¼‰ |
 
-> ×Ê²ú½ö±£´æ¡°³õÊ¼»¯ÓëÓ³Éä¡±Êý¾Ý£¬²»±£´æÔËÐÐÆÚÎïÀí×´Ì¬¡£
-
----
-## 3. ¹¹½¨ / µ¼ÈëÁ÷³Ì£¨Editor£©
-1. ½âÎö PMX£ºÉú³É SkeletalMesh£¨º¬ MorphTarget£©¡£
-2. ¹¹½¨²¢±£´æ `UMMDPmxPhysicsAsset` / `UMMDPmxMorphAsset`¡£
-3. ´´½¨ AnimBlueprint£¬²åÈë `MMDPhysicsNode`¡¢¼Æ»®ºóÐøµÄ `VMDPoseNode`¡¢`ApplyBoneMorphNode`¡£
-4. ½âÎö VMD£ºÉú³É `UVMDMotion`£¨¹Ç÷À¹Ø¼üÖ¡ + Morph È¨ÖØ±í£©¡£
-5. ÔÚ AnimBlueprint ±äÁ¿Ãæ°åÖÐÉèÖÃ£º`CurrentVMD` / ²¥·Å²ÎÊý£¨PlayRate¡¢Loop£©¡£
-6. ¿ÉÔÚ Sequencer ÄÚÌí¼Ó Track Çý¶¯ ExternalTimeSec¡£
+> èµ„äº§ä»…ä¿å­˜â€œåˆå§‹åŒ–ä¸Žæ˜ å°„â€æ•°æ®ï¼Œä¸ä¿å­˜è¿è¡ŒæœŸç‰©ç†çŠ¶æ€ã€‚
 
 ---
-## 4. ²¥·Å¿ØÖÆ²ã£º`UVMDPlaybackController`
-Ö°Ôð£º
-- ÊäÈë£º`ExternalTimeSec`£¨¾ø¶Ô²¥·ÅÊ±¼ä£©¡£
-- Êä³ö£º
-  - `BonePoseBuffer`£¨¾Ö²¿×ËÊÆ¸²¸Ç¼¯»ò²î·Ö£©¡£
-  - `BoneMorphBuffer`£¨¹Ç÷ÀÔöÁ¿£©¡£
-  - `VertexMorphWeights`£¨MorphTarget È¨ÖØ£©¡£
-  - Ìø×ªÅÐ¶¨±êÖ¾ `bDiscontinuous`¡£
-- ´¦Àí£ºLoop / Seek / Group morph Õ¹¿ª / Impulse morph ¶ÓÁÐ£¨¿ÉÑ¡£©¡£
+## 3. æž„å»º / å¯¼å…¥æµç¨‹ï¼ˆEditorï¼‰
+1. è§£æž PMXï¼šç”Ÿæˆ SkeletalMeshï¼ˆå« MorphTargetï¼‰ã€‚
+2. æž„å»ºå¹¶ä¿å­˜ `UMMDPmxPhysicsAsset` / `UMMDPmxMorphAsset`ã€‚
+3. åˆ›å»º AnimBlueprintï¼Œæ’å…¥ `MMDPhysicsNode`ã€è®¡åˆ’åŽç»­çš„ `VMDPoseNode`ã€`ApplyBoneMorphNode`ã€‚
+4. è§£æž VMDï¼šç”Ÿæˆ `UVMDMotion`ï¼ˆéª¨éª¼å…³é”®å¸§ + Morph æƒé‡è¡¨ï¼‰ã€‚
+5. åœ¨ AnimBlueprint å˜é‡é¢æ¿ä¸­è®¾ç½®ï¼š`CurrentVMD` / æ’­æ”¾å‚æ•°ï¼ˆPlayRateã€Loopï¼‰ã€‚
+6. å¯åœ¨ Sequencer å†…æ·»åŠ  Track é©±åŠ¨ ExternalTimeSecã€‚
 
-Ìø×ªÅÐ¶¨£º
+---
+## 4. æ’­æ”¾æŽ§åˆ¶å±‚ï¼š`UVMDPlaybackController`
+èŒè´£ï¼š
+- è¾“å…¥ï¼š`ExternalTimeSec`ï¼ˆç»å¯¹æ’­æ”¾æ—¶é—´ï¼‰ã€‚
+- è¾“å‡ºï¼š
+  - `BonePoseBuffer`ï¼ˆå±€éƒ¨å§¿åŠ¿è¦†ç›–é›†æˆ–å·®åˆ†ï¼‰ã€‚
+  - `BoneMorphBuffer`ï¼ˆéª¨éª¼å¢žé‡ï¼‰ã€‚
+  - `VertexMorphWeights`ï¼ˆMorphTarget æƒé‡ï¼‰ã€‚
+  - è·³è½¬åˆ¤å®šæ ‡å¿— `bDiscontinuous`ã€‚
+- å¤„ç†ï¼šLoop / Seek / Group morph å±•å¼€ / Impulse morph é˜Ÿåˆ—ï¼ˆå¯é€‰ï¼‰ã€‚
+
+è·³è½¬åˆ¤å®šï¼š
 ```
 ExternalTimeSec < LastExternalTimeSec
 ExternalTimeSec - LastExternalTimeSec > MaxContinuousDelta
@@ -48,127 +54,127 @@ DeltaSeconds <= 0
 ```
 
 ---
-## 5. AnimBlueprint Á÷Ë®Ïß£¨Evaluate Ë³Ðò£©
-1. Base Pose£¨Idle / Locomotion / ¿Õ£©¡£
-2. IK / Ô¼ÊøÐÞÕý¡£
-3. `VMDPoseNode`£ºÓ¦ÓÃ¹Ç÷À¹ì¼££¨¸²¸Ç / Partial / Additive£©¡£
-4. `ApplyBoneMorphNode`£ºµþ¼Ó Bone Morph¡£
-5. LocalToComponent¡£
-6. `MMDPhysicsNode`£º
-   - Èô `bDiscontinuous`£º
-     - `ResetSimulator()` ¡ú `PreSyncKinematicFromBones()` ¡ú `StepSimulation(FixedTimeStep)` ¡ú `PostSyncBonesFromPhysics()`¡£
-   - ·ñÔò£º`PreSync` ¡ú `Step(FixedTimeStep ¡Á SubSteps)` ¡ú `PostSync`¡£
-7. ComponentToLocal ¡ú Êä³ö×îÖÕ Pose¡£
-8. ¶¥µã Morph£ºÔÚ `UAnimInstance::NativeUpdateAnimation`£¨GameThread£©Àïµ÷ÓÃ `SetMorphTarget()` Ê¹ÓÃ `VertexMorphWeights`¡£
+## 5. AnimBlueprint æµæ°´çº¿ï¼ˆEvaluate é¡ºåºï¼‰
+1. Base Poseï¼ˆIdle / Locomotion / ç©ºï¼‰ã€‚
+2. IK / çº¦æŸä¿®æ­£ã€‚
+3. `VMDPoseNode`ï¼šåº”ç”¨éª¨éª¼è½¨è¿¹ï¼ˆè¦†ç›– / Partial / Additiveï¼‰ã€‚
+4. `ApplyBoneMorphNode`ï¼šå åŠ  Bone Morphã€‚
+5. LocalToComponentã€‚
+6. `MMDPhysicsNode`ï¼š
+   - è‹¥ `bDiscontinuous`ï¼š
+     - `ResetSimulator()` â†’ `PreSyncKinematicFromBones()` â†’ `StepSimulation(FixedTimeStep)` â†’ `PostSyncBonesFromPhysics()`ã€‚
+   - å¦åˆ™ï¼š`PreSync` â†’ `Step(FixedTimeStep Ã— SubSteps)` â†’ `PostSync`ã€‚
+7. ComponentToLocal â†’ è¾“å‡ºæœ€ç»ˆ Poseã€‚
+8. é¡¶ç‚¹ Morphï¼šåœ¨ `UAnimInstance::NativeUpdateAnimation`ï¼ˆGameThreadï¼‰é‡Œè°ƒç”¨ `SetMorphTarget()` ä½¿ç”¨ `VertexMorphWeights`ã€‚
 
-> ±£Ö¤ÎïÀíÓÀÔ¶Óë×îÐÂ¹Ç÷À + ±íÇéÍ¬²½£»Ìø×ªÖ¡Ò²ÓÐÎïÀíÏìÓ¦¡£
+> ä¿è¯ç‰©ç†æ°¸è¿œä¸Žæœ€æ–°éª¨éª¼ + è¡¨æƒ…åŒæ­¥ï¼›è·³è½¬å¸§ä¹Ÿæœ‰ç‰©ç†å“åº”ã€‚
 
 ---
-## 6. ÎïÀíÄ£Äâ²ßÂÔ
-- ¹Ì¶¨²½³¤£º`FixedTimeStep = 1/60`£»µÍÖ¡ÂÊÊ¹ÓÃ `MaxSubSteps` ²ð·Ö¡£
-- Ìø×ª£º²»»Ø·ÅÀúÊ·£»ÖØÖÃºóÔÚÄ¿±êÖ¡Ö´ÐÐµ¥²½Ä£Äâ£¨ImmediateOneStep£©¡£
-- ¿ÉÅäÖÃÄ£Ê½£¨Editor£©£º`FullResimulate`£¨´Ó 0 ÀÛ»ý£¬ÏÞÊ±/ÏÞ²½£©¡£
+## 6. ç‰©ç†æ¨¡æ‹Ÿç­–ç•¥
+- å›ºå®šæ­¥é•¿ï¼š`FixedTimeStep = 1/60`ï¼›ä½Žå¸§çŽ‡ä½¿ç”¨ `MaxSubSteps` æ‹†åˆ†ã€‚
+- è·³è½¬ï¼šä¸å›žæ”¾åŽ†å²ï¼›é‡ç½®åŽåœ¨ç›®æ ‡å¸§æ‰§è¡Œå•æ­¥æ¨¡æ‹Ÿï¼ˆImmediateOneStepï¼‰ã€‚
+- å¯é…ç½®æ¨¡å¼ï¼ˆEditorï¼‰ï¼š`FullResimulate`ï¼ˆä»Ž 0 ç´¯ç§¯ï¼Œé™æ—¶/é™æ­¥ï¼‰ã€‚
 
-×´Ì¬ÖØÖÃ£º
+çŠ¶æ€é‡ç½®ï¼š
 ```
-ResetSimulator(): Çå³ý¸ÕÌåËÙ¶È/»º´æ ¡ú bInitialized=false ¡ú Çå¿ÕÄÚ²¿¶ÓÁÐ
+ResetSimulator(): æ¸…é™¤åˆšä½“é€Ÿåº¦/ç¼“å­˜ â†’ bInitialized=false â†’ æ¸…ç©ºå†…éƒ¨é˜Ÿåˆ—
 ```
-Ê×Ö¡²½½ø£º±ÜÃâ¡°¾²Ì¬¹Ç÷À + ¶¯Ì¬¸½ÊôÎï²»Æ¥Åä¡±µÄÉÁ¶Ï¡£
+é¦–å¸§æ­¥è¿›ï¼šé¿å…â€œé™æ€éª¨éª¼ + åŠ¨æ€é™„å±žç‰©ä¸åŒ¹é…â€çš„é—ªæ–­ã€‚
 
 ---
-## 7. Sequencer ¼¯³É
-·½Ê½ A£¨¼òÒ×£©£ºProperty Track Çý¶¯ `ExternalTimeSec`£¬Event Track ´¥·¢ÖØÖÃ±ê¼Ç¡£
-·½Ê½ B£¨ÍÆ¼ö£©£º×Ô¶¨Òå `UMovieSceneVMDTrack` / `UMovieSceneVMDSection`£º
-- `Evaluate()` ÖÐ£º`Controller.Seek(LocalTime)` ¡ú ÉèÖÃ AnimInstance Ê±¼ä ¡ú ¼ì²âÌø×ª ¡ú ÎïÀí½ÚµãÏÂÒ»Ö¡ÏìÓ¦¡£
-- Scrub£ºÊ¼ÖÕÖØÖÃ + µ¥²½ÊµÊ±ÏÔÊ¾ÎïÀí¡£
+## 7. Sequencer é›†æˆ
+æ–¹å¼ Aï¼ˆç®€æ˜“ï¼‰ï¼šProperty Track é©±åŠ¨ `ExternalTimeSec`ï¼ŒEvent Track è§¦å‘é‡ç½®æ ‡è®°ã€‚
+æ–¹å¼ Bï¼ˆæŽ¨èï¼‰ï¼šè‡ªå®šä¹‰ `UMovieSceneVMDTrack` / `UMovieSceneVMDSection`ï¼š
+- `Evaluate()` ä¸­ï¼š`Controller.Seek(LocalTime)` â†’ è®¾ç½® AnimInstance æ—¶é—´ â†’ æ£€æµ‹è·³è½¬ â†’ ç‰©ç†èŠ‚ç‚¹ä¸‹ä¸€å¸§å“åº”ã€‚
+- Scrubï¼šå§‹ç»ˆé‡ç½® + å•æ­¥å®žæ—¶æ˜¾ç¤ºç‰©ç†ã€‚
 
-Ïà»ú/µÆ¹â¹ì¼££ºÍ¬Ò»Ê±¼äÔ´ÏÂ£¬¶ÀÁ¢ Track ¡ú ´Ó `UVMDMotion` ²åÖµ¡£
-
----
-## 8. ¹Ç÷À¸²¸ÇÓë»ìºÏ
-- VMDPose ½ö¸²¸ÇÓÐ¹ì¼£¹Ç÷À¼¯ºÏ£¨Sparse ¸²¸Ç£©¡£
-- Óë Locomotion »ìºÏ£ºÊ¹ÓÃ `LayeredBlendPerBone` »ò Additive¡£
-- Additive£º¼ÆËã²î·Ö Pose£¨VMDPose Óë²Î¿¼»ù×¼£©¡£
+ç›¸æœº/ç¯å…‰è½¨è¿¹ï¼šåŒä¸€æ—¶é—´æºä¸‹ï¼Œç‹¬ç«‹ Track â†’ ä»Ž `UVMDMotion` æ’å€¼ã€‚
 
 ---
-## 9. È·¶¨ÐÔÓëÏß³Ì°²È«
-| ·½Ãæ | »úÖÆ |
+## 8. éª¨éª¼è¦†ç›–ä¸Žæ··åˆ
+- VMDPose ä»…è¦†ç›–æœ‰è½¨è¿¹éª¨éª¼é›†åˆï¼ˆSparse è¦†ç›–ï¼‰ã€‚
+- ä¸Ž Locomotion æ··åˆï¼šä½¿ç”¨ `LayeredBlendPerBone` æˆ– Additiveã€‚
+- Additiveï¼šè®¡ç®—å·®åˆ† Poseï¼ˆVMDPose ä¸Žå‚è€ƒåŸºå‡†ï¼‰ã€‚
+
+---
+## 9. ç¡®å®šæ€§ä¸Žçº¿ç¨‹å®‰å…¨
+| æ–¹é¢ | æœºåˆ¶ |
 |------|------|
-| Ê±¼ä | Íâ²¿¾ø¶ÔÊ±¼ä `ExternalTimeSec`£¬²»ÒÀÀµ¸¡¶¯ÀÛ»ýÎó²î |
-| ÎïÀí²½½ø | ¹Ì¶¨²½³¤ + ×Ó²½£»Ìø×ªµ¥²½²»ÀÛ¼ÆÀúÊ· |
-| Morph Ó¦ÓÃ | ¶¥µã Morph ÔÚ GameThread£»¹Ç÷À Morph ÔÚ AnyThread Ö»¶Á»º³å |
-| Êý¾Ý·ÃÎÊ | AnimGraph ½Úµã²»·ÃÎÊ Actor£»Controller Ìá¹©Ö»¶Á»º³å |
-| ×´Ì¬³Ö¾Ã»¯ | ½ö³õÊ¼»¯ÓëÓ³Éä³Ö¾Ã»¯£¬ÔËÐÐÌ¬²»Ð´»Ø×Ê²ú |
+| æ—¶é—´ | å¤–éƒ¨ç»å¯¹æ—¶é—´ `ExternalTimeSec`ï¼Œä¸ä¾èµ–æµ®åŠ¨ç´¯ç§¯è¯¯å·® |
+| ç‰©ç†æ­¥è¿› | å›ºå®šæ­¥é•¿ + å­æ­¥ï¼›è·³è½¬å•æ­¥ä¸ç´¯è®¡åŽ†å² |
+| Morph åº”ç”¨ | é¡¶ç‚¹ Morph åœ¨ GameThreadï¼›éª¨éª¼ Morph åœ¨ AnyThread åªè¯»ç¼“å†² |
+| æ•°æ®è®¿é—® | AnimGraph èŠ‚ç‚¹ä¸è®¿é—® Actorï¼›Controller æä¾›åªè¯»ç¼“å†² |
+| çŠ¶æ€æŒä¹…åŒ– | ä»…åˆå§‹åŒ–ä¸Žæ˜ å°„æŒä¹…åŒ–ï¼Œè¿è¡Œæ€ä¸å†™å›žèµ„äº§ |
 
 ---
-## 10. ¹Ø¼ü×Ö¶Î/±äÁ¿
+## 10. å…³é”®å­—æ®µ/å˜é‡
 ```
-ExternalTimeSec        // µ±Ç°²¥·ÅÊ±¼ä£¨Sequencer »òÄÚ²¿Çý¶¯£©
-LastExternalTimeSec    // ÉÏÒ»Ö¡Ê±¼ä£¬ÓÃÓÚÌø×ªÅÐ¶¨
-bDiscontinuous         // ÌøÖ¡/µ¹ÍË±êÖ¾
-FixedTimeStep          // ÎïÀí¹Ì¶¨²½³¤
-MaxSubSteps            // µÍÖ¡ÂÊÊ±µÄ²¹³¥×Ó²½Êý
-BonePoseBuffer         // ¹Ç÷À¹ì¼£²åÖµÊä³ö
-BoneMorphBuffer        // ¹Ç÷À morph ÔöÁ¿
-VertexMorphWeights     // MorphTarget È¨ÖØ±í
+ExternalTimeSec        // å½“å‰æ’­æ”¾æ—¶é—´ï¼ˆSequencer æˆ–å†…éƒ¨é©±åŠ¨ï¼‰
+LastExternalTimeSec    // ä¸Šä¸€å¸§æ—¶é—´ï¼Œç”¨äºŽè·³è½¬åˆ¤å®š
+bDiscontinuous         // è·³å¸§/å€’é€€æ ‡å¿—
+FixedTimeStep          // ç‰©ç†å›ºå®šæ­¥é•¿
+MaxSubSteps            // ä½Žå¸§çŽ‡æ—¶çš„è¡¥å¿å­æ­¥æ•°
+BonePoseBuffer         // éª¨éª¼è½¨è¿¹æ’å€¼è¾“å‡º
+BoneMorphBuffer        // éª¨éª¼ morph å¢žé‡
+VertexMorphWeights     // MorphTarget æƒé‡è¡¨
 PhysicsAsset / MorphAsset
-CurrentVMD             // µ±Ç° VMD ¶¯×÷×Ê²úÖ¸Õë
-PlayRate, bLoop        // ²¥·Å¿ØÖÆ²ÎÊý
+CurrentVMD             // å½“å‰ VMD åŠ¨ä½œèµ„äº§æŒ‡é’ˆ
+PlayRate, bLoop        // æ’­æ”¾æŽ§åˆ¶å‚æ•°
 ```
 
 ---
-## 11. ÓÃ»§¹¤×÷Á÷£¨´ÓÁãµ½²¥·Å£©
-1. µ¼Èë `.pmx` ¡ú ×Ô¶¯Éú³É SkeletalMesh + PhysicsAsset + MorphAsset + AnimBP¡£
-2. µ¼Èë `.vmd` ¡ú Éú³É `UVMDMotion`¡£
-3. ÔÚ AnimBP ÉèÖÃ `CurrentVMD`£»ÍÏ½ÇÉ«µ½³¡¾°¼´¿É×Ô¶¯²¥·Å¡£
-4. Ê¹ÓÃ Sequencer£ºÌí¼Ó½ÇÉ« Track ¡ú Ìí¼Ó VMD Track »òÇý¶¯ ExternalTimeSec ¡ú ²¥·Å / Scrub¡£
-5. ÐèÒªÇÐ»»¶¯×÷£ºÌæ»» AnimBP ÖÐµÄ `CurrentVMD` »òÔÚ Sequencer ÇÐ»» Section¡£
-6. »ìºÏÒÆ¶¯£ºÔÚ AnimGraph Ìí¼Ó Locomotion Pose Óë VMDPose µÄ²ã¼¶»ìºÏ¡£
+## 11. ç”¨æˆ·å·¥ä½œæµï¼ˆä»Žé›¶åˆ°æ’­æ”¾ï¼‰
+1. å¯¼å…¥ `.pmx` â†’ è‡ªåŠ¨ç”Ÿæˆ SkeletalMesh + PhysicsAsset + MorphAsset + AnimBPã€‚
+2. å¯¼å…¥ `.vmd` â†’ ç”Ÿæˆ `UVMDMotion`ã€‚
+3. åœ¨ AnimBP è®¾ç½® `CurrentVMD`ï¼›æ‹–è§’è‰²åˆ°åœºæ™¯å³å¯è‡ªåŠ¨æ’­æ”¾ã€‚
+4. ä½¿ç”¨ Sequencerï¼šæ·»åŠ è§’è‰² Track â†’ æ·»åŠ  VMD Track æˆ–é©±åŠ¨ ExternalTimeSec â†’ æ’­æ”¾ / Scrubã€‚
+5. éœ€è¦åˆ‡æ¢åŠ¨ä½œï¼šæ›¿æ¢ AnimBP ä¸­çš„ `CurrentVMD` æˆ–åœ¨ Sequencer åˆ‡æ¢ Sectionã€‚
+6. æ··åˆç§»åŠ¨ï¼šåœ¨ AnimGraph æ·»åŠ  Locomotion Pose ä¸Ž VMDPose çš„å±‚çº§æ··åˆã€‚
 
 ---
-## 12. À©Õ¹·½Ïò
-- ¶à VMD »ìºÏ£¨¶à¸ö `UVMDMotion` + È¨ÖØ£©
-- Retarget£¨¹Ç÷ÀÃû³ÆÓ³Éä£©
-- Impulse morph ¡ú ÎïÀí½ÚµãÔ¤¶ÓÁÐÏû·Ñ
-- È«¾ÖÎïÀíÊÀ½ç£¨¿ç½ÇÉ«½»»¥£©
-- Editor µ÷ÊÔ£º`FullResimulateOnScrub`¡¢ÎïÀíÍ³¼ÆÃæ°å
+## 12. æ‰©å±•æ–¹å‘
+- å¤š VMD æ··åˆï¼ˆå¤šä¸ª `UVMDMotion` + æƒé‡ï¼‰
+- Retargetï¼ˆéª¨éª¼åç§°æ˜ å°„ï¼‰
+- Impulse morph â†’ ç‰©ç†èŠ‚ç‚¹é¢„é˜Ÿåˆ—æ¶ˆè´¹
+- å…¨å±€ç‰©ç†ä¸–ç•Œï¼ˆè·¨è§’è‰²äº¤äº’ï¼‰
+- Editor è°ƒè¯•ï¼š`FullResimulateOnScrub`ã€ç‰©ç†ç»Ÿè®¡é¢æ¿
 
 ---
-## 13. ±ÜÃâµÄ´íÎóÄ£Ê½
-- AnyThread ÖÐÖ±½Ó·ÃÎÊ Actor/UObject¡£
-- Ìø×ªºóÑØÓÃ¾É¸ÕÌåËÙ¶È£¨Î´ÖØÖÃ£©¡£
-- Ã¿´Î´ò¿ªÖØÐÂ½âÎö PMX£¨Ó¦Ê¹ÓÃ³Ö¾Ã»¯ DataAsset£©¡£
-- ½« VMD Ç¿ÖÆ×ª»»Îª´óÌå»ý `UAnimSequence`£¨Ê§È¥¶¯Ì¬±à¼­ÓÅÊÆ£©¡£
-- ¶¥µã Morph ÔÚ¶àÏß³Ì Pose ½×¶ÎÐ´Èë¡£
+## 13. é¿å…çš„é”™è¯¯æ¨¡å¼
+- AnyThread ä¸­ç›´æŽ¥è®¿é—® Actor/UObjectã€‚
+- è·³è½¬åŽæ²¿ç”¨æ—§åˆšä½“é€Ÿåº¦ï¼ˆæœªé‡ç½®ï¼‰ã€‚
+- æ¯æ¬¡æ‰“å¼€é‡æ–°è§£æž PMXï¼ˆåº”ä½¿ç”¨æŒä¹…åŒ– DataAssetï¼‰ã€‚
+- å°† VMD å¼ºåˆ¶è½¬æ¢ä¸ºå¤§ä½“ç§¯ `UAnimSequence`ï¼ˆå¤±åŽ»åŠ¨æ€ç¼–è¾‘ä¼˜åŠ¿ï¼‰ã€‚
+- é¡¶ç‚¹ Morph åœ¨å¤šçº¿ç¨‹ Pose é˜¶æ®µå†™å…¥ã€‚
 
 ---
-## 14. ÐÐÎªÒ»ÖÂÐÔ¶ÔÆë£¨Óë MMD£©
-| ÐÐÎª | MMD | ±¾·½°¸ |
+## 14. è¡Œä¸ºä¸€è‡´æ€§å¯¹é½ï¼ˆä¸Ž MMDï¼‰
+| è¡Œä¸º | MMD | æœ¬æ–¹æ¡ˆ |
 |------|-----|--------|
-| Ê×Ö¡ÎïÀí | ÖØÖÃºóÁ¢¼´ÏìÓ¦ | Reset + µ¥²½ |
-| Ê±¼äÌø×ª | ÖØÖÃ×´Ì¬ | Reset + µ¥²½ |
-| Á¬Ðø²¥·Å | ¹Ì¶¨²½ÀÛ»ý | ¹Ì¶¨²½ + SubSteps |
-| ±à¼­ Scrub | ×ËÊÆ + µ¥Ö¡ÎïÀí | ×ËÊÆ + µ¥²½ |
-| ±íÇé/Morph | È¨ÖØ²åÖµµþ¼Ó | Controller ²åÖµ + ·Ö²ãÓ¦ÓÃ |
+| é¦–å¸§ç‰©ç† | é‡ç½®åŽç«‹å³å“åº” | Reset + å•æ­¥ |
+| æ—¶é—´è·³è½¬ | é‡ç½®çŠ¶æ€ | Reset + å•æ­¥ |
+| è¿žç»­æ’­æ”¾ | å›ºå®šæ­¥ç´¯ç§¯ | å›ºå®šæ­¥ + SubSteps |
+| ç¼–è¾‘ Scrub | å§¿åŠ¿ + å•å¸§ç‰©ç† | å§¿åŠ¿ + å•æ­¥ |
+| è¡¨æƒ…/Morph | æƒé‡æ’å€¼å åŠ  | Controller æ’å€¼ + åˆ†å±‚åº”ç”¨ |
 
 ---
-## 15. ¿ìËÙ¼¯³ÉÇåµ¥
-- [ ] PMX ½âÎö ¡ú PhysicsAsset / MorphAsset
-- [ ] VMD ½âÎö ¡ú UVMDMotion
-- [ ] UVMDPlaybackController ÊµÏÖ£¨Seek/²åÖµ/»º³å£©
-- [ ] AnimBlueprint£ºVMDPoseNode / ApplyBoneMorphNode / MMDPhysicsNode
-- [ ] ¶¥µã Morph ÔÚ AnimInstance Update ÖÐÓ¦ÓÃ
-- [ ] Ìø×ªÅÐ¶¨ + Reset + µ¥²½Âß¼­
-- [ ] Sequencer Track£¨Çý¶¯ ExternalTimeSec£©
-- [ ] ÎÄµµÓëµ÷ÊÔÃæ°å
+## 15. å¿«é€Ÿé›†æˆæ¸…å•
+- [ ] PMX è§£æž â†’ PhysicsAsset / MorphAsset
+- [ ] VMD è§£æž â†’ UVMDMotion
+- [ ] UVMDPlaybackController å®žçŽ°ï¼ˆSeek/æ’å€¼/ç¼“å†²ï¼‰
+- [ ] AnimBlueprintï¼šVMDPoseNode / ApplyBoneMorphNode / MMDPhysicsNode
+- [ ] é¡¶ç‚¹ Morph åœ¨ AnimInstance Update ä¸­åº”ç”¨
+- [ ] è·³è½¬åˆ¤å®š + Reset + å•æ­¥é€»è¾‘
+- [ ] Sequencer Trackï¼ˆé©±åŠ¨ ExternalTimeSecï¼‰
+- [ ] æ–‡æ¡£ä¸Žè°ƒè¯•é¢æ¿
 
 ---
-## 16. Ê¾ÀýÎ±´úÂë£¨ºËÐÄÂß¼­Æ¬¶Î£©
+## 16. ç¤ºä¾‹ä¼ªä»£ç ï¼ˆæ ¸å¿ƒé€»è¾‘ç‰‡æ®µï¼‰
 ```cpp
 if (bDiscontinuous) {
     Physics.ResetSimulator();
     Physics.PreSyncKinematicFromBones(CurrentPose);
-    Physics.StepSimulation(FixedTimeStep); // µ¥²½
+    Physics.StepSimulation(FixedTimeStep); // å•æ­¥
     Physics.PostSyncBonesFromPhysics(OutBoneTransforms);
 } else {
     Physics.PreSyncKinematicFromBones(CurrentPose);
@@ -178,7 +184,10 @@ if (bDiscontinuous) {
 ```
 
 ---
-## 17. ½áÂÛ
-Í¨¹ý×Ê²ú·Ö²ã£¨Physics/Morph/VMD£©¡¢Á÷Ê½²åÖµ¿ØÖÆÆ÷¡¢È·¶¨ÐÔÎïÀí½ÚµãÓë Sequencer Ê±¼äÇý¶¯£¬¿ÉÔÚ UE5 ÖÐÊµÏÖÓë MMD ±à¼­Æ÷½üËÆµÄ¹¤×÷Á÷£º¸ßÐ§¡¢¿ÉÌø×ª¡¢ÎïÀí¼´Ê±ÏìÓ¦¡¢ÅäÖÃ³Ö¾Ã»¯¡¢ÔËÐÐÎÈ¶¨¡£¸ÃÉè¼Æ¼æ¹ËÀ©Õ¹ÐÔ£¨¶à VMD¡¢Retarget¡¢È«¾ÖÎïÀí£©ÓëÐÔÄÜ£¨±ÜÃâÖØ¸´½âÎö´óÎÄ¼þ£©¡£
+## 17. ç»“è®º
+é€šè¿‡èµ„äº§åˆ†å±‚ï¼ˆPhysics/Morph/VMDï¼‰ã€æµå¼æ’å€¼æŽ§åˆ¶å™¨ã€ç¡®å®šæ€§ç‰©ç†èŠ‚ç‚¹ä¸Ž Sequencer æ—¶é—´é©±åŠ¨ï¼Œå¯åœ¨ UE5 ä¸­å®žçŽ°ä¸Ž MMD ç¼–è¾‘å™¨è¿‘ä¼¼çš„å·¥ä½œæµï¼šé«˜æ•ˆã€å¯è·³è½¬ã€ç‰©ç†å³æ—¶å“åº”ã€é…ç½®æŒä¹…åŒ–ã€è¿è¡Œç¨³å®šã€‚è¯¥è®¾è®¡å…¼é¡¾æ‰©å±•æ€§ï¼ˆå¤š VMDã€Retargetã€å…¨å±€ç‰©ç†ï¼‰ä¸Žæ€§èƒ½ï¼ˆé¿å…é‡å¤è§£æžå¤§æ–‡ä»¶ï¼‰ã€‚
 
-> ºóÐø¿ÉÔÚ´Ë»ù´¡ÉÏÌí¼Óµ÷ÊÔ UI¡¢ÐÔÄÜÍ³¼Æ¡¢¿ç½ÇÉ«ÎïÀí½»»¥µÈ¸ß¼¶¹¦ÄÜ¡£
+> åŽç»­å¯åœ¨æ­¤åŸºç¡€ä¸Šæ·»åŠ è°ƒè¯• UIã€æ€§èƒ½ç»Ÿè®¡ã€è·¨è§’è‰²ç‰©ç†äº¤äº’ç­‰é«˜çº§åŠŸèƒ½ã€‚
+
+
+

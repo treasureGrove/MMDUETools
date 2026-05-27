@@ -1,6 +1,12 @@
-# VMD/PMX Animation Bake Notes
+﻿# VMD/PMX Animation Bake Notes
 
 This document records the current VMD import design and the bugs found while aligning the plugin with MMD-style playback.
+
+## Current Phase Task
+
+- UI cleanup: replace the old Slate-composed tool surface with the UMG-based tool panel, including a clear layout, visual hierarchy, and RenderTarget preview area.
+- Tool interaction optimization: refine the workflow for model import, motion loading, physics baking, preview playback, and status feedback.
+- Algorithm work is not the main focus in this phase; only the integration needed to keep the tool UI and preview workflow usable should be changed.
 
 ## Goal
 
@@ -170,3 +176,6 @@ Field meanings:
 - If legs break, inspect standard leg IK chain write coverage.
 - If hands break and `ArmHandExtra=0`, inspect FK rotation conversion.
 - If accessories break, inspect whether non-VMD decorative bones are being written.
+
+
+
