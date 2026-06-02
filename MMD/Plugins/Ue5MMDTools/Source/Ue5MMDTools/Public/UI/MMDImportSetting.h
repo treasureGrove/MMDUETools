@@ -50,6 +50,14 @@ private:
 
     FReply OnOpenPhysicsBakeClicked();
 
+    void LoadSelectedMMDActor();
+
+    bool SetCurrentMMDActorClass(UClass* ActorClass, const FString& DisplayName);
+
+    UClass* PickMMDActorClassFromContentBrowser();
+
+    bool EnsureCurrentMMDActorTarget();
+
     /** 导入MMD模型文件 */
     void ImportMMDModel();
 
@@ -117,6 +125,8 @@ private:
     TStrongObjectPtr<UMMDToolPanelWidget> ToolPanelWidget;
 
     TWeakObjectPtr<AActor> ComposerActor;
+    TWeakObjectPtr<AActor> LastImportedMMDActor;
+    TWeakObjectPtr<UClass> LastLoadedMMDActorClass;
     TWeakObjectPtr<USkeletalMeshComponent> ComposerSkeletalMeshComponent;
     TWeakObjectPtr<UAnimSequence> ComposerAnimSequence;
     TWeakObjectPtr<ULevelSequence> ComposerCameraSequence;

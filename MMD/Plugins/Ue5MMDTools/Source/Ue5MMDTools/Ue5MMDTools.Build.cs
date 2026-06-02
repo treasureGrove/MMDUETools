@@ -52,6 +52,7 @@ public class Ue5MMDTools : ModuleRules
             "DesktopPlatform",
             "AssetTools",
             "AssetRegistry",
+            "ContentBrowser",
             "PropertyEditor",
             "ApplicationCore",
             "SkeletalMeshUtilitiesCommon",

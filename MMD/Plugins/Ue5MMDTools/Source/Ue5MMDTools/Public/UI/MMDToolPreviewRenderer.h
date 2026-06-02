@@ -6,7 +6,10 @@
 #include "MMDToolPreviewRenderer.generated.h"
 
 class USceneCaptureComponent2D;
+class AActor;
+class UAnimSequence;
 class USkeletalMesh;
+class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class UTextureRenderTarget2D;
 
@@ -24,6 +27,9 @@ public:
 	UTextureRenderTarget2D* GetRenderTarget() const { return RenderTarget; }
 	UWorld* GetPreviewWorld() const;
 
+	bool SetPreviewActorClass(UClass* ActorClass);
+	bool SetPreviewSkeletalMesh(USkeletalMesh* SkeletalMesh);
+	bool SetPreviewAnimation(UAnimSequence* AnimSequence);
 	void Capture();
 
 private:
@@ -36,5 +42,17 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UStaticMeshComponent> PreviewTestMeshComponent;
 
+	UPROPERTY(Transient)
+	TObjectPtr<USkeletalMeshComponent> PreviewSkeletalMeshComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AActor> PreviewActor;
+
 	TUniquePtr<FPreviewScene> PreviewScene;
+
+	void ClearPreviewActor();
+	void ClearPreviewSkeletalMeshComponent();
+	void FocusCaptureOnActor(AActor* Actor);
+	void FocusCaptureOnBox(const FBox& Bounds);
+	USkeletalMeshComponent* GetPreviewSkeletalMeshComponent() const;
 };

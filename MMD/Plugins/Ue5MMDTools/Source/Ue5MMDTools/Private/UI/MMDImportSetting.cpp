@@ -38,11 +38,15 @@
 #include "Channels/MovieSceneChannelProxy.h"
 #include "Channels/MovieSceneDoubleChannel.h"
 #include "Channels/MovieSceneFloatChannel.h"
+#include "ContentBrowserModule.h"
+#include "IContentBrowserSingleton.h"
 #include "Factories/BlueprintFactory.h"
 #include "Editor.h"
 #include "Engine/Selection.h"
 #include "Engine/World.h"
+#include "DefaultLevelSequenceInstanceData.h"
 #include "LevelSequence.h"
+#include "LevelSequenceActor.h"
 #include "AMMDActor.h"
 #include "IMovieSceneObjectSpawner.h"
 #include "Misc/LevelSequenceEditorSpawnRegister.h"
@@ -201,6 +205,72 @@ static FString SanitizeMMDAssetName(const FString& InName)
 	return Result.IsEmpty() ? TEXT("VMD") : Result;
 }
 
+static FString SanitizeMMDModelFolderName(const FString& InName)
+{
+	FString Result = SanitizeMMDAssetName(InName);
+	while (Result.Contains(TEXT("__")))
+	{
+		Result.ReplaceInline(TEXT("__"), TEXT("_"));
+	}
+	if (!Result.IsEmpty() && !FChar::IsAlpha(Result[0]))
+	{
+		Result = TEXT("M_") + Result;
+	}
+	return Result.IsEmpty() ? TEXT("M_Unknown") : Result;
+}
+
+static FString GetMMDModelLevelSequenceFolder(AActor* Actor, USkeletalMeshComponent* SkelComp)
+{
+	const FString MMDModelsRoot = TEXT("/Game/MMDModels");
+
+	if (const AMMDActor* MMDActor = Cast<AMMDActor>(Actor))
+	{
+		if (!MMDActor->SourcePMXFilePath.IsEmpty())
+		{
+			return MMDModelsRoot / SanitizeMMDModelFolderName(FPaths::GetBaseFilename(MMDActor->SourcePMXFilePath)) / TEXT("LevelSequence");
+		}
+
+		if (Actor->GetClass())
+		{
+			if (const AMMDActor* CDO = Cast<AMMDActor>(Actor->GetClass()->GetDefaultObject()))
+			{
+				if (!CDO->SourcePMXFilePath.IsEmpty())
+				{
+					return MMDModelsRoot / SanitizeMMDModelFolderName(FPaths::GetBaseFilename(CDO->SourcePMXFilePath)) / TEXT("LevelSequence");
+				}
+			}
+		}
+	}
+
+	if (SkelComp)
+	{
+		if (USkeletalMesh* SkeletalMesh = SkelComp->GetSkeletalMeshAsset())
+		{
+			const FString MeshPackageName = SkeletalMesh->GetOutermost()->GetName();
+			const FString MeshPackagePath = FPackageName::GetLongPackagePath(MeshPackageName);
+			const FString ModelPathPrefix = MMDModelsRoot / TEXT("");
+			if (MeshPackagePath.StartsWith(ModelPathPrefix))
+			{
+				FString RelativePath = MeshPackagePath.RightChop(ModelPathPrefix.Len());
+				FString ModelFolder;
+				if (RelativePath.Split(TEXT("/"), &ModelFolder, nullptr))
+				{
+					if (!ModelFolder.IsEmpty())
+					{
+						return MMDModelsRoot / ModelFolder / TEXT("LevelSequence");
+					}
+				}
+				else if (!RelativePath.IsEmpty())
+				{
+					return MMDModelsRoot / RelativePath / TEXT("LevelSequence");
+				}
+			}
+		}
+	}
+
+	return MMDModelsRoot / TEXT("LevelSequence");
+}
+
 static FVector ConvertMMDPositionToUnrealCamera(const FVector& InPosition, double Scale)
 {
 	return FVector(InPosition.X * Scale, -InPosition.Z * Scale, InPosition.Y * Scale);
@@ -237,6 +307,13 @@ static FTransform ConvertVMDCameraKeyToUnrealTransform(const VMDCameraKeyframe& 
 	return FTransform(Rotation, Location, FVector::OneVector);
 }
 
+static float ConvertMMDVerticalFOVToUnrealHorizontalFOV(float VerticalFOVDegrees, float AspectRatio = 16.0f / 9.0f)
+{
+	const float ClampedVerticalFOV = FMath::Clamp(VerticalFOVDegrees, 1.0f, 179.0f);
+	const float HalfVerticalRadians = FMath::DegreesToRadians(ClampedVerticalFOV) * 0.5f;
+	return FMath::RadiansToDegrees(2.0f * FMath::Atan(FMath::Tan(HalfVerticalRadians) * AspectRatio));
+}
+
 static void AddDoubleKey(TMovieSceneChannelHandle<FMovieSceneDoubleChannel> ChannelHandle, FFrameNumber Frame, double Value)
 {
 	if (FMovieSceneDoubleChannel* Channel = ChannelHandle.Get())
@@ -265,6 +342,27 @@ static void AddCameraTransformKey(UMovieScene3DTransformSection* Section, FFrame
 	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Scale.X")), Frame, 1.0);
 	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Scale.Y")), Frame, 1.0);
 	AddDoubleKey(ChannelProxy.GetChannelByName<FMovieSceneDoubleChannel>(TEXT("Scale.Z")), Frame, 1.0);
+}
+
+static void AddIdentityTransformTrack(UMovieScene* MovieScene, const FGuid& ObjectGuid, int32 DurationFrames)
+{
+	if (!MovieScene || !ObjectGuid.IsValid())
+	{
+		return;
+	}
+
+	if (UMovieScene3DTransformTrack* TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectGuid))
+	{
+		TransformTrack->SetPropertyNameAndPath(TEXT("Transform"), TEXT("Transform"));
+		if (UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->CreateNewSection()))
+		{
+			TransformTrack->AddSection(*TransformSection);
+			TransformSection->SetRange(TRange<FFrameNumber>(
+				TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)),
+				TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(FMath::Max(DurationFrames, 1)))));
+			AddCameraTransformKey(TransformSection, FFrameNumber(0), FTransform::Identity);
+		}
+	}
 }
 
 static void ConfigureMMDMovieSceneTiming(UMovieScene* MovieScene, int32 DurationFrames)
@@ -312,6 +410,86 @@ struct FMMDSelectedAnimationTarget
 	FString SourcePMXFilePath;
 };
 
+static bool TryGetAnimationTargetFromActor(AActor* Actor, FMMDSelectedAnimationTarget& OutTarget)
+{
+	if (!Actor)
+	{
+		return false;
+	}
+
+	OutTarget = FMMDSelectedAnimationTarget{};
+	if (AMMDActor* MMDActor = Cast<AMMDActor>(Actor))
+	{
+		OutTarget.SkeletalMeshComponent = MMDActor->GetMeshComponent();
+		OutTarget.SourcePMXFilePath = MMDActor->SourcePMXFilePath;
+	}
+	else if (USkeletalMeshComponent* SkelComp = Actor->FindComponentByClass<USkeletalMeshComponent>())
+	{
+		OutTarget.SkeletalMeshComponent = SkelComp;
+	}
+
+	if (OutTarget.SourcePMXFilePath.IsEmpty() && Actor->GetClass())
+	{
+		if (const AMMDActor* CDO = Cast<AMMDActor>(Actor->GetClass()->GetDefaultObject()))
+		{
+			OutTarget.SourcePMXFilePath = CDO->SourcePMXFilePath;
+		}
+	}
+
+	if (OutTarget.SkeletalMeshComponent)
+	{
+		OutTarget.SkeletalMesh = OutTarget.SkeletalMeshComponent->GetSkeletalMeshAsset();
+	}
+
+	return OutTarget.SkeletalMeshComponent && OutTarget.SkeletalMesh;
+}
+
+static bool TryGetAnimationTargetFromActorClass(UClass* ActorClass, FMMDSelectedAnimationTarget& OutTarget)
+{
+	if (!ActorClass || !ActorClass->IsChildOf(AMMDActor::StaticClass()))
+	{
+		return false;
+	}
+
+	AMMDActor* CDO = Cast<AMMDActor>(ActorClass->GetDefaultObject());
+	if (!CDO)
+	{
+		return false;
+	}
+
+	OutTarget = FMMDSelectedAnimationTarget{};
+	OutTarget.SkeletalMeshComponent = CDO->GetMeshComponent();
+	OutTarget.SourcePMXFilePath = CDO->SourcePMXFilePath;
+	if (OutTarget.SkeletalMeshComponent)
+	{
+		OutTarget.SkeletalMesh = OutTarget.SkeletalMeshComponent->GetSkeletalMeshAsset();
+	}
+
+	return OutTarget.SkeletalMeshComponent && OutTarget.SkeletalMesh;
+}
+
+static UClass* ResolveMMDActorClassFromAsset(UObject* Asset)
+{
+	if (UBlueprint* Blueprint = Cast<UBlueprint>(Asset))
+	{
+		return Blueprint->GeneratedClass && Blueprint->GeneratedClass->IsChildOf(AMMDActor::StaticClass())
+			? Blueprint->GeneratedClass
+			: nullptr;
+	}
+
+	if (UClass* ClassAsset = Cast<UClass>(Asset))
+	{
+		return ClassAsset->IsChildOf(AMMDActor::StaticClass()) ? ClassAsset : nullptr;
+	}
+
+	return nullptr;
+}
+
+static UClass* ResolveMMDActorClassFromAssetData(const FAssetData& AssetData)
+{
+	return ResolveMMDActorClassFromAsset(AssetData.GetAsset());
+}
+
 static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget, FString& OutError)
 {
 	OutTarget = FMMDSelectedAnimationTarget{};
@@ -338,30 +516,9 @@ static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget
 			continue;
 		}
 
-		if (AMMDActor* MMDActor = Cast<AMMDActor>(Actor))
+		if (TryGetAnimationTargetFromActor(Actor, OutTarget))
 		{
-			OutTarget.SkeletalMeshComponent = MMDActor->GetMeshComponent();
-			OutTarget.SourcePMXFilePath = MMDActor->SourcePMXFilePath;
-		}
-		else if (USkeletalMeshComponent* SkelComp = Actor->FindComponentByClass<USkeletalMeshComponent>())
-		{
-			OutTarget.SkeletalMeshComponent = SkelComp;
-			if (Actor->GetClass())
-			{
-				if (const AMMDActor* CDO = Cast<AMMDActor>(Actor->GetClass()->GetDefaultObject()))
-				{
-					OutTarget.SourcePMXFilePath = CDO->SourcePMXFilePath;
-				}
-			}
-		}
-
-		if (OutTarget.SkeletalMeshComponent)
-		{
-			OutTarget.SkeletalMesh = OutTarget.SkeletalMeshComponent->GetSkeletalMeshAsset();
-			if (OutTarget.SkeletalMesh)
-			{
-				return true;
-			}
+			return true;
 		}
 	}
 
@@ -781,6 +938,10 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 	{
 		ImportVMDCameraAnimation();
 	};
+	CreatedToolPanel->OnLoadMMDActorRequested = [this]()
+	{
+		LoadSelectedMMDActor();
+	};
 	CreatedToolPanel->OnComposeSequenceRequested = [this]()
 	{
 		OpenSequenceComposerWindow();
@@ -807,6 +968,10 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 	};
 	CreatedToolPanel->OnPreviewPlayRequested = [this]()
 	{
+		if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+		{
+			ToolPanel->CapturePreview();
+		}
 		ShowImportProgress(TEXT("Preview play"));
 	};
 
@@ -849,6 +1014,142 @@ FReply MMDImportSetting::OnOpenPhysicsBakeClicked()
 	return FReply::Handled();
 }
 
+void MMDImportSetting::LoadSelectedMMDActor()
+{
+#if WITH_EDITOR
+	if (UClass* PickedClass = PickMMDActorClassFromContentBrowser())
+	{
+		SetCurrentMMDActorClass(PickedClass, PickedClass->GetName());
+	}
+#else
+	ShowImportProgress(TEXT("Loading AMMDActor is editor-only."), EMMDMessageType::Error);
+#endif
+}
+
+bool MMDImportSetting::SetCurrentMMDActorClass(UClass* ActorClass, const FString& DisplayName)
+{
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	if (!TryGetAnimationTargetFromActorClass(ActorClass, Target))
+	{
+		ShowImportProgress(TEXT("Selected asset is not a usable AMMDActor Blueprint with SkeletalMesh."), EMMDMessageType::Error);
+		return false;
+	}
+
+	LastLoadedMMDActorClass = ActorClass;
+	LastImportedMMDActor = nullptr;
+	ComposerActor = nullptr;
+	ComposerSkeletalMeshComponent = nullptr;
+	PhysicsBakeActor = nullptr;
+	PhysicsBakeSkeletalMeshComponent = nullptr;
+	RefreshSequenceComposerLabels();
+	RefreshPhysicsBakeLabels();
+
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		const FString Label = DisplayName.IsEmpty() ? ActorClass->GetName() : DisplayName;
+		ToolPanel->SetSelectedModelText(FText::FromString(Label));
+		if (!ToolPanel->SetPreviewActorClass(ActorClass))
+		{
+			ToolPanel->SetPreviewSkeletalMesh(Target.SkeletalMesh);
+		}
+	}
+
+	ShowImportProgress(FString::Printf(TEXT("Loaded MMD actor asset: %s"), DisplayName.IsEmpty() ? *ActorClass->GetName() : *DisplayName), EMMDMessageType::Success);
+	return true;
+#else
+	ShowImportProgress(TEXT("Loading AMMDActor is editor-only."), EMMDMessageType::Error);
+	return false;
+#endif
+}
+
+UClass* MMDImportSetting::PickMMDActorClassFromContentBrowser()
+{
+#if WITH_EDITOR
+	TArray<FAssetData> SelectedAssets;
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+	ContentBrowserModule.Get().GetSelectedAssets(SelectedAssets);
+
+	for (const FAssetData& AssetData : SelectedAssets)
+	{
+		if (UClass* ActorClass = ResolveMMDActorClassFromAssetData(AssetData))
+		{
+			return ActorClass;
+		}
+	}
+
+	FAssetPickerConfig AssetPickerConfig;
+	AssetPickerConfig.Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
+	AssetPickerConfig.Filter.bRecursiveClasses = true;
+	AssetPickerConfig.InitialAssetViewType = EAssetViewType::List;
+	AssetPickerConfig.bAllowNullSelection = false;
+	AssetPickerConfig.bFocusSearchBoxWhenOpened = true;
+	AssetPickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda([](const FAssetData& AssetData)
+	{
+		return ResolveMMDActorClassFromAssetData(AssetData) == nullptr;
+	});
+
+	FAssetData PickedAsset;
+	TSharedPtr<SWindow> PickerWindow;
+	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateLambda([&PickedAsset, &PickerWindow](const FAssetData& AssetData)
+	{
+		if (ResolveMMDActorClassFromAssetData(AssetData))
+		{
+			PickedAsset = AssetData;
+			if (PickerWindow.IsValid())
+			{
+				PickerWindow->RequestDestroyWindow();
+			}
+		}
+	});
+	AssetPickerConfig.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateLambda([&PickedAsset, &PickerWindow](const FAssetData& AssetData)
+	{
+		if (ResolveMMDActorClassFromAssetData(AssetData))
+		{
+			PickedAsset = AssetData;
+			if (PickerWindow.IsValid())
+			{
+				PickerWindow->RequestDestroyWindow();
+			}
+		}
+	});
+
+	PickerWindow = SNew(SWindow)
+		.Title(FText::FromString(TEXT("Select AMMDActor Blueprint")))
+		.ClientSize(FVector2D(760.0f, 520.0f))
+		.SupportsMinimize(false)
+		.SupportsMaximize(false);
+
+	PickerWindow->SetContent(ContentBrowserModule.Get().CreateAssetPicker(AssetPickerConfig));
+	FSlateApplication::Get().AddModalWindow(PickerWindow.ToSharedRef(), FSlateApplication::Get().FindBestParentWindowForDialogs(nullptr));
+
+	UClass* PickedClass = ResolveMMDActorClassFromAssetData(PickedAsset);
+	if (!PickedClass)
+	{
+		ShowImportProgress(TEXT("No AMMDActor Blueprint selected."), EMMDMessageType::Warning);
+	}
+	return PickedClass;
+#else
+	return nullptr;
+#endif
+}
+
+bool MMDImportSetting::EnsureCurrentMMDActorTarget()
+{
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget Target;
+	if (TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
+	{
+		return true;
+	}
+
+	UClass* PickedClass = PickMMDActorClassFromContentBrowser();
+	return PickedClass && SetCurrentMMDActorClass(PickedClass, PickedClass->GetName());
+#else
+	return false;
+#endif
+}
+
 void MMDImportSetting::ImportMMDModel()
 {
 	ShowImportProgress(TEXT("鎵撳紑鏂囦欢閫夋嫨瀵硅瘽妗?.."));
@@ -875,73 +1176,87 @@ void MMDImportSetting::ImportMMDModel()
 			FString FileName = FPaths::GetCleanFilename(SelectedFile);
 
 			ShowImportProgress(FString::Printf(TEXT("宸查€夋嫨鏂囦欢: %s"), *FileName));
+			if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+			{
+				ToolPanel->SetSelectedModelText(FText::FromString(FileName));
+			}
 
 			if (ViewPanel.IsValid())
 			{
 				ViewPanel->LoadMMDModel(SelectedFile);
-				ShowImportProgress(FString::Printf(TEXT("姝ｅ湪鍔犺浇妯″瀷: %s"), *FileName));
+			}
 
-				if (SelectedFile.EndsWith(TEXT(".pmx")))
-				{
-					ShowImportProgress(TEXT("寮€濮嬭В鏋怭MX鏂囦欢..."));
-					UE_LOG(LogTemp, Warning, TEXT("寮€濮嬭В鏋怭MX鏂囦欢: %s"), *SelectedFile);
+			ShowImportProgress(FString::Printf(TEXT("姝ｅ湪鍔犺浇妯″瀷: %s"), *FileName));
+
+			if (FPaths::GetExtension(SelectedFile).Equals(TEXT("pmx"), ESearchCase::IgnoreCase))
+			{
+				ShowImportProgress(TEXT("寮€濮嬭В鏋怭MX鏂囦欢..."));
+				UE_LOG(LogTemp, Warning, TEXT("寮€濮嬭В鏋怭MX鏂囦欢: %s"), *SelectedFile);
 #if WITH_EDITOR
-					UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-					if (!EditorWorld) {
-						ShowImportProgress(TEXT("鏈壘鍒扮紪杈戝櫒涓栫晫锛屾棤娉曠敓鎴怉ctor"), EMMDMessageType::Error);
-						return;
-					}
-					FActorSpawnParameters SpawnParams;
-					SpawnParams.Name = MakeUniqueObjectName(EditorWorld, AMMDActor::StaticClass(), FName(TEXT("MMDActor")));
-					SpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
-					AMMDActor* NewMMDActor = EditorWorld->SpawnActor<AMMDActor>(AMMDActor::StaticClass(), FTransform::Identity, SpawnParams);
-					if (!NewMMDActor)
+				UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+				if (!EditorWorld) {
+					ShowImportProgress(TEXT("鏈壘鍒扮紪杈戝櫒涓栫晫锛屾棤娉曠敓鎴怉ctor"), EMMDMessageType::Error);
+					return;
+				}
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.Name = MakeUniqueObjectName(EditorWorld, AMMDActor::StaticClass(), FName(TEXT("MMDActor")));
+				SpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
+				AMMDActor* NewMMDActor = EditorWorld->SpawnActor<AMMDActor>(AMMDActor::StaticClass(), FTransform::Identity, SpawnParams);
+				if (!NewMMDActor)
+				{
+					ShowImportProgress(TEXT("鐢熸垚AMMDActor澶辫触"), EMMDMessageType::Error);
+					return;
+				}
+				LastImportedMMDActor = NewMMDActor;
+				NewMMDActor->SetupComponents(SelectedFile);
+				// 淇濆瓨涓鸿摑鍥捐祫浜?
+				FString AssetFolder = TEXT("/Game/MMDModels");
+				FString AssetName = FPaths::GetBaseFilename(FileName);
+				if (UBlueprint* NewBP = SaveMMDBlueprintAsset(NewMMDActor, AssetFolder + TEXT("/") + AssetName + TEXT("/BluePrint"), AssetName, true))
+				{
+					if (UClass* GenClass = NewBP->GeneratedClass)
 					{
-						ShowImportProgress(TEXT("鐢熸垚AMMDActor澶辫触"), EMMDMessageType::Error);
-						return;
-					}
-					NewMMDActor->SetupComponents(SelectedFile);
-					// 淇濆瓨涓鸿摑鍥捐祫浜?
-					FString AssetFolder = TEXT("/Game/MMDModels");
-					FString AssetName = FPaths::GetBaseFilename(FileName);
-					if (UBlueprint* NewBP = SaveMMDBlueprintAsset(NewMMDActor, AssetFolder + TEXT("/") + AssetName + TEXT("/BluePrint"), AssetName, true))
-					{
-						if (UClass* GenClass = NewBP->GeneratedClass)
+						// 鍏抽敭锛氭妸 PMX 婧愯矾寰勮缃埌钃濆浘 CDO锛屼繚璇佽摑鍥惧疄渚?OnConstruction 鑳芥嬁鍒?
+						if (AActor* CDOActor = Cast<AActor>(GenClass->GetDefaultObject()))
 						{
-							// 鍏抽敭锛氭妸 PMX 婧愯矾寰勮缃埌钃濆浘 CDO锛屼繚璇佽摑鍥惧疄渚?OnConstruction 鑳芥嬁鍒?
-							if (AActor* CDOActor = Cast<AActor>(GenClass->GetDefaultObject()))
+							if (AMMDActor* CDO = Cast<AMMDActor>(CDOActor))
 							{
-								if (AMMDActor* CDO = Cast<AMMDActor>(CDOActor))
-								{
-									CDO->SourcePMXFilePath = SelectedFile; // 缁濆璺緞
-									CDO->Modify(true);
-									UE_LOG(LogTemp, Log, TEXT("[Import] Set CDO SourcePMXFilePath: %s"), *SelectedFile);
-								}
+								CDO->SourcePMXFilePath = SelectedFile; // 缁濆璺緞
+								CDO->Modify(true);
+								UE_LOG(LogTemp, Log, TEXT("[Import] Set CDO SourcePMXFilePath: %s"), *SelectedFile);
 							}
+						}
 
-							// 閲嶆柊缂栬瘧锛屼娇榛樿鍊肩敓鏁?
-							FKismetEditorUtilities::CompileBlueprint(NewBP);
+						// 閲嶆柊缂栬瘧锛屼娇榛樿鍊肩敓鏁?
+						FKismetEditorUtilities::CompileBlueprint(NewBP);
 
-							// 棰勮涓敓鎴愬疄渚嬶紙鍏?OnConstruction 灏嗗熀浜?CDO 鐨勮矾寰勮嚜鍔ㄥ垵濮嬪寲锛?
+						// 棰勮涓敓鎴愬疄渚嬶紙鍏?OnConstruction 灏嗗熀浜?CDO 鐨勮矾寰勮嚜鍔ㄥ垵濮嬪寲锛?
+						if (ViewPanel.IsValid())
+						{
 							ViewPanel->CreatePreviewActor(GenClass);
 						}
+						if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+						{
+							ToolPanel->SetPreviewActorClass(GenClass);
+						}
+						LastLoadedMMDActorClass = GenClass;
 					}
+				}
 
-					GEditor->SelectNone(false, true);
-					GEditor->SelectActor(NewMMDActor, true, true);
-					GEditor->MoveViewportCamerasToActor(*NewMMDActor, false);
+				GEditor->SelectNone(false, true);
+				GEditor->SelectActor(NewMMDActor, true, true);
+				GEditor->MoveViewportCamerasToActor(*NewMMDActor, false);
 
 
-					ShowImportProgress(TEXT("宸插湪鍏冲崱涓敓鎴怉MMDActor骞跺姞杞絇MX"), EMMDMessageType::Success);
+				ShowImportProgress(TEXT("宸插湪鍏冲崱涓敓鎴怉MMDActor骞跺姞杞絇MX"), EMMDMessageType::Success);
 
 #else
-					ShowImportProgress(TEXT("浠呭湪缂栬緫鍣ㄤ腑鍙敓鎴怉ctor"), EMMDMessageType::Warning);
+				ShowImportProgress(TEXT("浠呭湪缂栬緫鍣ㄤ腑鍙敓鎴怉ctor"), EMMDMessageType::Warning);
 #endif
-				}
-				else
-				{
-					ShowImportProgress(FString::Printf(TEXT("鏂囦欢绫诲瀷: %s (闈濸MX)"), *FPaths::GetExtension(SelectedFile)));
-				}
+			}
+			else
+			{
+				ShowImportProgress(FString::Printf(TEXT("鏂囦欢绫诲瀷: %s (闈濸MX)"), *FPaths::GetExtension(SelectedFile)));
 			}
 		}
 	}
@@ -996,6 +1311,19 @@ void MMDImportSetting::ImportVMDAnimation()
 {
 	ShowImportProgress(TEXT("鎵撳紑VMD鍔ㄧ敾閫夋嫨瀵硅瘽妗?.."));
 
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget InitialTarget;
+	if (!TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), InitialTarget))
+	{
+		UClass* PickedClass = PickMMDActorClassFromContentBrowser();
+		if (!PickedClass || !SetCurrentMMDActorClass(PickedClass, PickedClass->GetName()))
+		{
+			ShowImportProgress(TEXT("VMD import needs a loaded AMMDActor Blueprint asset."), EMMDMessageType::Error);
+			return;
+		}
+	}
+#endif
+
 	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
 	if (!DesktopPlatform)
 	{
@@ -1023,6 +1351,10 @@ void MMDImportSetting::ImportVMDAnimation()
 	const FString SelectedFile = OpenedFiles[0];
 	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
 	ShowImportProgress(FString::Printf(TEXT("姝ｅ湪瑙ｆ瀽VMD鏂囦欢: %s"), *FileName));
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		ToolPanel->SetSelectedAnimText(FText::FromString(FileName));
+	}
 
 	TVMDParser VMDParser;
 	if (!VMDParser.ParseVMDFile(SelectedFile))
@@ -1033,10 +1365,9 @@ void MMDImportSetting::ImportVMDAnimation()
 
 #if WITH_EDITOR
 	FMMDSelectedAnimationTarget Target;
-	FString TargetError;
-	if (!TryGetSelectedAnimationTarget(Target, TargetError))
+	if (!TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ShowImportProgress(TargetError, EMMDMessageType::Error);
+		ShowImportProgress(TEXT("VMD import needs a loaded AMMDActor Blueprint asset."), EMMDMessageType::Error);
 		return;
 	}
 
@@ -1115,6 +1446,10 @@ void MMDImportSetting::ImportVMDAnimation()
 		Target.SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 		Target.SkeletalMeshComponent->SetAnimation(AnimSequence);
 		Target.SkeletalMeshComponent->Play(true);
+	}
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		ToolPanel->SetPreviewAnimation(AnimSequence);
 	}
 
 	for (const FString& Warning : ImportReport.Warnings)
@@ -1399,11 +1734,10 @@ void MMDImportSetting::OpenPhysicsBakeWindow()
 {
 #if WITH_EDITOR
 	FMMDSelectedAnimationTarget Target;
-	FString TargetError;
-	if (TryGetSelectedAnimationTarget(Target, TargetError))
+	if (EnsureCurrentMMDActorTarget() && TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
 		PhysicsBakeSkeletalMeshComponent = Target.SkeletalMeshComponent;
-		PhysicsBakeActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+		PhysicsBakeActor = nullptr;
 	}
 
 	if (UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass())))
@@ -1442,8 +1776,8 @@ void MMDImportSetting::OpenPhysicsBakeWindow()
 				+ SHorizontalBox::Slot().AutoWidth()
 				[
 					SNew(SButton)
-					.Text(FText::FromString(TEXT("Use Selected")))
-					.ToolTipText(FText::FromString(TEXT("Use the selected level MMD actor. The actor must keep its source PMX path.")))
+					.Text(FText::FromString(TEXT("Load Actor Asset")))
+					.ToolTipText(FText::FromString(TEXT("Load the AMMDActor Blueprint used by the tool preview.")))
 					.OnClicked(this, &MMDImportSetting::CapturePhysicsBakeActor)
 				]
 			]
@@ -1524,10 +1858,9 @@ void MMDImportSetting::OpenSequenceComposerWindow()
 {
 #if WITH_EDITOR
 	FMMDSelectedAnimationTarget Target;
-	FString TargetError;
-	if (TryGetSelectedAnimationTarget(Target, TargetError))
+	if (EnsureCurrentMMDActorTarget() && TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ComposerActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+		ComposerActor = nullptr;
 		ComposerSkeletalMeshComponent = Target.SkeletalMeshComponent;
 	}
 
@@ -1567,14 +1900,14 @@ void MMDImportSetting::OpenSequenceComposerWindow()
 				+ SHorizontalBox::Slot().FillWidth(1.0f)
 				[
 					SNew(SObjectPropertyEntryBox)
-					.AllowedClass(AActor::StaticClass())
+					.AllowedClass(UBlueprint::StaticClass())
 					.ObjectPath(this, &MMDImportSetting::GetComposerActorPath)
 					.OnObjectChanged(this, &MMDImportSetting::OnComposerActorChanged)
 				]
 				+ SHorizontalBox::Slot().AutoWidth()
 				[
 					SNew(SButton)
-					.Text(FText::FromString(TEXT("Use Selected")))
+					.Text(FText::FromString(TEXT("Load Actor Asset")))
 					.OnClicked(this, &MMDImportSetting::CaptureSequenceComposerActor)
 				]
 			]
@@ -1633,14 +1966,13 @@ FReply MMDImportSetting::CaptureSequenceComposerActor()
 {
 #if WITH_EDITOR
 	FMMDSelectedAnimationTarget Target;
-	FString TargetError;
-	if (!TryGetSelectedAnimationTarget(Target, TargetError))
+	if (!EnsureCurrentMMDActorTarget() || !TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ShowImportProgress(TargetError, EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Sequence composer needs a loaded AMMDActor Blueprint asset."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 	ComposerSkeletalMeshComponent = Target.SkeletalMeshComponent;
-	ComposerActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+	ComposerActor = nullptr;
 	RefreshSequenceComposerLabels();
 #endif
 	return FReply::Handled();
@@ -1675,20 +2007,19 @@ FReply MMDImportSetting::CaptureSequenceComposerCamera()
 void MMDImportSetting::OnComposerActorChanged(const FAssetData& AssetData)
 {
 #if WITH_EDITOR
-	AActor* Actor = Cast<AActor>(AssetData.GetAsset());
-	if (!Actor)
+	UClass* ActorClass = ResolveMMDActorClassFromAssetData(AssetData);
+	if (!SetCurrentMMDActorClass(ActorClass, ActorClass ? ActorClass->GetName() : FString()))
 	{
-		ComposerActor.Reset();
+		LastLoadedMMDActorClass.Reset();
 		ComposerSkeletalMeshComponent.Reset();
 		RefreshSequenceComposerLabels();
 		return;
 	}
 
-	ComposerActor = Actor;
-	ComposerSkeletalMeshComponent = Actor->FindComponentByClass<USkeletalMeshComponent>();
-	if (!ComposerSkeletalMeshComponent.IsValid())
+	FMMDSelectedAnimationTarget Target;
+	if (TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ShowImportProgress(TEXT("Selected actor has no SkeletalMeshComponent."), EMMDMessageType::Warning);
+		ComposerSkeletalMeshComponent = Target.SkeletalMeshComponent;
 	}
 	RefreshSequenceComposerLabels();
 #endif
@@ -1708,7 +2039,7 @@ void MMDImportSetting::OnComposerCameraChanged(const FAssetData& AssetData)
 
 FString MMDImportSetting::GetComposerActorPath() const
 {
-	return ComposerActor.IsValid() ? ComposerActor->GetPathName() : FString();
+	return LastLoadedMMDActorClass.IsValid() ? LastLoadedMMDActorClass->GetPathName() : FString();
 }
 
 FString MMDImportSetting::GetComposerAnimationPath() const
@@ -1725,8 +2056,8 @@ void MMDImportSetting::RefreshSequenceComposerLabels()
 {
 	if (ComposerActorText.IsValid())
 	{
-		const FString Label = ComposerSkeletalMeshComponent.IsValid()
-			? FString::Printf(TEXT("Model: %s"), *ComposerSkeletalMeshComponent->GetOwner()->GetActorLabel())
+		const FString Label = LastLoadedMMDActorClass.IsValid()
+			? FString::Printf(TEXT("Model: %s"), *LastLoadedMMDActorClass->GetName())
 			: TEXT("Model: none");
 		ComposerActorText->SetText(FText::FromString(Label));
 	}
@@ -1750,14 +2081,13 @@ FReply MMDImportSetting::CapturePhysicsBakeActor()
 {
 #if WITH_EDITOR
 	FMMDSelectedAnimationTarget Target;
-	FString TargetError;
-	if (!TryGetSelectedAnimationTarget(Target, TargetError))
+	if (!EnsureCurrentMMDActorTarget() || !TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ShowImportProgress(TargetError, EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Physics bake needs a loaded AMMDActor Blueprint asset."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 	PhysicsBakeSkeletalMeshComponent = Target.SkeletalMeshComponent;
-	PhysicsBakeActor = Target.SkeletalMeshComponent ? Target.SkeletalMeshComponent->GetOwner() : nullptr;
+	PhysicsBakeActor = nullptr;
 	RefreshPhysicsBakeLabels();
 #endif
 	return FReply::Handled();
@@ -1811,8 +2141,8 @@ void MMDImportSetting::RefreshPhysicsBakeLabels()
 {
 	if (PhysicsBakeActorText.IsValid())
 	{
-		const FString Label = PhysicsBakeSkeletalMeshComponent.IsValid()
-			? FString::Printf(TEXT("Model: %s"), *PhysicsBakeSkeletalMeshComponent->GetOwner()->GetActorLabel())
+		const FString Label = LastLoadedMMDActorClass.IsValid()
+			? FString::Printf(TEXT("Model: %s"), *LastLoadedMMDActorClass->GetName())
 			: TEXT("Model: none");
 		PhysicsBakeActorText->SetText(FText::FromString(Label));
 	}
@@ -1828,36 +2158,24 @@ void MMDImportSetting::RefreshPhysicsBakeLabels()
 FReply MMDImportSetting::BakePhysicsAnimation()
 {
 #if WITH_EDITOR
-	USkeletalMeshComponent* SkelComp = PhysicsBakeSkeletalMeshComponent.Get();
-	UAnimSequence* SourceAnim = PhysicsBakeAnimSequence.Get();
-	if (!SkelComp || !SkelComp->GetOwner() || !SkelComp->GetSkeletalMeshAsset() || !SourceAnim)
+	FMMDSelectedAnimationTarget Target;
+	if (!EnsureCurrentMMDActorTarget() || !TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ShowImportProgress(TEXT("Select a model actor and an AnimSequence before baking."), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Physics bake needs the current RenderTarget AMMDActor asset."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 
-	FMMDSelectedAnimationTarget Target;
-	FString TargetError;
-	if (!TryGetSelectedAnimationTarget(Target, TargetError) && PhysicsBakeActor.IsValid())
+	USkeletalMeshComponent* SkelComp = Target.SkeletalMeshComponent;
+	UAnimSequence* SourceAnim = PhysicsBakeAnimSequence.Get();
+	if (!SkelComp || !Target.SkeletalMesh || !SourceAnim)
 	{
-		Target.SkeletalMeshComponent = SkelComp;
-		Target.SkeletalMesh = SkelComp->GetSkeletalMeshAsset();
-		if (AMMDActor* MMDActor = Cast<AMMDActor>(PhysicsBakeActor.Get()))
-		{
-			Target.SourcePMXFilePath = MMDActor->SourcePMXFilePath;
-		}
-		else if (PhysicsBakeActor->GetClass())
-		{
-			if (const AMMDActor* CDO = Cast<AMMDActor>(PhysicsBakeActor->GetClass()->GetDefaultObject()))
-			{
-				Target.SourcePMXFilePath = CDO->SourcePMXFilePath;
-			}
-		}
+		ShowImportProgress(TEXT("Load the current AMMDActor asset and an AnimSequence before baking."), EMMDMessageType::Error);
+		return FReply::Handled();
 	}
 
 	if (Target.SourcePMXFilePath.IsEmpty() || !FPaths::FileExists(Target.SourcePMXFilePath))
 	{
-		ShowImportProgress(TEXT("The selected model has no valid source PMX path for physics data."), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("The current AMMDActor asset has no valid source PMX path for physics data."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 
@@ -1877,7 +2195,7 @@ FReply MMDImportSetting::BakePhysicsAnimation()
 		return FReply::Handled();
 	}
 
-	USkeletalMesh* SkeletalMesh = SkelComp->GetSkeletalMeshAsset();
+	USkeletalMesh* SkeletalMesh = Target.SkeletalMesh;
 	USkeleton* Skeleton = SkeletalMesh ? SkeletalMesh->GetSkeleton() : nullptr;
 	if (!Skeleton)
 	{
@@ -1912,7 +2230,7 @@ FReply MMDImportSetting::BakePhysicsAnimation()
 	SlowTask.MakeDialog(true);
 
 	TArray<FTransform> ComponentTransforms;
-	const FTransform ComponentToWorld = SkelComp->GetComponentTransform();
+	const FTransform ComponentToWorld = FTransform::Identity;
 	const bool bPreviewBake = ViewPanel.IsValid();
 	if (bPreviewBake)
 	{
@@ -1997,19 +2315,19 @@ FReply MMDImportSetting::BakePhysicsAnimation()
 FReply MMDImportSetting::CreateComposedLevelSequence()
 {
 #if WITH_EDITOR
-	USkeletalMeshComponent* SkelComp = ComposerSkeletalMeshComponent.Get();
-	UAnimSequence* AnimSequence = ComposerAnimSequence.Get();
-	ULevelSequence* CameraSequence = ComposerCameraSequence.Get();
-	if (!SkelComp || !SkelComp->GetOwner() || !AnimSequence || !CameraSequence)
+	FMMDSelectedAnimationTarget Target;
+	if (!EnsureCurrentMMDActorTarget() || !TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
 	{
-		ShowImportProgress(TEXT("Select model actor, AnimSequence, and camera LevelSequence before composing."), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Sequence composer needs the current RenderTarget AMMDActor asset."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 
-	UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-	if (!EditorWorld)
+	USkeletalMeshComponent* SkelComp = Target.SkeletalMeshComponent;
+	UAnimSequence* AnimSequence = ComposerAnimSequence.Get();
+	ULevelSequence* CameraSequence = ComposerCameraSequence.Get();
+	if (!SkelComp || !LastLoadedMMDActorClass.IsValid() || !AnimSequence || !CameraSequence)
 	{
-		ShowImportProgress(TEXT("No active editor world found."), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("Load an AMMDActor asset, AnimSequence, and camera LevelSequence before composing."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 
@@ -2017,7 +2335,7 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	FString UniqueAssetName;
 	{
 		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
-		const FString BaseAssetPath = FString(TEXT("/Game/MMDSequences/LS_")) + SanitizeMMDAssetName(AnimSequence->GetName()) + TEXT("_Master");
+		const FString BaseAssetPath = GetMMDModelLevelSequenceFolder(nullptr, SkelComp) / (FString(TEXT("LS_")) + SanitizeMMDAssetName(AnimSequence->GetName()) + TEXT("_Master"));
 		AssetToolsModule.Get().CreateUniqueAssetName(BaseAssetPath, TEXT(""), UniquePackageName, UniqueAssetName);
 	}
 
@@ -2052,16 +2370,47 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	const int32 DurationFrames = FMath::Max(AnimDurationFrames, CameraDurationFrames);
 	ConfigureMMDMovieSceneTiming(MovieScene, DurationFrames);
 
-	AActor* OwnerActor = SkelComp->GetOwner();
-	const FGuid ActorGuid = MovieScene->AddPossessable(OwnerActor->GetActorLabel(), OwnerActor->GetClass());
-	MasterSequence->BindPossessableObject(ActorGuid, *OwnerActor, EditorWorld);
+	UObject* ActorTemplate = DuplicateObject<UObject>(LastLoadedMMDActorClass->GetDefaultObject(), MovieScene);
+	if (!ActorTemplate)
+	{
+		ShowImportProgress(TEXT("Failed to create model spawnable template."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	const FGuid ActorGuid = MovieScene->AddSpawnable(LastLoadedMMDActorClass->GetName(), *ActorTemplate);
+	if (!ActorGuid.IsValid())
+	{
+		ShowImportProgress(TEXT("Failed to create model spawnable binding."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	if (UMovieSceneSpawnTrack* SpawnTrack = MovieScene->AddTrack<UMovieSceneSpawnTrack>(ActorGuid))
+	{
+		SpawnTrack->SetObjectId(ActorGuid);
+		if (UMovieSceneSection* SpawnSection = SpawnTrack->CreateNewSection())
+		{
+			SpawnTrack->AddSection(*SpawnSection);
+			SpawnSection->SetRange(TRange<FFrameNumber>(
+				TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)),
+				TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
+		}
+	}
+	AddIdentityTransformTrack(MovieScene, ActorGuid, DurationFrames);
 
 	const FGuid SkelCompGuid = MovieScene->AddPossessable(SkelComp->GetName(), SkelComp->GetClass());
 	if (FMovieScenePossessable* SkelCompPossessable = MovieScene->FindPossessable(SkelCompGuid))
 	{
 		SkelCompPossessable->SetParent(ActorGuid, MovieScene);
 	}
-	MasterSequence->BindPossessableObject(SkelCompGuid, *SkelComp, OwnerActor);
+	if (FMovieSceneSpawnable* ActorSpawnable = MovieScene->FindSpawnable(ActorGuid))
+	{
+		ActorSpawnable->AddChildPossessable(SkelCompGuid);
+	}
+	AActor* ActorTemplateAsActor = Cast<AActor>(ActorTemplate);
+	USkeletalMeshComponent* TemplateSkelComp = ActorTemplateAsActor ? ActorTemplateAsActor->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+	if (TemplateSkelComp)
+	{
+		MasterSequence->BindPossessableObject(SkelCompGuid, *TemplateSkelComp, ActorTemplateAsActor);
+	}
 
 	if (UMovieSceneSkeletalAnimationTrack* AnimTrack = MovieScene->AddTrack<UMovieSceneSkeletalAnimationTrack>(SkelCompGuid))
 	{
@@ -2074,7 +2423,7 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	}
 
 	FString CameraInlineError;
-	const FTransform ModelRootTransform = OwnerActor->GetActorTransform();
+	const FTransform ModelRootTransform = FTransform::Identity;
 	if (!InlineCameraSequenceIntoMaster(CameraSequence, MasterSequence, CameraDurationFrames, ModelRootTransform, CameraInlineError))
 	{
 		ShowImportProgress(CameraInlineError, EMMDMessageType::Error);
@@ -2096,6 +2445,37 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 	{
 		AssetEditorSubsystem->OpenEditorForAsset(MasterSequence);
+	}
+
+	if (GEditor)
+	{
+		if (UWorld* EditorWorld = GEditor->GetEditorWorldContext().World())
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Name = MakeUniqueObjectName(EditorWorld, ALevelSequenceActor::StaticClass(), FName(*UniqueAssetName));
+			SpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
+			ALevelSequenceActor* SequenceActor = EditorWorld->SpawnActor<ALevelSequenceActor>(ALevelSequenceActor::StaticClass(), FTransform::Identity, SpawnParams);
+			if (SequenceActor)
+			{
+				SequenceActor->SetActorLabel(UniqueAssetName);
+				SequenceActor->SetSequence(MasterSequence);
+				SequenceActor->CameraSettings.bOverrideAspectRatioAxisConstraint = true;
+				SequenceActor->CameraSettings.AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
+				SequenceActor->bOverrideInstanceData = true;
+				UDefaultLevelSequenceInstanceData* InstanceData = Cast<UDefaultLevelSequenceInstanceData>(SequenceActor->DefaultInstanceData);
+				if (!InstanceData)
+				{
+					InstanceData = NewObject<UDefaultLevelSequenceInstanceData>(SequenceActor, TEXT("InstanceData"), RF_Transactional);
+					SequenceActor->DefaultInstanceData = InstanceData;
+				}
+				if (InstanceData)
+				{
+					InstanceData->TransformOriginActor = SequenceActor;
+					InstanceData->TransformOrigin = FTransform::Identity;
+				}
+				SequenceActor->MarkPackageDirty();
+			}
+		}
 	}
 
 	ShowImportProgress(FString::Printf(TEXT("Master Sequence created: %s"), *MasterSequence->GetPathName()), EMMDMessageType::Success);
@@ -2134,6 +2514,10 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 	const FString SelectedFile = OpenedFiles[0];
 	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
 	ShowImportProgress(FString::Printf(TEXT("Parsing VMD camera: %s"), *FileName));
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		ToolPanel->SetSelectedAnimText(FText::FromString(FileName));
+	}
 
 	TVMDParser VMDParser;
 	if (!VMDParser.ParseVMDFile(SelectedFile))
@@ -2174,7 +2558,7 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 	FString UniqueAssetName;
 	{
 		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
-		const FString BaseAssetPath = FString(TEXT("/Game/MMDSequences/LS_")) + CleanBaseName + TEXT("_Camera");
+		const FString BaseAssetPath = FString(TEXT("/Game/MMDModels/LevelSequence/LS_")) + CleanBaseName + TEXT("_Camera");
 		AssetToolsModule.Get().CreateUniqueAssetName(BaseAssetPath, TEXT(""), UniquePackageName, UniqueAssetName);
 	}
 
@@ -2225,7 +2609,10 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 			ShowImportProgress(TEXT("Failed to find camera component."), EMMDMessageType::Error);
 			return;
 		}
-		CameraComponent->SetFieldOfView(CameraKeys[0].ViewAngle);
+		CameraComponent->SetAspectRatio(16.0f / 9.0f);
+		CameraComponent->SetAspectRatioAxisConstraint(EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV);
+		CameraComponent->bOverrideAspectRatioAxisConstraint = true;
+		CameraComponent->SetFieldOfView(ConvertMMDVerticalFOVToUnrealHorizontalFOV(CameraKeys[0].ViewAngle));
 
 		FLevelSequenceEditorSpawnRegister SpawnRegister;
 		TValueOrError<FNewSpawnable, FText> SpawnableResult = SpawnRegister.CreateNewSpawnableType(*CameraActor, *MovieScene);
@@ -2306,7 +2693,7 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 			AddCameraTransformKey(TransformSection, Frame, ConvertVMDCameraKeyToUnrealTransform(Keyframe, 8.0));
 			if (FOVSection)
 			{
-				FOVSection->GetChannel().AddCubicKey(Frame, Keyframe.ViewAngle);
+				FOVSection->GetChannel().AddCubicKey(Frame, ConvertMMDVerticalFOVToUnrealHorizontalFOV(Keyframe.ViewAngle));
 			}
 		}
 

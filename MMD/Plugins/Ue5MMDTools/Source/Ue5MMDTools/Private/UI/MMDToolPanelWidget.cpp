@@ -24,6 +24,10 @@ void UMMDToolPanelWidget::NativeOnInitialized()
 	{
 		BtnImportCamera->OnClicked.AddDynamic(this, &UMMDToolPanelWidget::HandleImportCameraClicked);
 	}
+	if (BtnLoadMMDActor)
+	{
+		BtnLoadMMDActor->OnClicked.AddDynamic(this, &UMMDToolPanelWidget::HandleLoadMMDActorClicked);
+	}
 	if (BtnComposeSequence)
 	{
 		BtnComposeSequence->OnClicked.AddDynamic(this, &UMMDToolPanelWidget::HandleComposeSequenceClicked);
@@ -126,6 +130,32 @@ UTextureRenderTarget2D* UMMDToolPanelWidget::GetPreviewRenderTarget() const
 	return PreviewRenderer ? PreviewRenderer->GetRenderTarget() : nullptr;
 }
 
+bool UMMDToolPanelWidget::SetPreviewActorClass(UClass* ActorClass)
+{
+	InitializePreviewRenderTarget();
+	return PreviewRenderer ? PreviewRenderer->SetPreviewActorClass(ActorClass) : false;
+}
+
+bool UMMDToolPanelWidget::SetPreviewSkeletalMesh(USkeletalMesh* SkeletalMesh)
+{
+	InitializePreviewRenderTarget();
+	return PreviewRenderer ? PreviewRenderer->SetPreviewSkeletalMesh(SkeletalMesh) : false;
+}
+
+bool UMMDToolPanelWidget::SetPreviewAnimation(UAnimSequence* AnimSequence)
+{
+	InitializePreviewRenderTarget();
+	return PreviewRenderer ? PreviewRenderer->SetPreviewAnimation(AnimSequence) : false;
+}
+
+void UMMDToolPanelWidget::CapturePreview()
+{
+	if (PreviewRenderer)
+	{
+		PreviewRenderer->Capture();
+	}
+}
+
 void UMMDToolPanelWidget::InitializePreviewRenderTarget()
 {
 	if (!ImgPreviewRenderTarget)
@@ -169,6 +199,14 @@ void UMMDToolPanelWidget::HandleImportCameraClicked()
 	if (OnImportCameraRequested)
 	{
 		OnImportCameraRequested();
+	}
+}
+
+void UMMDToolPanelWidget::HandleLoadMMDActorClicked()
+{
+	if (OnLoadMMDActorRequested)
+	{
+		OnLoadMMDActorRequested();
 	}
 }
 

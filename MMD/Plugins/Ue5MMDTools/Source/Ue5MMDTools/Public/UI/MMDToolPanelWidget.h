@@ -6,8 +6,10 @@
 
 class UButton;
 class UImage;
+class UAnimSequence;
 class UMMDToolPreviewRenderer;
 class UProgressBar;
+class USkeletalMesh;
 class USpinBox;
 class UTextBlock;
 class UTextureRenderTarget2D;
@@ -21,6 +23,7 @@ public:
 	TFunction<void()> OnImportModelRequested;
 	TFunction<void()> OnImportVMDRequested;
 	TFunction<void()> OnImportCameraRequested;
+	TFunction<void()> OnLoadMMDActorRequested;
 	TFunction<void()> OnComposeSequenceRequested;
 	TFunction<void()> OnBakePhysicsRequested;
 	TFunction<void()> OnSelectModeRequested;
@@ -54,6 +57,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "MMD Tools|Preview")
 	UTextureRenderTarget2D* GetPreviewRenderTarget() const;
 
+	bool SetPreviewActorClass(UClass* ActorClass);
+	bool SetPreviewSkeletalMesh(USkeletalMesh* SkeletalMesh);
+	bool SetPreviewAnimation(UAnimSequence* AnimSequence);
+	void CapturePreview();
+
 protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Header")
 	TObjectPtr<UTextBlock> TxtStatus;
@@ -81,6 +89,9 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Actions")
 	TObjectPtr<UButton> BtnImportCamera;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Actions")
+	TObjectPtr<UButton> BtnLoadMMDActor;
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Actions")
 	TObjectPtr<UButton> BtnComposeSequence;
@@ -132,6 +143,9 @@ private:
 
 	UFUNCTION()
 	void HandleImportCameraClicked();
+
+	UFUNCTION()
+	void HandleLoadMMDActorClicked();
 
 	UFUNCTION()
 	void HandleComposeSequenceClicked();

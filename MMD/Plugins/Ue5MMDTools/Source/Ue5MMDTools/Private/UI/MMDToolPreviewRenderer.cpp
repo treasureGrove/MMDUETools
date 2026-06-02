@@ -1,9 +1,15 @@
 #include "UI/MMDToolPreviewRenderer.h"
 
+#include "Animation/AnimSequence.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "GameFramework/Actor.h"
 #include "PreviewScene.h"
 
 void UMMDToolPreviewRenderer::Initialize(int32 InWidth, int32 InHeight)
@@ -62,9 +68,12 @@ void UMMDToolPreviewRenderer::Shutdown()
 	{
 		PreviewScene->RemoveComponent(PreviewTestMeshComponent);
 	}
+	ClearPreviewActor();
+	ClearPreviewSkeletalMeshComponent();
 
 	SceneCapture = nullptr;
 	PreviewTestMeshComponent = nullptr;
+	PreviewSkeletalMeshComponent = nullptr;
 	PreviewScene.Reset();
 	RenderTarget = nullptr;
 }
@@ -80,10 +89,166 @@ UWorld* UMMDToolPreviewRenderer::GetPreviewWorld() const
 	return PreviewScene.IsValid() ? PreviewScene->GetWorld() : nullptr;
 }
 
+bool UMMDToolPreviewRenderer::SetPreviewActorClass(UClass* ActorClass)
+{
+	if (!PreviewScene.IsValid() || !ActorClass || !ActorClass->IsChildOf<AActor>())
+	{
+		return false;
+	}
+
+	UWorld* PreviewWorld = PreviewScene->GetWorld();
+	if (!PreviewWorld)
+	{
+		return false;
+	}
+
+	if (PreviewTestMeshComponent)
+	{
+		PreviewScene->RemoveComponent(PreviewTestMeshComponent);
+		PreviewTestMeshComponent = nullptr;
+	}
+	ClearPreviewActor();
+	ClearPreviewSkeletalMeshComponent();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.ObjectFlags |= RF_Transient;
+
+	PreviewActor = PreviewWorld->SpawnActor<AActor>(ActorClass, FTransform::Identity, SpawnParams);
+	if (!PreviewActor)
+	{
+		return false;
+	}
+
+	TArray<UPrimitiveComponent*> PrimitiveComponents;
+	PreviewActor->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+	for (UPrimitiveComponent* Component : PrimitiveComponents)
+	{
+		if (Component)
+		{
+			Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Component->MarkRenderStateDirty();
+		}
+	}
+
+	FocusCaptureOnActor(PreviewActor);
+	Capture();
+	return true;
+}
+
+bool UMMDToolPreviewRenderer::SetPreviewSkeletalMesh(USkeletalMesh* SkeletalMesh)
+{
+	if (!PreviewScene.IsValid() || !SkeletalMesh)
+	{
+		return false;
+	}
+
+	if (PreviewTestMeshComponent)
+	{
+		PreviewScene->RemoveComponent(PreviewTestMeshComponent);
+		PreviewTestMeshComponent = nullptr;
+	}
+	ClearPreviewActor();
+	ClearPreviewSkeletalMeshComponent();
+
+	PreviewSkeletalMeshComponent = NewObject<USkeletalMeshComponent>(this, TEXT("MMDToolPreviewSkeletalMesh"), RF_Transient);
+	if (!PreviewSkeletalMeshComponent)
+	{
+		return false;
+	}
+
+	PreviewSkeletalMeshComponent->SetSkeletalMesh(SkeletalMesh);
+	PreviewSkeletalMeshComponent->SetMobility(EComponentMobility::Movable);
+	PreviewSkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PreviewSkeletalMeshComponent->SetVisibility(true);
+	PreviewScene->AddComponent(PreviewSkeletalMeshComponent, FTransform::Identity);
+
+	const FBoxSphereBounds MeshBounds = SkeletalMesh->GetBounds();
+	FocusCaptureOnBox(FBox::BuildAABB(MeshBounds.Origin, MeshBounds.BoxExtent));
+	Capture();
+	return true;
+}
+
+bool UMMDToolPreviewRenderer::SetPreviewAnimation(UAnimSequence* AnimSequence)
+{
+	USkeletalMeshComponent* SkelComp = GetPreviewSkeletalMeshComponent();
+	if (!SkelComp || !AnimSequence)
+	{
+		return false;
+	}
+
+	SkelComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	SkelComp->SetAnimation(AnimSequence);
+	SkelComp->Play(true);
+	Capture();
+	return true;
+}
+
 void UMMDToolPreviewRenderer::Capture()
 {
 	if (SceneCapture)
 	{
 		SceneCapture->CaptureScene();
 	}
+}
+
+void UMMDToolPreviewRenderer::ClearPreviewActor()
+{
+	if (PreviewActor)
+	{
+		if (UWorld* PreviewWorld = PreviewActor->GetWorld())
+		{
+			PreviewWorld->DestroyActor(PreviewActor);
+		}
+		PreviewActor = nullptr;
+	}
+}
+
+void UMMDToolPreviewRenderer::ClearPreviewSkeletalMeshComponent()
+{
+	if (PreviewSkeletalMeshComponent)
+	{
+		if (PreviewScene.IsValid())
+		{
+			PreviewScene->RemoveComponent(PreviewSkeletalMeshComponent);
+		}
+		PreviewSkeletalMeshComponent->DestroyComponent();
+		PreviewSkeletalMeshComponent = nullptr;
+	}
+}
+
+void UMMDToolPreviewRenderer::FocusCaptureOnActor(AActor* Actor)
+{
+	if (!SceneCapture || !Actor)
+	{
+		return;
+	}
+
+	const FBox Bounds = Actor->GetComponentsBoundingBox(true);
+	FocusCaptureOnBox(Bounds);
+}
+
+void UMMDToolPreviewRenderer::FocusCaptureOnBox(const FBox& Bounds)
+{
+	if (!SceneCapture)
+	{
+		return;
+	}
+
+	const FVector Center = Bounds.IsValid ? Bounds.GetCenter() : FVector(0.0f, 0.0f, 80.0f);
+	const float Radius = Bounds.IsValid ? Bounds.GetExtent().Size() : 120.0f;
+	const float Distance = FMath::Max(Radius * 2.4f, 220.0f);
+	const FVector CameraLocation = Center + FVector(-Distance, -Distance * 0.65f, Distance * 0.55f);
+	const FRotator CameraRotation = (Center - CameraLocation).Rotation();
+
+	SceneCapture->SetWorldLocationAndRotation(CameraLocation, CameraRotation);
+}
+
+USkeletalMeshComponent* UMMDToolPreviewRenderer::GetPreviewSkeletalMeshComponent() const
+{
+	if (PreviewActor)
+	{
+		return PreviewActor->FindComponentByClass<USkeletalMeshComponent>();
+	}
+	return PreviewSkeletalMeshComponent;
 }
