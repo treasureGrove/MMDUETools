@@ -22,6 +22,7 @@ class UE5MMDTOOLS_API UMMDToolPanelWidget : public UUserWidget
 public:
 	TFunction<void()> OnImportModelRequested;
 	TFunction<void()> OnImportVMDRequested;
+	TFunction<void()> OnAppendFacialVMDRequested;
 	TFunction<void()> OnImportCameraRequested;
 	TFunction<void()> OnLoadMMDActorRequested;
 	TFunction<void()> OnComposeSequenceRequested;
@@ -47,6 +48,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "MMD Tools")
 	void SetBakeProgress(float InProgress);
+
+	UFUNCTION(BlueprintCallable, Category = "MMD Tools|Actions")
+	void RequestAppendFacialVMD();
 
 	UFUNCTION(BlueprintPure, Category = "MMD Tools")
 	float GetBakeFrameRate() const;
@@ -86,6 +90,9 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Actions")
 	TObjectPtr<UButton> BtnImportVMD;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Actions")
+	TObjectPtr<UButton> BtnAppendFacialVMD;
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MMD Tools|Actions")
 	TObjectPtr<UButton> BtnImportCamera;
@@ -140,6 +147,9 @@ private:
 
 	UFUNCTION()
 	void HandleImportVMDClicked();
+
+	UFUNCTION()
+	void HandleAppendFacialVMDClicked();
 
 	UFUNCTION()
 	void HandleImportCameraClicked();

@@ -44,6 +44,8 @@ private:
 
     FReply OnImportVMDClicked();
 
+    FReply OnAppendFacialVMDClicked();
+
     FReply OnImportVMDCameraClicked();
 
     FReply OnOpenSequenceComposerClicked();
@@ -56,6 +58,8 @@ private:
 
     UClass* PickMMDActorClassFromContentBrowser();
 
+    UAnimSequence* PickAnimSequenceFromContentBrowser();
+
     bool EnsureCurrentMMDActorTarget();
 
     /** 导入MMD模型文件 */
@@ -65,6 +69,8 @@ private:
     void ImportStaticMesh();
 
     void ImportVMDAnimation();
+
+    void AppendFacialVMDToAnimation();
 
     void ImportVMDCameraAnimation();
 

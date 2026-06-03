@@ -27,6 +27,7 @@
 #include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/AnimData/CurveIdentifier.h"
 #include "Animation/AnimCurveTypes.h"
+#include "Blueprint/BlueprintSupport.h"
 #include "Curves/RichCurve.h"
 #include "Misc/FrameRate.h"
 #include "Misc/ScopedSlowTask.h"
@@ -44,12 +45,9 @@
 #include "Editor.h"
 #include "Engine/Selection.h"
 #include "Engine/World.h"
-#include "DefaultLevelSequenceInstanceData.h"
 #include "LevelSequence.h"
-#include "LevelSequenceActor.h"
 #include "AMMDActor.h"
-#include "IMovieSceneObjectSpawner.h"
-#include "Misc/LevelSequenceEditorSpawnRegister.h"
+#include "AMMDLevelSequenceActor.h"
 #include "MovieScene.h"
 #include "MovieSceneObjectBindingID.h"
 #include "MovieScenePossessable.h"
@@ -72,6 +70,76 @@
 #include "UObject/SavePackage.h"
 #include "Misc/PackageName.h"
 #endif // WITH_EDITOR
+
+#if WITH_EDITOR
+static UBlueprint* CreateMMDLevelSequenceActorBlueprint(ULevelSequence* LevelSequence, const FString& FolderPath, const FString& AssetName, FString& OutError)
+{
+	OutError.Reset();
+	if (!LevelSequence)
+	{
+		OutError = TEXT("LevelSequence is null.");
+		return nullptr;
+	}
+
+	FString UniquePackageName;
+	FString UniqueAssetName;
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		AssetToolsModule.Get().CreateUniqueAssetName(FolderPath / AssetName, TEXT(""), UniquePackageName, UniqueAssetName);
+	}
+
+	UPackage* BlueprintPackage = CreatePackage(*UniquePackageName);
+	if (!BlueprintPackage)
+	{
+		OutError = FString::Printf(TEXT("Failed to create package: %s"), *UniquePackageName);
+		return nullptr;
+	}
+
+	UBlueprint* ActorBlueprint = FKismetEditorUtilities::CreateBlueprint(
+		AMMDLevelSequenceActor::StaticClass(),
+		BlueprintPackage,
+		FName(*UniqueAssetName),
+		BPTYPE_Normal,
+		UBlueprint::StaticClass(),
+		UBlueprintGeneratedClass::StaticClass());
+	if (!ActorBlueprint)
+	{
+		OutError = FString::Printf(TEXT("Failed to create AMMDLevelSequenceActor blueprint: %s"), *UniqueAssetName);
+		return nullptr;
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(ActorBlueprint);
+
+	if (UClass* GeneratedClass = ActorBlueprint->GeneratedClass)
+	{
+		if (AMMDLevelSequenceActor* DefaultActor = Cast<AMMDLevelSequenceActor>(GeneratedClass->GetDefaultObject()))
+		{
+			DefaultActor->LevelSequenceAsset = LevelSequence;
+			DefaultActor->CameraSettings.bOverrideAspectRatioAxisConstraint = true;
+			DefaultActor->CameraSettings.AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
+			DefaultActor->MarkPackageDirty();
+		}
+	}
+
+	FAssetRegistryModule::AssetCreated(ActorBlueprint);
+	ActorBlueprint->MarkPackageDirty();
+	BlueprintPackage->MarkPackageDirty();
+
+	const FString BlueprintPackageFilePath = FPackageName::LongPackageNameToFilename(BlueprintPackage->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	if (!UPackage::SavePackage(BlueprintPackage, ActorBlueprint, *BlueprintPackageFilePath, SaveArgs))
+	{
+		OutError = FString::Printf(TEXT("Failed to save actor blueprint: %s"), *BlueprintPackageFilePath);
+		return nullptr;
+	}
+
+	return ActorBlueprint;
+}
+#endif
 
 // Define helper now (was accidentally removed)
 static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& FolderPath, const FString& AssetName, bool bReplaceInLevel)
@@ -283,10 +351,10 @@ static FVector ConvertMMDDirectionToUnrealCamera(const FVector& InDirection)
 
 static FQuat MakeMMDCameraOrbitRotation(const FVector& InRotationRadians)
 {
-	const FQuat RotationX(FVector(1.0, 0.0, 0.0), InRotationRadians.X);
-	const FQuat RotationY(FVector(0.0, 1.0, 0.0), InRotationRadians.Y);
-	const FQuat RotationZ(FVector(0.0, 0.0, 1.0), InRotationRadians.Z);
-	return (RotationZ * RotationY * RotationX).GetNormalized();
+	const FQuat Yaw(FVector(0.0, 1.0, 0.0), -InRotationRadians.Y);
+	const FQuat Pitch(FVector(1.0, 0.0, 0.0), -InRotationRadians.X);
+	const FQuat Roll(FVector(0.0, 0.0, 1.0), -InRotationRadians.Z);
+	return (Roll * Pitch * Yaw).GetNormalized();
 }
 
 static FTransform ConvertVMDCameraKeyToUnrealTransform(const VMDCameraKeyframe& Keyframe, double Scale)
@@ -297,8 +365,7 @@ static FTransform ConvertVMDCameraKeyToUnrealTransform(const VMDCameraKeyframe& 
 	const FVector CameraPositionMMD = TargetMMD + CameraOffsetMMD;
 
 	const FVector Location = ConvertMMDPositionToUnrealCamera(CameraPositionMMD, Scale);
-	const FVector Target = ConvertMMDPositionToUnrealCamera(TargetMMD, Scale);
-	const FVector Forward = (Target - Location).GetSafeNormal();
+	const FVector Forward = ConvertMMDDirectionToUnrealCamera(CameraOrbitRotationMMD.RotateVector(FVector(0.0, 0.0, 1.0))).GetSafeNormal();
 	const FVector Up = ConvertMMDDirectionToUnrealCamera(CameraOrbitRotationMMD.RotateVector(FVector(0.0, 1.0, 0.0))).GetSafeNormal();
 	const FRotator Rotation = Forward.IsNearlyZero()
 		? FRotator::ZeroRotator
@@ -485,9 +552,92 @@ static UClass* ResolveMMDActorClassFromAsset(UObject* Asset)
 	return nullptr;
 }
 
+static FString GetBlueprintGeneratedClassPathFromAssetData(const FAssetData& AssetData)
+{
+	FString GeneratedClassPath;
+	if (!AssetData.GetTagValue(FBlueprintTags::GeneratedClassPath, GeneratedClassPath))
+	{
+		AssetData.GetTagValue(TEXT("GeneratedClass"), GeneratedClassPath);
+	}
+
+	if (GeneratedClassPath.StartsWith(TEXT("BlueprintGeneratedClass'")) && GeneratedClassPath.EndsWith(TEXT("'")))
+	{
+		GeneratedClassPath = GeneratedClassPath.Mid(24, GeneratedClassPath.Len() - 25);
+	}
+	else
+	{
+		GeneratedClassPath = FPackageName::ExportTextPathToObjectPath(GeneratedClassPath);
+	}
+
+	return GeneratedClassPath;
+}
+
 static UClass* ResolveMMDActorClassFromAssetData(const FAssetData& AssetData)
 {
+	const FString GeneratedClassPath = GetBlueprintGeneratedClassPathFromAssetData(AssetData);
+	if (!GeneratedClassPath.IsEmpty())
+	{
+		if (UClass* GeneratedClass = LoadClass<UObject>(nullptr, *GeneratedClassPath))
+		{
+			return GeneratedClass->IsChildOf(AMMDActor::StaticClass()) ? GeneratedClass : nullptr;
+		}
+	}
+
 	return ResolveMMDActorClassFromAsset(AssetData.GetAsset());
+}
+
+static bool IsMMDActorBlueprintAssetData(const FAssetData& AssetData)
+{
+	const FString GeneratedClassPath = GetBlueprintGeneratedClassPathFromAssetData(AssetData);
+	if (GeneratedClassPath.IsEmpty())
+	{
+		return false;
+	}
+
+	const FSoftClassPath GeneratedSoftClassPath(GeneratedClassPath);
+	const FTopLevelAssetPath GeneratedClassAssetPath = GeneratedSoftClassPath.GetAssetPath();
+	const FTopLevelAssetPath MMDActorClassPath = AMMDActor::StaticClass()->GetClassPathName();
+
+	static TSet<FTopLevelAssetPath> DerivedClassNames;
+	static bool bDerivedClassNamesInitialized = false;
+	if (!bDerivedClassNamesInitialized)
+	{
+		IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+		TArray<FTopLevelAssetPath> BaseClassNames;
+		BaseClassNames.Add(MMDActorClassPath);
+		TSet<FTopLevelAssetPath> ExcludedClassNames;
+		AssetRegistry.GetDerivedClassNames(BaseClassNames, ExcludedClassNames, DerivedClassNames);
+		bDerivedClassNamesInitialized = true;
+	}
+
+	return GeneratedClassAssetPath == MMDActorClassPath || DerivedClassNames.Contains(GeneratedClassAssetPath);
+}
+
+static FString GetMMDModelAnimationFolder(UClass* ActorClass)
+{
+	FMMDSelectedAnimationTarget Target;
+	if (!TryGetAnimationTargetFromActorClass(ActorClass, Target))
+	{
+		return FString();
+	}
+
+	FString LevelSequenceFolder = GetMMDModelLevelSequenceFolder(nullptr, Target.SkeletalMeshComponent);
+	if (LevelSequenceFolder.RemoveFromEnd(TEXT("/LevelSequence")))
+	{
+		return LevelSequenceFolder / TEXT("Animation");
+	}
+	return FString();
+}
+
+static bool ShouldFilterAnimationOutsideCurrentMMDModel(const FAssetData& AssetData, UClass* ActorClass)
+{
+	const FString AnimationFolder = GetMMDModelAnimationFolder(ActorClass);
+	return !AnimationFolder.IsEmpty() && !AssetData.PackagePath.ToString().StartsWith(AnimationFolder);
+}
+
+static bool ShouldFilterAnimationOutsideFolder(const FAssetData& AssetData, const FString& AnimationFolder)
+{
+	return !AnimationFolder.IsEmpty() && !AssetData.PackagePath.ToString().StartsWith(AnimationFolder);
 }
 
 static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget, FString& OutError)
@@ -934,6 +1084,10 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 	{
 		ImportVMDAnimation();
 	};
+	CreatedToolPanel->OnAppendFacialVMDRequested = [this]()
+	{
+		AppendFacialVMDToAnimation();
+	};
 	CreatedToolPanel->OnImportCameraRequested = [this]()
 	{
 		ImportVMDCameraAnimation();
@@ -995,6 +1149,11 @@ FReply MMDImportSetting::OnImportModelClicked()
 FReply MMDImportSetting::OnImportVMDClicked()
 {
 	ImportVMDAnimation();
+	return FReply::Handled();
+}
+FReply MMDImportSetting::OnAppendFacialVMDClicked()
+{
+	AppendFacialVMDToAnimation();
 	return FReply::Handled();
 }
 FReply MMDImportSetting::OnImportVMDCameraClicked()
@@ -1086,14 +1245,14 @@ UClass* MMDImportSetting::PickMMDActorClassFromContentBrowser()
 	AssetPickerConfig.bFocusSearchBoxWhenOpened = true;
 	AssetPickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda([](const FAssetData& AssetData)
 	{
-		return ResolveMMDActorClassFromAssetData(AssetData) == nullptr;
+		return !IsMMDActorBlueprintAssetData(AssetData);
 	});
 
 	FAssetData PickedAsset;
 	TSharedPtr<SWindow> PickerWindow;
 	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateLambda([&PickedAsset, &PickerWindow](const FAssetData& AssetData)
 	{
-		if (ResolveMMDActorClassFromAssetData(AssetData))
+		if (IsMMDActorBlueprintAssetData(AssetData))
 		{
 			PickedAsset = AssetData;
 			if (PickerWindow.IsValid())
@@ -1104,7 +1263,7 @@ UClass* MMDImportSetting::PickMMDActorClassFromContentBrowser()
 	});
 	AssetPickerConfig.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateLambda([&PickedAsset, &PickerWindow](const FAssetData& AssetData)
 	{
-		if (ResolveMMDActorClassFromAssetData(AssetData))
+		if (IsMMDActorBlueprintAssetData(AssetData))
 		{
 			PickedAsset = AssetData;
 			if (PickerWindow.IsValid())
@@ -1129,6 +1288,62 @@ UClass* MMDImportSetting::PickMMDActorClassFromContentBrowser()
 		ShowImportProgress(TEXT("No AMMDActor Blueprint selected."), EMMDMessageType::Warning);
 	}
 	return PickedClass;
+#else
+	return nullptr;
+#endif
+}
+
+UAnimSequence* MMDImportSetting::PickAnimSequenceFromContentBrowser()
+{
+#if WITH_EDITOR
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+	const FString AnimationFilterFolder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
+
+	FAssetPickerConfig AssetPickerConfig;
+	AssetPickerConfig.Filter.ClassPaths.Add(UAnimSequence::StaticClass()->GetClassPathName());
+	AssetPickerConfig.Filter.bRecursiveClasses = true;
+	AssetPickerConfig.InitialAssetViewType = EAssetViewType::List;
+	AssetPickerConfig.bAllowNullSelection = false;
+	AssetPickerConfig.bFocusSearchBoxWhenOpened = true;
+	AssetPickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda([AnimationFilterFolder](const FAssetData& AssetData)
+	{
+		return ShouldFilterAnimationOutsideFolder(AssetData, AnimationFilterFolder);
+	});
+
+	FAssetData PickedAsset;
+	TSharedPtr<SWindow> PickerWindow;
+	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateLambda([&PickedAsset, &PickerWindow](const FAssetData& AssetData)
+	{
+		PickedAsset = AssetData;
+		if (PickerWindow.IsValid())
+		{
+			PickerWindow->RequestDestroyWindow();
+		}
+	});
+	AssetPickerConfig.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateLambda([&PickedAsset, &PickerWindow](const FAssetData& AssetData)
+	{
+		PickedAsset = AssetData;
+		if (PickerWindow.IsValid())
+		{
+			PickerWindow->RequestDestroyWindow();
+		}
+	});
+
+	PickerWindow = SNew(SWindow)
+		.Title(FText::FromString(TEXT("Select Target AnimSequence")))
+		.ClientSize(FVector2D(760.0f, 520.0f))
+		.SupportsMinimize(false)
+		.SupportsMaximize(false);
+
+	PickerWindow->SetContent(ContentBrowserModule.Get().CreateAssetPicker(AssetPickerConfig));
+	FSlateApplication::Get().AddModalWindow(PickerWindow.ToSharedRef(), FSlateApplication::Get().FindBestParentWindowForDialogs(nullptr));
+
+	UAnimSequence* PickedAnimSequence = Cast<UAnimSequence>(PickedAsset.GetAsset());
+	if (!PickedAnimSequence)
+	{
+		ShowImportProgress(TEXT("No AnimSequence selected."), EMMDMessageType::Warning);
+	}
+	return PickedAnimSequence;
 #else
 	return nullptr;
 #endif
@@ -1449,8 +1664,11 @@ void MMDImportSetting::ImportVMDAnimation()
 	}
 	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
 	{
+		ToolPanel->SetSelectedAnimText(FText::FromString(AnimSequence->GetName()));
 		ToolPanel->SetPreviewAnimation(AnimSequence);
 	}
+	ComposerAnimSequence = AnimSequence;
+	PhysicsBakeAnimSequence = AnimSequence;
 
 	for (const FString& Warning : ImportReport.Warnings)
 	{
@@ -1469,6 +1687,152 @@ void MMDImportSetting::ImportVMDAnimation()
 		EMMDMessageType::Success);
 #else
 	ShowImportProgress(TEXT("VMD import is editor-only."), EMMDMessageType::Error);
+#endif
+}
+
+#if WITH_EDITOR
+static UObject* GetFirstSelectedEditorObjectOfClass(UClass* Class);
+#endif
+
+void MMDImportSetting::AppendFacialVMDToAnimation()
+{
+	ShowImportProgress(TEXT("Selecting target AnimSequence..."));
+
+#if WITH_EDITOR
+	FMMDSelectedAnimationTarget InitialTarget;
+	if (!TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), InitialTarget))
+	{
+		UClass* PickedClass = PickMMDActorClassFromContentBrowser();
+		if (!PickedClass || !SetCurrentMMDActorClass(PickedClass, PickedClass->GetName()))
+		{
+			ShowImportProgress(TEXT("Append facial VMD needs a loaded AMMDActor Blueprint asset."), EMMDMessageType::Error);
+			return;
+		}
+	}
+
+	UAnimSequence* TargetAnimSequence = PickAnimSequenceFromContentBrowser();
+	if (!TargetAnimSequence)
+	{
+		return;
+	}
+
+	ComposerAnimSequence = TargetAnimSequence;
+	PhysicsBakeAnimSequence = TargetAnimSequence;
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		ToolPanel->SetSelectedAnimText(FText::FromString(TargetAnimSequence->GetName()));
+		ToolPanel->SetPreviewAnimation(TargetAnimSequence);
+	}
+	RefreshSequenceComposerLabels();
+	RefreshPhysicsBakeLabels();
+
+	ShowImportProgress(FString::Printf(TEXT("Selected target AnimSequence: %s. Opening facial VMD file dialog..."), *TargetAnimSequence->GetName()));
+
+	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+	if (!DesktopPlatform)
+	{
+		ShowImportProgress(TEXT("Cannot open file selection dialog."), EMMDMessageType::Error);
+		return;
+	}
+
+	TArray<FString> OpenedFiles;
+	const FString FileTypes = TEXT("VMD Files (*.vmd)|*.vmd|All Files (*.*)|*.*");
+	const bool bOpened = DesktopPlatform->OpenFileDialog(
+		FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+		TEXT("Append Facial VMD"),
+		TEXT(""),
+		TEXT(""),
+		FileTypes,
+		EFileDialogFlags::None,
+		OpenedFiles);
+
+	if (!bOpened || OpenedFiles.Num() == 0)
+	{
+		ShowImportProgress(TEXT("Append facial VMD canceled."), EMMDMessageType::Warning);
+		return;
+	}
+
+	const FString SelectedFile = OpenedFiles[0];
+	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
+	ShowImportProgress(FString::Printf(TEXT("Parsing facial VMD: %s"), *FileName));
+
+	TVMDParser VMDParser;
+	if (!VMDParser.ParseVMDFile(SelectedFile))
+	{
+		ShowImportProgress(TEXT("Failed to parse facial VMD file."), EMMDMessageType::Error);
+		return;
+	}
+	if (VMDParser.VMDInfo.MorphKeyframes.Num() == 0)
+	{
+		ShowImportProgress(TEXT("Selected VMD has no facial morph keyframes."), EMMDMessageType::Warning);
+		return;
+	}
+
+	FMMDSelectedAnimationTarget Target;
+	if (!TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target))
+	{
+		ShowImportProgress(TEXT("Append facial VMD needs a loaded AMMDActor Blueprint asset."), EMMDMessageType::Error);
+		return;
+	}
+	if (!Target.SkeletalMesh || !Target.SkeletalMesh->GetSkeleton())
+	{
+		ShowImportProgress(TEXT("Current MMDActor SkeletalMesh has no Skeleton."), EMMDMessageType::Error);
+		return;
+	}
+
+	TPMXParser PMXParser;
+	const PMXDatas* PMXData = nullptr;
+	if (!Target.SourcePMXFilePath.IsEmpty() && FPaths::FileExists(Target.SourcePMXFilePath))
+	{
+		if (PMXParser.ParsePMXFile(Target.SourcePMXFilePath))
+		{
+			PMXData = &PMXParser.PMXInfo;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[VMD Facial Append] Failed to parse source PMX: %s"), *Target.SourcePMXFilePath);
+		}
+	}
+
+	FMMDAnimationImportContext ImportContext;
+	FMMDAnimationImportReport ImportReport;
+	if (!TMMDMeshBuilder::BuildAnimationImportContext(Target.SkeletalMesh, PMXData, Target.SourcePMXFilePath, SelectedFile, ImportContext, &ImportReport))
+	{
+		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("Failed to create facial VMD import context.");
+		ShowImportProgress(ErrorMessage, EMMDMessageType::Error);
+		return;
+	}
+
+	FMMDAnimationImportSettings ImportSettings;
+	ImportSettings.bImportBoneTracks = false;
+	ImportSettings.bImportMorphCurves = true;
+	ImportSettings.bBakeMMDIKToFK = false;
+
+	if (!TMMDMeshBuilder::AppendVMDMorphCurvesToAnimSequence(TargetAnimSequence, VMDParser.VMDInfo, ImportContext, ImportSettings, &ImportReport))
+	{
+		const FString ErrorMessage = ImportReport.Errors.Num() > 0 ? ImportReport.Errors[0] : TEXT("Failed to append facial VMD morph curves.");
+		ShowImportProgress(ErrorMessage, EMMDMessageType::Error);
+		return;
+	}
+
+	ComposerAnimSequence = TargetAnimSequence;
+	PhysicsBakeAnimSequence = TargetAnimSequence;
+	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
+	{
+		ToolPanel->SetSelectedAnimText(FText::FromString(TargetAnimSequence->GetName()));
+		ToolPanel->SetPreviewAnimation(TargetAnimSequence);
+	}
+	RefreshSequenceComposerLabels();
+	RefreshPhysicsBakeLabels();
+
+	ShowImportProgress(
+		FString::Printf(TEXT("Facial VMD appended to %s: morph matched %d/%d"),
+			*TargetAnimSequence->GetName(),
+			ImportReport.MatchedMorphTrackCount,
+			ImportReport.SourceMorphTrackCount),
+		EMMDMessageType::Success);
+#else
+	ShowImportProgress(TEXT("Append facial VMD is editor-only."), EMMDMessageType::Error);
 #endif
 }
 
@@ -1718,8 +2082,11 @@ static bool InlineCameraSequenceIntoMaster(ULevelSequence* CameraSequence, ULeve
 
 	if (UMovieSceneCameraCutTrack* CameraCutTrack = Cast<UMovieSceneCameraCutTrack>(TargetMovieScene->AddCameraCutTrack(UMovieSceneCameraCutTrack::StaticClass())))
 	{
-		if (UMovieSceneCameraCutSection* CameraCutSection = CameraCutTrack->AddNewCameraCut(UE::MovieScene::FRelativeObjectBindingID(TargetCameraGuid), FFrameNumber(0)))
+		UMovieSceneCameraCutSection* CameraCutSection = Cast<UMovieSceneCameraCutSection>(CameraCutTrack->CreateNewSection());
+		if (CameraCutSection)
 		{
+			CameraCutTrack->AddSection(*CameraCutSection);
+			CameraCutSection->SetCameraGuid(TargetCameraGuid);
 			CameraCutSection->SetRange(TRange<FFrameNumber>(
 				TRangeBound<FFrameNumber>::Inclusive(FFrameNumber(0)),
 				TRangeBound<FFrameNumber>::Exclusive(FFrameNumber(DurationFrames))));
@@ -1744,6 +2111,7 @@ void MMDImportSetting::OpenPhysicsBakeWindow()
 	{
 		PhysicsBakeAnimSequence = SelectedAnim;
 	}
+	const FString AnimationFilterFolder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
 
 	TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(FText::FromString(TEXT("MMD Physics Bake")))
@@ -1794,12 +2162,22 @@ void MMDImportSetting::OpenPhysicsBakeWindow()
 					.AllowedClass(UAnimSequence::StaticClass())
 					.ObjectPath(this, &MMDImportSetting::GetPhysicsBakeAnimationPath)
 					.OnObjectChanged(this, &MMDImportSetting::OnPhysicsBakeAnimationChanged)
+					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateLambda([AnimationFilterFolder](const FAssetData& AssetData)
+					{
+						return ShouldFilterAnimationOutsideFolder(AssetData, AnimationFilterFolder);
+					}))
 				]
 				+ SHorizontalBox::Slot().AutoWidth()
 				[
 					SNew(SButton)
 					.Text(FText::FromString(TEXT("Use Selected")))
 					.OnClicked(this, &MMDImportSetting::CapturePhysicsBakeAnimation)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(6.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("Append Facial VMD")))
+					.OnClicked(this, &MMDImportSetting::OnAppendFacialVMDClicked)
 				]
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
@@ -1872,6 +2250,7 @@ void MMDImportSetting::OpenSequenceComposerWindow()
 	{
 		ComposerCameraSequence = SelectedCameraSequence;
 	}
+	const FString AnimationFilterFolder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
 
 	TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(FText::FromString(TEXT("MMD Sequence Composer")))
@@ -1925,6 +2304,16 @@ void MMDImportSetting::OpenSequenceComposerWindow()
 					.AllowedClass(UAnimSequence::StaticClass())
 					.ObjectPath(this, &MMDImportSetting::GetComposerAnimationPath)
 					.OnObjectChanged(this, &MMDImportSetting::OnComposerAnimationChanged)
+					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateLambda([AnimationFilterFolder](const FAssetData& AssetData)
+					{
+						return ShouldFilterAnimationOutsideFolder(AssetData, AnimationFilterFolder);
+					}))
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(6.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("Append Facial VMD")))
+					.OnClicked(this, &MMDImportSetting::OnAppendFacialVMDClicked)
 				]
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 4.0f)
@@ -2333,9 +2722,11 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 
 	FString UniquePackageName;
 	FString UniqueAssetName;
+	FString SequenceFolder;
 	{
 		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
-		const FString BaseAssetPath = GetMMDModelLevelSequenceFolder(nullptr, SkelComp) / (FString(TEXT("LS_")) + SanitizeMMDAssetName(AnimSequence->GetName()) + TEXT("_Master"));
+		SequenceFolder = GetMMDModelLevelSequenceFolder(nullptr, SkelComp);
+		const FString BaseAssetPath = SequenceFolder / (FString(TEXT("LS_")) + SanitizeMMDAssetName(AnimSequence->GetName()) + TEXT("_Master"));
 		AssetToolsModule.Get().CreateUniqueAssetName(BaseAssetPath, TEXT(""), UniquePackageName, UniqueAssetName);
 	}
 
@@ -2370,7 +2761,8 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	const int32 DurationFrames = FMath::Max(AnimDurationFrames, CameraDurationFrames);
 	ConfigureMMDMovieSceneTiming(MovieScene, DurationFrames);
 
-	UObject* ActorTemplate = DuplicateObject<UObject>(LastLoadedMMDActorClass->GetDefaultObject(), MovieScene);
+	const FName ActorTemplateName = MakeUniqueObjectName(MovieScene, LastLoadedMMDActorClass.Get(), TEXT("MMDModelSpawnableTemplate"));
+	UObject* ActorTemplate = NewObject<UObject>(MovieScene, LastLoadedMMDActorClass.Get(), ActorTemplateName, RF_Transactional);
 	if (!ActorTemplate)
 	{
 		ShowImportProgress(TEXT("Failed to create model spawnable template."), EMMDMessageType::Error);
@@ -2442,43 +2834,41 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	SaveArgs.bWarnOfLongFilename = false;
 	UPackage::SavePackage(Package, MasterSequence, *PackageFilePath, SaveArgs);
 
+	FString ActorBlueprintError;
+	UBlueprint* SequenceActorBlueprint = CreateMMDLevelSequenceActorBlueprint(
+		MasterSequence,
+		SequenceFolder,
+		FString::Printf(TEXT("BP_%s_Actor"), *UniqueAssetName),
+		ActorBlueprintError);
+
 	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 	{
 		AssetEditorSubsystem->OpenEditorForAsset(MasterSequence);
 	}
 
-	if (GEditor)
+	if (SequenceActorBlueprint)
 	{
-		if (UWorld* EditorWorld = GEditor->GetEditorWorldContext().World())
-		{
-			FActorSpawnParameters SpawnParams;
-			SpawnParams.Name = MakeUniqueObjectName(EditorWorld, ALevelSequenceActor::StaticClass(), FName(*UniqueAssetName));
-			SpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
-			ALevelSequenceActor* SequenceActor = EditorWorld->SpawnActor<ALevelSequenceActor>(ALevelSequenceActor::StaticClass(), FTransform::Identity, SpawnParams);
-			if (SequenceActor)
-			{
-				SequenceActor->SetActorLabel(UniqueAssetName);
-				SequenceActor->SetSequence(MasterSequence);
-				SequenceActor->CameraSettings.bOverrideAspectRatioAxisConstraint = true;
-				SequenceActor->CameraSettings.AspectRatioAxisConstraint = EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV;
-				SequenceActor->bOverrideInstanceData = true;
-				UDefaultLevelSequenceInstanceData* InstanceData = Cast<UDefaultLevelSequenceInstanceData>(SequenceActor->DefaultInstanceData);
-				if (!InstanceData)
-				{
-					InstanceData = NewObject<UDefaultLevelSequenceInstanceData>(SequenceActor, TEXT("InstanceData"), RF_Transactional);
-					SequenceActor->DefaultInstanceData = InstanceData;
-				}
-				if (InstanceData)
-				{
-					InstanceData->TransformOriginActor = SequenceActor;
-					InstanceData->TransformOrigin = FTransform::Identity;
-				}
-				SequenceActor->MarkPackageDirty();
-			}
-		}
+		TArray<UObject*> AssetsToSync;
+		AssetsToSync.Add(SequenceActorBlueprint);
+		FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser").Get().SyncBrowserToAssets(AssetsToSync);
 	}
 
-	ShowImportProgress(FString::Printf(TEXT("Master Sequence created: %s"), *MasterSequence->GetPathName()), EMMDMessageType::Success);
+	if (SequenceActorBlueprint)
+	{
+		ShowImportProgress(
+			FString::Printf(TEXT("Master Sequence created: %s. Drag actor blueprint into the level: %s"),
+				*MasterSequence->GetPathName(),
+				*SequenceActorBlueprint->GetPathName()),
+			EMMDMessageType::Success);
+	}
+	else
+	{
+		ShowImportProgress(
+			FString::Printf(TEXT("Master Sequence created: %s, but actor blueprint creation failed: %s"),
+				*MasterSequence->GetPathName(),
+				ActorBlueprintError.IsEmpty() ? TEXT("unknown error") : *ActorBlueprintError),
+			EMMDMessageType::Warning);
+	}
 #endif
 	return FReply::Handled();
 }
@@ -2589,21 +2979,17 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 	const FTransform FirstTransform = ConvertVMDCameraKeyToUnrealTransform(CameraKeys[0], 8.0);
 
 	{
-		FActorSpawnParameters CameraSpawnParams;
-		CameraSpawnParams.Name = MakeUniqueObjectName(EditorWorld->GetCurrentLevel(), ACameraActor::StaticClass(), FName(*FString::Printf(TEXT("MMD_%s_Camera"), *CleanBaseName)));
-		CameraSpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
-		CameraSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		CameraSpawnParams.ObjectFlags = RF_Transient | RF_Transactional;
-
-		ACameraActor* CameraActor = EditorWorld->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), FirstTransform, CameraSpawnParams);
-		if (!CameraActor)
+		const FName CameraTemplateName = MakeUniqueObjectName(MovieScene, ACameraActor::StaticClass(), FName(*FString::Printf(TEXT("MMD_%s_Camera"), *CleanBaseName)));
+		ACameraActor* CameraTemplateActor = NewObject<ACameraActor>(MovieScene, ACameraActor::StaticClass(), CameraTemplateName, RF_Transactional);
+		if (!CameraTemplateActor)
 		{
-			ShowImportProgress(TEXT("Failed to create camera actor."), EMMDMessageType::Error);
+			ShowImportProgress(TEXT("Failed to create spawnable camera template."), EMMDMessageType::Error);
 			return;
 		}
-		CameraActor->SetActorLabel(FString::Printf(TEXT("MMD_%s_Camera"), *CleanBaseName));
+		CameraTemplateActor->SetActorLabel(FString::Printf(TEXT("MMD_%s_Camera"), *CleanBaseName));
+		CameraTemplateActor->SetActorTransform(FirstTransform);
 
-		UCameraComponent* CameraComponent = CameraActor->GetCameraComponent();
+		UCameraComponent* CameraComponent = CameraTemplateActor->GetCameraComponent();
 		if (!CameraComponent)
 		{
 			ShowImportProgress(TEXT("Failed to find camera component."), EMMDMessageType::Error);
@@ -2614,29 +3000,7 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 		CameraComponent->bOverrideAspectRatioAxisConstraint = true;
 		CameraComponent->SetFieldOfView(ConvertMMDVerticalFOVToUnrealHorizontalFOV(CameraKeys[0].ViewAngle));
 
-		FLevelSequenceEditorSpawnRegister SpawnRegister;
-		TValueOrError<FNewSpawnable, FText> SpawnableResult = SpawnRegister.CreateNewSpawnableType(*CameraActor, *MovieScene);
-
-		const bool bNetForce = false;
-		const bool bShouldModifyLevel = false;
-		EditorWorld->DestroyActor(CameraActor, bNetForce, bShouldModifyLevel);
-		CameraActor = nullptr;
-
-		if (!SpawnableResult.IsValid())
-		{
-			ShowImportProgress(SpawnableResult.GetError().ToString(), EMMDMessageType::Error);
-			return;
-		}
-
-		FNewSpawnable& NewSpawnable = SpawnableResult.GetValue();
-		ACameraActor* CameraTemplateActor = Cast<ACameraActor>(NewSpawnable.ObjectTemplate);
-		if (!CameraTemplateActor)
-		{
-			ShowImportProgress(TEXT("Failed to create spawnable camera template."), EMMDMessageType::Error);
-			return;
-		}
-
-		const FGuid CameraGuid = MovieScene->AddSpawnable(NewSpawnable.Name, *NewSpawnable.ObjectTemplate);
+		const FGuid CameraGuid = MovieScene->AddSpawnable(CameraTemplateActor->GetActorLabel(), *CameraTemplateActor);
 		if (!CameraGuid.IsValid())
 		{
 			ShowImportProgress(TEXT("Failed to create spawnable camera binding."), EMMDMessageType::Error);
@@ -2672,6 +3036,10 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 			if (FMovieScenePossessable* CameraComponentPossessable = MovieScene->FindPossessable(CameraComponentGuid))
 			{
 				CameraComponentPossessable->SetParent(CameraGuid, MovieScene);
+			}
+			if (FMovieSceneSpawnable* CameraSpawnable = MovieScene->FindSpawnable(CameraGuid))
+			{
+				CameraSpawnable->AddChildPossessable(CameraComponentGuid);
 			}
 			LevelSequence->BindPossessableObject(CameraComponentGuid, *CameraTemplateComponent, CameraTemplateActor);
 

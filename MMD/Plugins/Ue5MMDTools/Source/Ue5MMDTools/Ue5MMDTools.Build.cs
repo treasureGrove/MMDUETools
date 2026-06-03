@@ -35,7 +35,8 @@ public class Ue5MMDTools : ModuleRules
             "AnimGraphRuntime",
             "BlueprintGraph",
             "KismetCompiler",
-            "UMG"
+            "UMG",
+            "LevelSequence"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
@@ -65,7 +66,6 @@ public class Ue5MMDTools : ModuleRules
             "IKRigDeveloper",
             "Persona",
             "SkeletonEditor",
-            "LevelSequence",
             "LevelSequenceEditor",
             "MovieScene",
             "MovieSceneTracks",

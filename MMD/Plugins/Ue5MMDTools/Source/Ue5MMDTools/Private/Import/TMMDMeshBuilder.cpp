@@ -4262,6 +4262,176 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 #endif
 }
 
+bool TMMDMeshBuilder::AppendVMDMorphCurvesToAnimSequence(UAnimSequence* AnimSequence, const VMDData& VmdData, const FMMDAnimationImportContext& Context, const FMMDAnimationImportSettings& Settings, FMMDAnimationImportReport* OutReport)
+{
+#if WITH_EDITOR
+	FMMDAnimationImportSettings MorphSettings = Settings;
+	MorphSettings.bImportBoneTracks = false;
+	MorphSettings.bImportMorphCurves = true;
+	MorphSettings.bBakeMMDIKToFK = false;
+
+	FMMDAnimationImportReport LocalReport;
+	if (!AnimSequence)
+	{
+		AppendUniqueMessage(LocalReport.Errors, TEXT("Append facial VMD requires a target AnimSequence."));
+		if (OutReport)
+		{
+			*OutReport = LocalReport;
+		}
+		return false;
+	}
+
+	if (!AnalyzeVMDAnimationImport(VmdData, Context, MorphSettings, LocalReport))
+	{
+		if (OutReport)
+		{
+			*OutReport = LocalReport;
+		}
+		return false;
+	}
+
+	if (LocalReport.MatchedMorphTrackCount <= 0)
+	{
+		AppendUniqueMessage(LocalReport.Errors, TEXT("No VMD morph tracks matched the target SkeletalMesh."));
+		if (OutReport)
+		{
+			*OutReport = LocalReport;
+		}
+		return false;
+	}
+
+	TMap<FString, TArray<FMMDMorphTargetContribution>> ResolvedMorphContributions;
+	ResolvedMorphContributions.Reserve(LocalReport.MorphTracks.Num());
+	for (const FMMDResolvedMorphTrack& Track : LocalReport.MorphTracks)
+	{
+		TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Track.SourceMorphName);
+		if (Contributions.Num() > 0)
+		{
+			ResolvedMorphContributions.Add(Track.SourceMorphName, MoveTemp(Contributions));
+		}
+	}
+
+	TMap<FName, TArray<FRichCurveKey>> MorphCurveKeys;
+	TMap<FName, int32> MorphSourceKeyCounts;
+	for (const VMDMorphKeyframe& Keyframe : VmdData.MorphKeyframes)
+	{
+		const TArray<FMMDMorphTargetContribution>* Contributions = ResolvedMorphContributions.Find(Keyframe.MorphName);
+		if (!Contributions || Contributions->Num() == 0)
+		{
+			continue;
+		}
+
+		const float Time = static_cast<float>(Keyframe.FrameNumber) / FMath::Max(MorphSettings.FrameRate, KINDA_SMALL_NUMBER);
+		for (const FMMDMorphTargetContribution& Contribution : *Contributions)
+		{
+			if (Contribution.TargetMorphName == NAME_None)
+			{
+				continue;
+			}
+
+			FRichCurveKey CurveKey(Time, Keyframe.Weight * Contribution.WeightScale);
+			CurveKey.InterpMode = RCIM_Linear;
+			MorphCurveKeys.FindOrAdd(Contribution.TargetMorphName).Add(CurveKey);
+			++MorphSourceKeyCounts.FindOrAdd(Contribution.TargetMorphName);
+		}
+	}
+
+	if (MorphCurveKeys.Num() == 0)
+	{
+		AppendUniqueMessage(LocalReport.Errors, TEXT("No writable morph curves were found in the selected facial VMD."));
+		if (OutReport)
+		{
+			*OutReport = LocalReport;
+		}
+		return false;
+	}
+
+	IAnimationDataController& Controller = AnimSequence->GetController();
+	Controller.OpenBracket(FText::FromString(TEXT("Append MMD Facial VMD")), false);
+
+	int32 WrittenMorphCurveCount = 0;
+	int32 FailedMorphCurveCount = 0;
+	for (TPair<FName, TArray<FRichCurveKey>>& Pair : MorphCurveKeys)
+	{
+		const FName MorphName = Pair.Key;
+		TArray<FRichCurveKey>& CurveKeys = Pair.Value;
+		CurveKeys.Sort([](const FRichCurveKey& A, const FRichCurveKey& B)
+		{
+			return A.Time < B.Time;
+		});
+
+		TArray<FRichCurveKey> UniqueCurveKeys;
+		UniqueCurveKeys.Reserve(CurveKeys.Num());
+		for (const FRichCurveKey& CurveKey : CurveKeys)
+		{
+			if (UniqueCurveKeys.Num() > 0 && FMath::IsNearlyEqual(UniqueCurveKeys.Last().Time, CurveKey.Time))
+			{
+				UniqueCurveKeys.Last() = CurveKey;
+			}
+			else
+			{
+				UniqueCurveKeys.Add(CurveKey);
+			}
+		}
+
+		const FAnimationCurveIdentifier CurveId(MorphName, ERawCurveTrackTypes::RCT_Float);
+		if (AnimSequence->GetDataModel()->FindCurve(CurveId) == nullptr)
+		{
+			Controller.AddCurve(CurveId, AACF_DefaultCurve | AACF_DriveMorphTarget_DEPRECATED, false);
+		}
+		Context.Skeleton->AccumulateCurveMetaData(MorphName, false, true);
+
+		if (Controller.SetCurveKeys(CurveId, UniqueCurveKeys, false))
+		{
+			++WrittenMorphCurveCount;
+		}
+		else
+		{
+			AppendUniqueMessage(LocalReport.Warnings, FString::Printf(TEXT("Failed to write VMD morph curve keys: %s"), *MorphName.ToString()));
+			++FailedMorphCurveCount;
+		}
+	}
+
+	Controller.NotifyPopulated();
+	Controller.CloseBracket(false);
+
+	AnimSequence->PostEditChange();
+	AnimSequence->MarkPackageDirty();
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(AnimSequence->GetOutermost()->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.Error = GError;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.bWarnOfLongFilename = false;
+	if (!UPackage::SavePackage(AnimSequence->GetOutermost(), AnimSequence, *FilePath, SaveArgs))
+	{
+		AppendUniqueMessage(LocalReport.Warnings, FString::Printf(TEXT("Failed to save updated animation package: %s"), *FilePath));
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[VMD Facial Append] Updated %s | MorphCurves=%d/%d Failed=%d MaxFrame=%d"),
+		*AnimSequence->GetPathName(),
+		WrittenMorphCurveCount,
+		LocalReport.MatchedMorphTrackCount,
+		FailedMorphCurveCount,
+		LocalReport.MaxFrame);
+
+	LocalReport.PackagePath = AnimSequence->GetOutermost()->GetName();
+	LocalReport.AssetName = AnimSequence->GetName();
+	if (OutReport)
+	{
+		*OutReport = LocalReport;
+	}
+	return WrittenMorphCurveCount > 0 && FailedMorphCurveCount < MorphCurveKeys.Num();
+#else
+	if (OutReport != nullptr)
+	{
+		AppendUniqueMessage(OutReport->Errors, TEXT("AppendVMDMorphCurvesToAnimSequence is editor-only."));
+	}
+	return false;
+#endif
+}
+
 UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const FString& VMDFilePath)
 {
 	FMMDAnimationImportContext Context;

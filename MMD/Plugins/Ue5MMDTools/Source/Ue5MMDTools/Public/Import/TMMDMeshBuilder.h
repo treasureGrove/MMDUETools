@@ -86,6 +86,8 @@ public:
 
 	static UAnimSequence* BuildVMDAnimation(const VMDData& VmdData, const FMMDAnimationImportContext& Context, const FMMDAnimationImportSettings& Settings, FMMDAnimationImportReport* OutReport = nullptr);
 
+	static bool AppendVMDMorphCurvesToAnimSequence(UAnimSequence* AnimSequence, const VMDData& VmdData, const FMMDAnimationImportContext& Context, const FMMDAnimationImportSettings& Settings, FMMDAnimationImportReport* OutReport = nullptr);
+
 	static UAnimSequence* BuildVMDAnimation(const VMDData &VmdData,const FString& VMDFilePath);
 }; 
 

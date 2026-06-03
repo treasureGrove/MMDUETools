@@ -20,6 +20,10 @@ void UMMDToolPanelWidget::NativeOnInitialized()
 	{
 		BtnImportVMD->OnClicked.AddDynamic(this, &UMMDToolPanelWidget::HandleImportVMDClicked);
 	}
+	if (BtnAppendFacialVMD)
+	{
+		BtnAppendFacialVMD->OnClicked.AddDynamic(this, &UMMDToolPanelWidget::HandleAppendFacialVMDClicked);
+	}
 	if (BtnImportCamera)
 	{
 		BtnImportCamera->OnClicked.AddDynamic(this, &UMMDToolPanelWidget::HandleImportCameraClicked);
@@ -115,6 +119,14 @@ void UMMDToolPanelWidget::SetBakeProgress(float InProgress)
 	OnBakeProgressChanged(ClampedProgress);
 }
 
+void UMMDToolPanelWidget::RequestAppendFacialVMD()
+{
+	if (OnAppendFacialVMDRequested)
+	{
+		OnAppendFacialVMDRequested();
+	}
+}
+
 float UMMDToolPanelWidget::GetBakeFrameRate() const
 {
 	return SpinBakeFrameRate ? SpinBakeFrameRate->GetValue() : 30.0f;
@@ -192,6 +204,11 @@ void UMMDToolPanelWidget::HandleImportVMDClicked()
 	{
 		OnImportVMDRequested();
 	}
+}
+
+void UMMDToolPanelWidget::HandleAppendFacialVMDClicked()
+{
+	RequestAppendFacialVMD();
 }
 
 void UMMDToolPanelWidget::HandleImportCameraClicked()
