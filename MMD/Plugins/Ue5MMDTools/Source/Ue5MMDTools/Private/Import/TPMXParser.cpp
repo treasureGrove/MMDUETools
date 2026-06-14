@@ -334,6 +334,34 @@ int32 ReadGlobalIndex(FMemoryReader &Reader, uint8 IndexSize)
         return -1; // Invalid index size
     }
 }
+
+int32 ReadGlobalVertexIndex(FMemoryReader& Reader, uint8 IndexSize)
+{
+    switch (IndexSize)
+    {
+    case 1:
+    {
+        uint8 v;
+        Reader << v;
+        return v;
+    }
+    case 2:
+    {
+        uint16 v;
+        Reader << v;
+        return v;
+    }
+    case 4:
+    {
+        int32 v;
+        Reader << v;
+        return v;
+    }
+    default:
+        return -1;
+    }
+}
+
 bool ReadPMXGlobals(FMemoryReader &Reader, PMXGlobals &OutGlobals)
 {
     uint8 GlobalsCount;
@@ -487,7 +515,7 @@ bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo)
     PMXInfo.ModelIndices.Empty(PMXInfo.ModelIndicesCount);
     for (int32 i = 0; i < PMXInfo.ModelIndicesCount; i++)
     {
-        int32 Index = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+        int32 Index = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
         PMXInfo.ModelIndices.Add(Index);
         if (i < 5)
         {
@@ -735,7 +763,7 @@ bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
             PMXInfo.ModelMorphs[i].Vertices.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
             for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
             {
-                PMXInfo.ModelMorphs[i].Vertices[j].VertexIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+                PMXInfo.ModelMorphs[i].Vertices[j].VertexIndex = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
                 float dx, dy, dz;
                 Reader << dx << dy << dz;
                 PMXInfo.ModelMorphs[i].Vertices[j].PositionOffset = FVector(dx, dy, dz);
@@ -762,7 +790,7 @@ bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
             PMXInfo.ModelMorphs[i].UVs.SetNum(PMXInfo.ModelMorphs[i].ElementCount);
             for (int32 j = 0; j < PMXInfo.ModelMorphs[i].ElementCount; j++)
             {
-                PMXInfo.ModelMorphs[i].UVs[j].VertexIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+                PMXInfo.ModelMorphs[i].UVs[j].VertexIndex = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
                 float x, y, z, w;
                 Reader << x << y << z << w;
                 PMXInfo.ModelMorphs[i].UVs[j].UVOffset = FVector4(x, y, z, w);
@@ -1019,7 +1047,7 @@ bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo){
         Reader<<PMXInfo.ModelSoftBodies[i].PinVertexCount;
         PMXInfo.ModelSoftBodies[i].PinVertices.SetNum(PMXInfo.ModelSoftBodies[i].PinVertexCount);
         for (int32 j = 0; j < PMXInfo.ModelSoftBodies[i].PinVertexCount; j++){
-            PMXInfo.ModelSoftBodies[i].PinVertices[j] = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+            PMXInfo.ModelSoftBodies[i].PinVertices[j] = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
         }
 
     }

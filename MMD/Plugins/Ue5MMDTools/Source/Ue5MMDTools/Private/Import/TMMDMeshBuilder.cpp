@@ -24,6 +24,7 @@
 //材质
 #include "Materials/Material.h"
 #include "MaterialDomain.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/MaterialInstanceBasePropertyOverrides.h"
 //转换
@@ -2597,6 +2598,39 @@ static void SetVectorParameterIfPresent(UMaterialInstanceConstant* MaterialInsta
 	MaterialInstance->SetVectorParameterValueEditorOnly(ParamInfo, Value);
 }
 
+static UMaterial* LoadMMDBaseMaterial()
+{
+	static const FString BaseMaterialPath = TEXT("/Ue5MMDTools/Resources/MaterialInstance/Mat_MMD_Base.Mat_MMD_Base");
+	UMaterial* BaseMaterial = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *BaseMaterialPath));
+	if (!BaseMaterial)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to load base material from path: %s"), *BaseMaterialPath);
+	}
+	return BaseMaterial;
+}
+
+static bool SetMaterialTextureParameterDefault(UMaterial* Material, const FName& ParameterName, UTexture* Texture)
+{
+	if (!Material || !Texture)
+	{
+		return false;
+	}
+
+	bool bChanged = false;
+	for (UMaterialExpression* Expression : Material->GetExpressions())
+	{
+		UMaterialExpressionTextureSampleParameter2D* TextureParameter = Cast<UMaterialExpressionTextureSampleParameter2D>(Expression);
+		if (TextureParameter && TextureParameter->GetParameterName() == ParameterName)
+		{
+			TextureParameter->Modify();
+			TextureParameter->Texture = Texture;
+			bChanged = true;
+		}
+	}
+
+	return bChanged;
+}
+
 FString GetMaterialTexturePath(const FPMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
 	if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
 		FString PMXDirectory = PMXFilePath;
@@ -2619,13 +2653,10 @@ FString GetMaterialTexturePath(const FPMXMaterial& Material, const PMXDatas& PMX
 		return FString();
 	}
 }
-UMaterialInterface* CreateMaterialFromTexture(UTexture2D& Texture2D, const FPMXMaterial& PMXMaterial, const FString& MaterialName, const FString& OutPath) {
+UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, const FPMXMaterial& PMXMaterial, const FString& MaterialName, const FString& OutPath) {
 
-	static const FString BaseMaterialPath = TEXT("/Ue5MMDTools/Resources/MaterialInstance/Mat_MMD_Base.Mat_MMD_Base");
-	UMaterial* BaseMaterial = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *BaseMaterialPath));
-
+	UMaterial* BaseMaterial = LoadMMDBaseMaterial();
 	if (!BaseMaterial) {
-		UE_LOG(LogTemp, Error, TEXT("Failed to load base material from path: %s"), *BaseMaterialPath);
 		return nullptr;
 	}
 
@@ -2644,68 +2675,94 @@ UMaterialInterface* CreateMaterialFromTexture(UTexture2D& Texture2D, const FPMXM
 		UE_LOG(LogTemp, Error, TEXT("CreatePackage failed: %s"), *PackageName);
 		return nullptr;
 	}
-	UMaterialInstanceConstant* MaterialInstance = NewObject<UMaterialInstanceConstant>(Package, *CleanMaterialName, RF_Public | RF_Standalone);
-	MaterialInstance->SetParentEditorOnly(BaseMaterial);
 
-	FMaterialParameterInfo ParamInfo("BaseColorMap");
-	MaterialInstance->SetTextureParameterValueEditorOnly(ParamInfo, &Texture2D);
+	Package->FullyLoad();
 
+	UMaterial* Material = FindObject<UMaterial>(Package, *CleanMaterialName);
+	if (!Material)
+	{
+		Material = DuplicateObject<UMaterial>(BaseMaterial, Package, *CleanMaterialName);
+	}
+
+	if (!Material)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Duplicate base material failed: %s"), *PackageName);
+		return nullptr;
+	}
+
+	Material->SetFlags(RF_Public | RF_Standalone);
+	Material->Modify();
+	if (Texture2D)
+	{
+		SetMaterialTextureParameterDefault(Material, TEXT("BaseColorMap"), Texture2D);
+		SetMaterialTextureParameterDefault(Material, TEXT("BaseColorTexture"), Texture2D);
+		SetMaterialTextureParameterDefault(Material, TEXT("BaseColor"), Texture2D);
+	}
+
+	// Keep the graph identical to Mat_MMD_Base, but copy PMX alpha into editable material properties.
 	const float MaterialAlpha = FMath::Clamp(PMXMaterial.DiffuseColor.W, 0.0f, 1.0f);
-	const bool bHasTextureAlpha = Texture2D.HasAlphaChannel();
-	const bool bNeedsAlphaEvaluation = bHasTextureAlpha || MaterialAlpha < 0.999f;
+	const bool bNeedsAlphaEvaluation = MaterialAlpha < 0.999f;
 	const float AlphaClipValue = bNeedsAlphaEvaluation ? 0.01f : 0.0f;
-
-	FMaterialInstanceBasePropertyOverrides Overrides = MaterialInstance->BasePropertyOverrides;
-	Overrides.bOverride_TwoSided = true;
-	Overrides.TwoSided = true;
-	Overrides.bOverride_OpacityMaskClipValue = true;
-	Overrides.OpacityMaskClipValue = AlphaClipValue;
-	Overrides.bOverride_CastDynamicShadowAsMasked = true;
-	Overrides.bCastDynamicShadowAsMasked = bNeedsAlphaEvaluation;
+	// PMX assets often rely on thin shell geometry for hair, face decals and clothing frills.
+	// Import as two-sided by default so a winding mismatch on one material slot does not make it invisible.
+	Material->TwoSided = true;
+	Material->BlendMode = BLEND_Opaque;
+	Material->OpacityMaskClipValue = 0.0f;
+	Material->bCastDynamicShadowAsMasked = false;
 	if (bNeedsAlphaEvaluation)
 	{
-		Overrides.bOverride_BlendMode = true;
-		Overrides.BlendMode = BLEND_Masked;
+		Material->BlendMode = BLEND_Translucent;
+		Material->OpacityMaskClipValue = AlphaClipValue;
 	}
-	MaterialInstance->BasePropertyOverrides = Overrides;
-	MaterialInstance->SetOverrideCastShadowAsMasked(true);
-	MaterialInstance->SetCastShadowAsMasked(bNeedsAlphaEvaluation);
+	Material->UpdateCachedExpressionData();
 
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("Alpha"), MaterialAlpha);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("MaterialAlpha"), MaterialAlpha);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("Opacity"), MaterialAlpha);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("AlphaClip"), AlphaClipValue);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("AlphaClipValue"), AlphaClipValue);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("OpacityMaskClipValue"), AlphaClipValue);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("MaskClipValue"), AlphaClipValue);
-	SetScalarParameterIfPresent(MaterialInstance, TEXT("Cutoff"), AlphaClipValue);
-
-	SetVectorParameterIfPresent(MaterialInstance, TEXT("DiffuseColor"), FLinearColor(PMXMaterial.DiffuseColor.X, PMXMaterial.DiffuseColor.Y, PMXMaterial.DiffuseColor.Z, MaterialAlpha));
-	SetVectorParameterIfPresent(MaterialInstance, TEXT("AmbientColor"), FLinearColor(PMXMaterial.AmbientColor.X, PMXMaterial.AmbientColor.Y, PMXMaterial.AmbientColor.Z, 1.0f));
-	SetVectorParameterIfPresent(MaterialInstance, TEXT("SpecularColor"), FLinearColor(PMXMaterial.SpecularColor.X, PMXMaterial.SpecularColor.Y, PMXMaterial.SpecularColor.Z, PMXMaterial.SpecularPower));
-
-	FAssetRegistryModule::AssetCreated(MaterialInstance);
-	MaterialInstance->PostEditChange();
+	FAssetRegistryModule::AssetCreated(Material);
+	Material->PostEditChange();
 	Package->MarkPackageDirty();
+	UE_LOG(LogTemp, Log, TEXT("MMD material updated: %s TwoSided=%d BlendMode=%d Alpha=%.3f Texture=%s"),
+		*PackageName,
+		Material->TwoSided ? 1 : 0,
+		static_cast<int32>(Material->BlendMode),
+		MaterialAlpha,
+		Texture2D ? *Texture2D->GetName() : TEXT("None"));
 
-	return MaterialInstance;
+	return Material;
+}
+
+UMaterialInterface* CreateMaterialFromTexture(UTexture2D& Texture2D, const FPMXMaterial& PMXMaterial, const FString& MaterialName, const FString& OutPath) {
+	return CreateMaterialFromMMDBase(&Texture2D, PMXMaterial, MaterialName, OutPath);
 }
 
 #pragma endregion
 #pragma region 顶点
+static constexpr float PMX_TO_UE_IMPORT_SCALE = 8.0f;
+static constexpr float PMX_IMPORT_OUTLIER_COORD_LIMIT = 10000.0f;
+
 FVector3f ConvertPMXVectorToUnreal(const FVector& PMXVector) {
-	FVector3f TempPos(PMXVector.Z * 8.0f, PMXVector.X * 8.0f, PMXVector.Y * 8.0f);
-
-	return FVector3f(TempPos.Y, -TempPos.X, TempPos.Z);
+	return FVector3f(
+		PMXVector.X * PMX_TO_UE_IMPORT_SCALE,
+		-PMXVector.Z * PMX_TO_UE_IMPORT_SCALE,
+		PMXVector.Y * PMX_TO_UE_IMPORT_SCALE);
 }
-FVector3f ConvertPMXBonePositionToUnreal(const FVector& PMXPosition, float Scale = 8.0f) {
-	FVector3f TempPos(PMXPosition.Z * Scale, PMXPosition.X * Scale, PMXPosition.Y * Scale);
+FVector3f ConvertPMXBonePositionToUnreal(const FVector& PMXPosition, float Scale = PMX_TO_UE_IMPORT_SCALE) {
+	return FVector3f(
+		PMXPosition.X * Scale,
+		-PMXPosition.Z * Scale,
+		PMXPosition.Y * Scale);
+}
 
-	return FVector3f(TempPos.Y, -TempPos.X, TempPos.Z);
+static bool IsPMXImportPositionOutlier(const FVector& PMXPosition)
+{
+	return !FMath::IsFinite(PMXPosition.X)
+		|| !FMath::IsFinite(PMXPosition.Y)
+		|| !FMath::IsFinite(PMXPosition.Z)
+		|| FMath::Abs(PMXPosition.X) > PMX_IMPORT_OUTLIER_COORD_LIMIT
+		|| FMath::Abs(PMXPosition.Y) > PMX_IMPORT_OUTLIER_COORD_LIMIT
+		|| FMath::Abs(PMXPosition.Z) > PMX_IMPORT_OUTLIER_COORD_LIMIT;
 }
 static FVector3f ConvertPMXNormalToUnreal(const FVector& PMXNormal)
 {
-	FVector3f Normal(-PMXNormal.Z, -PMXNormal.X, -PMXNormal.Y);
+	FVector3f Normal(PMXNormal.X, -PMXNormal.Z, PMXNormal.Y);
 	const float LenSq = Normal.SizeSquared();
 	if (!FMath::IsFinite(LenSq) || LenSq <= KINDA_SMALL_NUMBER)
 	{
@@ -2734,7 +2791,14 @@ static FVector3f SanitizePMXNormal(const FVector3f& Normal, const FVector3f& Fal
 		return FallbackFaceNormal;
 	}
 
-	return Normal * FMath::InvSqrt(LenSq);
+	const FVector3f UnitNormal = Normal * FMath::InvSqrt(LenSq);
+	if (FVector3f::DotProduct(UnitNormal, FallbackFaceNormal) < -0.25f)
+	{
+		++OutFlippedCount;
+		return -UnitNormal;
+	}
+
+	return UnitNormal;
 }
 
 static FVector3f MakeStableTangentX(const FVector3f& Normal)
@@ -2797,8 +2861,10 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 			CleanMaterialName = FixMMDName(CleanMaterialName, TEXT("M_"));
 
 			MaterialData.MaterialImportName = CleanMaterialName;
+			MaterialData.Material = nullptr;
 
 			FString TexturePath = GetMaterialTexturePath(Material, PMXInfo, PMXPath);
+			UTexture2D* Texture = nullptr;
 
 			// 只有当纹理存在时才创建材质
 			if (!TexturePath.IsEmpty() && FPaths::FileExists(TexturePath)) {
@@ -2807,17 +2873,15 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 				CleanFileName = CleanFileName.Replace(TEXT(" "), TEXT("_"));
 				CleanFileName = CleanFileName.Replace(TEXT("-"), TEXT("_"));
 
-				UTexture2D* Texture = CreateTextureFromFile(TexturePath,
+				Texture = CreateTextureFromFile(TexturePath,
 					FString("/Game/MMDModels/") + PMXModelName + FString("/Textures"),
 					CleanFileName);
-
-				if (Texture) {
-					MaterialData.Material = CreateMaterialFromTexture(*Texture,
-						Material,
-						CleanMaterialName,
-						FString("/Game/MMDModels/") + PMXModelName + FString("/Materials"));
-				}
 			}
+
+			MaterialData.Material = CreateMaterialFromMMDBase(Texture,
+				Material,
+				CleanMaterialName,
+				FString("/Game/MMDModels/") + PMXModelName + FString("/Materials"));
 
 			PMXImportData.Materials.Add(MaterialData);
 		}
@@ -2847,6 +2911,15 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 	int32 BaseIndex = 0;
 	int32 ZeroNormalCount = 0;
 	int32 FlippedNormalCount = 0;
+	int32 OutlierTriangleCount = 0;
+	TArray<int32> MaterialImportedTriangleCounts;
+	TArray<int32> MaterialDegenerateTriangleCounts;
+	TArray<int32> MaterialInvalidIndexTriangleCounts;
+	TArray<int32> MaterialOutlierTriangleCounts;
+	MaterialImportedTriangleCounts.SetNumZeroed(PMXInfo.ModelMaterials.Num());
+	MaterialDegenerateTriangleCounts.SetNumZeroed(PMXInfo.ModelMaterials.Num());
+	MaterialInvalidIndexTriangleCounts.SetNumZeroed(PMXInfo.ModelMaterials.Num());
+	MaterialOutlierTriangleCounts.SetNumZeroed(PMXInfo.ModelMaterials.Num());
 	for (int32 MatIndex = 0; MatIndex < PMXInfo.ModelMaterials.Num(); MatIndex++)
 	{
 		const FPMXMaterial& Material = PMXInfo.ModelMaterials[MatIndex];
@@ -2865,17 +2938,32 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 
 			// 退化剔除
 			if (vi0 == vi1 || vi1 == vi2 || vi0 == vi2)
+			{
+				++MaterialDegenerateTriangleCounts[MatIndex];
 				continue;
+			}
 			if (vi0 < 0 || vi1 < 0 || vi2 < 0 ||
 				vi0 >= PMXInfo.ModelVertices.Num() ||
 				vi1 >= PMXInfo.ModelVertices.Num() ||
 				vi2 >= PMXInfo.ModelVertices.Num())
+			{
+				++MaterialInvalidIndexTriangleCounts[MatIndex];
 				continue;
+			}
+
+			if (IsPMXImportPositionOutlier(PMXInfo.ModelVertices[vi0].Position)
+				|| IsPMXImportPositionOutlier(PMXInfo.ModelVertices[vi1].Position)
+				|| IsPMXImportPositionOutlier(PMXInfo.ModelVertices[vi2].Position))
+			{
+				++OutlierTriangleCount;
+				++MaterialOutlierTriangleCounts[MatIndex];
+				continue;
+			}
 
 			SkeletalMeshImportData::FTriangle Tri;
 			Tri.WedgeIndex[0] = AddPMXWedge(PMXImportData, PMXInfo.ModelVertices[vi0], vi0);
-			Tri.WedgeIndex[1] = AddPMXWedge(PMXImportData, PMXInfo.ModelVertices[vi1], vi1);
-			Tri.WedgeIndex[2] = AddPMXWedge(PMXImportData, PMXInfo.ModelVertices[vi2], vi2);
+			Tri.WedgeIndex[1] = AddPMXWedge(PMXImportData, PMXInfo.ModelVertices[vi2], vi2);
+			Tri.WedgeIndex[2] = AddPMXWedge(PMXImportData, PMXInfo.ModelVertices[vi1], vi1);
 			Tri.MatIndex = MatIndex;
 			Tri.AuxMatIndex = 0;
 			Tri.SmoothingGroups = 0;
@@ -2886,11 +2974,11 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 			const FVector3f P0 = PMXImportData.Points[vi0];
 			const FVector3f P1 = PMXImportData.Points[vi1];
 			const FVector3f P2 = PMXImportData.Points[vi2];
-			const FVector3f FaceNormal = GetFallbackFaceNormal(P0, P1, P2);
+			const FVector3f FaceNormal = GetFallbackFaceNormal(P0, P2, P1);
 
 			Tri.TangentZ[0] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N0), FaceNormal, ZeroNormalCount, FlippedNormalCount);
-			Tri.TangentZ[1] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N1), FaceNormal, ZeroNormalCount, FlippedNormalCount);
-			Tri.TangentZ[2] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N2), FaceNormal, ZeroNormalCount, FlippedNormalCount);
+			Tri.TangentZ[1] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N2), FaceNormal, ZeroNormalCount, FlippedNormalCount);
+			Tri.TangentZ[2] = SanitizePMXNormal(ConvertPMXNormalToUnreal(N1), FaceNormal, ZeroNormalCount, FlippedNormalCount);
 			Tri.TangentX[0] = MakeStableTangentX(Tri.TangentZ[0]);
 			Tri.TangentX[1] = MakeStableTangentX(Tri.TangentZ[1]);
 			Tri.TangentX[2] = MakeStableTangentX(Tri.TangentZ[2]);
@@ -2899,13 +2987,28 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 			Tri.TangentY[2] = FVector3f::CrossProduct(Tri.TangentZ[2], Tri.TangentX[2]).GetSafeNormal();
 
 			PMXImportData.Faces.Add(Tri);
+			++MaterialImportedTriangleCounts[MatIndex];
 		}
 		BaseIndex += FaceIndexCount;
 	}
 
 	PMXImportData.ComputeSmoothGroupFromNormals();
-	UE_LOG(LogTemp, Log, TEXT("Original PMX normals applied. Triangles=%d Wedges=%d ZeroFixed=%d Flipped=%d"),
-		PMXImportData.Faces.Num(), PMXImportData.Wedges.Num(), ZeroNormalCount, FlippedNormalCount);
+	UE_LOG(LogTemp, Log, TEXT("Original PMX normals applied. Triangles=%d Wedges=%d ZeroFixed=%d Flipped=%d OutlierTrianglesSkipped=%d"),
+		PMXImportData.Faces.Num(), PMXImportData.Wedges.Num(), ZeroNormalCount, FlippedNormalCount, OutlierTriangleCount);
+	for (int32 MatIndex = 0; MatIndex < PMXInfo.ModelMaterials.Num(); ++MatIndex)
+	{
+		const FPMXMaterial& Material = PMXInfo.ModelMaterials[MatIndex];
+		const FString MaterialName = Material.NameJP.IsEmpty() ? Material.NameEN : Material.NameJP;
+		UE_LOG(LogTemp, Warning,
+			TEXT("MMD_IMPORT_MATERIAL Mat=%d Name='%s' RawTriangles=%d ImportedTriangles=%d DegenerateSkipped=%d InvalidIndexSkipped=%d OutlierSkipped=%d"),
+			MatIndex,
+			*MaterialName,
+			Material.FaceIndexCount / 3,
+			MaterialImportedTriangleCounts.IsValidIndex(MatIndex) ? MaterialImportedTriangleCounts[MatIndex] : -1,
+			MaterialDegenerateTriangleCounts.IsValidIndex(MatIndex) ? MaterialDegenerateTriangleCounts[MatIndex] : -1,
+			MaterialInvalidIndexTriangleCounts.IsValidIndex(MatIndex) ? MaterialInvalidIndexTriangleCounts[MatIndex] : -1,
+			MaterialOutlierTriangleCounts.IsValidIndex(MatIndex) ? MaterialOutlierTriangleCounts[MatIndex] : -1);
+	}
 #pragma endregion
 
 #pragma region 骨骼Bone
@@ -3166,6 +3269,18 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 
 	for (FSkelMeshSection& Section : LODModel.Sections)
 	{
+		const FString MaterialName = PMXInfo.ModelMaterials.IsValidIndex(Section.MaterialIndex)
+			? (PMXInfo.ModelMaterials[Section.MaterialIndex].NameJP.IsEmpty() ? PMXInfo.ModelMaterials[Section.MaterialIndex].NameEN : PMXInfo.ModelMaterials[Section.MaterialIndex].NameJP)
+			: FString(TEXT("Invalid"));
+		UE_LOG(LogTemp, Warning,
+			TEXT("MMD_UE_SECTION SectionMaterialIndex=%d MaterialName='%s' Triangles=%u Vertices=%d BaseIndex=%u BaseVertex=%u"),
+			Section.MaterialIndex,
+			*MaterialName,
+			Section.NumTriangles,
+			Section.GetNumVertices(),
+			Section.BaseIndex,
+			Section.BaseVertexIndex);
+
 		if (PMXInfo.ModelMaterials.IsValidIndex(Section.MaterialIndex))
 		{
 			const FPMXMaterial& PMXMaterial = PMXInfo.ModelMaterials[Section.MaterialIndex];
@@ -3200,10 +3315,23 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 		UE_LOG(LogTemp, Error, TEXT("RefBasesInvMatrix 未正确初始化！"));
 	}
 
-	if (PMXImportData.Points.Num() > 0) {
+	if (PMXImportData.Faces.Num() > 0) {
 		FBox BoundingBox(ForceInit);
-		for (const FVector3f& Point : PMXImportData.Points) {
-			BoundingBox += FVector(Point);
+		for (const SkeletalMeshImportData::FTriangle& Face : PMXImportData.Faces) {
+			for (int32 CornerIndex = 0; CornerIndex < 3; ++CornerIndex)
+			{
+				const int32 WedgeIndex = Face.WedgeIndex[CornerIndex];
+				if (!PMXImportData.Wedges.IsValidIndex(WedgeIndex))
+				{
+					continue;
+				}
+
+				const int32 PointIndex = PMXImportData.Wedges[WedgeIndex].VertexIndex;
+				if (PMXImportData.Points.IsValidIndex(PointIndex))
+				{
+					BoundingBox += FVector(PMXImportData.Points[PointIndex]);
+				}
+			}
 		}
 		FBoxSphereBounds ActualBounds(BoundingBox);
 		SkeletalMesh->SetImportedBounds(ActualBounds);
