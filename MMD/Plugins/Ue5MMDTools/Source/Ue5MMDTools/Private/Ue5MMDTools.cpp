@@ -4,8 +4,11 @@
 #include "Ue5MMDToolsCommands.h"
 #include "Ue5MMDToolsStyle.h"
 
+#include "Interfaces/IPluginManager.h"
 #include "LevelEditor.h"
 #include "MMDImportSetting.h"
+#include "Misc/Paths.h"
+#include "ShaderCore.h"
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
 
@@ -15,6 +18,18 @@ static const FName Ue5MMDToolsTabName("Ue5MMDTools");
 
 void FUe5MMDToolsModule::StartupModule()
 {
+	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
+	if (Plugin.IsValid())
+	{
+		const FString ShaderDirectory = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
+		AddShaderSourceDirectoryMapping(TEXT("/Plugin/Ue5MMDTools"), ShaderDirectory);
+		UE_LOG(LogTemp, Log, TEXT("Ue5MMDTools shader directory mapped: /Plugin/Ue5MMDTools -> %s"), *ShaderDirectory);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Ue5MMDTools plugin descriptor not found; shader directory mapping was skipped."));
+	}
+
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
 

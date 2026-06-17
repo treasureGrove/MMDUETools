@@ -1,0 +1,36 @@
+#ifndef MMD_COLOR_ADJUSTMENT_USF
+#define MMD_COLOR_ADJUSTMENT_USF
+
+struct TColorAdjustment
+{
+    float3 Desaturate(float3 color, float desaturation)
+    {
+        float lum = dot(color, float3(0.2126, 0.7152, 0.0722));
+        return lerp(float3(lum, lum, lum), color, desaturation);
+    }
+
+    float3 AdjustBrightness(float3 color, float brightness)
+    {
+        return color * brightness;
+    }
+
+    float3 AdjustContrast(float3 color, float contrast)
+    {
+        return (color - 0.5) * contrast + 0.5;
+    }
+
+    float3 SafeColor(float3 color)
+    {
+        return max(color, 0.0);
+    }
+
+    float GetLuminance(float3 color)
+    {
+        return dot(color, float3(0.2126, 0.7152, 0.0722));
+    }
+
+};
+
+
+
+#endif

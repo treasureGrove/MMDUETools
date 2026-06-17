@@ -2,8 +2,10 @@
 
 #include "Animation/AnimSequence.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/DirectionalLightComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -11,6 +13,15 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "GameFramework/Actor.h"
 #include "PreviewScene.h"
+
+namespace
+{
+	constexpr float MMDPreviewLookDegreesPerPixel = 0.12f;
+	constexpr float MMDPreviewOrbitDegreesPerPixel = 0.12f;
+	constexpr float MMDPreviewPanDistanceFactor = 0.0015f;
+	constexpr float MMDPreviewBaseFlySpeed = 480.0f;
+	constexpr float MMDPreviewWheelDollyUnits = 48.0f;
+}
 
 void UMMDToolPreviewRenderer::Initialize(int32 InWidth, int32 InHeight)
 {
@@ -34,10 +45,12 @@ void UMMDToolPreviewRenderer::Initialize(int32 InWidth, int32 InHeight)
 		.SetSkyBrightness(1.5f)
 		.SetEditor(true);
 	PreviewScene = MakeUnique<FPreviewScene>(PreviewSceneValues);
+	SetupPreviewLighting();
 
 	SceneCapture = NewObject<USceneCaptureComponent2D>(this, TEXT("MMDToolPreviewSceneCapture"), RF_Transient);
 	SceneCapture->TextureTarget = RenderTarget;
 	SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	SceneCapture->ProjectionType = ECameraProjectionMode::Perspective;
 	SceneCapture->bCaptureEveryFrame = true;
 	SceneCapture->bCaptureOnMovement = true;
 	SceneCapture->FOVAngle = 35.0f;
@@ -51,9 +64,8 @@ void UMMDToolPreviewRenderer::Initialize(int32 InWidth, int32 InHeight)
 		PreviewScene->AddComponent(PreviewTestMeshComponent, FTransform(FRotator::ZeroRotator, FVector(0.0f, 0.0f, 40.0f), FVector(0.8f)));
 	}
 
-	const FVector CameraLocation(-260.0f, -180.0f, 150.0f);
-	const FRotator CameraRotation = (FVector(0.0f, 0.0f, 45.0f) - CameraLocation).Rotation();
-	PreviewScene->AddComponent(SceneCapture, FTransform(CameraRotation, CameraLocation));
+	UpdateCaptureTransform();
+	PreviewScene->AddComponent(SceneCapture, SceneCapture->GetComponentTransform());
 
 	Capture();
 }
@@ -68,11 +80,31 @@ void UMMDToolPreviewRenderer::Shutdown()
 	{
 		PreviewScene->RemoveComponent(PreviewTestMeshComponent);
 	}
+	if (PreviewScene.IsValid() && KeyLightComponent)
+	{
+		PreviewScene->RemoveComponent(KeyLightComponent);
+	}
+	if (PreviewScene.IsValid() && FillLightComponent)
+	{
+		PreviewScene->RemoveComponent(FillLightComponent);
+	}
+	if (PreviewScene.IsValid() && RimLightComponent)
+	{
+		PreviewScene->RemoveComponent(RimLightComponent);
+	}
+	if (PreviewScene.IsValid() && SkyLightComponent)
+	{
+		PreviewScene->RemoveComponent(SkyLightComponent);
+	}
 	ClearPreviewActor();
 	ClearPreviewSkeletalMeshComponent();
 
 	SceneCapture = nullptr;
 	PreviewTestMeshComponent = nullptr;
+	KeyLightComponent = nullptr;
+	FillLightComponent = nullptr;
+	RimLightComponent = nullptr;
+	SkyLightComponent = nullptr;
 	PreviewSkeletalMeshComponent = nullptr;
 	PreviewScene.Reset();
 	RenderTarget = nullptr;
@@ -192,6 +224,104 @@ void UMMDToolPreviewRenderer::Capture()
 	}
 }
 
+void UMMDToolPreviewRenderer::OrbitCamera(const FVector2D& DragDelta)
+{
+	CameraYaw += DragDelta.X * MMDPreviewOrbitDegreesPerPixel;
+	CameraPitch = FMath::Clamp(CameraPitch + DragDelta.Y * MMDPreviewOrbitDegreesPerPixel, -80.0f, 80.0f);
+	UpdateCaptureTransform();
+	Capture();
+}
+
+void UMMDToolPreviewRenderer::LookCamera(const FVector2D& DragDelta)
+{
+	if (!SceneCapture)
+	{
+		return;
+	}
+
+	const FVector CameraLocation = SceneCapture->GetComponentLocation();
+	CameraYaw += DragDelta.X * MMDPreviewLookDegreesPerPixel;
+	CameraPitch = FMath::Clamp(CameraPitch - DragDelta.Y * MMDPreviewLookDegreesPerPixel, -80.0f, 80.0f);
+
+	const FRotator LookRotation(CameraPitch, CameraYaw, 0.0f);
+	const FVector Forward = FRotationMatrix(LookRotation).GetUnitAxis(EAxis::X);
+	CameraTarget = CameraLocation + Forward * CameraDistance;
+	UpdateCaptureTransform();
+	Capture();
+}
+
+void UMMDToolPreviewRenderer::PanCamera(const FVector2D& DragDelta)
+{
+	if (!SceneCapture)
+	{
+		return;
+	}
+
+	const FRotationMatrix ViewRotation(SceneCapture->GetComponentRotation());
+	const FVector Right = ViewRotation.GetUnitAxis(EAxis::Y);
+	const FVector Up = ViewRotation.GetUnitAxis(EAxis::Z);
+	const float PanScale = FMath::Max(CameraDistance, 1.0f) * MMDPreviewPanDistanceFactor;
+	CameraTarget += (-Right * DragDelta.X + Up * DragDelta.Y) * PanScale;
+	UpdateCaptureTransform();
+	Capture();
+}
+
+void UMMDToolPreviewRenderer::ZoomCamera(float WheelDelta)
+{
+	if (FMath::IsNearlyZero(WheelDelta))
+	{
+		return;
+	}
+
+	CameraDistance = FMath::Clamp(CameraDistance * FMath::Pow(0.85f, WheelDelta), 30.0f, 100000.0f);
+	UpdateCaptureTransform();
+	Capture();
+}
+
+void UMMDToolPreviewRenderer::MoveCameraLocal(const FVector& LocalDirection, float DeltaSeconds)
+{
+	if (!SceneCapture || LocalDirection.IsNearlyZero() || DeltaSeconds <= 0.0f)
+	{
+		return;
+	}
+
+	const FVector ClampedDirection = LocalDirection.GetClampedToMaxSize(1.0f);
+	const FRotationMatrix ViewRotation(SceneCapture->GetComponentRotation());
+	const FVector Forward = ViewRotation.GetUnitAxis(EAxis::X);
+	const FVector Right = ViewRotation.GetUnitAxis(EAxis::Y);
+	const FVector Up = FVector::UpVector;
+	const float Speed = MMDPreviewBaseFlySpeed * GetCameraSpeedScale();
+	const FVector WorldDelta = (Forward * ClampedDirection.X + Right * ClampedDirection.Y + Up * ClampedDirection.Z) * Speed * DeltaSeconds;
+
+	CameraTarget += WorldDelta;
+	UpdateCaptureTransform();
+	Capture();
+}
+
+void UMMDToolPreviewRenderer::DollyCamera(float InputAmount)
+{
+	if (!SceneCapture || FMath::IsNearlyZero(InputAmount))
+	{
+		return;
+	}
+
+	const FVector Forward = SceneCapture->GetComponentRotation().Vector();
+	CameraTarget += Forward * InputAmount * MMDPreviewWheelDollyUnits * GetCameraSpeedScale();
+	UpdateCaptureTransform();
+	Capture();
+}
+
+void UMMDToolPreviewRenderer::AdjustCameraMoveSpeed(float WheelDelta)
+{
+	if (FMath::IsNearlyZero(WheelDelta))
+	{
+		return;
+	}
+
+	const int32 SpeedStep = WheelDelta > 0.0f ? 1 : -1;
+	CameraSpeedSetting = FMath::Clamp(CameraSpeedSetting + SpeedStep, 1, 8);
+}
+
 void UMMDToolPreviewRenderer::ClearPreviewActor()
 {
 	if (PreviewActor)
@@ -235,13 +365,87 @@ void UMMDToolPreviewRenderer::FocusCaptureOnBox(const FBox& Bounds)
 		return;
 	}
 
-	const FVector Center = Bounds.IsValid ? Bounds.GetCenter() : FVector(0.0f, 0.0f, 80.0f);
+	CameraTarget = Bounds.IsValid ? Bounds.GetCenter() : FVector(0.0f, 0.0f, 80.0f);
 	const float Radius = Bounds.IsValid ? Bounds.GetExtent().Size() : 120.0f;
-	const float Distance = FMath::Max(Radius * 2.4f, 220.0f);
-	const FVector CameraLocation = Center + FVector(-Distance, -Distance * 0.65f, Distance * 0.55f);
-	const FRotator CameraRotation = (Center - CameraLocation).Rotation();
+	CameraDistance = FMath::Max(Radius * 2.4f, 220.0f);
+	CameraYaw = -145.0f;
+	CameraPitch = -12.0f;
+	UpdateCaptureTransform();
+}
 
+void UMMDToolPreviewRenderer::SetupPreviewLighting()
+{
+	if (!PreviewScene.IsValid())
+	{
+		return;
+	}
+
+	KeyLightComponent = NewObject<UDirectionalLightComponent>(this, TEXT("MMDToolPreviewKeyLight"), RF_Transient);
+	if (KeyLightComponent)
+	{
+		KeyLightComponent->SetMobility(EComponentMobility::Movable);
+		KeyLightComponent->SetIntensity(4.0f);
+		KeyLightComponent->SetLightColor(FLinearColor(1.0f, 0.94f, 0.86f));
+		PreviewScene->AddComponent(KeyLightComponent, FTransform(FRotator(-38.0f, -35.0f, 0.0f)));
+	}
+
+	FillLightComponent = NewObject<UDirectionalLightComponent>(this, TEXT("MMDToolPreviewFillLight"), RF_Transient);
+	if (FillLightComponent)
+	{
+		FillLightComponent->SetMobility(EComponentMobility::Movable);
+		FillLightComponent->SetIntensity(0.75f);
+		FillLightComponent->SetLightColor(FLinearColor(0.68f, 0.82f, 1.0f));
+		PreviewScene->AddComponent(FillLightComponent, FTransform(FRotator(-18.0f, 145.0f, 0.0f)));
+	}
+
+	RimLightComponent = NewObject<UDirectionalLightComponent>(this, TEXT("MMDToolPreviewRimLight"), RF_Transient);
+	if (RimLightComponent)
+	{
+		RimLightComponent->SetMobility(EComponentMobility::Movable);
+		RimLightComponent->SetIntensity(1.35f);
+		RimLightComponent->SetLightColor(FLinearColor(0.75f, 0.92f, 1.0f));
+		PreviewScene->AddComponent(RimLightComponent, FTransform(FRotator(-10.0f, 35.0f, 0.0f)));
+	}
+
+	SkyLightComponent = NewObject<USkyLightComponent>(this, TEXT("MMDToolPreviewSkyLight"), RF_Transient);
+	if (SkyLightComponent)
+	{
+		SkyLightComponent->SetMobility(EComponentMobility::Movable);
+		SkyLightComponent->Intensity = 1.25f;
+		SkyLightComponent->LightColor = FColor(210, 225, 255);
+		PreviewScene->AddComponent(SkyLightComponent, FTransform::Identity);
+	}
+}
+
+void UMMDToolPreviewRenderer::UpdateCaptureTransform()
+{
+	if (!SceneCapture)
+	{
+		return;
+	}
+
+	const FRotator OrbitRotation(CameraPitch, CameraYaw, 0.0f);
+	const FVector Forward = FRotationMatrix(OrbitRotation).GetUnitAxis(EAxis::X);
+	const FVector CameraLocation = CameraTarget - Forward * CameraDistance;
+	const FRotator CameraRotation = (CameraTarget - CameraLocation).Rotation();
 	SceneCapture->SetWorldLocationAndRotation(CameraLocation, CameraRotation);
+}
+
+float UMMDToolPreviewRenderer::GetCameraSpeedScale() const
+{
+	static constexpr float SpeedScales[] = {
+		0.125f,
+		0.25f,
+		0.5f,
+		1.0f,
+		2.0f,
+		4.0f,
+		8.0f,
+		16.0f
+	};
+
+	const int32 Index = FMath::Clamp(CameraSpeedSetting, 1, 8) - 1;
+	return SpeedScales[Index];
 }
 
 USkeletalMeshComponent* UMMDToolPreviewRenderer::GetPreviewSkeletalMeshComponent() const

@@ -36,6 +36,13 @@ public:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	UFUNCTION(BlueprintCallable, Category = "MMD Tools")
 	void SetStatusText(const FText& InText, const FLinearColor& InColor);
@@ -137,10 +144,33 @@ protected:
 	void OnBakeProgressChanged(float InProgress);
 
 private:
+	enum class EPreviewMouseDragMode : uint8
+	{
+		None,
+		MoveRotate,
+		Orbit,
+		Pan,
+		Zoom
+	};
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMMDToolPreviewRenderer> PreviewRenderer;
 
+	bool bPreviewMouseDragging = false;
+	EPreviewMouseDragMode PreviewMouseDragMode = EPreviewMouseDragMode::None;
+	FVector2D LastPreviewMouseScreenPosition = FVector2D::ZeroVector;
+	bool bPreviewMoveForward = false;
+	bool bPreviewMoveBackward = false;
+	bool bPreviewMoveLeft = false;
+	bool bPreviewMoveRight = false;
+	bool bPreviewMoveUp = false;
+	bool bPreviewMoveDown = false;
+
 	void InitializePreviewRenderTarget();
+	bool IsMouseOverPreviewImage(const FPointerEvent& InMouseEvent) const;
+	bool IsMouseOverPreviewControl(const FPointerEvent& InMouseEvent) const;
+	bool SetPreviewNavigationKeyState(const FKey& Key, bool bIsDown);
+	void ResetPreviewNavigationState();
 
 	UFUNCTION()
 	void HandleImportModelClicked();
