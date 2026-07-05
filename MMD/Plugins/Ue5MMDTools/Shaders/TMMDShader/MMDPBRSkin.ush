@@ -32,8 +32,8 @@ struct TMMDShaderPBRSkin
         // float3 smooth_body_normal = normalize(lerp(vertex_normal, object_radial_normal, normal_smooth_strength));
         // float3 shade_normal = normalize(lerp(pixel_normal, smooth_body_normal, 0.88f));
 
-        float ndotl = dot(pixel_normal, main_light_dir);
-        float ndotv = saturate(dot(pixel_normal, view_dir));
+        float ndotl = dot(vertex_normal, main_light_dir);
+        float ndotv = saturate(dot(vertex_normal, view_dir));
 
 ///toon shadow
         float shadow_threshold = 0.2f;
@@ -50,17 +50,17 @@ struct TMMDShaderPBRSkin
         float skin_wrap = 0.5f;
         float3 H =normalize(view_dir - main_light_dir);
         float scatter_power =4.0f;
-        float back_sss = pow(saturate(dot(pixel_normal,H)),scatter_power);
-
-
+        float directional_scatter_mask = pow(saturate(dot(pixel_normal,H)),scatter_power);
+///rim lighting
+        float rim_power = 1.8f;
+        float rim_mask = pow(1-saturate(dot(vertex_normal, view_dir)), rim_power);
         
+///final blend
         
         // float shadow_depth = GetShadowDepth(ndotl, shadow_threshold, 0.36f);
         // shadow_depth = pow(shadow_depth, 0.72f);
 
-        return back_sss;
-        
-
+        return rim_mask;
     }
 };
 TMMDShaderPBRSkin MMDShader;
