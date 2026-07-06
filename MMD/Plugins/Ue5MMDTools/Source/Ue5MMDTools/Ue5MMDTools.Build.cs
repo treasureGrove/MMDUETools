@@ -31,8 +31,6 @@ public class Ue5MMDTools : ModuleRules
             "EditorStyle",
             "RenderCore",
             "RHI",
-            "Renderer",
-            "RenderGraph",
             "AnimGraph",
             "AnimGraphRuntime",
             "BlueprintGraph",
