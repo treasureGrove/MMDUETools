@@ -8,8 +8,10 @@
 #include "LevelEditor.h"
 #include "MMDImportSetting.h"
 #include "Misc/Paths.h"
+#if 0 // Disabled - needs UE 5.5 post-process API migration
 #include "Rendering/MMDAnimeViewExtension.h"
 #include "SceneViewExtension.h"
+#endif
 #include "ShaderCore.h"
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -32,8 +34,10 @@ void FUe5MMDToolsModule::StartupModule()
 		UE_LOG(LogTemp, Warning, TEXT("Ue5MMDTools plugin descriptor not found; shader directory mapping was skipped."));
 	}
 
+#if 0 // Disabled - needs UE 5.5 post-process API migration
 	AnimeViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeViewExtension>();
 	UE_LOG(LogTemp, Log, TEXT("MMD AnimeViewExtension registered."));
+#endif
 
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
@@ -56,8 +60,10 @@ void FUe5MMDToolsModule::StartupModule()
 
 void FUe5MMDToolsModule::ShutdownModule()
 {
+#if 0 // Disabled - needs UE 5.5 post-process API migration
 	// Release the SceneViewExtension so it is not leaked.
 	AnimeViewExtension.Reset();
+#endif
 
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);

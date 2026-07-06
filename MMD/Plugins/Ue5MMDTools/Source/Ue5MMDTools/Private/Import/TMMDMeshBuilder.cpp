@@ -2717,7 +2717,6 @@ UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, const FPMXM
 	}
 	Material->UpdateCachedExpressionData();
 
-	Material->bRenderCustomDepth = true;
 	FAssetRegistryModule::AssetCreated(Material);
 	Material->PostEditChange();
 	Package->MarkPackageDirty();
@@ -3287,10 +3286,6 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 		{
 			const FPMXMaterial& PMXMaterial = PMXInfo.ModelMaterials[Section.MaterialIndex];
 			Section.bCastShadow = (PMXMaterial.DrawFlags & PMX_DRAW_CAST_SHADOW) != 0;
-
-			// Enable custom depth rendering on every section so the anime post-process
-			// can read the stencil buffer for per-region shading selection.
-			Section.bRenderCustomDepth = true;
 
 			// Classify the material by PMX name keywords (face/hair/skin/eye/metal)
 			// and store the stencil value for runtime reference. The actual stencil

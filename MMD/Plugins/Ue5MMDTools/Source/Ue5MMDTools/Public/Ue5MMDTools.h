@@ -2,7 +2,9 @@
 #pragma once
 
 #include "Modules/ModuleManager.h"
+#if 0 // Disabled - needs UE 5.5 post-process API migration
 #include "Rendering/MMDAnimeViewExtension.h"
+#endif
 /**
  * FUe5MMDToolsModule类
  * 继承自IModuleInterface接口，是一个模块类，用于实现UE5的MMD工具插件功能
@@ -25,6 +27,8 @@ private:
 private:
 	TSharedPtr<class FUICommandList> PluginCommands;
 
+#if 0 // Disabled - needs UE 5.5 post-process API migration
 	/** Anime toon-render SceneViewExtension */
 	TSharedPtr<FMMDAnimeViewExtension> AnimeViewExtension;
+#endif
 };

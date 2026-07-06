@@ -1,13 +1,15 @@
 // Copyright (c) 2024-2026 MMDUETools. All Rights Reserved.
+// TODO: Re-enable after migrating to UE 5.5+ post-process API
 
 #include "Rendering/MMDAnimeViewExtension.h"
 #include "Rendering/MMDAnimePostProcessPass.h"
 
-#include "PostProcess/PostProcessing.h"
 #include "PostProcess/PostProcessMaterialInputs.h"
-#include "RenderGraph/RenderGraphBuilder.h"
+#include "RenderGraphBuilder.h"
 #include "ScreenPass.h"
 #include "SceneView.h"
+
+#if 0 // Disabled - needs UE 5.5 post-process API migration
 
 FMMDAnimeViewExtension::FMMDAnimeViewExtension(const FAutoRegister& AutoRegister)
 	: FSceneViewExtensionBase(AutoRegister)
@@ -21,10 +23,10 @@ bool FMMDAnimeViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensio
 
 void FMMDAnimeViewExtension::SubscribeToPostProcessingPass(
 	EPostProcessingPass PassId,
+	const FSceneView& View,
 	FAfterPassCallbackDelegateArray& InOutPassCallbacks,
 	bool bIsPassEnabled)
 {
-	// Inject BEFORE the tonemap pass so we receive HDR scene color.
 	if (PassId == EPostProcessingPass::Tonemap)
 	{
 		InOutPassCallbacks.Add(FAfterPassCallback::CreateRaw(
@@ -37,7 +39,6 @@ FScreenPassTexture FMMDAnimeViewExtension::PostProcessCallback_RenderThread(
 	const FSceneView& View,
 	const FPostProcessMaterialInputs& Inputs)
 {
-	// Extract the scene color texture from the post-process inputs.
 	FScreenPassTexture SceneColorInput = Inputs.OverrideOutput;
 	if (!SceneColorInput.IsValid())
 	{
@@ -50,25 +51,19 @@ FScreenPassTexture FMMDAnimeViewExtension::PostProcessCallback_RenderThread(
 		return Inputs.OverrideOutput;
 	}
 
-	// Build render parameters (defaults for now; later driven by UMMDAnimeRenderSettings).
 	FMMDAnimeRenderParams Params;
-
-	// Try to extract the main directional light direction from the view.
-	// The view's family may contain directional lights; use a sensible default
-	// (overhead sun) when none is found.
-	Params.MainLightDirection = FVector3f(0.0f, -0.3f, 0.95f); // slight angle, mostly overhead
+	Params.MainLightDirection = FVector3f(0.0f, -0.3f, 0.95f);
 	Params.MainLightColor     = FVector3f(1.0f, 1.0f, 1.0f);
 
-	// Camera position from the view
 	const FVector ViewLocation = View.GetViewLocation();
 	Params.CameraPosition = FVector3f(
 		static_cast<float>(ViewLocation.X),
 		static_cast<float>(ViewLocation.Y),
 		static_cast<float>(ViewLocation.Z));
 
-	// Dispatch the toon-remap compute pass
 	AddMMDAnimePostProcessPass(GraphBuilder, View, SceneColor, Params);
 
-	// Return the (now modified) scene color
 	return FScreenPassTexture(SceneColor, SceneColorInput.Subresource);
 }
+
+#endif // Disabled - needs UE 5.5 post-process API migration
