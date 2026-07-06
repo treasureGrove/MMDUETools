@@ -1,6 +1,7 @@
 #include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
 #include "MMDModelDataAsset.h"
+#include "Rendering/MMDAnimeStencilValues.h"
 
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
@@ -2716,10 +2717,11 @@ UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, const FPMXM
 	}
 	Material->UpdateCachedExpressionData();
 
+	Material->bRenderCustomDepth = true;
 	FAssetRegistryModule::AssetCreated(Material);
 	Material->PostEditChange();
 	Package->MarkPackageDirty();
-	UE_LOG(LogTemp, Log, TEXT("MMD material updated: %s TwoSided=%d BlendMode=%d Alpha=%.3f Texture=%s"),
+	UE_LOG(LogTemp, Log, TEXT("MMD material updated: %s TwoSided=%d BlendMode=%d Alpha=%.3f Texture=%s RenderCustomDepth=true"),
 		*PackageName,
 		Material->TwoSided ? 1 : 0,
 		static_cast<int32>(Material->BlendMode),
@@ -3285,6 +3287,19 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 		{
 			const FPMXMaterial& PMXMaterial = PMXInfo.ModelMaterials[Section.MaterialIndex];
 			Section.bCastShadow = (PMXMaterial.DrawFlags & PMX_DRAW_CAST_SHADOW) != 0;
+
+			// Enable custom depth rendering on every section so the anime post-process
+			// can read the stencil buffer for per-region shading selection.
+			Section.bRenderCustomDepth = true;
+
+			// Classify the material by PMX name keywords (face/hair/skin/eye/metal)
+			// and store the stencil value for runtime reference. The actual stencil
+			// value written to the buffer is set at the component level; this log
+			// helps users identify which stencil value to assign per section.
+			const uint8 StencilValue = ClassifyMMDMaterialName(PMXMaterial.NameJP, PMXMaterial.NameEN);
+			UE_LOG(LogTemp, Log,
+				TEXT("MMD_STENCIL Section=%d Material='%s' StencilValue=%d (0=None 1=Body 2=Skin 3=Hair 4=Face 5=EyesMetal)"),
+				Section.MaterialIndex, *MaterialName, StencilValue);
 		}
 	}
 

@@ -1,0 +1,98 @@
+
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeLightingCommon.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeEnvironment.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/ColorAdjustment.usf"
+
+// ============================================================================
+// TMMDAnimeSkin
+// Skin variant anime shader with warm terminator and fast SSS.
+//
+// input parameters (connect in material editor):
+//   float4 base_color_map_value  - albedo texture sample
+//   float3 shadow_color          - shadow tint color            [default: 0.4,0.25,0.2]
+//   float  shadow_threshold      - shadow cutoff [-1..1]        [default: 0.15]
+//   float  shadow_softness       - shadow edge width [0..1]     [default: 0.05]
+//   float  rim_width             - rim light width [0..1]       [default: 0.25]
+//   float3 rim_color             - rim light tint               [default: 1,0.9,0.85]
+//   float  environment_strength  - ambient/env blend [0..1]     [default: 0.35]
+//   float  sss_strength          - SSS intensity [0..1]         [default: 0.4]
+//   float  sss_scatter_power     - SSS falloff [1..16]          [default: 4.0]
+//   float3 sss_color             - SSS tint color               [default: 1,0.4,0.3]
+// ============================================================================
+
+struct TMMDAnimeSkin
+{
+    float4 OutputColor(FMaterialPixelParameters material_parameters,
+                       float4 base_color_map_value,
+                       float3 shadow_color,
+                       float shadow_threshold,
+                       float shadow_softness,
+                       float rim_width,
+                       float3 rim_color,
+                       float environment_strength,
+                       float sss_strength,
+                       float sss_scatter_power,
+                       float3 sss_color)
+    {
+        // -- Utility structs --
+        TAnimeLightingCommon lighting;
+        TAnimeEnvironment    environment;
+        TColorAdjustment     colorAdj;
+
+        // -- Core vectors --
+        float3 view_dir     = normalize(material_parameters.CameraVector);
+        float3 pixel_normal = normalize(material_parameters.WorldNormal * material_parameters.TwoSidedSign);
+
+        // 1. Main light + ambient
+        float3 light_dir   = environment.GetMainLightDirection();
+        float3 light_color = environment.GetMainLightColor();
+        float3 ambient     = environment.GetAmbientColor(pixel_normal);
+
+        // 2. NdotL, NdotV
+        float ndotl = dot(pixel_normal, light_dir);
+        float ndotv = saturate(dot(pixel_normal, view_dir));
+
+        // 3. Dual-layer toon shadow with softer transitions for skin
+        float toon_shadow = lighting.ComputeDualLayerShadow(ndotl, shadow_threshold, max(shadow_softness, 0.03), 0.25);
+
+        // 4. Warmer shadow terminator: blend warm tint at shadow edge
+        float terminator_mask = 1.0 - abs(toon_shadow * 2.0 - 1.0); // peaks at shadow boundary
+        float3 warm_terminator = float3(1.0, 0.5, 0.3) * terminator_mask * 0.15;
+
+        // 5. Environment-tinted shadow
+        float3 env_tint = environment.GetEnvironmentTint(pixel_normal, environment_strength);
+        float3 shadow_tinted = shadow_color * env_tint;
+
+        // 6. Apply shadow to base color
+        float3 base_color = colorAdj.SafeColor(base_color_map_value.rgb);
+        float3 lit_color   = base_color * saturate(light_color);
+        float3 shaded_color = base_color * shadow_tinted;
+        float3 result = lerp(shaded_color, lit_color, toon_shadow);
+        result += warm_terminator;
+
+        // Ambient fill in shadows
+        float3 gi = environment.ComputeGIResponse(pixel_normal, environment_strength);
+        result += base_color * gi * (1.0 - toon_shadow);
+
+        // 7. Fast SSS via half-vector scatter (from MMDPBRSkin pattern)
+        float3 H = normalize(view_dir - light_dir);
+        float back_sss = pow(saturate(dot(pixel_normal, H)), sss_scatter_power);
+        // SSS is strongest at shadow boundary and on thin areas
+        float sss_mask = back_sss * sss_strength;
+        result += sss_color * sss_mask * (1.0 - toon_shadow * 0.5);
+
+        // 8. Curvature-aware rim: softer, wider for skin
+        float rim_mask = lighting.ComputeRimMask(ndotv, rim_width, 0.15);
+        float rim_light_weight = saturate(ndotl * 0.5 + 0.5);
+        float3 rim_contrib = rim_color * rim_mask * rim_light_weight * 0.6; // reduced for skin
+        result += rim_contrib;
+
+        // 9. Soft anime specular (subtle for skin)
+        float spec = lighting.ComputeAnimeSpecular(pixel_normal, light_dir, view_dir, 0.3, 12.0);
+        result += float3(1.0, 0.95, 0.9) * spec * toon_shadow * 0.4;
+
+        return float4(max(result, 0.0), base_color_map_value.a);
+    }
+};
+TMMDAnimeSkin MMDShader;
+return MMDShader.OutputColor(Parameters, base_color_map_value, shadow_color, shadow_threshold, shadow_softness, rim_width, rim_color, environment_strength, sss_strength, sss_scatter_power, sss_color);

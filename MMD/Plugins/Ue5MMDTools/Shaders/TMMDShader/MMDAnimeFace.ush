@@ -1,0 +1,94 @@
+
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeLightingCommon.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeEnvironment.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/ColorAdjustment.usf"
+
+// ============================================================================
+// TMMDAnimeFace
+// Face variant anime shader with forward-facing shadow, optional SDF blend,
+// minimal rim, and very soft transitions.
+//
+// input parameters (connect in material editor):
+//   float4 base_color_map_value  - albedo texture sample
+//   float3 shadow_color          - shadow tint color            [default: 0.4,0.3,0.3]
+//   float3 forward_vector        - face forward direction       [default: object forward]
+//   float  face_shadow_softness  - shadow softness [0..1]       [default: 0.15]
+//   float  environment_strength  - ambient/env blend [0..1]     [default: 0.4]
+//   float4 sdf_texture_value     - SDF shadow map sample (R=shadow) [default: 0,0,0,0]
+// ============================================================================
+
+struct TMMDAnimeFace
+{
+    float4 OutputColor(FMaterialPixelParameters material_parameters,
+                       float4 base_color_map_value,
+                       float3 shadow_color,
+                       float3 forward_vector,
+                       float face_shadow_softness,
+                       float environment_strength,
+                       float4 sdf_texture_value)
+    {
+        // -- Utility structs --
+        TAnimeLightingCommon lighting;
+        TAnimeEnvironment    environment;
+        TColorAdjustment     colorAdj;
+
+        // -- Core vectors --
+        float3 view_dir     = normalize(material_parameters.CameraVector);
+        float3 pixel_normal = normalize(material_parameters.WorldNormal * material_parameters.TwoSidedSign);
+        float3 face_forward = normalize(forward_vector);
+
+        // 1. Main light + ambient
+        float3 light_dir   = environment.GetMainLightDirection();
+        float3 light_color = environment.GetMainLightColor();
+        float3 ambient     = environment.GetAmbientColor(pixel_normal);
+
+        // 2. Forward-facing shadow threshold:
+        //    Use dot(lightDir, forward_vector) instead of per-pixel NdotL
+        //    This gives a uniform shadow across the face that follows head rotation
+        float forward_ndotl = dot(light_dir, face_forward);
+        float pixel_ndotl   = dot(pixel_normal, light_dir);
+        float ndotv         = saturate(dot(pixel_normal, view_dir));
+
+        // Blend: mostly forward-based with slight pixel normal influence for form
+        float shadow_ndotl = lerp(forward_ndotl, pixel_ndotl, 0.25);
+
+        // 3. Very soft toon shadow for face
+        float toon_shadow = lighting.ComputeToonShadow(shadow_ndotl, 0.0, max(face_shadow_softness, 0.08));
+
+        // 4. Optional SDF shadow map blend
+        //    sdf_texture_value.r is expected to be 0 (shadow) or 1 (lit)
+        float sdf_shadow = sdf_texture_value.r;
+        // Blend SDF with procedural shadow: SDF takes priority where available
+        float has_sdf = step(0.001, sdf_shadow + (1.0 - sdf_shadow)); // always valid if sampled
+        float combined_shadow = lerp(toon_shadow, min(toon_shadow, sdf_shadow), 0.6);
+
+        // 5. Environment-tinted shadow
+        float3 env_tint = environment.GetEnvironmentTint(pixel_normal, environment_strength);
+        float3 shadow_tinted = shadow_color * env_tint;
+
+        // 6. Apply shadow to base color
+        float3 base_color = colorAdj.SafeColor(base_color_map_value.rgb);
+        float3 lit_color   = base_color * saturate(light_color);
+        float3 shaded_color = base_color * shadow_tinted;
+        float3 result = lerp(shaded_color, lit_color, combined_shadow);
+
+        // Ambient fill in shadows (stronger for face to keep it readable)
+        float3 gi = environment.ComputeGIResponse(pixel_normal, environment_strength);
+        result += base_color * gi * (1.0 - combined_shadow) * 1.2;
+
+        // 7. Minimal rim light (very subtle for face)
+        float rim_mask = lighting.ComputeRimMask(ndotv, 0.15, 0.2);
+        float rim_light_weight = saturate(shadow_ndotl * 0.5 + 0.5);
+        result += float3(1.0, 0.95, 0.9) * rim_mask * rim_light_weight * 0.15;
+
+        // 8. Soft lip/eye specular (very small, subtle)
+        float spec_lip = lighting.ComputeAnimeSpecular(pixel_normal, light_dir, view_dir, 0.15, 24.0);
+        float spec_eye = lighting.ComputeAnimeSpecular(pixel_normal, light_dir, view_dir, 0.1, 48.0);
+        float soft_spec = (spec_lip * 0.3 + spec_eye * 0.5) * combined_shadow;
+        result += float3(1.0, 0.97, 0.95) * soft_spec;
+
+        return float4(max(result, 0.0), base_color_map_value.a);
+    }
+};
+TMMDAnimeFace MMDShader;
+return MMDShader.OutputColor(Parameters, base_color_map_value, shadow_color, forward_vector, face_shadow_softness, environment_strength, sdf_texture_value);

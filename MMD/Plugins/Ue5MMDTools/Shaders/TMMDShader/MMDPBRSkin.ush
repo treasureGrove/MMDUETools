@@ -1,5 +1,6 @@
 
 #include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/ColorAdjustment.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeEnvironment.usf"
 
 // input
 // float4 base_color_map_value
@@ -39,12 +40,10 @@ struct TMMDShaderPBRSkin
         float shadow_threshold = 0.2f;
         float shadow_softness = 0.018f;
         float toon_light_mask = smoothstep(shadow_threshold - shadow_softness, shadow_threshold + shadow_softness, ndotl);
-        float3 shadow_color =base_color_map_value.rgb *0.2f;
 
-        final_output.rgb = lerp(shadow_color, final_output.rgb, toon_light_mask);
 ///toon light edge
         float toon_light_edge_mask = 1-abs(toon_light_mask*2-1);
-        final_output.rgb = lerp(final_output.rgb, 0, toon_light_edge_mask);
+
 ///fast sss
         float sss_strength = 0.48f;
         float skin_wrap = 0.5f;
@@ -52,15 +51,20 @@ struct TMMDShaderPBRSkin
         float scatter_power =4.0f;
         float back_sss = pow(saturate(dot(pixel_normal,H)),scatter_power);
 
+///assemble final color
+        // Get environment ambient for shadow tinting
+        TAnimeEnvironment env;
+        float3 ambient_color = env.GetAmbientColor(pixel_normal);
 
-        
-        
-        // float shadow_depth = GetShadowDepth(ndotl, shadow_threshold, 0.36f);
-        // shadow_depth = pow(shadow_depth, 0.72f);
+        // Environment-tinted shadow
+        float3 env_shadow_color = lerp(skin_color * 0.5, skin_color * 0.5 * ambient_color, 0.5);
+        final_output.rgb = lerp(env_shadow_color, final_output.rgb, toon_light_mask);
 
-        return back_sss;
-        
+        // Add SSS at shadow terminator
+        float terminator_mask = toon_light_edge_mask;
+        final_output.rgb += back_sss * sss_strength * skin_color * terminator_mask;
 
+        return final_output;
     }
 };
 TMMDShaderPBRSkin MMDShader;

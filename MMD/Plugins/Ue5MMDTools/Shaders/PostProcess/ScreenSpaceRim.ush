@@ -1,0 +1,110 @@
+#ifndef MMD_SCREEN_SPACE_RIM_USH
+#define MMD_SCREEN_SPACE_RIM_USH
+
+// Screen-Space Rim Light for Anime Rendering (屏幕空间轮廓光)
+// Detects silhouette and edge pixels using depth and normal discontinuities,
+// then applies light-side weighted rim highlights for anime-style outlines.
+// 使用深度和法线不连续性检测轮廓边缘，并应用受光侧加权的轮廓光
+
+struct TScreenSpaceRim
+{
+    // Detect depth edge using Sobel-like operator on pre-sampled neighbor depths
+    // 使用类Sobel算子检测深度边缘（预先采样的邻域深度值）
+    // neighborDepths: [0]=left, [1]=right, [2]=up, [3]=down
+    // Returns edge strength in [0, 1]
+    float DetectDepthEdge(float centerDepth, float4 neighborDepths, float depthThreshold)
+    {
+        // Sobel-like horizontal and vertical gradients (水平和垂直梯度)
+        // Using center-difference approximation for 4-neighbor sampling
+        float horizontalDiff = neighborDepths.y - neighborDepths.x; // right - left
+        float verticalDiff   = neighborDepths.w - neighborDepths.z; // down - up
+        
+        // Gradient magnitude (梯度幅值)
+        float gradientMag = sqrt(horizontalDiff * horizontalDiff + verticalDiff * verticalDiff);
+        
+        // Normalize by center depth to handle perspective correctly (透视校正归一化)
+        float safeDepth = max(centerDepth, 0.001);
+        float normalizedEdge = gradientMag / safeDepth;
+        
+        // Threshold and smooth the edge (阈值化并平滑边缘)
+        float edgeStrength = smoothstep(depthThreshold * 0.5, depthThreshold, normalizedEdge);
+        
+        return saturate(edgeStrength);
+    }
+
+    // Detect normal discontinuity at edges (法线不连续性检测)
+    // Identifies boundaries between surfaces with different orientations
+    // neighborNormals: [0]=left, [1]=right, [2]=up, [3]=down
+    float DetectNormalEdge(float3 centerNormal, float3 neighborNormals0, float3 neighborNormals1,
+                           float3 neighborNormals2, float3 neighborNormals3, float normalThreshold)
+    {
+        // Compare center normal with each neighbor using dot product
+        // Dot product near 1.0 = similar direction, lower = more discontinuous
+        // 使用点积比较中心法线与邻域法线，点积越接近1表示方向越一致
+        float diff0 = 1.0 - dot(centerNormal, neighborNormals0); // left
+        float diff1 = 1.0 - dot(centerNormal, neighborNormals1); // right
+        float diff2 = 1.0 - dot(centerNormal, neighborNormals2); // up
+        float diff3 = 1.0 - dot(centerNormal, neighborNormals3); // down
+        
+        // Take maximum discontinuity as edge strength (取最大不连续性作为边缘强度)
+        float maxDiff = max(max(diff0, diff1), max(diff2, diff3));
+        
+        // Also consider the gradient between opposite neighbors (对向邻域梯度)
+        float hDiff = 1.0 - dot(neighborNormals0, neighborNormals1);
+        float vDiff = 1.0 - dot(neighborNormals2, neighborNormals3);
+        float crossDiff = max(hDiff, vDiff);
+        
+        // Combine center-neighbor and neighbor-neighbor differences
+        float edgeStrength = max(maxDiff, crossDiff * 0.5);
+        
+        // Smooth threshold (平滑阈值)
+        float rim = smoothstep(normalThreshold * 0.5, normalThreshold, edgeStrength);
+        
+        return saturate(rim);
+    }
+
+    // Compute rim light with light-side weighting (计算受光侧加权的轮廓光)
+    // Rim appears primarily on lit edges facing the light source
+    // 轮廓光主要出现在面向光源的受光边缘
+    float3 ComputeRim(float depthEdge, float normalEdge,
+                      float3 lightDir, float3 normal,
+                      float rimWidth, float3 rimColor)
+    {
+        // Combine depth and normal edges (结合深度和法线边缘)
+        float edgeMask = max(depthEdge, normalEdge);
+        
+        // Light-side weighting: NdotL mapped to [0, 1]
+        // Rim is stronger on the lit side of the model (受光侧权重更强)
+        float NdotL = dot(normal, lightDir);
+        float lightSideWeight = saturate(NdotL * 0.5 + 0.5);
+        
+        // Apply rim width control via smoothstep
+        // Wider rim = more gradual falloff from edge (轮廓光宽度控制)
+        float rimMask = edgeMask * rimWidth;
+        rimMask = smoothstep(0.0, 1.0, rimMask);
+        
+        // Final rim: edge * light-side weight (最终轮廓光 = 边缘 × 受光侧权重)
+        float rimIntensity = rimMask * lightSideWeight;
+        rimIntensity = saturate(rimIntensity);
+        
+        return rimColor * rimIntensity;
+    }
+
+    // Convenience: full rim computation with all neighbor data
+    // 便捷方法：使用所有邻域数据完整计算轮廓光
+    float3 ComputeFullRim(float centerDepth, float4 neighborDepths,
+                          float3 centerNormal,
+                          float3 neighborNormal0, float3 neighborNormal1,
+                          float3 neighborNormal2, float3 neighborNormal3,
+                          float3 lightDir, float3 normal,
+                          float depthThreshold, float normalThreshold,
+                          float rimWidth, float3 rimColor)
+    {
+        float depthEdge = DetectDepthEdge(centerDepth, neighborDepths, depthThreshold);
+        float normalEdge = DetectNormalEdge(centerNormal, neighborNormal0, neighborNormal1,
+                                            neighborNormal2, neighborNormal3, normalThreshold);
+        return ComputeRim(depthEdge, normalEdge, lightDir, normal, rimWidth, rimColor);
+    }
+};
+
+#endif // MMD_SCREEN_SPACE_RIM_USH

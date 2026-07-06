@@ -1,0 +1,161 @@
+#include "/Engine/Private/Common.ush"
+#include "/Plugin/Ue5MMDTools/PostProcess/ToonShadowRemap.ush"
+#include "/Plugin/Ue5MMDTools/PostProcess/ScreenSpaceRim.ush"
+#include "/Plugin/Ue5MMDTools/PostProcess/AnimeSpecularPP.ush"
+
+// Parameters bound from C++
+Texture2D SceneColorTexture;
+Texture2D GBufferATexture;
+Texture2D SceneDepthTexture;
+Texture2D CustomStencilTexture;
+RWTexture2D<float4> OutputTexture;
+SamplerState LinearSampler;
+
+// Toon params
+float ShadowThreshold;
+float ShadowSoftness;
+float3 ShadowColor;
+float3 DeepShadowColor;
+// Rim params
+float RimWidth;
+float3 RimColor;
+// Environment
+float EnvironmentStrength;
+float3 AmbientColor;
+// Specular
+float SpecularSize;
+float SpecularHardness;
+// View
+float3 MainLightDirection;
+float3 MainLightColor;
+float3 CameraPosition;
+float2 ViewportSize;
+float2 InvViewportSize;
+// Stencil values
+int StencilBodyCloth;
+int StencilSkin;
+int StencilHair;
+int StencilFace;
+int StencilEyes;
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+    uint2 PixelPos = DispatchThreadId.xy;
+
+    // Bounds check
+    if (any(PixelPos >= (uint2)ViewportSize))
+        return;
+
+    float2 UV = (float2(PixelPos) + 0.5) * InvViewportSize;
+
+    // Read custom stencil to identify MMD pixels
+    int stencilValue = (int)CustomStencilTexture.Load(int3(PixelPos, 0)).r;
+
+    // If not an MMD object, pass through
+    if (stencilValue == 0)
+    {
+        OutputTexture[PixelPos] = SceneColorTexture.Load(int3(PixelPos, 0));
+        return;
+    }
+
+    // Read scene data
+    float4 sceneColor = SceneColorTexture.Load(int3(PixelPos, 0));
+    float4 gbufferA = GBufferATexture.Load(int3(PixelPos, 0));
+    float depth = SceneDepthTexture.Load(int3(PixelPos, 0)).r;
+
+    // Decode world normal from GBuffer A (UE5 encoding: octahedral)
+    float3 worldNormal = normalize(gbufferA.xyz * 2.0 - 1.0);
+
+    // Compute view direction
+    // (simplified - in full implementation would reconstruct world position from depth)
+    float3 viewDir = normalize(CameraPosition - float3(UV * 2.0 - 1.0, depth));
+
+    // Base color approximation (scene color / estimated lighting)
+    // For stencil-marked objects, we use scene color as a proxy
+    float3 baseColor = sceneColor.rgb;
+
+    // === TOON SHADOW REMAP ===
+    TToonShadowRemap shadowRemap;
+    float3 result;
+
+    if (stencilValue == StencilFace)
+    {
+        result = shadowRemap.RemapToToonFace(sceneColor.rgb, baseColor,
+            ShadowThreshold, ShadowSoftness * 3.0,
+            ShadowColor, EnvironmentStrength, AmbientColor);
+    }
+    else if (stencilValue == StencilSkin)
+    {
+        float3 sssColor = float3(1.0, 0.4, 0.3); // Warm SSS
+        result = shadowRemap.RemapToToonSkin(sceneColor.rgb, baseColor,
+            ShadowThreshold, ShadowSoftness,
+            ShadowColor, sssColor, EnvironmentStrength, AmbientColor);
+    }
+    else
+    {
+        result = shadowRemap.RemapToToon(sceneColor.rgb, baseColor,
+            ShadowThreshold, ShadowSoftness,
+            ShadowColor, DeepShadowColor, EnvironmentStrength, AmbientColor);
+    }
+
+    // === SCREEN SPACE RIM ===
+    if (stencilValue != StencilFace) // Minimal rim on face
+    {
+        TScreenSpaceRim rimCalc;
+
+        // Sample neighbors for edge detection
+        float depthC = depth;
+        float depthL = SceneDepthTexture.Load(int3(PixelPos + int2(-1, 0), 0)).r;
+        float depthR = SceneDepthTexture.Load(int3(PixelPos + int2( 1, 0), 0)).r;
+        float depthU = SceneDepthTexture.Load(int3(PixelPos + int2( 0,-1), 0)).r;
+        float depthD = SceneDepthTexture.Load(int3(PixelPos + int2( 0, 1), 0)).r;
+
+        float3 normalL = normalize(GBufferATexture.Load(int3(PixelPos + int2(-1, 0), 0)).xyz * 2.0 - 1.0);
+        float3 normalR = normalize(GBufferATexture.Load(int3(PixelPos + int2( 1, 0), 0)).xyz * 2.0 - 1.0);
+        float3 normalU = normalize(GBufferATexture.Load(int3(PixelPos + int2( 0,-1), 0)).xyz * 2.0 - 1.0);
+        float3 normalD = normalize(GBufferATexture.Load(int3(PixelPos + int2( 0, 1), 0)).xyz * 2.0 - 1.0);
+
+        // Pack neighbor depths
+        float4 neighborDepths = float4(depthL, depthR, depthU, depthD);
+
+        // DetectNormalEdge takes 4 separate float3 params (not an array)
+        float depthEdge = rimCalc.DetectDepthEdge(depthC, neighborDepths, 0.001);
+        float normalEdge = rimCalc.DetectNormalEdge(worldNormal, normalL, normalR, normalU, normalD, 0.5);
+
+        float3 rim = rimCalc.ComputeRim(depthEdge, normalEdge,
+            MainLightDirection, worldNormal, RimWidth, RimColor);
+
+        result += rim;
+    }
+
+    // === ANIME SPECULAR ===
+    if (stencilValue != StencilEyes) // Eyes have their own specular handling
+    {
+        TAnimeSpecularPP specCalc;
+
+        if (stencilValue == StencilHair)
+        {
+            // Hair uses anisotropic - approximate tangent from normal
+            float3 approxTangent = normalize(cross(worldNormal, float3(0, 1, 0)));
+            float3 hairSpec = specCalc.ComputeHairSpec(worldNormal, approxTangent,
+                MainLightDirection, viewDir, 0.1, 0.3, 0.05, 0.15);
+            result += hairSpec * MainLightColor * 0.5;
+        }
+        else
+        {
+            float3 spec = specCalc.ComputeAnimeSpec(worldNormal, MainLightDirection, viewDir,
+                SpecularSize, SpecularHardness);
+            result += spec * MainLightColor * 0.5;
+        }
+    }
+    else
+    {
+        // Eye specular - extra sharp
+        TAnimeSpecularPP specCalc;
+        float3 eyeSpec = specCalc.ComputeEyeSpec(worldNormal, MainLightDirection, viewDir, 0.05);
+        result += eyeSpec * float3(1, 1, 1) * 0.8;
+    }
+
+    OutputTexture[PixelPos] = float4(result, sceneColor.a);
+}

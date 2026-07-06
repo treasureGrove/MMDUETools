@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Modules/ModuleManager.h"
+#include "Rendering/MMDAnimeViewExtension.h"
 /**
  * FUe5MMDToolsModule类
  * 继承自IModuleInterface接口，是一个模块类，用于实现UE5的MMD工具插件功能
@@ -23,4 +24,7 @@ private:
 
 private:
 	TSharedPtr<class FUICommandList> PluginCommands;
+
+	/** Anime toon-render SceneViewExtension */
+	TSharedPtr<FMMDAnimeViewExtension> AnimeViewExtension;
 };

@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: ""
+title: Ue5MMDTools 插件根目录与文档
+scope:
+    - README.md
+    - .gitattributes
+    - .gitignore
+    - LICENSE
+source_files: []
+depends_on: []
+related_to: []

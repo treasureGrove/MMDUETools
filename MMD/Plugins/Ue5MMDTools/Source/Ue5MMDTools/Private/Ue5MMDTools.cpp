@@ -8,6 +8,8 @@
 #include "LevelEditor.h"
 #include "MMDImportSetting.h"
 #include "Misc/Paths.h"
+#include "Rendering/MMDAnimeViewExtension.h"
+#include "SceneViewExtension.h"
 #include "ShaderCore.h"
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -30,6 +32,9 @@ void FUe5MMDToolsModule::StartupModule()
 		UE_LOG(LogTemp, Warning, TEXT("Ue5MMDTools plugin descriptor not found; shader directory mapping was skipped."));
 	}
 
+	AnimeViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeViewExtension>();
+	UE_LOG(LogTemp, Log, TEXT("MMD AnimeViewExtension registered."));
+
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
 
@@ -51,6 +56,9 @@ void FUe5MMDToolsModule::StartupModule()
 
 void FUe5MMDToolsModule::ShutdownModule()
 {
+	// Release the SceneViewExtension so it is not leaked.
+	AnimeViewExtension.Reset();
+
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
 

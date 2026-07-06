@@ -1,0 +1,97 @@
+#ifndef MMD_TOON_SHADOW_REMAP_USH
+#define MMD_TOON_SHADOW_REMAP_USH
+
+// Toon Shadow Remapping for RaycastMMD-style rendering
+// Extracts lighting intensity from final rendered scene color and remaps to anime-style layers
+// 提取光照强度并重映射为动漫风格阴影层
+
+struct TToonShadowRemap
+{
+    // Extract lighting intensity by dividing scene color by base color
+    // This gives us the actual illumination the surface received (including RT shadows, GI, AO)
+    // 通过场景颜色除以基础颜色提取光照强度，包含RT阴影、GI、AO等所有光照信息
+    float ExtractLightingIntensity(float3 sceneColor, float3 baseColor)
+    {
+        float3 safeBase = max(baseColor, float3(0.001, 0.001, 0.001));
+        float3 lighting = sceneColor / safeBase;
+        // Use perceptual luminance (感知亮度)
+        return dot(lighting, float3(0.2126, 0.7152, 0.0722));
+    }
+
+    // Dual-layer toon shadow remapping (双层卡通阴影重映射)
+    // Layer 1: Primary shadow boundary (大面积明暗分界)
+    // Layer 2: Deep shadow for extra depth (暗部层次)
+    float3 RemapToToon(float3 sceneColor, float3 baseColor,
+                       float threshold, float softness,
+                       float3 shadowColor, float3 deepShadowColor,
+                       float envStrength, float3 ambientColor)
+    {
+        float lightIntensity = ExtractLightingIntensity(sceneColor, baseColor);
+
+        // Layer 1: Primary shadow (主阴影)
+        float shadow1 = smoothstep(threshold - softness, threshold + softness, lightIntensity);
+        
+        // Layer 2: Deep shadow (深层阴影, offset below primary)
+        float deepThreshold = threshold - 0.3;
+        float deepSoftness = softness * 0.5;
+        float shadow2 = smoothstep(deepThreshold - deepSoftness, deepThreshold + deepSoftness, lightIntensity);
+
+        // Environment-tinted shadow color (环境光影响阴影颜色)
+        // RaycastMMD signature: shadows respond to ambient lighting
+        float3 envShadowColor = lerp(shadowColor, shadowColor * ambientColor, envStrength);
+        float3 envDeepShadowColor = lerp(deepShadowColor, deepShadowColor * ambientColor, envStrength * 0.7);
+
+        // Compose: deep shadow → mid shadow → lit (从深到浅合成)
+        float3 result = lerp(envDeepShadowColor * baseColor, envShadowColor * baseColor, shadow2);
+        result = lerp(result, sceneColor, shadow1);
+
+        return result;
+    }
+
+    // Simplified version for face (面部简化版，使用更柔和的过渡)
+    // Uses softer thresholds, no deep shadow layer for clean anime face shading
+    float3 RemapToToonFace(float3 sceneColor, float3 baseColor,
+                           float threshold, float softness,
+                           float3 shadowColor, float envStrength, float3 ambientColor)
+    {
+        float lightIntensity = ExtractLightingIntensity(sceneColor, baseColor);
+        
+        // Face uses much softer transition, no deep shadow layer (面部柔和过渡，无深层阴影)
+        float faceSoftness = softness * 3.0;
+        float shadow = smoothstep(threshold - faceSoftness, threshold + faceSoftness, lightIntensity);
+        
+        float3 envShadowColor = lerp(shadowColor, shadowColor * ambientColor, envStrength);
+        float3 result = lerp(envShadowColor * baseColor, sceneColor, shadow);
+        
+        return result;
+    }
+
+    // Skin variant with warm terminator (皮肤变体，带有暖色明暗分界线)
+    // Adds SSS-like warm color at the shadow boundary for realistic anime skin
+    float3 RemapToToonSkin(float3 sceneColor, float3 baseColor,
+                           float threshold, float softness,
+                           float3 shadowColor, float3 sssColor,
+                           float envStrength, float3 ambientColor)
+    {
+        float lightIntensity = ExtractLightingIntensity(sceneColor, baseColor);
+
+        // Primary shadow (主阴影)
+        float shadow1 = smoothstep(threshold - softness, threshold + softness, lightIntensity);
+        
+        // SSS terminator zone (次表面散射分界区域)
+        // Warm color band at the shadow boundary for anime skin effect
+        float terminatorMask = smoothstep(threshold - softness * 2.0, threshold, lightIntensity)
+                             - smoothstep(threshold, threshold + softness * 2.0, lightIntensity);
+        terminatorMask = saturate(terminatorMask);
+        
+        float3 envShadowColor = lerp(shadowColor, shadowColor * ambientColor, envStrength);
+        float3 shadedColor = lerp(envShadowColor * baseColor, sceneColor, shadow1);
+        
+        // Add warm SSS at terminator (在明暗分界线添加暖色SSS效果)
+        shadedColor += terminatorMask * sssColor * baseColor * 0.3;
+        
+        return shadedColor;
+    }
+};
+
+#endif // MMD_TOON_SHADOW_REMAP_USH

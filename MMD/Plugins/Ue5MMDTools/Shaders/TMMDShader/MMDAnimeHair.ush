@@ -1,0 +1,102 @@
+
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeLightingCommon.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/AnimeEnvironment.usf"
+#include "/Plugin/Ue5MMDTools/TShaderFunctionLibrary/ColorAdjustment.usf"
+
+// ============================================================================
+// TMMDAnimeHair
+// Hair variant anime shader with anisotropic (Kajiya-Kay) dual-layer specular.
+//
+// input parameters (connect in material editor):
+//   float4 base_color_map_value  - albedo texture sample
+//   float3 shadow_color          - shadow tint color            [default: 0.25,0.2,0.3]
+//   float  shadow_threshold      - shadow cutoff [-1..1]        [default: 0.1]
+//   float  shadow_softness       - shadow edge width [0..1]     [default: 0.08]
+//   float3 tangent_dir           - hair tangent direction       [default: from TangentToWorld[0]]
+//   float  spec_shift_1          - primary specular shift [-1..1]  [default: 0.15]
+//   float  spec_shift_2          - secondary specular shift [-1..1][default: -0.1]
+//   float3 spec_color_1          - primary specular tint        [default: 1,1,1]
+//   float3 spec_color_2          - secondary specular tint      [default: 0.8,0.7,0.6]
+//   float  environment_strength  - ambient/env blend [0..1]     [default: 0.3]
+// ============================================================================
+
+struct TMMDAnimeHair
+{
+    // Anisotropic Kajiya-Kay specular for a single layer
+    float AnisotropicSpecular(float3 N, float3 T, float3 L, float3 V, float shift, float exponent)
+    {
+        // Shift tangent for highlight offset
+        float3 shiftedT = normalize(T + N * shift);
+        float3 H = normalize(L + V);
+        float TdotH = dot(shiftedT, H);
+        float sinTH = sqrt(saturate(1.0 - TdotH * TdotH));
+        return pow(sinTH, exponent);
+    }
+
+    float4 OutputColor(FMaterialPixelParameters material_parameters,
+                       float4 base_color_map_value,
+                       float3 shadow_color,
+                       float shadow_threshold,
+                       float shadow_softness,
+                       float3 tangent_dir,
+                       float spec_shift_1,
+                       float spec_shift_2,
+                       float3 spec_color_1,
+                       float3 spec_color_2,
+                       float environment_strength)
+    {
+        // -- Utility structs --
+        TAnimeLightingCommon lighting;
+        TAnimeEnvironment    environment;
+        TColorAdjustment     colorAdj;
+
+        // -- Core vectors --
+        float3 view_dir     = normalize(material_parameters.CameraVector);
+        float3 pixel_normal = normalize(material_parameters.WorldNormal * material_parameters.TwoSidedSign);
+        float3 tangent      = normalize(tangent_dir + material_parameters.TangentToWorld[0] * material_parameters.TwoSidedSign);
+
+        // 1. Main light + ambient
+        float3 light_dir   = environment.GetMainLightDirection();
+        float3 light_color = environment.GetMainLightColor();
+        float3 ambient     = environment.GetAmbientColor(pixel_normal);
+
+        // 2. NdotL, NdotV
+        float ndotl = dot(pixel_normal, light_dir);
+        float ndotv = saturate(dot(pixel_normal, view_dir));
+
+        // 3. Softer shadow gradient for hair
+        float toon_shadow = lighting.ComputeDualLayerShadow(ndotl, shadow_threshold, max(shadow_softness, 0.05), 0.35);
+
+        // 4. Environment-tinted shadow
+        float3 env_tint = environment.GetEnvironmentTint(pixel_normal, environment_strength);
+        float3 shadow_tinted = shadow_color * env_tint;
+
+        // 5. Apply shadow to base color
+        float3 base_color = colorAdj.SafeColor(base_color_map_value.rgb);
+        float3 lit_color   = base_color * saturate(light_color);
+        float3 shaded_color = base_color * shadow_tinted;
+        float3 result = lerp(shaded_color, lit_color, toon_shadow);
+
+        // Ambient fill in shadows
+        float3 gi = environment.ComputeGIResponse(pixel_normal, environment_strength);
+        result += base_color * gi * (1.0 - toon_shadow);
+
+        // 6. Dual-layer anisotropic specular (Kajiya-Kay)
+        float spec1 = AnisotropicSpecular(pixel_normal, tangent, light_dir, view_dir, spec_shift_1, 32.0);
+        float spec2 = AnisotropicSpecular(pixel_normal, tangent, light_dir, view_dir, spec_shift_2, 16.0);
+
+        // Environment color tints highlights
+        float3 env_highlight = environment.GetEnvironmentTint(pixel_normal, environment_strength * 0.5);
+        float3 spec_contrib = spec_color_1 * spec1 * env_highlight + spec_color_2 * spec2 * env_highlight;
+        result += spec_contrib * toon_shadow; // only on lit side
+
+        // 7. Subtle hair rim
+        float rim_mask = lighting.ComputeRimMask(ndotv, 0.2, 0.12);
+        float rim_light_weight = saturate(ndotl * 0.5 + 0.5);
+        result += float3(0.8, 0.75, 0.7) * rim_mask * rim_light_weight * 0.3;
+
+        return float4(max(result, 0.0), base_color_map_value.a);
+    }
+};
+TMMDAnimeHair MMDShader;
+return MMDShader.OutputColor(Parameters, base_color_map_value, shadow_color, shadow_threshold, shadow_softness, tangent_dir, spec_shift_1, spec_shift_2, spec_color_1, spec_color_2, environment_strength);
