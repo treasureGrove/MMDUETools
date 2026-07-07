@@ -6,6 +6,8 @@
 #include "RenderGraph.h"
 #include "SceneView.h"
 
+struct FPostProcessMaterialInputs;
+
 /**
  * Runtime parameter block passed from the game thread (via UMMDAnimeRenderSettings)
  * down to the RDG compute pass on the render thread.
@@ -40,5 +42,6 @@ struct FMMDAnimeRenderParams
 void AddMMDAnimePostProcessPass(
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& View,
+	const FPostProcessMaterialInputs& Inputs,
 	FRDGTextureRef SceneColor,
 	const FMMDAnimeRenderParams& Params);

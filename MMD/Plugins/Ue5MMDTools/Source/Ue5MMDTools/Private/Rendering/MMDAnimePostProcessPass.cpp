@@ -1,5 +1,4 @@
 // Copyright (c) 2024-2026 MMDUETools. All Rights Reserved.
-// TODO: Re-enable after migrating to UE 5.5+ RDG / Renderer API
 
 #include "Rendering/MMDAnimePostProcessPass.h"
 #include "Rendering/MMDAnimeStencilValues.h"
@@ -7,10 +6,8 @@
 
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
+#include "PostProcess/PostProcessMaterialInputs.h"
 #include "ScreenPass.h"
-
-#if 0 // Disabled - needs UE 5.5 RDG / Renderer module migration
-
 #include "SystemTextures.h"
 
 static FRDGTextureSRVRef GetFallbackBlackTexture2D(FRDGBuilder& GraphBuilder)
@@ -22,6 +19,7 @@ static FRDGTextureSRVRef GetFallbackBlackTexture2D(FRDGBuilder& GraphBuilder)
 void AddMMDAnimePostProcessPass(
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& View,
+	const FPostProcessMaterialInputs& Inputs,
 	FRDGTextureRef SceneColor,
 	const FMMDAnimeRenderParams& Params)
 {
@@ -56,9 +54,17 @@ void AddMMDAnimePostProcessPass(
 		GraphBuilder.AllocParameters<FMMDAnimeToonRemapCS::FParameters>();
 
 	PassParameters->SceneColorTexture = GraphBuilder.CreateSRV(SceneColor);
+
+	// GBufferA / SceneDepth: FSceneTextures is in Renderer/Internal/ (accessible),
+	// but retrieving it requires FViewInfo which is in Renderer/Private/ (not accessible from plugin).
 	PassParameters->GBufferATexture = GetFallbackBlackTexture2D(GraphBuilder);
 	PassParameters->SceneDepthTexture = GetFallbackBlackTexture2D(GraphBuilder);
-	PassParameters->CustomStencilTexture = GetFallbackBlackTexture2D(GraphBuilder);
+
+	// Custom stencil: directly available from post-process inputs.
+	PassParameters->CustomStencilTexture = Inputs.CustomDepthTexture
+		? GraphBuilder.CreateSRV(FRDGTextureSRVDesc::Create(Inputs.CustomDepthTexture))
+		: GetFallbackBlackTexture2D(GraphBuilder);
+
 	PassParameters->OutputTexture = GraphBuilder.CreateUAV(OutputTexture);
 	PassParameters->LinearSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
@@ -96,15 +102,4 @@ void AddMMDAnimePostProcessPass(
 		GroupCount);
 
 	AddCopyTexturePass(GraphBuilder, OutputTexture, SceneColor);
-}
-
-#endif // Disabled - needs UE 5.5 RDG / Renderer module migration
-
-void AddMMDAnimePostProcessPass(
-	FRDGBuilder& GraphBuilder,
-	const FSceneView& View,
-	FRDGTextureRef SceneColor,
-	const FMMDAnimeRenderParams& Params)
-{
-	// Stub: post-process pass disabled pending UE 5.5 API migration
 }

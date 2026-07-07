@@ -71,7 +71,8 @@ public class Ue5MMDTools : ModuleRules
             "MovieSceneTracks",
             "Sequencer",
             "Json",
-            "JsonUtilities"
+            "JsonUtilities",
+            "Renderer"
         });
 
         string PluginPath = Path.GetFullPath(Path.Combine(ModuleDirectory, "../../"));

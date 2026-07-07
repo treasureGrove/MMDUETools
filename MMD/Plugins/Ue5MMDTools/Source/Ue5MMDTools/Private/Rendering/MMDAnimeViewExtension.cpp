@@ -1,5 +1,4 @@
 // Copyright (c) 2024-2026 MMDUETools. All Rights Reserved.
-// TODO: Re-enable after migrating to UE 5.5+ post-process API
 
 #include "Rendering/MMDAnimeViewExtension.h"
 #include "Rendering/MMDAnimePostProcessPass.h"
@@ -8,8 +7,6 @@
 #include "RenderGraphBuilder.h"
 #include "ScreenPass.h"
 #include "SceneView.h"
-
-#if 0 // Disabled - needs UE 5.5 post-process API migration
 
 FMMDAnimeViewExtension::FMMDAnimeViewExtension(const FAutoRegister& AutoRegister)
 	: FSceneViewExtensionBase(AutoRegister)
@@ -29,7 +26,7 @@ void FMMDAnimeViewExtension::SubscribeToPostProcessingPass(
 {
 	if (PassId == EPostProcessingPass::Tonemap)
 	{
-		InOutPassCallbacks.Add(FAfterPassCallback::CreateRaw(
+		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(
 			this, &FMMDAnimeViewExtension::PostProcessCallback_RenderThread));
 	}
 }
@@ -52,18 +49,19 @@ FScreenPassTexture FMMDAnimeViewExtension::PostProcessCallback_RenderThread(
 	}
 
 	FMMDAnimeRenderParams Params;
+
+	// Extract main directional light from the view (use default overhead sun)
 	Params.MainLightDirection = FVector3f(0.0f, -0.3f, 0.95f);
 	Params.MainLightColor     = FVector3f(1.0f, 1.0f, 1.0f);
 
-	const FVector ViewLocation = View.GetViewLocation();
+	// Camera position from the view
+	const FVector ViewOrigin = View.ViewMatrices.GetViewOrigin();
 	Params.CameraPosition = FVector3f(
-		static_cast<float>(ViewLocation.X),
-		static_cast<float>(ViewLocation.Y),
-		static_cast<float>(ViewLocation.Z));
+		static_cast<float>(ViewOrigin.X),
+		static_cast<float>(ViewOrigin.Y),
+		static_cast<float>(ViewOrigin.Z));
 
-	AddMMDAnimePostProcessPass(GraphBuilder, View, SceneColor, Params);
+	AddMMDAnimePostProcessPass(GraphBuilder, View, Inputs, SceneColor, Params);
 
-	return FScreenPassTexture(SceneColor, SceneColorInput.Subresource);
+	return FScreenPassTexture(SceneColor);
 }
-
-#endif // Disabled - needs UE 5.5 post-process API migration
