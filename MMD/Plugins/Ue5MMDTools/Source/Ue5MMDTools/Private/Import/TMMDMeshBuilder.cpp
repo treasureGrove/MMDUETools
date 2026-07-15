@@ -1,8 +1,6 @@
 #include "TMMDMeshBuilder.h"
 #include "TPMXParser.h"
 #include "MMDModelDataAsset.h"
-#include "Rendering/MMDAnimeStencilValues.h"
-
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataController.h"
@@ -3286,15 +3284,6 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 		{
 			const FPMXMaterial& PMXMaterial = PMXInfo.ModelMaterials[Section.MaterialIndex];
 			Section.bCastShadow = (PMXMaterial.DrawFlags & PMX_DRAW_CAST_SHADOW) != 0;
-
-			// Classify the material by PMX name keywords (face/hair/skin/eye/metal)
-			// and store the stencil value for runtime reference. The actual stencil
-			// value written to the buffer is set at the component level; this log
-			// helps users identify which stencil value to assign per section.
-			const uint8 StencilValue = ClassifyMMDMaterialName(PMXMaterial.NameJP, PMXMaterial.NameEN);
-			UE_LOG(LogTemp, Log,
-				TEXT("MMD_STENCIL Section=%d Material='%s' StencilValue=%d (0=None 1=Body 2=Skin 3=Hair 4=Face 5=EyesMetal)"),
-				Section.MaterialIndex, *MaterialName, StencilValue);
 		}
 	}
 

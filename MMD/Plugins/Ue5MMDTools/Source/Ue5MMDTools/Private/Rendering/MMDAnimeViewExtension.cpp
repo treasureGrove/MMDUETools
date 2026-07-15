@@ -1,67 +1,56 @@
-// Copyright (c) 2024-2026 MMDUETools. All Rights Reserved.
-
 #include "Rendering/MMDAnimeViewExtension.h"
-#include "Rendering/MMDAnimePostProcessPass.h"
-
 #include "PostProcess/PostProcessMaterialInputs.h"
-#include "RenderGraphBuilder.h"
 #include "ScreenPass.h"
-#include "SceneView.h"
+#include "EngineUtils.h"
+#include "Components/SpotLightComponent.h"
 
 FMMDAnimeViewExtension::FMMDAnimeViewExtension(const FAutoRegister& AutoRegister)
-	: FSceneViewExtensionBase(AutoRegister)
-{
+	: FSceneViewExtensionBase(AutoRegister) {}
+
+bool FMMDAnimeViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const {
+		
+	return bEnabled && bDataReady;
 }
 
-bool FMMDAnimeViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
-{
-	return bEnabled;
+void FMMDAnimeViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily) {
+	UWorld* World = InViewFamily.Scene ? InViewFamily.Scene->GetWorld():nullptr;
+	if (!World) {
+		bDataReady = false;
+		return;
+	}
+	FMemory::Memzero(&EnvParams,sizeof(EnvParams));
+
+	int PtIdx = 0, SpIdx = 0, RtIdx = 0;
+
+	for (TActorIterator<AActor> It(World); It; ++It) {
+		AActor* Actor = *It;
+		if (!Actor || Actor->IsHidden())
+			continue;
+
+		if (SpIdx < MMD_ANIME_MAX_POINT_LIGHTS) {
+			TArray<USpotLightComponent*> SpotComps;
+			Actor->GetComponents<USpotLightComponent>(SpotComps);
+			for (USpotLightComponent* L : SpotComps)
+			{
+				if (!L || !L->IsVisible()||SpIdx >= MMD_ANIME_MAX_SPOT_LIGHTS)
+					continue;
+
+				const FLinearColor SpotLightColor = L->GetLightColor()*L->Intensity;
+				const float HalfRad = FMath::DegreesToRadians(L->OuterConeAngle*0.5f);
+			}
+		}
+	}
+
+	bDataReady = (EnvParams.PointLightCount.X + EnvParams.SpotLightCount.X + EnvParams.RectLightCount.X) > 0;
 }
 
-void FMMDAnimeViewExtension::SubscribeToPostProcessingPass(
-	EPostProcessingPass PassId,
-	const FSceneView& View,
-	FAfterPassCallbackDelegateArray& InOutPassCallbacks,
-	bool bIsPassEnabled)
+void FMMDAnimeViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) {}
+
+void FMMDAnimeViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily) {}
+
+void FMMDAnimeViewExtension::SubscribeToPostProcessingPass(EPostProcessingPass PassId, const FSceneView& View, FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled) {}
+
+FScreenPassTexture FMMDAnimeViewExtension::PostProcessCallback_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& View, const FPostProcessMaterialInputs& Inputs)
 {
-	if (PassId == EPostProcessingPass::Tonemap)
-	{
-		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(
-			this, &FMMDAnimeViewExtension::PostProcessCallback_RenderThread));
-	}
-}
-
-FScreenPassTexture FMMDAnimeViewExtension::PostProcessCallback_RenderThread(
-	FRDGBuilder& GraphBuilder,
-	const FSceneView& View,
-	const FPostProcessMaterialInputs& Inputs)
-{
-	FScreenPassTexture SceneColorInput = Inputs.OverrideOutput;
-	if (!SceneColorInput.IsValid())
-	{
-		return Inputs.OverrideOutput;
-	}
-
-	FRDGTextureRef SceneColor = SceneColorInput.Texture;
-	if (!SceneColor)
-	{
-		return Inputs.OverrideOutput;
-	}
-
-	FMMDAnimeRenderParams Params;
-
-	// Extract main directional light from the view (use default overhead sun)
-	Params.MainLightDirection = FVector3f(0.0f, -0.3f, 0.95f);
-	Params.MainLightColor     = FVector3f(1.0f, 1.0f, 1.0f);
-
-	// Camera position from the view
-	const FVector ViewOrigin = View.ViewMatrices.GetViewOrigin();
-	Params.CameraPosition = FVector3f(
-		static_cast<float>(ViewOrigin.X),
-		static_cast<float>(ViewOrigin.Y),
-		static_cast<float>(ViewOrigin.Z));
-
-	AddMMDAnimePostProcessPass(GraphBuilder, View, Inputs, SceneColor, Params);
-
-	return FScreenPassTexture(SceneColor);
+	return Inputs.OverrideOutput;
 }

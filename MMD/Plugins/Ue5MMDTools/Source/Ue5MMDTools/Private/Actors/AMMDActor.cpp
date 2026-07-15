@@ -8,8 +8,6 @@
 #include "AGN_MMDSkeletalControl.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "TPMXParser.h"
-#include "Rendering/MMDAnimeStencilValues.h"
-
 AMMDActor::AMMDActor()
 {
     PrimaryActorTick.bCanEverTick = true;
@@ -32,10 +30,6 @@ AMMDActor::AMMDActor()
     SkeletalMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
     SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
     SkeletalMeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -80.0f));
-
-    // Enable custom depth / stencil so the anime post-process can identify MMD meshes.
-    SkeletalMeshComponent->SetRenderCustomDepth(true);
-    SkeletalMeshComponent->SetCustomDepthStencilValue(MMDAnimeStencil::BodyCloth);
 }
 
 void AMMDActor::SetupComponents(const FString& FilePath)
@@ -72,10 +66,6 @@ void AMMDActor::SetupComponents(const FString& FilePath)
         SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
     }
     SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
-
-    // Ensure custom depth / stencil stays enabled after mesh assignment.
-    SkeletalMeshComponent->SetRenderCustomDepth(true);
-    SkeletalMeshComponent->SetCustomDepthStencilValue(MMDAnimeStencil::BodyCloth);
 
     UAnimBlueprint* MMDAnimBP = MeshBuilder.BuildAnimBlueprint(BuiltMesh, FilePath);
 

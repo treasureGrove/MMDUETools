@@ -20,24 +20,21 @@ static const FName Ue5MMDToolsTabName("Ue5MMDTools");
 
 void FUe5MMDToolsModule::StartupModule()
 {
-	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
-	if (Plugin.IsValid())
+	// ---------- shader directory mapping ----------
+	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools")))
 	{
-		const FString ShaderDirectory = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
-		AddShaderSourceDirectoryMapping(TEXT("/Plugin/Ue5MMDTools"), ShaderDirectory);
-		UE_LOG(LogTemp, Log, TEXT("Ue5MMDTools shader directory mapped: /Plugin/Ue5MMDTools -> %s"), *ShaderDirectory);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Ue5MMDTools plugin descriptor not found; shader directory mapping was skipped."));
+		const FString ShaderDir = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
+		AddShaderSourceDirectoryMapping(TEXT("/Plugin/Ue5MMDTools"), ShaderDir);
+		UE_LOG(LogTemp, Log, TEXT("Ue5MMDTools shader dir mapped: /Plugin/Ue5MMDTools"));
 	}
 
+	// ---------- SceneViewExtension ----------
 	AnimeViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeViewExtension>();
-	UE_LOG(LogTemp, Log, TEXT("MMD AnimeViewExtension registered."));
+	UE_LOG(LogTemp, Log, TEXT("MMD AnimeViewExtension registered"));
 
+	// ---------- UI ----------
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
-
 	FUe5MMDToolsCommands::Register();
 
 	PluginCommands = MakeShareable(new FUICommandList);
@@ -46,10 +43,12 @@ void FUe5MMDToolsModule::StartupModule()
 		FExecuteAction::CreateRaw(this, &FUe5MMDToolsModule::PluginButtonClicked),
 		FCanExecuteAction());
 
-	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FUe5MMDToolsModule::RegisterMenus));
+	UToolMenus::RegisterStartupCallback(
+		FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FUe5MMDToolsModule::RegisterMenus));
 
 	FGlobalTabmanager::Get()
-		->RegisterNomadTabSpawner(Ue5MMDToolsTabName, FOnSpawnTab::CreateRaw(this, &FUe5MMDToolsModule::OnSpawnPluginTab))
+		->RegisterNomadTabSpawner(Ue5MMDToolsTabName,
+			FOnSpawnTab::CreateRaw(this, &FUe5MMDToolsModule::OnSpawnPluginTab))
 		.SetDisplayName(LOCTEXT("FUe5MMDToolsTabTitle", "Ue5MMDTools"))
 		.SetMenuType(ETabSpawnerMenuType::Hidden);
 }
@@ -60,10 +59,8 @@ void FUe5MMDToolsModule::ShutdownModule()
 
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
-
 	FUe5MMDToolsStyle::Shutdown();
 	FUe5MMDToolsCommands::Unregister();
-
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(Ue5MMDToolsTabName);
 }
 
@@ -71,12 +68,7 @@ TSharedRef<SDockTab> FUe5MMDToolsModule::OnSpawnPluginTab(const FSpawnTabArgs& S
 {
 	TSharedRef<MMDImportSetting> ImportSetting = SNew(MMDImportSetting);
 	MMDImportSetting::RegisterInstance(ImportSetting);
-
-	return SNew(SDockTab)
-		.TabRole(ETabRole::NomadTab)
-		[
-			ImportSetting
-		];
+	return SNew(SDockTab).TabRole(ETabRole::NomadTab)[ImportSetting];
 }
 
 void FUe5MMDToolsModule::PluginButtonClicked()
@@ -87,21 +79,20 @@ void FUe5MMDToolsModule::PluginButtonClicked()
 void FUe5MMDToolsModule::RegisterMenus()
 {
 	FToolMenuOwnerScoped OwnerScoped(this);
-
 	{
 		UToolMenu* Menu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Window");
 		FToolMenuSection& Section = Menu->FindOrAddSection("WindowLayout");
-		Section.AddMenuEntryWithCommandList(FUe5MMDToolsCommands::Get().OpenPluginWindow, PluginCommands);
+		Section.AddMenuEntryWithCommandList(
+			FUe5MMDToolsCommands::Get().OpenPluginWindow, PluginCommands);
 	}
-
 	{
-		UToolMenu* ToolbarMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
-		FToolMenuSection& Section = ToolbarMenu->FindOrAddSection("Settings");
-		FToolMenuEntry& Entry = Section.AddEntry(FToolMenuEntry::InitToolBarButton(FUe5MMDToolsCommands::Get().OpenPluginWindow));
+		UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar");
+		FToolMenuSection& Section = Toolbar->FindOrAddSection("Settings");
+		FToolMenuEntry& Entry = Section.AddEntry(
+			FToolMenuEntry::InitToolBarButton(FUe5MMDToolsCommands::Get().OpenPluginWindow));
 		Entry.SetCommandList(PluginCommands);
 	}
 }
 
 #undef LOCTEXT_NAMESPACE
-
 IMPLEMENT_MODULE(FUe5MMDToolsModule, Ue5MMDTools)
