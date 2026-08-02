@@ -5,11 +5,10 @@
 #include "Rendering/MMDAnimeEnvironmentUniformBuffer.h"
 
 struct FPostProcessMaterialInputs;
+struct FScreenPassTexture;
 
-void AddMMDAnimePostProcessPass(
-	FRDGBuilder& GraphBuilder,
-	const FSceneView& View,
-	const FPostProcessMaterialInputs& Inputs,
-	FRDGTextureRef SceneColor,
-	FRDGUniformBufferRef AnimeEnvironmentUB);
-
+FScreenPassTexture AddMMDAnimePostProcessPass(
+    FRDGBuilder& GraphBuilder,
+    const FSceneView& View,
+    const FPostProcessMaterialInputs& Inputs,
+    TRDGUniformBufferRef<FAnimeEnvironmentParameters> AnimeEnvironmentUB);

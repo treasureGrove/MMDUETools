@@ -1,0 +1,419 @@
+#include "Rendering/UMMDAnimeLightDataSubsystem.h"
+
+#include "EngineModule.h"
+#include "RendererInterface.h"
+#include "RenderGraphUtils.h"
+#include "EngineUtils.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Engine/World.h"
+#include "Containers/Ticker.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/CameraComponent.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
+#include "MMDAnimeWriteLightsCS.h"
+#include "Misc/PackageName.h"
+#include "UObject/Package.h"
+#include "UObject/SavePackage.h"
+
+#if WITH_EDITOR
+#include "AssetRegistry/IAssetRegistry.h"
+#include "Editor.h"
+#include "EditorViewportClient.h"
+#endif
+
+// Light type codes written into the light data texture.
+namespace MMDAnimeLightType
+{
+	constexpr float Empty = 0.0f;
+	constexpr float Point = 1.0f;
+	constexpr float Spot = 2.0f;
+	constexpr float Directional = 3.0f;
+}
+
+namespace
+{
+	const TCHAR* GMMDAnimeLightDataRT_PackagePath = TEXT("/Ue5MMDTools/Rendering");
+	const TCHAR* GMMDAnimeLightDataRT_AssetName   = TEXT("LightDataRT");
+	const TCHAR* GMMDAnimeLightDataRT_AssetPath   = TEXT("/Ue5MMDTools/Rendering/LightDataRT.LightDataRT");
+}
+
+void UMMDAnimeLightDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+
+	PostOpaqueDelegateHandle = GetRendererModule().RegisterPostOpaqueRenderDelegate(
+		FPostOpaqueRenderDelegate::CreateUObject(this, &UMMDAnimeLightDataSubsystem::OnPostOpaque));
+
+	TickHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateUObject(this, &UMMDAnimeLightDataSubsystem::TickLightCollection), 0.0f);
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDAnimeLight] Subsystem initialized, PostOpaque delegate registered."));
+}
+
+void UMMDAnimeLightDataSubsystem::Deinitialize()
+{
+	if (TickHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
+		TickHandle.Reset();
+	}
+
+	FlushRenderingCommands();
+
+	if (PostOpaqueDelegateHandle.IsValid())
+	{
+		GetRendererModule().RemovePostOpaqueRenderDelegate(PostOpaqueDelegateHandle);
+		PostOpaqueDelegateHandle.Reset();
+	}
+
+	Super::Deinitialize();
+}
+
+void UMMDAnimeLightDataSubsystem::SetLightDataRenderTarget(UTextureRenderTarget2D* InRenderTarget)
+{
+	LightDataRT = InRenderTarget;
+	if (LightDataRT)
+	{
+		LightDataRT->bCanCreateUAV = true;
+		LightDataRT->RenderTargetFormat = RTF_RGBA16f;
+		LightDataRT->InitAutoFormat(MaxLights * 4, 1);
+		LightDataRT->UpdateResourceImmediate(true);
+		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA16f UAV)"),
+			*LightDataRT->GetName(), LightDataRT->SizeX, LightDataRT->SizeY);
+	}
+}
+
+void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
+{
+	// 1. Try to load an existing asset.
+	UTextureRenderTarget2D* ExistingRT = LoadObject<UTextureRenderTarget2D>(nullptr, GMMDAnimeLightDataRT_AssetPath);
+	if (ExistingRT)
+	{
+		SetLightDataRenderTarget(ExistingRT);
+		return;
+	}
+
+#if WITH_EDITOR
+	// 2. Auto-create the asset in the editor so the user only has to drag it into a material.
+	const FString PackagePath = FString(GMMDAnimeLightDataRT_PackagePath) / GMMDAnimeLightDataRT_AssetName;
+	UPackage* Package = CreatePackage(*PackagePath);
+	if (Package)
+	{
+		UTextureRenderTarget2D* NewRT = NewObject<UTextureRenderTarget2D>(
+			Package,
+			GMMDAnimeLightDataRT_AssetName,
+			RF_Public | RF_Standalone);
+
+		if (NewRT)
+		{
+			NewRT->RenderTargetFormat = RTF_RGBA16f;
+			NewRT->bCanCreateUAV = true;
+			NewRT->bAutoGenerateMips = false;
+			NewRT->InitAutoFormat(MaxLights * 4, 1);
+			NewRT->UpdateResourceImmediate(true);
+			NewRT->MarkPackageDirty();
+
+			FString FileName;
+			if (FPackageName::TryConvertLongPackageNameToFilename(PackagePath, FileName, FPackageName::GetAssetPackageExtension()))
+			{
+				FSavePackageArgs SaveArgs;
+				SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+				SaveArgs.SaveFlags = SAVE_NoError;
+				UPackage::SavePackage(Package, NewRT, *FileName, SaveArgs);
+			}
+
+			if (IAssetRegistry* AssetRegistry = IAssetRegistry::Get())
+			{
+				AssetRegistry->AssetCreated(NewRT);
+			}
+
+			UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Auto-created light data RT asset at %s.%s"),
+				*PackagePath, GMMDAnimeLightDataRT_AssetName);
+			SetLightDataRenderTarget(NewRT);
+			return;
+		}
+	}
+#endif
+
+	UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT not found at %s and could not be created."),
+		GMMDAnimeLightDataRT_AssetPath);
+}
+
+bool UMMDAnimeLightDataSubsystem::TickLightCollection(float DeltaTime)
+{
+	if (!bAutoSetupDone)
+	{
+		bAutoSetupDone = true;
+		AutoSetupLightDataRT();
+	}
+
+	if (!bCollectionEnabled)
+	{
+		return true;
+	}
+
+	UWorld* World = GWorld;
+	if (!World)
+	{
+		return true;
+	}
+
+	TArray<FVector4f> Data;
+	CollectLights(World, Data);
+
+	// Push to the render thread. Both the writer (this command) and the reader
+	// (OnPostOpaque) run on the render thread, so no lock is needed.
+	TArray<FVector4f> DataCopy = MoveTemp(Data);
+	ENQUEUE_RENDER_COMMAND(MMDAnimeUpdateLightData)(
+		[this, DataCopy = MoveTemp(DataCopy)](FRHICommandListImmediate& RHICmdList) mutable
+		{
+			RenderThreadLightData = MoveTemp(DataCopy);
+		});
+
+	return true;
+}
+
+void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>& OutData)
+{
+	OutData.SetNum(MaxLights * 4);
+	FMemory::Memzero(OutData.GetData(), OutData.Num() * sizeof(FVector4f));
+
+	// ---- camera for distance culling ----
+	FVector CameraPos = FVector::ZeroVector;
+	bool bHasCamera = false;
+
+	if (APlayerController* PC = World->GetFirstPlayerController())
+	{
+		if (PC->PlayerCameraManager)
+		{
+			CameraPos = PC->PlayerCameraManager->GetCameraLocation();
+			bHasCamera = true;
+		}
+	}
+#if WITH_EDITOR
+	if (!bHasCamera && GEditor)
+	{
+		if (FViewport* Viewport = GEditor->GetActiveViewport())
+		{
+			if (FViewportClient* VC = Viewport->GetClient())
+			{
+				if (FEditorViewportClient* EVC = static_cast<FEditorViewportClient*>(VC))
+				{
+					CameraPos = EVC->GetViewLocation();
+					bHasCamera = true;
+				}
+			}
+		}
+	}
+#endif
+
+	const float MaxLightDistance = bHasCamera ? 5000.0f : 1e9f;
+	const float MaxDistSq = MaxLightDistance * MaxLightDistance;
+
+	struct FPointCand { FVector Pos; FLinearColor Color; float Intensity; float Radius; float DistSq; };
+	struct FSpotCand  { FVector Pos; FVector Dir; FLinearColor Color; float Intensity; float Radius; float InnerCos; float OuterCos; float DistSq; };
+
+	TArray<FPointCand> Points;
+	TArray<FSpotCand> Spots;
+	FVector DirLightDir = FVector::ZeroVector;
+	FLinearColor DirLightColor = FLinearColor::Black;
+	float DirLightIntensity = 0.0f;
+	bool bHasDir = false;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (!Actor || Actor->IsHidden())
+		{
+			continue;
+		}
+
+		// ---- directional light (first visible) ----
+		if (!bHasDir)
+		{
+			if (UDirectionalLightComponent* DirComp = Actor->FindComponentByClass<UDirectionalLightComponent>())
+			{
+				if (DirComp->IsVisible())
+				{
+					DirLightDir = Actor->GetActorForwardVector();
+					DirLightColor = DirComp->GetLightColor();
+					DirLightIntensity = DirComp->Intensity;
+					bHasDir = true;
+				}
+			}
+		}
+
+		// ---- spot lights ----
+		{
+			TArray<USpotLightComponent*> Comps;
+			Actor->GetComponents<USpotLightComponent>(Comps);
+			for (USpotLightComponent* L : Comps)
+			{
+				if (!L || !L->IsVisible())
+				{
+					continue;
+				}
+				FVector Pos = L->GetComponentLocation();
+				float DistSq = FVector::DistSquared(Pos, CameraPos);
+				if (DistSq > MaxDistSq)
+				{
+					continue;
+				}
+				FSpotCand& C = Spots.AddDefaulted_GetRef();
+				C.Pos = Pos;
+				C.Dir = L->GetForwardVector();
+				C.Color = L->GetLightColor();
+				C.Intensity = L->Intensity;
+				C.Radius = L->AttenuationRadius;
+				float HalfInner = FMath::DegreesToRadians(L->InnerConeAngle * 0.5f);
+				float HalfOuter = FMath::DegreesToRadians(L->OuterConeAngle * 0.5f);
+				C.InnerCos = FMath::Cos(HalfInner);
+				C.OuterCos = FMath::Cos(HalfOuter);
+				C.DistSq = DistSq;
+			}
+		}
+
+		// ---- point lights (excluding spot lights, which derive from point) ----
+		{
+			TArray<UPointLightComponent*> Comps;
+			Actor->GetComponents<UPointLightComponent>(Comps);
+			for (UPointLightComponent* L : Comps)
+			{
+				if (!L || !L->IsVisible() || Cast<USpotLightComponent>(L))
+				{
+					continue;
+				}
+				FVector Pos = L->GetComponentLocation();
+				float DistSq = FVector::DistSquared(Pos, CameraPos);
+				if (DistSq > MaxDistSq)
+				{
+					continue;
+				}
+				FPointCand& C = Points.AddDefaulted_GetRef();
+				C.Pos = Pos;
+				C.Color = L->GetLightColor();
+				C.Intensity = L->Intensity;
+				C.Radius = L->AttenuationRadius;
+				C.DistSq = DistSq;
+			}
+		}
+	}
+
+	// ---- sort by distance (closest first) ----
+	Points.Sort([](const FPointCand& A, const FPointCand& B) { return A.DistSq < B.DistSq; });
+	Spots.Sort([](const FSpotCand& A, const FSpotCand& B) { return A.DistSq < B.DistSq; });
+
+	// ---- pack into unified light slots ----
+	int32 Slot = 0;
+
+	if (bHasDir && Slot < MaxLights)
+	{
+		const int32 B = Slot * 4;
+		OutData[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, MMDAnimeLightType::Directional);
+		OutData[B + 1] = FVector4f(DirLightColor.R, DirLightColor.G, DirLightColor.B, DirLightIntensity);
+		OutData[B + 2] = FVector4f(DirLightDir.X, DirLightDir.Y, DirLightDir.Z, 0.0f);
+		OutData[B + 3] = FVector4f(0.0f, 0.0f, 0.0f, 0.0f);
+		Slot++;
+	}
+
+	for (const FPointCand& C : Points)
+	{
+		if (Slot >= MaxLights)
+		{
+			break;
+		}
+		const int32 B = Slot * 4;
+		OutData[B + 0] = FVector4f(C.Pos.X, C.Pos.Y, C.Pos.Z, MMDAnimeLightType::Point);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, C.Radius);
+		OutData[B + 3] = FVector4f(0.0f, 0.0f, 0.0f, 0.0f);
+		Slot++;
+	}
+
+	for (const FSpotCand& C : Spots)
+	{
+		if (Slot >= MaxLights)
+		{
+			break;
+		}
+		const int32 B = Slot * 4;
+		OutData[B + 0] = FVector4f(C.Pos.X, C.Pos.Y, C.Pos.Z, MMDAnimeLightType::Spot);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 2] = FVector4f(C.Dir.X, C.Dir.Y, C.Dir.Z, C.Radius);
+		OutData[B + 3] = FVector4f(C.InnerCos, C.OuterCos, 2.0f, 0.0f);
+		Slot++;
+	}
+
+	// ---- debug log when the light configuration changes ----
+	static int32 LastLoggedKey = -1;
+	const int32 Key = (bHasDir ? 1 : 0) | (Points.Num() << 4) | (Spots.Num() << 8);
+	if (Key != LastLoggedKey)
+	{
+		LastLoggedKey = Key;
+		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Collected -> Directional=%d Point=%d Spot=%d"),
+			bHasDir ? 1 : 0,
+			FMath::Min(Points.Num(), MaxLights),
+			FMath::Min(Spots.Num(), MaxLights));
+	}
+}
+
+void UMMDAnimeLightDataSubsystem::OnPostOpaque(FPostOpaqueRenderParameters& Parameters)
+{
+	if (!bCollectionEnabled || !LightDataRT || !LightDataRT->GetRenderTargetResource())
+	{
+		return;
+	}
+
+	FRDGBuilder* GraphBuilder = Parameters.GraphBuilder;
+	if (!GraphBuilder || RenderThreadLightData.Num() == 0)
+	{
+		return;
+	}
+
+	FRHITexture* RTTex = LightDataRT->GetRenderTargetResource()->GetRenderTargetTexture().GetReference();
+	if (!RTTex)
+	{
+		return;
+	}
+
+	FRDGTextureRef RT = GraphBuilder->RegisterExternalTexture(
+		CreateRenderTarget(RTTex, TEXT("MMDAnimeLightDataRT")));
+
+	FRDGBufferRef LightBuffer = CreateStructuredBuffer(
+		*GraphBuilder,
+		TEXT("MMDAnimeLightData"),
+		sizeof(FVector4f),
+		RenderThreadLightData.Num(),
+		RenderThreadLightData.GetData(),
+		RenderThreadLightData.Num() * sizeof(FVector4f));
+
+	FRDGBufferSRVRef LightSRV = GraphBuilder->CreateSRV(FRDGBufferSRVDesc(LightBuffer));
+	FRDGTextureUAVRef OutputUAV = GraphBuilder->CreateUAV(FRDGTextureUAVDesc(RT));
+
+	FMMDAnimeWriteLightsCS::FParameters* Params =
+		GraphBuilder->AllocParameters<FMMDAnimeWriteLightsCS::FParameters>();
+	Params->LightData = LightSRV;
+	Params->OutputTexture = OutputUAV;
+
+	TShaderMapRef<FMMDAnimeWriteLightsCS> CS(GetGlobalShaderMap(GMaxRHIFeatureLevel));
+	if (!CS.GetShader())
+	{
+		static bool bLogged = false;
+		if (!bLogged)
+		{
+			bLogged = true;
+			UE_LOG(LogTemp, Error, TEXT("[MMDAnimeLight] FMMDAnimeWriteLightsCS shader is NULL (feature level %d). Check shader compile errors in Output Log."),
+				(int32)GMaxRHIFeatureLevel);
+		}
+		return;
+	}
+
+	FComputeShaderUtils::AddPass(
+		*GraphBuilder,
+		RDG_EVENT_NAME("MMDAnimeWriteLights"),
+		CS,
+		Params,
+		FIntVector(1, 1, 1));
+}

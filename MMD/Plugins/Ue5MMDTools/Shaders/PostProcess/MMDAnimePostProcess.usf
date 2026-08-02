@@ -1,11 +1,100 @@
 #include "/Engine/Private/Common.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+#include "/Engine/Private/SceneTexturesCommon.ush"
 
-Texture2D SceneColorTexture;
 RWTexture2D<float4> OutputTexture;
+
+float3 DecodeGBufferNormal(float3 InNormal)
+{
+    return normalize(InNormal * 2.0 - 1.0);
+}
+
+float3 ReconstructWorldPosition(uint2 PixelPos, float DeviceZ)
+{
+    float4 SvPosition = float4(float(PixelPos.x), float(PixelPos.y), DeviceZ, 1.0);
+    float4 HPos = mul(SvPosition, View.SVPositionToTranslatedWorld);
+    float3 TranslatedWorldPos = HPos.xyz * rcp(HPos.w);
+    return TranslatedWorldPos + View.PreViewTranslation;
+}
+
+float2 ToonRamp(float NdotL, float StepX, float StepY)
+{
+    float lo = smoothstep(StepX - 0.05, StepX + 0.05, NdotL);
+    float hi = smoothstep(StepY - 0.05, StepY + 0.05, NdotL);
+    return float2(lo, hi);
+}
 
 [numthreads(8, 8, 1)]
 void MainCS(uint3 DTid : SV_DispatchThreadID)
 {
-    // TODO: screen-space SSS / rim / SSAO
-    OutputTexture[DTid.xy] = SceneColorTexture.Load(int3(DTid.xy, 0));
+    uint2 PixelPos = DTid.xy;
+
+    uint2 Size;
+    SceneTexturesStruct.SceneDepthTexture.GetDimensions(Size.x, Size.y);
+    if (any(PixelPos >= Size))
+        return;
+
+    // ---- read scene textures (GBuffer via SceneTexturesStruct) ----
+    float DeviceZ     = SceneTexturesStruct.SceneDepthTexture.Load(int3(PixelPos, 0)).r;
+    float4 GBDataA    = SceneTexturesStruct.GBufferATexture.Load(int3(PixelPos, 0));
+    float4 GBDataC    = SceneTexturesStruct.GBufferCTexture.Load(int3(PixelPos, 0));
+
+    float3 BaseColor   = GBDataC.rgb;
+    float3 WorldNormal = DecodeGBufferNormal(GBDataA.rgb);
+    float3 WorldPos    = ReconstructWorldPosition(PixelPos, DeviceZ);
+
+    // ---- directional light ----
+    float3 LightDir   = -AnimeEnvironment.DirectionalLightDirection.xyz;
+    float  NdotL      = saturate(dot(WorldNormal, LightDir));
+    float3 LightColor = AnimeEnvironment.DirectionalLightColor.rgb;
+
+    float StepShadow    = AnimeEnvironment.ToonShadowStep.x;
+    float StepHighlight = AnimeEnvironment.ToonShadowStep.y;
+    float2 Ramp         = ToonRamp(NdotL, StepShadow, StepHighlight);
+    float3 ShadowCol    = AnimeEnvironment.ToonShadowColor.rgb;
+
+    float3 FinalColor = LightColor * BaseColor * lerp(ShadowCol, float3(1,1,1), Ramp.x);
+    FinalColor += LightColor * BaseColor * Ramp.y * 0.5;
+
+    // ---- point lights ----
+    uint PtCount = (uint)AnimeEnvironment.PointLightCount.x;
+    for (uint i = 0; i < PtCount && i < 8; i++)
+    {
+        float3 ToLight = AnimeEnvironment.PointLightPosition[i].xyz - WorldPos;
+        float  Dist    = length(ToLight);
+        float3 L       = ToLight / (Dist + 0.0001);
+        float  Atten   = 1.0 - saturate(Dist / max(AnimeEnvironment.PointLightRadius[i].x, 1.0));
+        float  NdotLi  = saturate(dot(WorldNormal, L));
+        float3 PtCol   = AnimeEnvironment.PointLightColor[i].rgb * Atten;
+        float  PTStep  = step(StepShadow, NdotLi);
+        float3 Diffuse = lerp(ShadowCol, float3(1,1,1), PTStep);
+        FinalColor += PtCol * BaseColor * Diffuse;
+    }
+
+    // ---- spot lights ----
+    uint SpCount = (uint)AnimeEnvironment.SpotLightCount.x;
+    for (uint j = 0; j < SpCount && j < 8; j++)
+    {
+        float3 ToLight  = AnimeEnvironment.SpotLightPosition[j].xyz - WorldPos;
+        float  Dist     = length(ToLight);
+        float3 L        = ToLight / (Dist + 0.0001);
+        float  Atten    = 1.0 - saturate(Dist / max(AnimeEnvironment.SpotLightRadius[j].x, 1.0));
+        float  Theta    = dot(-L, AnimeEnvironment.SpotLightDirection[j].xyz);
+        float  ConeAtten = smoothstep(AnimeEnvironment.SpotLightOuterConeCos[j].x,
+                                      AnimeEnvironment.SpotLightInnerConeCos[j].x, Theta);
+        float  NdotLi   = saturate(dot(WorldNormal, L));
+        float  SPStep   = step(StepShadow, NdotLi);
+        float3 SpCol    = AnimeEnvironment.SpotLightColor[j].rgb * Atten * ConeAtten;
+        float3 Diffuse  = lerp(ShadowCol, float3(1,1,1), SPStep);
+        FinalColor += SpCol * BaseColor * Diffuse;
+    }
+
+    // ---- rim light ----
+    float3 ViewDir = normalize(AnimeEnvironment.ViewPosition.xyz - WorldPos);
+    float  VdotN   = saturate(dot(ViewDir, WorldNormal));
+    float  Rim     = 1.0 - VdotN;
+    Rim = pow(max(Rim + AnimeEnvironment.ToonRimParams.y, 0.0), AnimeEnvironment.ToonRimParams.x);
+    FinalColor += AnimeEnvironment.ToonRimColor.rgb * Rim;
+
+    OutputTexture[PixelPos] = float4(FinalColor, 1.0);
 }

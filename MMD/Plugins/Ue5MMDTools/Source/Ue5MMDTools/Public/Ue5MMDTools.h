@@ -13,8 +13,10 @@ public:
 
 private:
 	void RegisterMenus();
+	void RegisterAnimeViewExtension();
 	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs &SpawnTabArgs);
 
 	TSharedPtr<class FUICommandList> PluginCommands;
 	TSharedPtr<class FMMDAnimeViewExtension> AnimeViewExtension;
+	FDelegateHandle OnPostEngineInitHandle;
 };

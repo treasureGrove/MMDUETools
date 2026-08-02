@@ -1,0 +1,10 @@
+#include "/Engine/Private/Common.ush"
+
+StructuredBuffer<float4> LightData;
+RWTexture2D<float4> OutputTexture;
+
+[numthreads(64, 1, 1)]
+void WriteCS(uint3 DTid : SV_DispatchThreadID)
+{
+    OutputTexture[uint2(DTid.x, 0)] = LightData[DTid.x];
+}
