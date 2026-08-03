@@ -12,6 +12,7 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
+#include "Components/RectLightComponent.h"
 #include "MMDAnimeWriteLightsCS.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
@@ -30,6 +31,7 @@ namespace MMDAnimeLightType
 	constexpr float Point = 1.0f;
 	constexpr float Spot = 2.0f;
 	constexpr float Directional = 3.0f;
+	constexpr float Rect = 4.0f;
 }
 
 namespace
@@ -77,7 +79,7 @@ void UMMDAnimeLightDataSubsystem::SetLightDataRenderTarget(UTextureRenderTarget2
 	if (LightDataRT)
 	{
 		LightDataRT->bCanCreateUAV = true;
-		LightDataRT->RenderTargetFormat = RTF_RGBA16f;
+		LightDataRT->RenderTargetFormat = RTF_RGBA32f;
 		LightDataRT->InitAutoFormat(MaxLights * 4, 1);
 		LightDataRT->UpdateResourceImmediate(true);
 		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA16f UAV)"),
@@ -108,7 +110,7 @@ void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
 
 		if (NewRT)
 		{
-			NewRT->RenderTargetFormat = RTF_RGBA16f;
+			NewRT->RenderTargetFormat = RTF_RGBA32f;
 			NewRT->bCanCreateUAV = true;
 			NewRT->bAutoGenerateMips = false;
 			NewRT->InitAutoFormat(MaxLights * 4, 1);
@@ -214,9 +216,11 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 
 	struct FPointCand { FVector Pos; FLinearColor Color; float Intensity; float Radius; float DistSq; };
 	struct FSpotCand  { FVector Pos; FVector Dir; FLinearColor Color; float Intensity; float Radius; float InnerCos; float OuterCos; float DistSq; };
+	struct FRectCand  { FVector Pos; FVector Dir; FLinearColor Color; float Intensity; float Radius; float SizeX; float SizeY; float DistSq; };
 
 	TArray<FPointCand> Points;
 	TArray<FSpotCand> Spots;
+	TArray<FRectCand> Rects;
 	FVector DirLightDir = FVector::ZeroVector;
 	FLinearColor DirLightColor = FLinearColor::Black;
 	float DirLightIntensity = 0.0f;
@@ -267,8 +271,10 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 				C.Color = L->GetLightColor();
 				C.Intensity = L->Intensity;
 				C.Radius = L->AttenuationRadius;
-				float HalfInner = FMath::DegreesToRadians(L->InnerConeAngle * 0.5f);
-				float HalfOuter = FMath::DegreesToRadians(L->OuterConeAngle * 0.5f);
+				// InnerConeAngle / OuterConeAngle are already half-angles in degrees (the
+				// engine uses them directly: CosOuterCone = cos(OuterConeAngle_rad)).
+				float HalfInner = FMath::DegreesToRadians(L->InnerConeAngle);
+				float HalfOuter = FMath::DegreesToRadians(L->OuterConeAngle);
 				C.InnerCos = FMath::Cos(HalfInner);
 				C.OuterCos = FMath::Cos(HalfOuter);
 				C.DistSq = DistSq;
@@ -299,11 +305,40 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 				C.DistSq = DistSq;
 			}
 		}
+
+		// ---- rect lights ----
+		{
+			TArray<URectLightComponent*> Comps;
+			Actor->GetComponents<URectLightComponent>(Comps);
+			for (URectLightComponent* L : Comps)
+			{
+				if (!L || !L->IsVisible())
+				{
+					continue;
+				}
+				FVector Pos = L->GetComponentLocation();
+				float DistSq = FVector::DistSquared(Pos, CameraPos);
+				if (DistSq > MaxDistSq)
+				{
+					continue;
+				}
+				FRectCand& C = Rects.AddDefaulted_GetRef();
+				C.Pos = Pos;
+				C.Dir = -L->GetForwardVector(); // rect emission direction (rays travel along -forward)
+				C.Color = L->GetLightColor();
+				C.Intensity = L->Intensity;
+				C.Radius = L->AttenuationRadius;
+				C.SizeX = L->SourceWidth;
+				C.SizeY = L->SourceHeight;
+				C.DistSq = DistSq;
+			}
+		}
 	}
 
 	// ---- sort by distance (closest first) ----
 	Points.Sort([](const FPointCand& A, const FPointCand& B) { return A.DistSq < B.DistSq; });
 	Spots.Sort([](const FSpotCand& A, const FSpotCand& B) { return A.DistSq < B.DistSq; });
+	Rects.Sort([](const FRectCand& A, const FRectCand& B) { return A.DistSq < B.DistSq; });
 
 	// ---- pack into unified light slots ----
 	int32 Slot = 0;
@@ -346,16 +381,31 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 		Slot++;
 	}
 
+	for (const FRectCand& C : Rects)
+	{
+		if (Slot >= MaxLights)
+		{
+			break;
+		}
+		const int32 B = Slot * 4;
+		OutData[B + 0] = FVector4f(C.Pos.X, C.Pos.Y, C.Pos.Z, MMDAnimeLightType::Rect);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 2] = FVector4f(C.Dir.X, C.Dir.Y, C.Dir.Z, C.Radius);
+		OutData[B + 3] = FVector4f(C.SizeX, C.SizeY, 0.0f, 0.0f);
+		Slot++;
+	}
+
 	// ---- debug log when the light configuration changes ----
 	static int32 LastLoggedKey = -1;
-	const int32 Key = (bHasDir ? 1 : 0) | (Points.Num() << 4) | (Spots.Num() << 8);
+	const int32 Key = (bHasDir ? 1 : 0) | (Points.Num() << 4) | (Spots.Num() << 8) | (Rects.Num() << 12);
 	if (Key != LastLoggedKey)
 	{
 		LastLoggedKey = Key;
-		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Collected -> Directional=%d Point=%d Spot=%d"),
+		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Collected -> Directional=%d Point=%d Spot=%d Rect=%d"),
 			bHasDir ? 1 : 0,
 			FMath::Min(Points.Num(), MaxLights),
-			FMath::Min(Spots.Num(), MaxLights));
+			FMath::Min(Spots.Num(), MaxLights),
+			FMath::Min(Rects.Num(), MaxLights));
 	}
 }
 

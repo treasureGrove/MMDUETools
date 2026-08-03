@@ -18,7 +18,7 @@
 		{
 			"Name": "Ue5MMDTools",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "PostConfigInit"
 		}
 	],
 	"Plugins": [

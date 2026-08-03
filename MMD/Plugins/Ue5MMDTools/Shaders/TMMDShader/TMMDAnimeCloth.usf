@@ -1,1 +1,5 @@
-// TODO: TMMDAnimeCloth
+// TMMDAnimeCloth - cloth material shading
+//
+// Shared multi-light toon lighting for MMD materials. Include this from a
+// material Custom node (see MMDAnimeToonLighting.usf for usage).
+#include "MMDAnimeToonLighting.usf"

@@ -1,0 +1,88 @@
+// MMDAnimeToonLighting.usf
+//
+// Multi-light toon lighting for MMD characters.
+//
+// NOTE: material Custom node #include is inlined INSIDE the material's generated
+// function, so this file cannot define functions. It defines a statement-block
+// MACRO instead, which expands inline where used.
+//
+// Custom node usage:
+//   OutputType: float3
+//   Code:
+//     #include "/Plugin/Ue5MMDTools/TMMDShader/MMDAnimeToonLighting.usf"
+//     float3 _mmdResult;
+//     MMD_ANIME_TOON_LIGHTING(
+//         LightDataTex, LightDataTexSampler,       // light data texture + sampler (node inputs)
+//         ShadowColor, ShadowStep, HighlightStep,  // toon params (node inputs)
+//         RimColor, RimPower,
+//         _mmdResult);                             // output variable (must be float3)
+//     return _mmdResult;
+//
+//   Node inputs:
+//     LightDataTex  (Texture2D) - the light data RT (/Ue5MMDTools/Rendering/LightDataRT)
+//     ShadowColor   (float3)
+//     ShadowStep    (float)
+//     HighlightStep (float)
+//     RimColor      (float3)
+//     RimPower      (float)
+
+#define MMD_TOON_MAX_LIGHTS 16
+#define MMD_TOON_TEX_WIDTH  64.0   // MMD_TOON_MAX_LIGHTS * 4
+
+// Statement-block macro. `Parameters` (FMaterialPixelParameters) must be in scope
+// at the expansion site (it is, inside a material Custom node). World normal /
+// position / view direction are fetched here, so no node inputs are needed for them.
+#define MMD_ANIME_TOON_LIGHTING(LightDataTex, LightDataTexSampler, ShadowColor, ShadowStep, HighlightStep, RimColor, RimPower, OutColor) \
+    { \
+        const float3 _mmdWorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition); \
+        const float3 _mmdWorldNormal = normalize((float3)Parameters.TangentToWorld[2]); \
+        const float3 _mmdCameraPos = LWCToFloat(GetWorldCameraOrigin(Parameters)); \
+        const float3 _mmdViewDir = normalize(_mmdCameraPos - _mmdWorldPos); \
+        float3 _mmdAccum = float3(0, 0, 0); \
+        for (int _mmdi = 0; _mmdi < MMD_TOON_MAX_LIGHTS; _mmdi++) \
+        { \
+            float4 _mmdP = Texture2DSample(LightDataTex, LightDataTexSampler, float2((_mmdi * 4.0 + 0.5) / MMD_TOON_TEX_WIDTH, 0.5)); \
+            float4 _mmdC = Texture2DSample(LightDataTex, LightDataTexSampler, float2((_mmdi * 4.0 + 1.5) / MMD_TOON_TEX_WIDTH, 0.5)); \
+            float4 _mmdD = Texture2DSample(LightDataTex, LightDataTexSampler, float2((_mmdi * 4.0 + 2.5) / MMD_TOON_TEX_WIDTH, 0.5)); \
+            float4 _mmdT = Texture2DSample(LightDataTex, LightDataTexSampler, float2((_mmdi * 4.0 + 3.5) / MMD_TOON_TEX_WIDTH, 0.5)); \
+            if (_mmdP.w >= 0.5) \
+            { \
+                float3 _mmdL; float _mmdAtten = 1.0; \
+                if (_mmdP.w < 1.5) \
+                { \
+                    float3 _mmdToLight = _mmdP.xyz - _mmdWorldPos; \
+                    float _mmdDist = length(_mmdToLight); \
+                    _mmdL = _mmdToLight / max(_mmdDist, 0.0001); \
+                    _mmdAtten = 1.0 - saturate(_mmdDist / max(_mmdD.w, 0.001)); \
+                } \
+                else if (_mmdP.w < 2.5) \
+                { \
+                    float3 _mmdToLight = _mmdP.xyz - _mmdWorldPos; \
+                    float _mmdDist = length(_mmdToLight); \
+                    _mmdL = _mmdToLight / max(_mmdDist, 0.0001); \
+                    _mmdAtten = 1.0 - saturate(_mmdDist / max(_mmdD.w, 0.001)); \
+                    _mmdAtten *= smoothstep(_mmdT.y, _mmdT.x, dot(-_mmdL, _mmdD.xyz)); \
+                } \
+                else if (_mmdP.w < 3.5) \
+                { \
+                    _mmdL = -normalize(_mmdD.xyz); \
+                } \
+                else \
+                { \
+                    float3 _mmdToLight = _mmdP.xyz - _mmdWorldPos; \
+                    float _mmdDist = length(_mmdToLight); \
+                    _mmdL = _mmdToLight / max(_mmdDist, 0.0001); \
+                    _mmdAtten = 1.0 - saturate(_mmdDist / max(_mmdD.w, 0.001)); \
+                    _mmdAtten *= smoothstep(0.0, 0.25, dot(_mmdL, _mmdD.xyz)); \
+                } \
+                float _mmdNdotL = saturate(dot(_mmdWorldNormal, _mmdL)); \
+                float _mmdRamp = smoothstep(ShadowStep - 0.05, ShadowStep + 0.05, _mmdNdotL); \
+                float _mmdHigh = smoothstep(HighlightStep - 0.05, HighlightStep + 0.05, _mmdNdotL); \
+                float3 _mmdLit = lerp((float3)(ShadowColor), float3(1, 1, 1), _mmdRamp) + _mmdHigh * 0.5; \
+                _mmdAccum += _mmdC.rgb * _mmdC.w * _mmdLit * _mmdAtten; \
+            } \
+        } \
+        float _mmdVdotN = saturate(dot(_mmdViewDir, _mmdWorldNormal)); \
+        _mmdAccum += (float3)(RimColor) * pow(max(1.0 - _mmdVdotN, 0.0), (RimPower)); \
+        OutColor = _mmdAccum; \
+    }

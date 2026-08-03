@@ -6,10 +6,9 @@
 
 #include "Interfaces/IPluginManager.h"
 #include "LevelEditor.h"
+#include "Misc/CoreDelegates.h"
 #include "MMDImportSetting.h"
 #include "Misc/Paths.h"
-#include "Rendering/MMDAnimeViewExtension.h"
-#include "SceneViewExtension.h"
 #include "ShaderCore.h"
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -21,6 +20,8 @@ static const FName Ue5MMDToolsTabName("Ue5MMDTools");
 void FUe5MMDToolsModule::StartupModule()
 {
 	// ---------- shader directory mapping ----------
+	// Must happen early (module loads at PostConfigInit, before the engine's shader
+	// serialization history is initialized, so global shaders register correctly).
 	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools")))
 	{
 		const FString ShaderDir = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
@@ -28,11 +29,13 @@ void FUe5MMDToolsModule::StartupModule()
 		UE_LOG(LogTemp, Log, TEXT("Ue5MMDTools shader dir mapped: /Plugin/Ue5MMDTools"));
 	}
 
-	// ---------- SceneViewExtension ----------
-	AnimeViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeViewExtension>();
-	UE_LOG(LogTemp, Log, TEXT("MMD AnimeViewExtension registered"));
-
 	// ---------- UI ----------
+	// Defer until the engine (GEngine, Slate, ToolMenus, tab manager) is ready.
+	OnPostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FUe5MMDToolsModule::OnPostEngineInit);
+}
+
+void FUe5MMDToolsModule::OnPostEngineInit()
+{
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
 	FUe5MMDToolsCommands::Register();
@@ -55,7 +58,11 @@ void FUe5MMDToolsModule::StartupModule()
 
 void FUe5MMDToolsModule::ShutdownModule()
 {
-	AnimeViewExtension.Reset();
+	if (OnPostEngineInitHandle.IsValid())
+	{
+		FCoreDelegates::OnPostEngineInit.Remove(OnPostEngineInitHandle);
+		OnPostEngineInitHandle.Reset();
+	}
 
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
