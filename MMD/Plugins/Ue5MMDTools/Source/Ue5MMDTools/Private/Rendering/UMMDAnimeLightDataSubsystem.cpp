@@ -6,7 +6,7 @@
 #include "EngineUtils.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
-#include "Containers/Ticker.h"
+#include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/DirectionalLightComponent.h"
@@ -48,20 +48,16 @@ void UMMDAnimeLightDataSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 	PostOpaqueDelegateHandle = GetRendererModule().RegisterPostOpaqueRenderDelegate(
 		FPostOpaqueRenderDelegate::CreateUObject(this, &UMMDAnimeLightDataSubsystem::OnPostOpaque));
 
-	TickHandle = FTSTicker::GetCoreTicker().AddTicker(
-		FTickerDelegate::CreateUObject(this, &UMMDAnimeLightDataSubsystem::TickLightCollection), 0.0f);
-
 	UE_LOG(LogTemp, Log, TEXT("[MMDAnimeLight] Subsystem initialized, PostOpaque delegate registered."));
+}
+
+UMMDAnimeLightDataSubsystem* UMMDAnimeLightDataSubsystem::Get()
+{
+	return GEngine ? GEngine->GetEngineSubsystem<UMMDAnimeLightDataSubsystem>() : nullptr;
 }
 
 void UMMDAnimeLightDataSubsystem::Deinitialize()
 {
-	if (TickHandle.IsValid())
-	{
-		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
-		TickHandle.Reset();
-	}
-
 	FlushRenderingCommands();
 
 	if (PostOpaqueDelegateHandle.IsValid())
@@ -143,7 +139,7 @@ void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
 		GMMDAnimeLightDataRT_AssetPath);
 }
 
-bool UMMDAnimeLightDataSubsystem::TickLightCollection(float DeltaTime)
+void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
 {
 	if (!bAutoSetupDone)
 	{
@@ -153,28 +149,28 @@ bool UMMDAnimeLightDataSubsystem::TickLightCollection(float DeltaTime)
 
 	if (!bCollectionEnabled)
 	{
-		return true;
+		return;
 	}
 
 	UWorld* World = GWorld;
 	if (!World)
 	{
-		return true;
+		return;
 	}
 
 	TArray<FVector4f> Data;
 	CollectLights(World, Data);
 
 	// Push to the render thread. Both the writer (this command) and the reader
-	// (OnPostOpaque) run on the render thread, so no lock is needed.
+	// (OnPostOpaque) run on the render thread, so no lock is needed. This runs
+	// from SetupViewFamily (before the scene render is dispatched), so PostOpaque
+	// reads the data for the CURRENT frame - no one-frame latency.
 	TArray<FVector4f> DataCopy = MoveTemp(Data);
 	ENQUEUE_RENDER_COMMAND(MMDAnimeUpdateLightData)(
 		[this, DataCopy = MoveTemp(DataCopy)](FRHICommandListImmediate& RHICmdList) mutable
 		{
 			RenderThreadLightData = MoveTemp(DataCopy);
 		});
-
-	return true;
 }
 
 void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>& OutData)

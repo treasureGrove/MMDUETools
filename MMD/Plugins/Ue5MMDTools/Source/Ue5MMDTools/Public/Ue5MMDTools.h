@@ -17,5 +17,6 @@ private:
 	TSharedRef<class SDockTab> OnSpawnPluginTab(const class FSpawnTabArgs &SpawnTabArgs);
 
 	TSharedPtr<class FUICommandList> PluginCommands;
+	TSharedPtr<class FMMDAnimeLightViewExtension> LightViewExtension;
 	FDelegateHandle OnPostEngineInitHandle;
 };

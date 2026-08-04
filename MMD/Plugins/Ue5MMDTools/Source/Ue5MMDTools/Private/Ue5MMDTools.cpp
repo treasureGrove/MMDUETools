@@ -9,6 +9,8 @@
 #include "Misc/CoreDelegates.h"
 #include "MMDImportSetting.h"
 #include "Misc/Paths.h"
+#include "Rendering/FMMDAnimeLightViewExtension.h"
+#include "SceneViewExtension.h"
 #include "ShaderCore.h"
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -36,6 +38,10 @@ void FUe5MMDToolsModule::StartupModule()
 
 void FUe5MMDToolsModule::OnPostEngineInit()
 {
+	// ---------- light data collection view extension ----------
+	// Collects lights in SetupViewFamily so the light data RT is same-frame synced.
+	LightViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeLightViewExtension>();
+
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
 	FUe5MMDToolsCommands::Register();
@@ -63,6 +69,8 @@ void FUe5MMDToolsModule::ShutdownModule()
 		FCoreDelegates::OnPostEngineInit.Remove(OnPostEngineInitHandle);
 		OnPostEngineInitHandle.Reset();
 	}
+
+	LightViewExtension.Reset();
 
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
