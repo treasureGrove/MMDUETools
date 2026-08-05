@@ -1,6 +1,6 @@
-// MMDAnimeToonLighting.usf
+﻿// MMDAnimeToonLighting.usf
 //
-// Toon 光照：只算光照部分（类似 UE shading model），输出 = BaseColor * 累计光照。
+// Toon 光照：只算光照部分（类似 UE shading model），输出 = BaseColor * 累计漫反射 + 高光。
 // 用 struct 包装逻辑——Custom 节点内不能定义独立函数，但 struct 是"类型声明"，
 // 函数体内合法，所以这是节点里做函数复用的标准写法。纯插件实现，不改引擎、不用 #define。
 //
@@ -13,13 +13,17 @@
 //   节点输入（需连线）：
 //     BaseColor     (float3)    - 基础色（来自你自己的 BaseColor HLSL 节点）
 //     LightDataTex  (Texture2D) - 灯光数据 RT (/Ue5MMDTools/Rendering/LightDataRT)
-//     ShadowStep    (float)
-//     HighlightStep (float)
-//     ShadowColor   (float3)
+//     ShadowStep    (float)     - 卡通阴影阈值
+//     HighlightStep (float)     - 保留占位（高光阶暂未接）
+//     ShadowColor   (float3)    - 阴影色
+//     SpecularPower (float)     - 高光锐度（颜色来自灯光色）
+//     MatCap        (Texture2D) - MMD sphere/matcap 贴图
+//     SphereMode    (float)     - 0=关 1=乘(matcap烘焙阴影) 2=加(matcap高光)
 //
 //   节点作用域自动提供（无需连线）：
 //     Parameters          - FMaterialPixelParameters
 //     LightDataTexSampler - LightDataTex 自动生成的采样器
+//     MatCapSampler       - MatCap 自动生成的采样器
 //
 // 光照累计为 ADDITIVE：每盏灯贡献 (color * intensity / PI) * toonRamp(NdotL) * attenuation。
 // 除以 PI 让响应强度接近 PBR（默认强度 ~3.14 的平行光 ≈ 1.0）。天空环境光用与 PBR 相同的
@@ -47,14 +51,20 @@ struct TMMDAnimeToonLighting
         return max(float3(0, 0, 0), I0 + I1 + View.SkyIrradianceEnvironmentMap[6].xyz * VC);
     }
 
-    // 主入口：累加直接光 + 天空环境光，最后乘上基础色。
+    // 主入口：累加直接光漫反射 + 高光 + 天空环境光。
+    // 高光颜色来自灯光色，SpecularPower 控制锐度。
+    // SphereMode: 0=关 1=乘(matcap烘焙阴影乘进漫反射) 2=加(matcap高光叠加)。
     float3 OutputColor(FMaterialPixelParameters Parameters,
                        float3 BaseColor,
                        Texture2D LightDataTex,
                        SamplerState LightDataTexSampler,
                        float ShadowStep,
                        float HighlightStep,
-                       float3 ShadowColor)
+                       float3 ShadowColor,
+                       float SpecularPower,
+                       Texture2D MatCap,
+                       SamplerState MatCapSampler,
+                       float SphereMode)
     {
         static const int   MaxLights = 16;
         static const float TexWidth  = 64.0;   // MaxLights * 4
@@ -62,8 +72,10 @@ struct TMMDAnimeToonLighting
 
         const float3 WorldPos    = LWCToFloat(Parameters.AbsoluteWorldPosition);
         const float3 WorldNormal = normalize((float3)Parameters.TangentToWorld[2]);
+        const float3 ViewDir     = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
 
         float3 Lighting = float3(0, 0, 0);
+        float3 Specular = float3(0, 0, 0);
 
         for (int i = 0; i < MaxLights; i++)
         {
@@ -110,13 +122,38 @@ struct TMMDAnimeToonLighting
                 float3 Diffuse = lerp(ShadowColor, float3(1, 1, 1), Ramp);
 
                 Lighting += C.rgb * (C.w / ToonPI) * Diffuse * Atten;
+
+                // 高光：颜色用灯光色，Ramp 门控到受光面
+                float3 H    = normalize(L + ViewDir);
+                float  NdotH = saturate(dot(WorldNormal, H));
+                float  Spec  = pow(NdotH, max(SpecularPower, 1.0)) * Ramp;
+                Specular += C.rgb * (C.w / ToonPI) * Spec * Atten;
             }
         }
 
         Lighting += SkyAmbient(WorldNormal) * View.SkyLightColor.rgb;
 
-        // HighlightStep 暂未使用，保留参数以保持接口一致（高光阶还没接）。
-        return BaseColor * Lighting;
+        float3 Final = BaseColor * Lighting + Specular;
+
+        // ---- MMD sphere/matcap ----
+        if (SphereMode > 0.5)
+        {
+            // MMD spa 是视图空间查找：法线转到视图空间再投影成 UV（相机转动时 matcap 跟着转）
+            float3 ViewNormal = mul(WorldNormal, (float3x3)ResolvedView.TranslatedWorldToView);
+            float2 MatcapUV = ViewNormal.xy * 0.5 + 0.5;
+            float3 Matcap   = Texture2DSample(MatCap, MatCapSampler, MatcapUV).rgb;
+
+            if (SphereMode < 1.5)       // 乘：matcap 烘焙阴影，只乘漫反射
+            {
+                Final = BaseColor * (Lighting * Matcap) + Specular;
+            }
+            else                        // 加：matcap 高光，叠加
+            {
+                Final += Matcap;
+            }
+        }
+
+        return Final;
     }
 };
 
@@ -125,4 +162,6 @@ struct TMMDAnimeToonLighting
 TMMDAnimeToonLighting Toon;
 return Toon.OutputColor(Parameters,
                         BaseColor, LightDataTex, LightDataTexSampler,
-                        ShadowStep, HighlightStep, ShadowColor);
+                        ShadowStep, HighlightStep, ShadowColor,
+                        SpecularPower,
+                        MatCap, MatCapSampler, SphereMode);

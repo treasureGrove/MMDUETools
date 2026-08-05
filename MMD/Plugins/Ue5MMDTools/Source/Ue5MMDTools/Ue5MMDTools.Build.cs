@@ -56,6 +56,7 @@ public class Ue5MMDTools : ModuleRules
             "ContentBrowser",
             "PropertyEditor",
             "ApplicationCore",
+            "ImageWrapper",
             "SkeletalMeshUtilitiesCommon",
             "MeshUtilities",
             "MeshUtilitiesCommon",

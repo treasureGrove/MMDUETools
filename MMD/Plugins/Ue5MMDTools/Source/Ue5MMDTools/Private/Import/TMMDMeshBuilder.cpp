@@ -32,6 +32,9 @@
 #include "IAssetTools.h"
 #include "Misc/FileHelper.h"
 #include "Engine/Texture2D.h"
+#include "Engine/Engine.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
 //动画蓝图
 #include "Factories/AnimBlueprintFactory.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -2597,44 +2600,87 @@ static void SetVectorParameterIfPresent(UMaterialInstanceConstant* MaterialInsta
 	MaterialInstance->SetVectorParameterValueEditorOnly(ParamInfo, Value);
 }
 
-static UMaterial* LoadMMDBaseMaterial()
+static void SetTextureParameterIfPresent(UMaterialInstanceConstant* MaterialInstance, const FName& ParameterName, UTexture* Texture)
 {
-	static const FString BaseMaterialPath = TEXT("/Ue5MMDTools/Resources/MaterialInstance/Mat_MMD_Base.Mat_MMD_Base");
-	UMaterial* BaseMaterial = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *BaseMaterialPath));
-	if (!BaseMaterial)
+	if (!MaterialInstance || !Texture)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to load base material from path: %s"), *BaseMaterialPath);
+		return;
 	}
-	return BaseMaterial;
+	FMaterialParameterInfo ParamInfo(ParameterName);
+	MaterialInstance->SetTextureParameterValueEditorOnly(ParamInfo, Texture);
 }
 
-static bool SetMaterialTextureParameterDefault(UMaterial* Material, const FName& ParameterName, UTexture* Texture)
+static UMaterialInterface* LoadMMDBaseParent(const TCHAR* AssetName)
 {
-	if (!Material || !Texture)
+	const FString ParentPath = FString::Printf(TEXT("/Ue5MMDTools/Resources/MaterialInstance/%s.%s"), AssetName, AssetName);
+	UMaterialInterface* Parent = LoadObject<UMaterialInterface>(nullptr, *ParentPath);
+	if (!Parent)
 	{
-		return false;
+		UE_LOG(LogTemp, Error, TEXT("Failed to load MMD base parent from path: %s"), *ParentPath);
+	}
+	return Parent;
+}
+
+static UMaterialInterface* LoadMMDOpaqueParent()      { return LoadMMDBaseParent(TEXT("M_MMD_Base_Opaque")); }
+static UMaterialInterface* LoadMMDMaskedParent()      { return LoadMMDBaseParent(TEXT("M_MMD_Base_Masked")); }
+static UMaterialInterface* LoadMMDTransparentParent() { return LoadMMDBaseParent(TEXT("M_MMD_Base_Transparent")); }
+
+// 统计贴图 alpha<1 的像素占比（采样一部分像素）。>0.8 说明是大面积半透明贴图（如头发阴影 HS.png）。
+static float TextureAlphaCoverage(UTexture2D* Tex)
+{
+	if (!Tex || !Tex->Source.IsValid() || Tex->Source.GetNumMips() == 0)
+	{
+		return 0.0f;
+	}
+	if (Tex->Source.GetFormat() != TSF_BGRA8)
+	{
+		return 0.0f; // 只有 8-bit RGBA 源能直接读 alpha
 	}
 
-	bool bChanged = false;
-	for (UMaterialExpression* Expression : Material->GetExpressions())
+	IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>("ImageWrapper");
+	TArray64<uint8> MipData;
+	if (!Tex->Source.GetMipData(MipData, 0, &ImageWrapperModule))
 	{
-		UMaterialExpressionTextureSampleParameter2D* TextureParameter = Cast<UMaterialExpressionTextureSampleParameter2D>(Expression);
-		if (TextureParameter && TextureParameter->GetParameterName() == ParameterName)
+		return 0.0f;
+	}
+
+	const int64 W = Tex->Source.GetSizeX();
+	const int64 H = Tex->Source.GetSizeY();
+	if (W <= 0 || H <= 0 || MipData.Num() < 4)
+	{
+		return 0.0f;
+	}
+
+	int32 Sampled = 0;
+	int32 Transparent = 0;
+	const int64 Stride = 8; // 采样 1/64 像素就够统计
+	for (int64 y = 0; y < H; y += Stride)
+	{
+		for (int64 x = 0; x < W; x += Stride)
 		{
-			TextureParameter->Modify();
-			TextureParameter->Texture = Texture;
-			bChanged = true;
+			const int64 Offset = (y * W + x) * 4; // BGRA
+			if (Offset + 3 < (int64)MipData.Num())
+			{
+				const uint8 A = MipData[Offset + 3];
+				Sampled++;
+				if (A < 255)
+				{
+					Transparent++;
+				}
+			}
 		}
 	}
 
-	return bChanged;
+	return Sampled > 0 ? (float)Transparent / (float)Sampled : 0.0f;
 }
 
-FString GetMaterialTexturePath(const FPMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath) {
-	if (Material.TextureIndex >= 0 && Material.TextureIndex < PMXInfo.ModelTextureCount) {
+// TextureIndexOverride: -2 = 未指定（用 Material.TextureIndex）；-1 及 >=0 直接用它（-1 表示无贴图，返回空）
+FString GetMaterialTexturePath(const FPMXMaterial& Material, const PMXDatas& PMXInfo, const FString& PMXFilePath, int32 TextureIndexOverride = -2) {
+	const int32 TextureIndex = (TextureIndexOverride != -2) ? TextureIndexOverride : Material.TextureIndex;
+	if (TextureIndex >= 0 && TextureIndex < PMXInfo.ModelTextureCount) {
 		FString PMXDirectory = PMXFilePath;
 
-		FString RelativeTexturePath = PMXInfo.ModelTexturePaths[Material.TextureIndex];
+		FString RelativeTexturePath = PMXInfo.ModelTexturePaths[TextureIndex];
 		// 使用 FPaths::Combine 安全拼接路径
 		FString FullTexturePath = FPaths::Combine(PMXDirectory, RelativeTexturePath);
 
@@ -2643,19 +2689,27 @@ FString GetMaterialTexturePath(const FPMXMaterial& Material, const PMXDatas& PMX
 
 		return FullTexturePath;
 	}
-	else if (Material.TextureIndex == -1) {
+	else if (TextureIndex == -1) {
 		// 没有贴图
 		return FString();
 	}
 	else {
-		UE_LOG(LogTemp, Warning, TEXT("Invalid texture index %d for material %s"), Material.TextureIndex, *Material.NameEN);
+		UE_LOG(LogTemp, Warning, TEXT("Invalid texture index %d for material %s"), TextureIndex, *Material.NameEN);
 		return FString();
 	}
 }
-UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, const FPMXMaterial& PMXMaterial, const FString& MaterialName, const FString& OutPath) {
+UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, UTexture2D* MatCapTexture2D, const FPMXMaterial& PMXMaterial, const FString& MaterialName, const FString& OutPath) {
 
-	UMaterial* BaseMaterial = LoadMMDBaseMaterial();
-	if (!BaseMaterial) {
+	// PMX alpha（DiffuseColor.A）或贴图大面积 alpha<1（如头发阴影 HS.png）都判半透明：
+	//   alpha < 0.999 或 贴图 alpha 覆盖 > 80% → Transparent
+	//   alpha ≥ 0.999 且 贴图 alpha 覆盖 ≤ 80% → Opaque
+	// Masked 不自动选（MMD 没有 masked 标志，需手动指定）。
+	const float MaterialAlpha = FMath::Clamp(PMXMaterial.DiffuseColor.W, 0.0f, 1.0f);
+	const float AlphaCoverage = TextureAlphaCoverage(Texture2D);
+	const bool bNeedsAlphaEvaluation = MaterialAlpha < 0.999f || AlphaCoverage > 0.8f;
+
+	UMaterialInterface* ParentMaterial = bNeedsAlphaEvaluation ? LoadMMDTransparentParent() : LoadMMDOpaqueParent();
+	if (!ParentMaterial) {
 		return nullptr;
 	}
 
@@ -2677,59 +2731,90 @@ UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, const FPMXM
 
 	Package->FullyLoad();
 
-	UMaterial* Material = FindObject<UMaterial>(Package, *CleanMaterialName);
-	if (!Material)
+	UMaterialInstanceConstant* MatInst = FindObject<UMaterialInstanceConstant>(Package, *CleanMaterialName);
+	if (!MatInst)
 	{
-		Material = DuplicateObject<UMaterial>(BaseMaterial, Package, *CleanMaterialName);
+		MatInst = NewObject<UMaterialInstanceConstant>(Package, *CleanMaterialName, RF_Public | RF_Standalone);
+		MatInst->SetParentEditorOnly(ParentMaterial);
 	}
 
-	if (!Material)
+	if (!MatInst)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Duplicate base material failed: %s"), *PackageName);
+		UE_LOG(LogTemp, Error, TEXT("Create material instance failed: %s"), *PackageName);
 		return nullptr;
 	}
 
-	Material->SetFlags(RF_Public | RF_Standalone);
-	Material->Modify();
+	MatInst->SetFlags(RF_Public | RF_Standalone);
+	MatInst->Modify();
+
+	// ---- 贴图参数 ----
 	if (Texture2D)
 	{
-		SetMaterialTextureParameterDefault(Material, TEXT("BaseColorMap"), Texture2D);
-		SetMaterialTextureParameterDefault(Material, TEXT("BaseColorTexture"), Texture2D);
-		SetMaterialTextureParameterDefault(Material, TEXT("BaseColor"), Texture2D);
+		SetTextureParameterIfPresent(MatInst, TEXT("BaseColorMap"), Texture2D);
+		SetTextureParameterIfPresent(MatInst, TEXT("BaseColorTexture"), Texture2D);
+		SetTextureParameterIfPresent(MatInst, TEXT("BaseColor"), Texture2D);
+	}
+	if (MatCapTexture2D)
+	{
+		SetTextureParameterIfPresent(MatInst, TEXT("MatCap"), MatCapTexture2D);
+		SetScalarParameterIfPresent(MatInst, TEXT("SphereMode"), (float)PMXMaterial.SphereMode);
+	}
+	else
+	{
+		// 没有 sphere 贴图：MatCap 用黑色兜底（绝不复用 BaseColor），并强制关闭 sphere 效果。
+		if (GEngine)
+		{
+			SetTextureParameterIfPresent(MatInst, TEXT("MatCap"), GEngine->DefaultTexture);
+		}
+		SetScalarParameterIfPresent(MatInst, TEXT("SphereMode"), 0.0f);
 	}
 
-	// Keep the graph identical to Mat_MMD_Base, but copy PMX alpha into editable material properties.
-	const float MaterialAlpha = FMath::Clamp(PMXMaterial.DiffuseColor.W, 0.0f, 1.0f);
-	const bool bNeedsAlphaEvaluation = MaterialAlpha < 0.999f;
+	// ---- PMX 标量/向量参数 ----
+	// DiffuseColor.RGB 乘到 BaseColor（材质里 BaseColor = DiffuseColor × BaseColorMap）
+	SetVectorParameterIfPresent(MatInst, TEXT("DiffuseColor"), FLinearColor(PMXMaterial.DiffuseColor));
+	SetScalarParameterIfPresent(MatInst, TEXT("SpecularPower"), PMXMaterial.SpecularPower);
+	SetVectorParameterIfPresent(MatInst, TEXT("SpecularColor"), FLinearColor(PMXMaterial.SpecularColor));
+	SetVectorParameterIfPresent(MatInst, TEXT("AmbientColor"), FLinearColor(PMXMaterial.AmbientColor));
+	SetVectorParameterIfPresent(MatInst, TEXT("EdgeColor"), FLinearColor(PMXMaterial.EdgeColor));
+	SetScalarParameterIfPresent(MatInst, TEXT("EdgeSize"), PMXMaterial.EdgeSize);
+
+	// 半透明材质：Opacity = DiffuseColor.A（材质里再乘 BaseColorMap.A）
+	if (bNeedsAlphaEvaluation)
+	{
+		SetScalarParameterIfPresent(MatInst, TEXT("Opacity"), MaterialAlpha);
+	}
+
+	// ---- 基础属性覆盖（透明度 / 双面 / 混合模式）----
 	const float AlphaClipValue = bNeedsAlphaEvaluation ? 0.01f : 0.0f;
 	// PMX assets often rely on thin shell geometry for hair, face decals and clothing frills.
 	// Import as two-sided by default so a winding mismatch on one material slot does not make it invisible.
-	Material->TwoSided = true;
-	Material->BlendMode = BLEND_Opaque;
-	Material->OpacityMaskClipValue = 0.0f;
-	Material->bCastDynamicShadowAsMasked = false;
-	if (bNeedsAlphaEvaluation)
-	{
-		Material->BlendMode = BLEND_Translucent;
-		Material->OpacityMaskClipValue = AlphaClipValue;
-	}
-	Material->UpdateCachedExpressionData();
+	MatInst->BasePropertyOverrides.bOverride_TwoSided = true;
+	MatInst->BasePropertyOverrides.TwoSided = true;
+	MatInst->BasePropertyOverrides.bOverride_BlendMode = true;
+	MatInst->BasePropertyOverrides.BlendMode = bNeedsAlphaEvaluation ? BLEND_Translucent : BLEND_Opaque;
+	MatInst->BasePropertyOverrides.bOverride_OpacityMaskClipValue = true;
+	MatInst->BasePropertyOverrides.OpacityMaskClipValue = AlphaClipValue;
+	MatInst->BasePropertyOverrides.bOverride_CastDynamicShadowAsMasked = true;
+	MatInst->BasePropertyOverrides.bCastDynamicShadowAsMasked = false;
 
-	FAssetRegistryModule::AssetCreated(Material);
-	Material->PostEditChange();
+	MatInst->InitStaticPermutation();
+
+	FAssetRegistryModule::AssetCreated(MatInst);
+	MatInst->PostEditChange();
 	Package->MarkPackageDirty();
-	UE_LOG(LogTemp, Log, TEXT("MMD material updated: %s TwoSided=%d BlendMode=%d Alpha=%.3f Texture=%s RenderCustomDepth=true"),
+	UE_LOG(LogTemp, Log, TEXT("MMD material instance updated: %s TwoSided=%d BlendMode=%d Alpha=%.3f BaseTex=%s MatCapTex=%s RenderCustomDepth=true"),
 		*PackageName,
-		Material->TwoSided ? 1 : 0,
-		static_cast<int32>(Material->BlendMode),
+		MatInst->BasePropertyOverrides.TwoSided ? 1 : 0,
+		static_cast<int32>(MatInst->BasePropertyOverrides.BlendMode),
 		MaterialAlpha,
-		Texture2D ? *Texture2D->GetName() : TEXT("None"));
+		Texture2D ? *Texture2D->GetName() : TEXT("None"),
+		MatCapTexture2D ? *MatCapTexture2D->GetName() : TEXT("None"));
 
-	return Material;
+	return MatInst;
 }
 
 UMaterialInterface* CreateMaterialFromTexture(UTexture2D& Texture2D, const FPMXMaterial& PMXMaterial, const FString& MaterialName, const FString& OutPath) {
-	return CreateMaterialFromMMDBase(&Texture2D, PMXMaterial, MaterialName, OutPath);
+	return CreateMaterialFromMMDBase(&Texture2D, nullptr, PMXMaterial, MaterialName, OutPath);
 }
 
 #pragma endregion
@@ -2877,7 +2962,21 @@ void LoadPMXImportData(FSkeletalMeshImportData& PMXImportData, const PMXDatas& P
 					CleanFileName);
 			}
 
+			// ---- MMD MatCap / sphere 贴图 ----
+			UTexture2D* MatCapTexture = nullptr;
+			FString MatCapPath = GetMaterialTexturePath(Material, PMXInfo, PMXPath, Material.SphereTextureIndex);
+			if (!MatCapPath.IsEmpty() && FPaths::FileExists(MatCapPath)) {
+				FString CleanMatCapName = FPaths::GetCleanFilename(MatCapPath);
+				CleanMatCapName = CleanMatCapName.Replace(TEXT(" "), TEXT("_"));
+				CleanMatCapName = CleanMatCapName.Replace(TEXT("-"), TEXT("_"));
+
+				MatCapTexture = CreateTextureFromFile(MatCapPath,
+					FString("/Game/MMDModels/") + PMXModelName + FString("/Textures"),
+					CleanMatCapName);
+			}
+
 			MaterialData.Material = CreateMaterialFromMMDBase(Texture,
+				MatCapTexture,
 				Material,
 				CleanMaterialName,
 				FString("/Game/MMDModels/") + PMXModelName + FString("/Materials"));
