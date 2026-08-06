@@ -1,0 +1,248 @@
+// MMDAnimeEye.usf
+//
+// 二次元（アニメ）眼睛材质：在 MMDAnimeToonLighting.usf 的 toon 光照基础上，
+// 按动漫眼睛的特征重构：
+//   - 虹膜自发光：只有虹膜"亮着"，阴影里也保持明亮；眼白正常受光、阴影里变灰；
+//   - 白高光（キャッチライト/glint）：虹膜上方固定的白色圆斑，二次元眼睛的灵魂；
+//   - 上睫毛阴影：眼睛上部眼睑投影，柔和压暗；
+//   - 虹膜下缘提亮：上深下浅的水灵渐变；
+//   - 湿润高光：HighlightStep 驱动的锐利 toon 高光（不再只靠软高光）。
+//
+// Custom 节点用法：
+//   OutputType: float3
+//   Code:
+//     #include "/Plugin/Ue5MMDTools/TMMDShader/MMDAnimeEye.usf"
+//     return 0;   // 兜底返回值（正常不可达）
+//
+//   节点输入（需连线）：
+//     BaseColor     (float3)    - 眼睛贴图颜色（BaseColor × BaseColorMap）
+//     LightDataTex  (Texture2D) - 灯光数据 RT
+//     ShadowStep    (float)     - 卡通阴影阈值
+//     HighlightStep (float)     - 湿润高光阈值（锐利高光阶，建议 0.85）
+//     ShadowColor   (float3)    - 阴影色
+//     SpecularPower (float)     - 软高光锐度（眼珠光泽，~100）
+//     MatCap        (Texture2D) - 球面贴图（眼睛用 add 模式的 spa 做湿润高光）
+//     SphereMode    (float)     - 0=关 1=乘 2=加
+//
+//   新增二次元眼睛输入（务必在 Custom 节点 Details 里加这 6 个输入并设默认值；
+//   不连线时按 0 处理）：
+//     IrisGlow      (float)  - 虹膜自发光强度（建议 1.0；0 也有保底亮度）
+//     GlintStrength (float)  - 白高光强度（0=关，建议 1.0~2.0）
+//     GlintPos      (float2) - 白高光在眼睛 UV 中的位置（建议 0.5, 0.42 偏上）
+//     GlintSize     (float)  - 白高光半径（UV 单位，建议 0.05）
+//     TopShadow     (float)  - 上睫毛阴影强度（建议 0.5~0.8）
+//     BottomLift    (float)  - 虹膜下缘提亮强度（建议 0.5~0.8）
+//
+//   节点作用域自动提供（无需连线）：
+//     Parameters / LightDataTexSampler / MatCapSampler
+//
+//   注意：默认假设眼睛 UV 顶部在 y=0（上眼睑在上）。若模型 UV 上下翻转，
+//   把 EyelashShadow / IrisBottomGrad 里的 EyeUV.y 换成 1.0 - EyeUV.y。
+struct TMMDAnimeEye
+{
+    float ToonRamp(float ShadowStep, float NdotL)
+    {
+        return smoothstep(ShadowStep - 0.05, ShadowStep + 0.05, NdotL);
+    }
+
+    float3 SkyAmbient(float3 WorldNormal)
+    {
+        float4 NrmV = float4(WorldNormal, 1.0);
+        float3 I0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], NrmV),
+                           dot(View.SkyIrradianceEnvironmentMap[1], NrmV),
+                           dot(View.SkyIrradianceEnvironmentMap[2], NrmV));
+        float4 VB = NrmV.xyzz * NrmV.yzzx;
+        float3 I1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], VB),
+                           dot(View.SkyIrradianceEnvironmentMap[4], VB),
+                           dot(View.SkyIrradianceEnvironmentMap[5], VB));
+        float  VC  = NrmV.x * NrmV.x - NrmV.y * NrmV.y;
+        return max(float3(0, 0, 0), I0 + I1 + View.SkyIrradianceEnvironmentMap[6].xyz * VC);
+    }
+
+    // 眼白/虹膜区分：虹膜=1，眼白=0。
+    // 眼白高亮低饱和；虹膜偏暗且高饱和（亮蓝这类也判为虹膜）。
+    float IrisMask(float3 BaseColor)
+    {
+        float Luma = dot(BaseColor, float3(0.299, 0.587, 0.114));
+        float MaxC = max(BaseColor.r, max(BaseColor.g, BaseColor.b));
+        float MinC = min(BaseColor.r, min(BaseColor.g, BaseColor.b));
+        float Sat  = MaxC - MinC;
+        return saturate((1.0 - smoothstep(0.55, 0.85, Luma)) + Sat * 0.75);
+    }
+
+    // 白高光：虹膜上方固定的柔和圆斑，pow 提锐边缘。
+    float Glint(float2 EyeUV, float2 GlintPos, float GlintSize)
+    {
+        float d = distance(EyeUV, GlintPos);
+        float g = exp(-d * d / (2.0 * GlintSize * GlintSize));
+        return pow(saturate(g), 4.0);
+    }
+
+    // 上睫毛阴影：从 UV 顶部向下淡出的投影（默认顶部在 y=0）。
+    float EyelashShadow(float2 EyeUV)
+    {
+        return 1.0 - smoothstep(0.03, 0.32, EyeUV.y);
+    }
+
+    // 虹膜下缘提亮：上深下浅。
+    float IrisBottomGrad(float2 EyeUV)
+    {
+        return smoothstep(0.30, 0.75, EyeUV.y);
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 BaseColor,
+                       Texture2D LightDataTex,
+                       SamplerState LightDataTexSampler,
+                       float ShadowStep,
+                       float HighlightStep,
+                       float3 ShadowColor,
+                       float SpecularPower,
+                       Texture2D MatCap,
+                       SamplerState MatCapSampler,
+                       float SphereMode,
+                       float IrisGlow,
+                       float GlintStrength,
+                       float2 GlintPos,
+                       float GlintSize,
+                       float TopShadow,
+                       float BottomLift)
+    {
+        static const int   MaxLights = 16;
+        static const float TexWidth  = 64.0;
+        static const float ToonPI    = 3.14159265;
+
+        const float3 WorldPos    = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 WorldNormal = normalize((float3)Parameters.TangentToWorld[2]);
+        const float3 ViewDir     = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+        const float2 EyeUV       = Parameters.TexCoords[0];
+
+        // 湿润高光阈值：未接线（0）时给默认值 0.85
+        float WetStep = HighlightStep > 0.01 ? HighlightStep : 0.85;
+
+        float3 Lighting = float3(0, 0, 0);
+        float3 Specular = float3(0, 0, 0);
+
+        for (int i = 0; i < MaxLights; i++)
+        {
+            float4 P = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.5));
+            float4 C = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.5));
+            float4 D = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.5));
+            float4 T = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.5));
+
+            if (P.w >= 0.5)
+            {
+                float3 L;
+                float  Atten = 1.0;
+
+                if (P.w < 1.5)          // 点光
+                {
+                    float3 ToLight = P.xyz - WorldPos;
+                    float  Dist    = length(ToLight);
+                    L = ToLight / max(Dist, 0.0001);
+                    Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
+                }
+                else if (P.w < 2.5)     // 聚光
+                {
+                    float3 ToLight = P.xyz - WorldPos;
+                    float  Dist    = length(ToLight);
+                    L = ToLight / max(Dist, 0.0001);
+                    Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
+                    Atten *= smoothstep(T.y, T.x, dot(-L, D.xyz));
+                }
+                else if (P.w < 3.5)     // 平行光
+                {
+                    L = -normalize(D.xyz);
+                }
+                else                    // 矩形/面光
+                {
+                    float3 ToLight = P.xyz - WorldPos;
+                    float  Dist    = length(ToLight);
+                    L = ToLight / max(Dist, 0.0001);
+                    Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
+                    Atten *= smoothstep(0.0, 0.25, dot(L, D.xyz));
+                }
+
+                float  NdotL   = saturate(dot(WorldNormal, L));
+                float  Ramp    = ToonRamp(ShadowStep, NdotL);
+                float3 Diffuse = lerp(ShadowColor, float3(1, 1, 1), Ramp);
+
+                Lighting += C.rgb * (C.w / ToonPI) * Diffuse * Atten;
+
+                float3 H     = normalize(L + ViewDir);
+                float  NdotH = saturate(dot(WorldNormal, H));
+
+                // 软高光：眼珠光泽（轻微）
+                float SpecSoft = pow(NdotH, max(SpecularPower, 1.0)) * Ramp;
+                Specular += C.rgb * (C.w / ToonPI) * SpecSoft * Atten * 0.6;
+
+                // 湿润高光：HighlightStep 锐利阶（二次元的"湿亮"）
+                float SpecWet = smoothstep(WetStep, WetStep + 0.08, NdotH) * Ramp;
+                Specular += C.rgb * (C.w / ToonPI) * SpecWet * Atten * 2.5;
+            }
+        }
+
+        Lighting += SkyAmbient(WorldNormal) * View.SkyLightColor.rgb;
+
+        // ---- 眼白/虹膜拆分 ----
+        // 眼白正常受光（阴影里变灰），虹膜自发光为主（阴影里保持"亮着"）。
+        float IrisM    = IrisMask(BaseColor);
+        float EyeSelf  = 0.55 + 0.45 * IrisGlow;
+
+        float3 Sclera = BaseColor * (0.30 + Lighting * 0.70);
+        float3 Iris   = BaseColor * (EyeSelf + Lighting * 0.40);
+        float3 Final  = lerp(Sclera, Iris, IrisM);
+
+        // 高光叠加（软 + 湿）
+        Final += Specular;
+
+        // ---- MMD sphere/matcap ----
+        if (SphereMode > 0.5)
+        {
+            float3 ViewNormal = mul(WorldNormal, (float3x3)ResolvedView.TranslatedWorldToView);
+            float2 MatcapUV = ViewNormal.xy * 0.5 + 0.5;
+            float3 Matcap   = Texture2DSample(MatCap, MatCapSampler, MatcapUV).rgb;
+
+            if (SphereMode < 1.5)       // 乘：matcap 烘焙阴影只乘眼白，虹膜保持自发光
+            {
+                Final = lerp(Sclera * Matcap, Iris, IrisM) + Specular;
+            }
+            else                        // 加：眼睛的湿润高光
+            {
+                Final += Matcap;
+            }
+        }
+
+        // ---- 上睫毛阴影 ----
+        if (TopShadow > 0.001)
+        {
+            Final *= 1.0 - EyelashShadow(EyeUV) * TopShadow * 0.55;
+        }
+
+        // ---- 虹膜下缘提亮（上深下浅）----
+        if (BottomLift > 0.001)
+        {
+            Final += BaseColor * BottomLift * IrisBottomGrad(EyeUV) * IrisM * 0.35;
+        }
+
+        // ---- 白高光（キャッチライト）----
+        if (GlintStrength > 0.001)
+        {
+            float NdotV = saturate(dot(WorldNormal, ViewDir));
+            float Fres  = smoothstep(0.15, 0.55, NdotV);   // 侧面视角淡出
+            Final += float3(1, 1, 1) * GlintStrength * Glint(EyeUV, GlintPos, max(GlintSize, 0.001)) * IrisM * Fres;
+        }
+
+        return Final;
+    }
+};
+
+// 自包含入口
+TMMDAnimeEye Eye;
+return Eye.OutputColor(Parameters,
+                       BaseColor, LightDataTex, LightDataTexSampler,
+                       ShadowStep, HighlightStep, ShadowColor,
+                       SpecularPower,
+                       MatCap, MatCapSampler, SphereMode,
+                       IrisGlow, GlintStrength, GlintPos, GlintSize,
+                       TopShadow, BottomLift);

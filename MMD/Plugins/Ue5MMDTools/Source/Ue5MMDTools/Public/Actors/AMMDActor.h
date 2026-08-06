@@ -25,6 +25,7 @@ public:
 	/*void InitializeMMDPhysics(UAnimGraphNode_MMDSkeletalControl* MMDNode,const PMXDatas& PMXData);*/
     UPROPERTY(EditAnywhere, Category = "MMD")
     FString SourcePMXFilePath;
+
 protected:
 
     virtual void BeginPlay() override;
@@ -35,7 +36,7 @@ protected:
     void InitSimulatorForPreviewIfNeeded();
 #endif
 private:
-    //��ͼ���
+    //��ͼ���?
     UPROPERTY(VisibleAnywhere, Category = "MMD")
     USkeletalMeshComponent* SkeletalMeshComponent = nullptr;
 

@@ -15,9 +15,15 @@
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
 
+#if WITH_EDITOR
+#include "EditorModeRegistry.h"
+#include "Editor/MMDMaterialPickerMode.h"
+#endif
+
 static const FName Ue5MMDToolsTabName("Ue5MMDTools");
 
 #define LOCTEXT_NAMESPACE "FUe5MMDToolsModule"
+
 
 void FUe5MMDToolsModule::StartupModule()
 {
@@ -41,6 +47,13 @@ void FUe5MMDToolsModule::OnPostEngineInit()
 	// ---------- light data collection view extension ----------
 	// Collects lights in SetupViewFamily so the light data RT is same-frame synced.
 	LightViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeLightViewExtension>();
+
+#if WITH_EDITOR
+	// 材质拾取模式（选中 AMMDActor 自动进入，点击部位高亮材质）
+	FEditorModeRegistry::Get().RegisterMode(
+		FMMDMaterialPickerMode::EM_MaterialPicker,
+		MakeShareable(new FMMDMaterialPickerMode::FFactory));
+#endif
 
 	FUe5MMDToolsStyle::Initialize();
 	FUe5MMDToolsStyle::ReloadTextures();
@@ -71,6 +84,10 @@ void FUe5MMDToolsModule::ShutdownModule()
 	}
 
 	LightViewExtension.Reset();
+
+#if WITH_EDITOR
+	FEditorModeRegistry::Get().UnregisterMode(FMMDMaterialPickerMode::EM_MaterialPicker);
+#endif
 
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
