@@ -1,5 +1,5 @@
 // TMMDAnimeCloth - 布料材质着色
 //
-// 复用 MMDAnimeToonLighting.usf 的多灯 toon 光照。在材质 Custom 节点里 include 本文件即可
-// （用法同 MMDAnimeToonLighting.usf）。
-#include "MMDAnimeToonLighting.usf"
+// 复用 MMDBaseToon.usf 的多灯 toon 光照。在材质 Custom 节点里 include 本文件即可
+// （用法同 MMDBaseToon.usf）。
+#include "MMDBaseToon.usf"

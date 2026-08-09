@@ -1,0 +1,80 @@
+// TMMDAnimeFace.usf
+//
+// 面部材质：声明自己的 struct，调用 Core/MMDToonLighting.ush 的 ComputeLighting 拿原始光照，
+// 组合工具库的标准 toon 阴影（软硬度 0.12，更柔）+ 法线贴图，再加 Rim（强度跟随光强）。
+// 完全通用：只依赖 BaseColor + LightDataTex，不依赖任何 UV 布局/配套贴图（见 AGENTS.md 通用性铁律）。
+//
+// Custom 节点用法（OutputType: float3）：
+//   Code:
+//     #include "/Plugin/Ue5MMDTools/TMMDShader/TMMDAnimeFace.usf"
+//     return 0;   // 兜底返回值（正常不可达）
+//
+//   节点输入（最少连 BaseColor + LightDataTex 就能完整着色）：
+//     BaseColor         (float3)    - 面部基础色（BaseColor × 面部贴图）
+//     LightDataTex      (Texture2D) - 灯光数据 RT
+//     ShadowStep        (float)     - 卡通阴影阈值
+//     HighlightStep     (float)     - 保留占位（高光阶暂未接）
+//     ShadowColor       (float3)    - 阴影色（建议用 BaseColor 压暗派生，保留色相）
+//     SpecularPower     (float)     - 高光锐度（鼻梁/额头柔光）
+//     NormalMap         (Texture2D) - 法线贴图（可选；不接或强度 0 用几何法线）
+//     NormalMapStrength (float)     - 法线强度（0=关 1=满，建议 0.5~1.0）
+//     RimColor          (float3)    - 边缘光颜色（建议偏冷/肤色反光）
+//     RimPower          (float)     - 边缘带宽度（越大越窄，建议 2~4）
+//     RimStrength       (float)     - 边缘光强度
+//
+//   节点作用域自动提供：Parameters / LightDataTexSampler / NormalMapSampler
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+
+struct TMMDAnimeFace
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 BaseColor,
+                       Texture2D LightDataTex,
+                       SamplerState LightDataTexSampler,
+                       float ShadowStep,
+                       float HighlightStep,
+                       float3 ShadowColor,
+                       float SpecularPower,
+                       Texture2D NormalMap,
+                       SamplerState NormalMapSampler,
+                       float NormalMapStrength,
+                       float3 RimColor,
+                       float RimPower,
+                       float RimStrength)
+    {
+        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+
+        TMMDToonLight TL;
+        // 法线贴图：强度 0 时退化为几何法线
+        const float3 WorldNormal = TL.ApplyNormalMap(Parameters, NormalMap, NormalMapSampler, NormalMapStrength);
+
+        // 原始光照（不含阴影、不含 sphere）；DirLight 不含光强，供 toon 阴影 ramp 用
+        float3 Diffuse, DirLight, Specular;
+        TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
+                           WorldNormal, ViewDir, Diffuse, DirLight, Specular);
+
+        // 标准 toon 阴影，脸部更柔（软硬度 0.12，阴影由工具库统一算）
+        float3 ShadedSpecular;
+        float3 ShadedDiffuse = TL.ApplyToonShadow(Diffuse, DirLight, Specular, ShadowStep, ShadowColor, 0.12, ShadedSpecular);
+
+        // 天空环境光：和直接光一样乘 BaseColor（对齐 PBR/Lit，色相才正确）
+        float3 Final = BaseColor * (ShadedDiffuse + TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb) + ShadedSpecular;
+
+        // ---- Rim（边缘光，跟随光强）----
+        float LightIntensity = TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler);
+        float NdotV = saturate(dot(WorldNormal, ViewDir));
+        float Rim   = pow(1.0 - NdotV, max(RimPower, 0.5));
+        Final += RimColor * RimStrength * Rim * LightIntensity;
+
+        return Final;
+    }
+};
+
+TMMDAnimeFace Face;
+return Face.OutputColor(Parameters,
+                        BaseColor, LightDataTex, LightDataTexSampler,
+                        ShadowStep, HighlightStep, ShadowColor,
+                        SpecularPower,
+                        NormalMap, NormalMapSampler, NormalMapStrength,
+                        RimColor, RimPower, RimStrength);

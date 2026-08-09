@@ -1,0 +1,93 @@
+﻿// ============================================================================
+//   MMDBaseToon —— 【基础材质 / BASE MATERIAL】
+//   所有 TMMDAnime* 材质共用的基础 toon 着色器：
+//     标准 toon（皮肤/布料/头发）→ 材质节点一行 include 本文件即可直接用；
+//     特化材质（Face/Eye）        → 照抄本 struct 结构，自行改阴影/sphere/叠加效果。
+//   光照/阴影/法线/matcap 函数库：Core/MMDToonLighting.ush
+// ============================================================================
+// MMDBaseToon.usf —— 通用基础 Toon 材质实现（struct TMMDBaseToon）
+// 调用 Core/MMDToonLighting.ush 的 ComputeLighting 拿原始光照，
+// 再组合标准 toon 阴影（软硬度 0.05）+ sphere(matcap)。
+//
+// Custom 节点用法（OutputType: float3）：
+//   Code:
+//     #include "/Plugin/Ue5MMDTools/TMMDShader/MMDBaseToon.usf"
+//     return 0;   // 兜底返回值（正常不可达）
+//
+//   节点输入（需连线）：
+//     BaseColor         (float3)    - 基础色
+//     LightDataTex      (Texture2D) - 灯光数据 RT
+//     ShadowStep        (float)     - 卡通阴影阈值
+//     HighlightStep     (float)     - 保留占位（高光阶暂未接）
+//     ShadowColor       (float3)    - 阴影色
+//     SpecularPower     (float)     - 高光锐度
+//     NormalMap         (Texture2D) - 法线贴图（可选；不接或强度 0 用几何法线）
+//     NormalMapStrength (float)     - 法线强度（0=关 1=满，建议 0.5~1.0）
+//     MatCap            (Texture2D) - sphere/matcap 贴图
+//     SphereMode        (float)     - 0=关 1=乘(matcap烘焙阴影) 2=加(matcap高光)
+//
+//   节点作用域自动提供：Parameters / LightDataTexSampler / NormalMapSampler / MatCapSampler
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+
+struct TMMDBaseToon
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 BaseColor,
+                       Texture2D LightDataTex,
+                       SamplerState LightDataTexSampler,
+                       float ShadowStep,
+                       float HighlightStep,
+                       float3 ShadowColor,
+                       float SpecularPower,
+                       Texture2D NormalMap,
+                       SamplerState NormalMapSampler,
+                       float NormalMapStrength,
+                       Texture2D MatCap,
+                       SamplerState MatCapSampler,
+                       float SphereMode)
+    {
+        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+
+        TMMDToonLight TL;
+        // 法线贴图：强度 0 时退化为几何法线
+        const float3 WorldNormal = TL.ApplyNormalMap(Parameters, NormalMap, NormalMapSampler, NormalMapStrength);
+
+        // 原始光照（不含阴影、不含 sphere）；DirLight 不含光强，供 toon 阴影 ramp 用
+        float3 Diffuse, DirLight, Specular;
+        TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
+                           WorldNormal, ViewDir, Diffuse, DirLight, Specular);
+
+        // 标准 toon 阴影（软硬度 0.05，阴影由工具库统一算）
+        float3 ShadedSpecular;
+        float3 ShadedDiffuse = TL.ApplyToonShadow(Diffuse, DirLight, Specular, ShadowStep, ShadowColor, 0.05, ShadedSpecular);
+
+        // 天空环境光：和直接光一样乘 BaseColor（对齐 PBR/Lit，色相才正确）
+        float3 Final = BaseColor * (ShadedDiffuse + TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb) + ShadedSpecular;
+
+        // ---- sphere/matcap ----
+        if (SphereMode > 0.5)
+        {
+            float3 Matcap = TL.SampleMatcap(WorldNormal, MatCap, MatCapSampler);
+
+            if (SphereMode < 1.5)       // 乘：matcap 烘焙阴影，只乘漫反射
+            {
+                Final = BaseColor * (ShadedDiffuse * Matcap) + ShadedSpecular;
+            }
+            else                        // 加：matcap 高光，叠加
+            {
+                Final += Matcap;
+            }
+        }
+
+        return Final;
+    }
+};
+
+TMMDBaseToon Toon;
+return Toon.OutputColor(Parameters,
+                        BaseColor, LightDataTex, LightDataTexSampler,
+                        ShadowStep, HighlightStep, ShadowColor,
+                        SpecularPower,
+                        NormalMap, NormalMapSampler, NormalMapStrength,
+                        MatCap, MatCapSampler, SphereMode);

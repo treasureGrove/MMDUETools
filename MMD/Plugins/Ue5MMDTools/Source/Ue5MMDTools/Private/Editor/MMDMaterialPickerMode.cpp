@@ -56,7 +56,9 @@ static UMaterial* GetClipMaterial()
 	if (!Mat)
 	{
 		Mat = NewObject<UMaterial>(GetTransientPackage(), TEXT("MMD_OverlayClip"));
-		Mat->SetFlags(RF_Transient);
+		// RF_Standalone：编辑器中即使没有 UObject 引用也不被 GC（static C++ 变量 GC 不识别，
+		// 不加此 flag 第一次 GC 后 Mat 就成悬空指针，下次 SetMaterial 触发崩溃）
+		Mat->SetFlags(RF_Transient | RF_Standalone);
 		Mat->SetShadingModel(EMaterialShadingModel::MSM_Unlit);
 		Mat->BlendMode = BLEND_Masked;
 		Mat->bUsedWithSkeletalMesh = true;
@@ -79,7 +81,7 @@ static UMaterial* GetInvisibleTranslucentMaterial()
 	if (!Mat)
 	{
 		Mat = NewObject<UMaterial>(GetTransientPackage(), TEXT("MMD_OverlayInvisible"));
-		Mat->SetFlags(RF_Transient);
+		Mat->SetFlags(RF_Transient | RF_Standalone); // 同上，防 GC 回收
 		Mat->SetShadingModel(EMaterialShadingModel::MSM_Unlit);
 		Mat->BlendMode = BLEND_Translucent;
 		Mat->bUsedWithSkeletalMesh = true;

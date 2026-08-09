@@ -21,7 +21,7 @@
 #if WITH_EDITOR
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Editor.h"
-#include "EditorViewportClient.h"
+#include "LevelEditorViewport.h"
 #endif
 
 // Light type codes written into the light data texture.
@@ -193,15 +193,15 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 #if WITH_EDITOR
 	if (!bHasCamera && GEditor)
 	{
-		if (FViewport* Viewport = GEditor->GetActiveViewport())
+		// 用 GetLevelViewportClients()（类型安全，返回 FLevelEditorViewportClient*），
+		// 不要对 GetClient() 强转 —— 那可能是非 editor 视口（缩略图/后台），会崩。
+		for (FLevelEditorViewportClient* EVC : GEditor->GetLevelViewportClients())
 		{
-			if (FViewportClient* VC = Viewport->GetClient())
+			if (EVC)
 			{
-				if (FEditorViewportClient* EVC = static_cast<FEditorViewportClient*>(VC))
-				{
-					CameraPos = EVC->GetViewLocation();
-					bHasCamera = true;
-				}
+				CameraPos = EVC->GetViewLocation();
+				bHasCamera = true;
+				break;
 			}
 		}
 	}
