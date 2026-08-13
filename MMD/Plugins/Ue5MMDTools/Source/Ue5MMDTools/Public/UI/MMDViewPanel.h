@@ -34,7 +34,11 @@ protected:
 	/** Creates the viewport client for this viewport */
 	virtual TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;
 
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 7
+	virtual TSharedPtr<SWidget> BuildViewportToolbar() override;
+#else
 	virtual TSharedPtr<SWidget> MakeViewportToolbar() override;
+#endif
 
 private:
 	void ImportModelClicked();

@@ -8,6 +8,35 @@
 #include "AGN_MMDSkeletalControl.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "TPMXParser.h"
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+
+// 控制台命令：重新导入关卡里所有 MMD 角色（验证 mesh 构建改动如 bCastShadow 时用）。
+// 用法：编辑器输出日志里输入 MMD.Reimport
+static FAutoConsoleCommand GMMDReimportCommand(
+	TEXT("MMD.Reimport"),
+	TEXT("Re-import all MMD actors in the current level from their source PMX files."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		UWorld* World = GWorld;
+		if (!World)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[MMD.Reimport] No world available."));
+			return;
+		}
+		int32 Count = 0;
+		for (TActorIterator<AMMDActor> It(World); It; ++It)
+		{
+			AMMDActor* MMD = *It;
+			if (MMD && !MMD->SourcePMXFilePath.IsEmpty())
+			{
+				MMD->SetupComponents(MMD->SourcePMXFilePath);
+				Count++;
+			}
+		}
+		UE_LOG(LogTemp, Log, TEXT("[MMD.Reimport] Re-imported %d MMD actor(s)."), Count);
+	})
+);
 AMMDActor::AMMDActor()
 {
     PrimaryActorTick.bCanEverTick = true;

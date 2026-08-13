@@ -43,9 +43,13 @@
 //IKRig
 #if WITH_EDITOR
 #include "RigEditor/IKRigController.h"
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+#include "Rig/Solvers/IKRigFullBodyIK.h"
+#else
 #include "Rig/Solvers/IKRig_FBIKSolver.h"
+#endif
 #include "Retargeter/IKRetargeter.h"
-#include "RetargetEditor/IKRetargeterController.h"   
+#include "RetargetEditor/IKRetargeterController.h"
 #endif
 #pragma region 材质贴图
 static constexpr uint8 PMX_DRAW_DOUBLE_SIDED = 0x01;
@@ -3381,8 +3385,10 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 
 		if (PMXInfo.ModelMaterials.IsValidIndex(Section.MaterialIndex))
 		{
-			const FPMXMaterial& PMXMaterial = PMXInfo.ModelMaterials[Section.MaterialIndex];
-			Section.bCastShadow = (PMXMaterial.DrawFlags & PMX_DRAW_CAST_SHADOW) != 0;
+			// MMD 模型默认投射直射光阴影（与场景物体/地面保持一致）。
+			// 原实现按 PMX 0x04(cast shadow) flag 控制，但测试模型该位常缺失导致角色完全无投影，
+			// 这里强制投射（MMD 通用模型均带阴影；半透明材质引擎本身不投阴影，不受影响）。
+			Section.bCastShadow = true;
 		}
 	}
 
@@ -3647,7 +3653,11 @@ UIKRigDefinition* TMMDMeshBuilder::BuildIKRigFromPMX(USkeletalMesh* SkeletalMesh
 	}
 	// 创建FBIK求解器
 	{
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+		int32 SolverIndex = Controller->AddSolver(TEXT("/Script/IKRig.FullBodyIKSolver"));
+#else
 		int32 SolverIndex = Controller->AddSolver(UIKRigFBIKSolver::StaticClass());
+#endif
 
 		if (SolverIndex != INDEX_NONE)
 		{

@@ -281,21 +281,38 @@ public:
     }
 
     // 重写鼠标移动处理 - 确保右键拖拽用于视角控制
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+    virtual bool InputAxis(const FInputKeyEventArgs& Args) override
+#else
     virtual bool InputAxis(FViewport *InViewport, FInputDeviceId DeviceId, FKey Key, float Delta, float DeltaTime, int32 NumSamples, bool bGamepad) override
+#endif
     {
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+        FViewport* InViewport = Args.Viewport;
+        const FKey Key = Args.Key;
+#else
         // 右键相关的鼠标移动总是用于视角控制
+#endif
         if (Key == EKeys::MouseX || Key == EKeys::MouseY)
         {
             // 检查右键是否被按下
             if (InViewport->KeyState(EKeys::RightMouseButton))
             {
                 // 强制使用父类的视角控制，不传递给Widget系统
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+                return FEditorViewportClient::InputAxis(Args);
+#else
                 return FEditorViewportClient::InputAxis(InViewport, DeviceId, Key, Delta, DeltaTime, NumSamples, bGamepad);
+#endif
             }
         }
 
         // 其他轴输入正常处理
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+        return FEditorViewportClient::InputAxis(Args);
+#else
         return FEditorViewportClient::InputAxis(InViewport, DeviceId, Key, Delta, DeltaTime, NumSamples, bGamepad);
+#endif
     }
 
     // 重写输入处理 - 确保右键总是用于视角控制，滚轮控制速度
@@ -437,7 +454,11 @@ TSharedRef<FEditorViewportClient> MMDViewPanel::MakeEditorViewportClient()
     return CustomViewportClient.ToSharedRef();
 }
 
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 7
+TSharedPtr<SWidget> MMDViewPanel::BuildViewportToolbar()
+#else
 TSharedPtr<SWidget> MMDViewPanel::MakeViewportToolbar()
+#endif
 {
     // 创建工具栏
     return SNew(SHorizontalBox) + SHorizontalBox::Slot().AutoWidth().Padding(2.0f)[SNew(SButton).Text(FText::FromString(TEXT("Move (W)"))).OnClicked_Lambda([this]()

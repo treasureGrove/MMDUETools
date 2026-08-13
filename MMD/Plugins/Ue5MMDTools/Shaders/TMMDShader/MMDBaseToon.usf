@@ -25,8 +25,10 @@
 //     NormalMapStrength (float)     - 法线强度（0=关 1=满，建议 0.5~1.0）
 //     MatCap            (Texture2D) - sphere/matcap 贴图
 //     SphereMode        (float)     - 0=关 1=乘(matcap烘焙阴影) 2=加(matcap高光)
+//     MMDShadowMap      (Texture2D) - 场景阴影深度 RT（Ue5MMDTools/Rendering/MMDShadowMapRT）
+//     MMDShadowBias     (float)     - 阴影深度偏移（cm，默认 0，一般 5~20 调自遮挡）
 //
-//   节点作用域自动提供：Parameters / LightDataTexSampler / NormalMapSampler / MatCapSampler
+//   节点作用域自动提供：Parameters / LightDataTexSampler / NormalMapSampler / MatCapSampler / MMDShadowMapSampler
 #include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
 
 struct TMMDBaseToon
@@ -44,7 +46,10 @@ struct TMMDBaseToon
                        float NormalMapStrength,
                        Texture2D MatCap,
                        SamplerState MatCapSampler,
-                       float SphereMode)
+                       float SphereMode,
+                       Texture2D MMDShadowMap,
+                       SamplerState MMDShadowMapSampler,
+                       float MMDShadowBias)
     {
         const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
         const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
@@ -58,12 +63,21 @@ struct TMMDBaseToon
         TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
                            WorldNormal, ViewDir, Diffuse, DirLight, Specular);
 
+        // 场景阴影（主平行光遮挡）：关闭/无效时返回 1，不改变原有 toon 光照
+        float MMDShadowFactor = TL.SampleMMDShadow(Parameters, LightDataTex, LightDataTexSampler,
+                                                   MMDShadowMap, MMDShadowMapSampler,
+                                                   MMDShadowBias);
+        Diffuse  *= MMDShadowFactor;
+        DirLight *= MMDShadowFactor;
+        Specular *= MMDShadowFactor;
+
         // 标准 toon 阴影（软硬度 0.05，阴影由工具库统一算）
         float3 ShadedSpecular;
         float3 ShadedDiffuse = TL.ApplyToonShadow(Diffuse, DirLight, Specular, ShadowStep, ShadowColor, 0.05, ShadedSpecular);
 
-        // 天空环境光：和直接光一样乘 BaseColor（对齐 PBR/Lit，色相才正确）
-        float3 Final = BaseColor * (ShadedDiffuse + TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb) + ShadedSpecular;
+        // 天空环境光：和直接光一样乘 BaseColor（对齐 PBR/Lit，色相才正确）；
+        // 同时乘 MMDShadowFactor，使遮挡时环境光随直射光一起归零（与地面原生阴影一致，遮挡处全黑）。
+        float3 Final = BaseColor * (ShadedDiffuse + TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb * MMDShadowFactor) + ShadedSpecular;
 
         // ---- sphere/matcap ----
         if (SphereMode > 0.5)
@@ -90,4 +104,5 @@ return Toon.OutputColor(Parameters,
                         ShadowStep, HighlightStep, ShadowColor,
                         SpecularPower,
                         NormalMap, NormalMapSampler, NormalMapStrength,
-                        MatCap, MatCapSampler, SphereMode);
+                        MatCap, MatCapSampler, SphereMode,
+                        MMDShadowMap, MMDShadowMapSampler, MMDShadowBias);

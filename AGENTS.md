@@ -85,7 +85,7 @@ Code:
 数据来源是插件写入的灯光数据 RT `LightDataTex`（`/Ue5MMDTools/Rendering/LightDataRT`，
 由 `UMMDAnimeLightDataSubsystem` 每帧写入）。
 
-**LightDataTex 布局**（`MaxLights=16`，宽 `64 = 16*4`）——每盏灯占 4 个 texel：
+**LightDataTex 布局**（`MaxLights=16`，宽 `64 = 16*4`，**高 2**，RGBA32F）——第 0 行每盏灯占 4 个 texel：
 
 | texel | 内容 |
 |---|---|
@@ -93,6 +93,10 @@ Code:
 | C (`+1`) | `rgb`=灯光颜色，`w`=强度 |
 | D (`+2`) | `xyz`=方向（平行光=光照方向），`w`=半径 |
 | T (`+3`) | 附加（聚光内外锥角、面光朝向） |
+
+**第 1 行（y=1，x=0..3）** = MMD 场景阴影相机基（`UMMDShadowMapSubsystem` 写入，材质侧 `SampleMMDShadow` 读）：
+texel0=`(Origin.xyz, Valid)`、texel1=`(Right/OrthoWidth, GlobalBias)`、texel2=`(Up/OrthoWidth, 0)`、texel3=`(Forward.xyz, TexelSize)`。
+阴影深度存 `/Ue5MMDTools/Rendering/MMDShadowMapRT`（RGBA16F 2048²，`ASceneCapture2D` + `SCS_SceneDepth` 从主平行光视角渲染，R=沿光轴线性深度 cm）。
 
 ### 核心工具库 `Shaders/Core/MMDToonLighting.ush`（struct `TMMDToonLight`）
 
@@ -106,13 +110,14 @@ Code:
 | `SkyAmbient(WorldNormal)` | 天空 SH 环境光（与 PBR 同公式） |
 | `SampleMatcap(WorldNormal, MatCap, Sampler)` | 视图空间 matcap 查找采样（乘/加由材质定） |
 | `TotalLightIntensity(Parameters, LightDataTex, Sampler)` | 总光强（不含天空），给 Rim 等用 |
+| `SampleMMDShadow(Parameters, LightDataTex, Sampler, ShadowMap, Sampler, Enabled, Bias)` | 场景阴影（主平行光遮挡）：读 LightDataTex 第 1 行阴影相机基 → 世界坐标投到阴影空间 → 采样 MMDShadowMapRT 深度比较（4-tap PCF）。Enabled<=0 或 Valid==0 返回 1 |
 | `GetMainLightDirection(...)` / `GetMainLightData(...)` | 找最强主光方向/颜色 —— **face 已回退，当前暂未被使用** |
 
 ### 材质 usf 一览（`Shaders/TMMDShader/`）
 
 | 文件 | struct | 状态 |
 |---|---|---|
-| `MMDBaseToon.usf` | `TMMDBaseToon` | **基础**：ApplyNormalMap → ComputeLighting → ApplyToonShadow(0.05) → 天空(乘 BaseColor) → matcap。输入：BaseColor/LightDataTex/ShadowStep/HighlightStep/ShadowColor/SpecularPower/NormalMap/NormalMapStrength/MatCap/SphereMode |
+| `MMDBaseToon.usf` | `TMMDBaseToon` | **基础**：ApplyNormalMap → ComputeLighting → SampleMMDShadow(场景遮挡) → ApplyToonShadow(0.05) → 天空(乘 BaseColor) → matcap。输入：BaseColor/LightDataTex/ShadowStep/HighlightStep/ShadowColor/SpecularPower/NormalMap/NormalMapStrength/MatCap/SphereMode/**MMDShadowMap/MMDShadowEnabled/MMDShadowBias** |
 | `TMMDAnimeCloth.usf` | — | `#include "MMDBaseToon.usf"` 复用基础 |
 | `TMMDAnimeSkin.usf` | `TMMDAnimeSkin` | ⚠️ **旧实现**：自带 toon 循环，未用 Core 工具库（可后续迁移） |
 | `MMDAnimeEye.usf` | `TMMDAnimeEye` | 完全特化（虹膜自发光/白高光/睫毛阴影/湿润高光），自带循环 |
@@ -143,9 +148,10 @@ Code:
 - `AGN_MMDSkeletalControl`（AnimNode）— MMD 骨骼控制节点，配合 `MMDPhysicsSimulator`（Bullet 物理，刚体/关节数据见 `FMMDPhysicsRigidBodyData` / `FMMDPhysicsJointData`）。
 
 ### 渲染 / 光照（LightDataRT 系统）
-- `UMMDAnimeLightDataSubsystem` — 每帧把场景灯光写入 `LightDataRT`（`/Ue5MMDTools/Rendering/LightDataRT`，16 灯×4 texel，P/C/D/T 布局，见上文"当前光照架构"）。
-- `FMMDAnimeLightViewExtension`（Private/Rendering）— SceneViewExtension，渲染期注入灯光写入 compute pass。
-- `MMDAnimeWriteLights` + `Shaders/PostProcess/MMDAnimeWriteLights.usf` — 灯光→RT 的 compute shader。
+- `UMMDAnimeLightDataSubsystem` — 每帧把场景灯光写入 `LightDataRT`（`/Ue5MMDTools/Rendering/LightDataRT`，**64×2**：第 0 行 16 灯×4 texel P/C/D/T，第 1 行阴影相机基，见上文"当前光照架构"）。
+- `UMMDShadowMapSubsystem` — MMD 场景阴影（主平行光遮挡）：隐藏 `ASceneCapture2D`（正交 + `SCS_SceneDepth`）每帧渲染主光视角场景深度到 `MMDShadowMapRT`（RGBA16F 2048²），并把阴影相机基写入 LightDataRT 第 1 行；默认排除 AMMDActor（不自阴影）。BP：`SetShadowEnabled/SetShadowMapRenderTarget/SetShadowDistance/SetOrthoWidth/SetGlobalBias/SetHideMMDActors`。
+- `FMMDAnimeLightViewExtension`（Private/Rendering）— SceneViewExtension，SetupViewFamily 里先更新阴影相机再收集灯光，渲染期注入灯光写入 compute pass。
+- `MMDAnimeWriteLights` + `Shaders/PostProcess/MMDAnimeWriteLights.usf` — 灯光→RT 的 compute shader（64 线程写第 0 行 + 4 线程写第 1 行）。
 - `MMDAnimeEnvironmentUniformBuffer` — 环境光照 UniformBuffer（平行光/点光/聚光/面光/雾/toon shadow color），材质里可采。
 - 材质侧 toon 光照：`Shaders/Core/MMDToonLighting.ush` + `Shaders/TMMDShader/*.usf`（见上文"当前光照架构"）。
 - `UMMDHeadBoneSubsystem` — 头骨朝向 → 材质参数 `MMDHeadForward/MMDHeadRight`。**face 已回退，当前冗余**（待删/待定）。

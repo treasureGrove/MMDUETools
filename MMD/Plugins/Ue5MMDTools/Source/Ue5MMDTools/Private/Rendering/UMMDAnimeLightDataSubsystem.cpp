@@ -76,10 +76,18 @@ void UMMDAnimeLightDataSubsystem::SetLightDataRenderTarget(UTextureRenderTarget2
 	{
 		LightDataRT->bCanCreateUAV = true;
 		LightDataRT->RenderTargetFormat = RTF_RGBA32f;
-		LightDataRT->InitAutoFormat(MaxLights * 4, 1);
+		LightDataRT->InitAutoFormat(MaxLights * 4, 2);   // 第 2 行 = 阴影相机基
 		LightDataRT->UpdateResourceImmediate(true);
-		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA16f UAV)"),
+		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA32f UAV)"),
 			*LightDataRT->GetName(), LightDataRT->SizeX, LightDataRT->SizeY);
+	}
+}
+
+void UMMDAnimeLightDataSubsystem::SetShadowCameraData(const FVector4f InData[4])
+{
+	for (int32 i = 0; i < 4; i++)
+	{
+		ShadowCameraData[i] = InData[i];
 	}
 }
 
@@ -109,7 +117,7 @@ void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
 			NewRT->RenderTargetFormat = RTF_RGBA32f;
 			NewRT->bCanCreateUAV = true;
 			NewRT->bAutoGenerateMips = false;
-			NewRT->InitAutoFormat(MaxLights * 4, 1);
+			NewRT->InitAutoFormat(MaxLights * 4, 2);   // 第 2 行 = 阴影相机基
 			NewRT->UpdateResourceImmediate(true);
 			NewRT->MarkPackageDirty();
 
@@ -160,6 +168,13 @@ void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
 
 	TArray<FVector4f> Data;
 	CollectLights(World, Data);
+
+	// 追加阴影相机基到第 2 行（y=1）：texel 0..3（写进 LightDataRT 的 64..67）
+	Data.SetNum(MaxLights * 4 + 4);
+	for (int32 i = 0; i < 4; i++)
+	{
+		Data[MaxLights * 4 + i] = ShadowCameraData[i];
+	}
 
 	// Push to the render thread. Both the writer (this command) and the reader
 	// (OnPostOpaque) run on the render thread, so no lock is needed. This runs
@@ -461,5 +476,5 @@ void UMMDAnimeLightDataSubsystem::OnPostOpaque(FPostOpaqueRenderParameters& Para
 		RDG_EVENT_NAME("MMDAnimeWriteLights"),
 		CS,
 		Params,
-		FIntVector(1, 1, 1));
+		FIntVector(MaxLights * 4 + 4, 1, 1));   // 64 灯光 + 4 阴影基
 }
