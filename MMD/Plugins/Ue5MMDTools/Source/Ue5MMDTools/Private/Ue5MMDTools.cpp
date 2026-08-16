@@ -9,6 +9,7 @@
 #include "Misc/CoreDelegates.h"
 #include "MMDImportSetting.h"
 #include "Misc/Paths.h"
+#include "HAL/IConsoleManager.h"
 #include "Rendering/FMMDAnimeLightViewExtension.h"
 #include "SceneViewExtension.h"
 #include "ShaderCore.h"
@@ -21,6 +22,16 @@
 #endif
 
 static const FName Ue5MMDToolsTabName("Ue5MMDTools");
+
+// 控制台命令：MMD.OpenPanel —— 打开 MMD 工具面板（供脚本/MCP 验证用）
+static FAutoConsoleCommand CmdMMDOpenPanel(
+	TEXT("MMD.OpenPanel"),
+	TEXT("打开 MMD 工具面板（Nomad Tab）"),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		FGlobalTabmanager::Get()->TryInvokeTab(Ue5MMDToolsTabName);
+	}));
+
 
 #define LOCTEXT_NAMESPACE "FUe5MMDToolsModule"
 

@@ -28,6 +28,13 @@ void FMMDShadowCustomRenderPass::OnPreRender(FRDGBuilder& GraphBuilder)
 		// 插件调用不了。但我们的 RT 大小在 SetShadowMapRenderTarget 里固定为 2048²，运行时不变，
 		// 不需要 Resize，直接注册即可。
 		RenderTargetTexture = ExternalRenderTarget->GetRenderTargetTexture(GraphBuilder);
+
+		// 关键修复：若上一帧 OnEndPass 的 UseExternalAccessMode(SRVMask) 或别的消费方
+		// （如 MMD 预览渲染器的 SceneCapture）把本 RT 切成了 external access，必须先切回
+		// internal，否则本 pass 再把它当 RTV/深度目标写入会触发 RDG 校验崩溃：
+		//   "is in external access mode ... but is being used with access RTV"
+		// 与引擎 FSceneCapturePass::OnPreRender 的做法完全一致（已处于 internal 时是 no-op）。
+		GraphBuilder.UseInternalAccessMode(RenderTargetTexture);
 	}
 }
 

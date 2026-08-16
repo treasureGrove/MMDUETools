@@ -8,9 +8,11 @@
 #include "Widgets/Text/STextBlock.h"
 
 class MMDViewPanel;
+class SMMDToolPreview;
 class AActor;
 class UAnimSequence;
 class ULevelSequence;
+class USkeletalMesh;
 class USkeletalMeshComponent;
 struct FAssetData;
 
@@ -129,6 +131,17 @@ private:
     /** 状态文本显示 */
     TSharedPtr<STextBlock> StatusText;
     TStrongObjectPtr<UMMDToolPanelWidget> ToolPanelWidget;
+
+    /** 新 Slate 预览视口 + 选中的模型/动画文本 */
+    TSharedPtr<SMMDToolPreview> PreviewViewport;
+    TSharedPtr<STextBlock> SelectedModelText;
+    TSharedPtr<STextBlock> SelectedAnimText;
+
+    void SetSelectedModelTextUI(const FText& Text);
+    void SetSelectedAnimTextUI(const FText& Text);
+    bool SetPreviewActorClassUI(UClass* InClass);
+    void SetPreviewSkeletalMeshUI(USkeletalMesh* InMesh);
+    void SetPreviewAnimationUI(UAnimSequence* InAnim);
 
     TWeakObjectPtr<AActor> ComposerActor;
     TWeakObjectPtr<AActor> LastImportedMMDActor;

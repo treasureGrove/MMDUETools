@@ -1,6 +1,8 @@
 ﻿#include "MMDImportSetting.h"
 #include "MMDViewPanel.h"
 #include "UI/MMDToolPanelWidget.h"
+#include "UI/SMMDToolPreview.h"
+#include "Rendering/UMMDLightingEnvironmentLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBox.h"
@@ -15,6 +17,11 @@
 #include "PropertyCustomizationHelpers.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/Layout/SSplitter.h"
+#include "Styling/AppStyle.h"
+#include "Styling/CoreStyle.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Widgets/SWindow.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/Paths.h"
@@ -913,102 +920,387 @@ void MMDImportSetting::RegisterInstance(const TSharedRef<MMDImportSetting>& Inst
 	CurrentInstance = InstanceRef;
 }
 
+namespace
+{
+	// ===== 二次元主题配色（马卡龙 + 深紫底）=====
+	const FLinearColor GMMDColorPink   = FLinearColor(1.00f, 0.42f, 0.62f, 1.0f);  // 樱花粉
+	const FLinearColor GMMDColorBlue   = FLinearColor(0.35f, 0.72f, 1.00f, 1.0f);  // 天蓝
+	const FLinearColor GMMDColorMint   = FLinearColor(0.24f, 0.90f, 0.78f, 1.0f);  // 薄荷
+	const FLinearColor GMMDColorPurple = FLinearColor(0.66f, 0.47f, 1.00f, 1.0f);  // 紫
+
+	const FLinearColor GMMDPanelBG   = FLinearColor(0.10f, 0.07f, 0.16f, 1.0f);   // 深紫底
+	const FLinearColor GMMDSectionBG = FLinearColor(0.14f, 0.10f, 0.22f, 1.0f);   // 分区底
+	const FLinearColor GMMDHeaderBG  = FLinearColor(0.17f, 0.12f, 0.27f, 1.0f);   // 顶栏/状态栏底
+	const FLinearColor GMMDTextDim   = FLinearColor(0.72f, 0.68f, 0.85f, 1.0f);   // 灰紫文字
+	const FLinearColor GMMDTextBright= FLinearColor(0.96f, 0.95f, 1.00f, 1.0f);   // 亮文字
+
+	// 二次元大圆角
+	constexpr float GMMDRadius = 10.0f;
+
+	// 按钮样式工厂：普通/悬停/按下 三态 + 大圆角
+	FButtonStyle MMDMakeButtonStyle(const FLinearColor& Normal, const FLinearColor& Hovered, const FLinearColor& Pressed)
+	{
+		FButtonStyle S;
+		S.SetNormal(FSlateRoundedBoxBrush(Normal, GMMDRadius));
+		S.SetHovered(FSlateRoundedBoxBrush(Hovered, GMMDRadius));
+		S.SetPressed(FSlateRoundedBoxBrush(Pressed, GMMDRadius));
+		S.SetDisabled(FSlateRoundedBoxBrush(FLinearColor(0.20f, 0.17f, 0.28f, 1.0f), GMMDRadius));
+		S.SetNormalPadding(FMargin(14.0f, 7.0f));
+		S.SetPressedPadding(FMargin(14.0f, 8.0f, 14.0f, 6.0f));
+		return S;
+	}
+
+	const FButtonStyle& MMDGetPrimaryButtonStyle()
+	{
+		static const FButtonStyle Style = MMDMakeButtonStyle(
+			FLinearColor(0.85f, 0.28f, 0.52f, 1.0f),   // 樱花粉（加深，白字可读）
+			FLinearColor(0.95f, 0.40f, 0.64f, 1.0f),
+			FLinearColor(0.70f, 0.22f, 0.42f, 1.0f));
+		return Style;
+	}
+
+	const FButtonStyle& MMDGetSecondaryButtonStyle()
+	{
+		static const FButtonStyle Style = MMDMakeButtonStyle(
+			FLinearColor(0.30f, 0.42f, 0.78f, 1.0f),   // 蓝紫
+			FLinearColor(0.42f, 0.56f, 0.92f, 1.0f),
+			FLinearColor(0.22f, 0.32f, 0.62f, 1.0f));
+		return Style;
+	}
+
+	const FButtonStyle& MMDGetAccentButtonStyle()
+	{
+		static const FButtonStyle Style = MMDMakeButtonStyle(
+			FLinearColor(0.08f, 0.50f, 0.42f, 1.0f),   // 薄荷绿（加深，白字可读）
+			FLinearColor(0.14f, 0.64f, 0.54f, 1.0f),
+			FLinearColor(0.05f, 0.40f, 0.34f, 1.0f));
+		return Style;
+	}
+
+	const FButtonStyle& MMDGetWarnButtonStyle()
+	{
+		static const FButtonStyle Style = MMDMakeButtonStyle(
+			FLinearColor(0.82f, 0.30f, 0.42f, 1.0f),   // 红（清除）
+			FLinearColor(0.95f, 0.42f, 0.54f, 1.0f),
+			FLinearColor(0.66f, 0.22f, 0.32f, 1.0f));
+		return Style;
+	}
+
+	TSharedRef<SWidget> MMDMakeButton(const FText& Label, const FButtonStyle& Style, FOnClicked Handler, const FLinearColor& TextColor = FLinearColor::White)
+	{
+		return SNew(SButton)
+			.ButtonStyle(&Style)
+			.OnClicked(Handler)
+			.HAlign(HAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(Label)
+				.ColorAndOpacity(FSlateColor(TextColor))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+			];
+	}
+
+	TSharedRef<SWidget> MMDMakeSectionHeader(const FText& Title, const FLinearColor& Color)
+	{
+		return SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(FString(TEXT("◆ ")) + Title.ToString()))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+				.ColorAndOpacity(FSlateColor(Color))
+				.Margin(FMargin(2.0f, 2.0f))
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SSeparator)
+				.ColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.08f)))
+			];
+	}
+
+	TSharedRef<SWidget> MMDMakeSolidPanel(const FLinearColor& Color, TSharedRef<SWidget> Content, FMargin Padding = FMargin(8.0f))
+	{
+		return SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FSlateColor(Color))
+			.Padding(Padding)
+			[
+				Content
+			];
+	}
+}
+
 void MMDImportSetting::Construct(const FArguments& InArgs)
 {
 	ViewPanel = InArgs._ViewPanel;
 
-	UMMDToolPanelWidget* CreatedToolPanel = nullptr;
-#if WITH_EDITOR
-	UWorld* EditorWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
-	if (EditorWorld)
-	{
-		static const TCHAR* ToolPanelWidgetPath = TEXT("/Ue5MMDTools/UI/WBP_MMDToolPanel.WBP_MMDToolPanel_C");
-		UClass* ToolPanelClass = StaticLoadClass(UMMDToolPanelWidget::StaticClass(), nullptr, ToolPanelWidgetPath);
-		if (ToolPanelClass)
-		{
-			CreatedToolPanel = CreateWidget<UMMDToolPanelWidget>(EditorWorld, ToolPanelClass);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("MMD tool panel widget not found: %s"), ToolPanelWidgetPath);
-		}
-	}
-#endif
+	// ================= 左侧边栏 =================
+	TSharedRef<SVerticalBox> Sidebar = SNew(SVerticalBox);
 
-	if (!CreatedToolPanel)
+	auto AddSection = [&Sidebar](const FText& Title, const FLinearColor& Color) -> TSharedRef<SVerticalBox>
 	{
-		ChildSlot
+		Sidebar->AddSlot()
+			.AutoHeight()
+			.Padding(0.0f, 14.0f, 0.0f, 2.0f)
+			[
+				MMDMakeSectionHeader(Title, Color)
+			];
+
+		TSharedRef<SVerticalBox> Section = SNew(SVerticalBox);
+		Sidebar->AddSlot()
+			.AutoHeight()
+			.Padding(8.0f, 2.0f, 8.0f, 4.0f)
+			[
+				Section
+			];
+		return Section;
+	};
+
+	auto AddButton = [](TSharedRef<SVerticalBox> Section, const FText& Label, const FButtonStyle& Style, FOnClicked Handler)
+	{
+		Section->AddSlot()
+			.AutoHeight()
+			.Padding(0.0f, 2.0f)
+			[
+				MMDMakeButton(Label, Style, Handler)
+			];
+	};
+
+	// ---- 模型导入 ----
+	{
+		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("模型导入")), GMMDColorPink);
+		AddButton(Sec, FText::FromString(TEXT("导入 PMX 模型")), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportModelClicked));
+		AddButton(Sec, FText::FromString(TEXT("导入 VMD 动作")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDClicked));
+		AddButton(Sec, FText::FromString(TEXT("追加表情 VMD")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnAppendFacialVMDClicked));
+		AddButton(Sec, FText::FromString(TEXT("导入 VMD 相机")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDCameraClicked));
+	}
+
+	// ---- 工具 ----
+	{
+		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("工具")), GMMDColorBlue);
+		AddButton(Sec, FText::FromString(TEXT("加载 MMD 角色")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateLambda([this]() { LoadSelectedMMDActor(); return FReply::Handled(); }));
+		AddButton(Sec, FText::FromString(TEXT("序列合成")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenSequenceComposerClicked));
+		AddButton(Sec, FText::FromString(TEXT("烘焙物理")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
+	}
+
+	// ---- 光照环境 ----
+	auto AddLightingEnvRow = [this](TSharedRef<SVerticalBox> Sec, EMMDLightingEnvironment Env)
+	{
+		const FString Name = UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(Env);
+		const bool bSpecial = UMMDLightingEnvironmentLibrary::IsSpecialEnvironment(Env);
+		const FString Label = bSpecial ? (Name + TEXT("（特殊）")) : Name;
+
+		Sec->AddSlot()
+			.AutoHeight()
+			.Padding(0.0f, 2.0f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(2.0f).Padding(0.0f, 0.0f, 2.0f, 0.0f)
+				[
+					MMDMakeButton(FText::FromString(Label), MMDGetSecondaryButtonStyle(),
+						FOnClicked::CreateLambda([this, Env, Name]()
+						{
+							const int32 Count = UMMDLightingEnvironmentLibrary::ApplyLightingEnvironment(nullptr, Env);
+							ShowImportProgress(FString::Printf(TEXT("已应用光照环境：%s（%d 盏灯）"), *Name, Count),
+								Count > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
+							return FReply::Handled();
+						}))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				[
+					MMDMakeButton(FText::FromString(TEXT("打开")), MMDGetAccentButtonStyle(),
+						FOnClicked::CreateLambda([this, Env, Name]()
+						{
+							const bool bOpened = UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(Env);
+							ShowImportProgress(bOpened
+								? FString::Printf(TEXT("已打开场景：%s"), *Name)
+								: FString::Printf(TEXT("打开场景失败：%s"), *Name),
+								bOpened ? EMMDMessageType::Success : EMMDMessageType::Error);
+							return FReply::Handled();
+						}))
+				]
+			];
+	};
+
+	{
+		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("光照环境 · 标准")), GMMDColorMint);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::Studio3Point);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::Daylight);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::OvercastSoft);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::IndoorWarm);
+	}
+
+	{
+		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("光照环境 · 特殊")), GMMDColorPurple);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::NeonNight);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::RimSilhouette);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::GoldenHour);
+		AddLightingEnvRow(Sec, EMMDLightingEnvironment::HorrorGreen);
+
+		AddButton(Sec, FText::FromString(TEXT("生成全部场景资产")), MMDGetSecondaryButtonStyle(),
+			FOnClicked::CreateLambda([this]()
+			{
+				const int32 Count = UMMDLightingEnvironmentLibrary::CreateAllEnvironmentLevelAssets();
+				ShowImportProgress(FString::Printf(TEXT("已生成 %d 个光照环境关卡资产"), Count),
+					Count > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
+				return FReply::Handled();
+			}));
+
+		AddButton(Sec, FText::FromString(TEXT("清除环境光")), MMDGetWarnButtonStyle(),
+			FOnClicked::CreateLambda([this]()
+			{
+				UMMDLightingEnvironmentLibrary::ClearLightingEnvironment(nullptr);
+				ShowImportProgress(TEXT("已清除光照环境"), EMMDMessageType::Info);
+				return FReply::Handled();
+			}));
+	}
+
+	// ================= 右侧预览区 =================
+	TSharedRef<SWidget> PreviewArea =
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(8.0f, 6.0f, 8.0f, 2.0f)
 		[
-			SNullWidget::NullWidget
+			SAssignNew(SelectedModelText, STextBlock)
+			.Text(FText::FromString(TEXT("模型：未选择")))
+			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
+			.ColorAndOpacity(FSlateColor(GMMDTextDim))
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(8.0f, 0.0f, 8.0f, 6.0f)
+		[
+			SAssignNew(SelectedAnimText, STextBlock)
+			.Text(FText::FromString(TEXT("动画：未选择")))
+			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
+			.ColorAndOpacity(FSlateColor(GMMDTextDim))
+		]
+		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(8.0f, 0.0f, 8.0f, 8.0f)
+		[
+			SAssignNew(PreviewViewport, SMMDToolPreview)
 		];
-		return;
-	}
 
-	ToolPanelWidget.Reset(CreatedToolPanel);
-	CreatedToolPanel->OnImportModelRequested = [this]()
-	{
-		ImportMMDModel();
-	};
-	CreatedToolPanel->OnImportVMDRequested = [this]()
-	{
-		ImportVMDAnimation();
-	};
-	CreatedToolPanel->OnAppendFacialVMDRequested = [this]()
-	{
-		AppendFacialVMDToAnimation();
-	};
-	CreatedToolPanel->OnImportCameraRequested = [this]()
-	{
-		ImportVMDCameraAnimation();
-	};
-	CreatedToolPanel->OnLoadMMDActorRequested = [this]()
-	{
-		LoadSelectedMMDActor();
-	};
-	CreatedToolPanel->OnComposeSequenceRequested = [this]()
-	{
-		OpenSequenceComposerWindow();
-	};
-	CreatedToolPanel->OnBakePhysicsRequested = [this]()
-	{
-		OpenPhysicsBakeWindow();
-	};
-	CreatedToolPanel->OnSelectModeRequested = [this]()
-	{
-		ShowImportProgress(TEXT("Select mode"));
-	};
-	CreatedToolPanel->OnMoveModeRequested = [this]()
-	{
-		ShowImportProgress(TEXT("Move mode"));
-	};
-	CreatedToolPanel->OnRotateModeRequested = [this]()
-	{
-		ShowImportProgress(TEXT("Rotate mode"));
-	};
-	CreatedToolPanel->OnScaleModeRequested = [this]()
-	{
-		ShowImportProgress(TEXT("Scale mode"));
-	};
-	CreatedToolPanel->OnPreviewPlayRequested = [this]()
-	{
-		if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-		{
-			ToolPanel->CapturePreview();
-		}
-		ShowImportProgress(TEXT("Preview play"));
-	};
+	// ================= 头部 =================
+	TSharedRef<SWidget> Header =
+		SNew(SBorder)
+		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+		.BorderBackgroundColor(FSlateColor(GMMDHeaderBG))
+		.Padding(FMargin(12.0f, 8.0f))
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+					.Text(FText::FromString(TEXT("MMD 工具")))
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
+					.ColorAndOpacity(FSlateColor(GMMDColorPink))
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Ue5MMDTools · PMX/VMD 导入")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
+				.ColorAndOpacity(FSlateColor(GMMDTextDim))
+			]
+		];
+
+	// ================= 状态栏 =================
+	TSharedRef<SWidget> StatusBar =
+		SNew(SBorder)
+		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+		.BorderBackgroundColor(FSlateColor(FLinearColor(0.20f, 0.14f, 0.32f, 1.0f)))
+		.Padding(FMargin(12.0f, 6.0f))
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("状态： ")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+				.ColorAndOpacity(FSlateColor(GMMDTextDim))
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.0f).HAlign(HAlign_Center).VAlign(VAlign_Center)
+			[
+				SAssignNew(StatusText, STextBlock)
+				.Text(FText::FromString(TEXT("就绪")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
+				.ColorAndOpacity(FSlateColor(GMMDTextDim))
+			]
+		];
+
+	// ================= 整体布局 =================
+	TSharedRef<SSplitter> Splitter =
+		SNew(SSplitter)
+		.Orientation(Orient_Horizontal)
+		+ SSplitter::Slot().Value(0.36f).MinSize(260.0f)
+		[
+			MMDMakeSolidPanel(GMMDSectionBG,
+				SNew(SScrollBox)
+				+ SScrollBox::Slot()
+				[
+					Sidebar
+				])
+		]
+		+ SSplitter::Slot().Value(0.66f)
+		[
+			PreviewArea
+		];
 
 	ChildSlot
-	.HAlign(HAlign_Fill)
-	.VAlign(VAlign_Fill)
 	[
-		SNew(SBox)
-		.HAlign(HAlign_Fill)
-		.VAlign(VAlign_Fill)
-		[
-			CreatedToolPanel->TakeWidget()
-		]
+		MMDMakeSolidPanel(GMMDPanelBG,
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				Header
+			]
+			+ SVerticalBox::Slot().FillHeight(1.0f).Padding(0.0f, 2.0f, 0.0f, 2.0f)
+			[
+				Splitter
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				StatusBar
+			],
+			FMargin(2.0f))
 	];
+}
+
+void MMDImportSetting::SetSelectedModelTextUI(const FText& Text)
+{
+	if (SelectedModelText.IsValid())
+	{
+		SelectedModelText->SetText(FText::FromString(TEXT("模型：") + Text.ToString()));
+		SelectedModelText->SetColorAndOpacity(FSlateColor(FLinearColor(0.80f, 0.85f, 0.92f, 1.0f)));
+	}
+}
+
+void MMDImportSetting::SetSelectedAnimTextUI(const FText& Text)
+{
+	if (SelectedAnimText.IsValid())
+	{
+		SelectedAnimText->SetText(FText::FromString(TEXT("动画：") + Text.ToString()));
+		SelectedAnimText->SetColorAndOpacity(FSlateColor(FLinearColor(0.80f, 0.85f, 0.92f, 1.0f)));
+	}
+}
+
+bool MMDImportSetting::SetPreviewActorClassUI(UClass* InClass)
+{
+	return PreviewViewport.IsValid() ? PreviewViewport->SetPreviewActorClass(InClass) : false;
+}
+
+void MMDImportSetting::SetPreviewSkeletalMeshUI(USkeletalMesh* InMesh)
+{
+	if (PreviewViewport.IsValid())
+	{
+		PreviewViewport->SetPreviewSkeletalMesh(InMesh);
+	}
+}
+
+void MMDImportSetting::SetPreviewAnimationUI(UAnimSequence* InAnim)
+{
+	if (PreviewViewport.IsValid())
+	{
+		PreviewViewport->SetPreviewAnimation(InAnim);
+	}
 }
 FReply MMDImportSetting::OnImportModelClicked()
 {
@@ -1073,13 +1365,12 @@ bool MMDImportSetting::SetCurrentMMDActorClass(UClass* ActorClass, const FString
 	RefreshSequenceComposerLabels();
 	RefreshPhysicsBakeLabels();
 
-	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
 	{
 		const FString Label = DisplayName.IsEmpty() ? ActorClass->GetName() : DisplayName;
-		ToolPanel->SetSelectedModelText(FText::FromString(Label));
-		if (!ToolPanel->SetPreviewActorClass(ActorClass))
+		SetSelectedModelTextUI(FText::FromString(Label));
+		if (!SetPreviewActorClassUI(ActorClass))
 		{
-			ToolPanel->SetPreviewSkeletalMesh(Target.SkeletalMesh);
+			SetPreviewSkeletalMeshUI(Target.SkeletalMesh);
 		}
 	}
 
@@ -1260,10 +1551,7 @@ void MMDImportSetting::ImportMMDModel()
 			FString FileName = FPaths::GetCleanFilename(SelectedFile);
 
 			ShowImportProgress(FString::Printf(TEXT("宸查€夋嫨鏂囦欢: %s"), *FileName));
-			if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-			{
-				ToolPanel->SetSelectedModelText(FText::FromString(FileName));
-			}
+			SetSelectedModelTextUI(FText::FromString(FileName));
 
 			if (ViewPanel.IsValid())
 			{
@@ -1319,10 +1607,7 @@ void MMDImportSetting::ImportMMDModel()
 						{
 							ViewPanel->CreatePreviewActor(GenClass);
 						}
-						if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-						{
-							ToolPanel->SetPreviewActorClass(GenClass);
-						}
+						SetPreviewActorClassUI(GenClass);
 						LastLoadedMMDActorClass = GenClass;
 					}
 				}
@@ -1435,10 +1720,7 @@ void MMDImportSetting::ImportVMDAnimation()
 	const FString SelectedFile = OpenedFiles[0];
 	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
 	ShowImportProgress(FString::Printf(TEXT("姝ｅ湪瑙ｆ瀽VMD鏂囦欢: %s"), *FileName));
-	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-	{
-		ToolPanel->SetSelectedAnimText(FText::FromString(FileName));
-	}
+	SetSelectedAnimTextUI(FText::FromString(FileName));
 
 	TVMDParser VMDParser;
 	if (!VMDParser.ParseVMDFile(SelectedFile))
@@ -1531,11 +1813,8 @@ void MMDImportSetting::ImportVMDAnimation()
 		Target.SkeletalMeshComponent->SetAnimation(AnimSequence);
 		Target.SkeletalMeshComponent->Play(true);
 	}
-	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-	{
-		ToolPanel->SetSelectedAnimText(FText::FromString(AnimSequence->GetName()));
-		ToolPanel->SetPreviewAnimation(AnimSequence);
-	}
+	SetSelectedAnimTextUI(FText::FromString(AnimSequence->GetName()));
+	SetPreviewAnimationUI(AnimSequence);
 	ComposerAnimSequence = AnimSequence;
 	PhysicsBakeAnimSequence = AnimSequence;
 
@@ -1587,11 +1866,8 @@ void MMDImportSetting::AppendFacialVMDToAnimation()
 
 	ComposerAnimSequence = TargetAnimSequence;
 	PhysicsBakeAnimSequence = TargetAnimSequence;
-	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-	{
-		ToolPanel->SetSelectedAnimText(FText::FromString(TargetAnimSequence->GetName()));
-		ToolPanel->SetPreviewAnimation(TargetAnimSequence);
-	}
+	SetSelectedAnimTextUI(FText::FromString(TargetAnimSequence->GetName()));
+	SetPreviewAnimationUI(TargetAnimSequence);
 	RefreshSequenceComposerLabels();
 	RefreshPhysicsBakeLabels();
 
@@ -1686,11 +1962,8 @@ void MMDImportSetting::AppendFacialVMDToAnimation()
 
 	ComposerAnimSequence = TargetAnimSequence;
 	PhysicsBakeAnimSequence = TargetAnimSequence;
-	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-	{
-		ToolPanel->SetSelectedAnimText(FText::FromString(TargetAnimSequence->GetName()));
-		ToolPanel->SetPreviewAnimation(TargetAnimSequence);
-	}
+	SetSelectedAnimTextUI(FText::FromString(TargetAnimSequence->GetName()));
+	SetPreviewAnimationUI(TargetAnimSequence);
 	RefreshSequenceComposerLabels();
 	RefreshPhysicsBakeLabels();
 
@@ -2773,10 +3046,7 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 	const FString SelectedFile = OpenedFiles[0];
 	const FString FileName = FPaths::GetCleanFilename(SelectedFile);
 	ShowImportProgress(FString::Printf(TEXT("Parsing VMD camera: %s"), *FileName));
-	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
-	{
-		ToolPanel->SetSelectedAnimText(FText::FromString(FileName));
-	}
+	SetSelectedAnimTextUI(FText::FromString(FileName));
 
 	TVMDParser VMDParser;
 	if (!VMDParser.ParseVMDFile(SelectedFile))
