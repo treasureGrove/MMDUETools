@@ -1,7 +1,6 @@
 ﻿#include "MMDImportSetting.h"
 #include "MMDViewPanel.h"
 #include "UI/MMDToolPanelWidget.h"
-#include "UI/SMMDToolPreview.h"
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Widgets/SBoxPanel.h"
@@ -1033,6 +1032,10 @@ namespace
 void MMDImportSetting::Construct(const FArguments& InArgs)
 {
 	ViewPanel = InArgs._ViewPanel;
+	if (!ViewPanel.IsValid())
+	{
+		SAssignNew(ViewPanel, MMDViewPanel);
+	}
 
 	// ================= 左侧边栏 =================
 	TSharedRef<SVerticalBox> Sidebar = SNew(SVerticalBox);
@@ -1083,10 +1086,11 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 		AddButton(Sec, FText::FromString(TEXT("烘焙物理")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
 	}
 
-	// ---- 光照环境 ----
+	// ---- 光照环境（场景切换：每个环境是一个可编辑的 .umap，点"打开"切换到该场景调灯）----
 	auto AddLightingEnvRow = [this](TSharedRef<SVerticalBox> Sec, EMMDLightingEnvironment Env)
 	{
 		const FString Name = UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(Env);
+		const FString EnName = UMMDLightingEnvironmentLibrary::GetEnvironmentAssetName(Env);
 		const bool bSpecial = UMMDLightingEnvironmentLibrary::IsSpecialEnvironment(Env);
 		const FString Label = bSpecial ? (Name + TEXT("（特殊）")) : Name;
 
@@ -1097,24 +1101,20 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().FillWidth(2.0f).Padding(0.0f, 0.0f, 2.0f, 0.0f)
 				[
-					MMDMakeButton(FText::FromString(Label), MMDGetSecondaryButtonStyle(),
+					MMDMakeButton(FText::FromString(FString::Printf(TEXT("打开场景：%s (%s)"), *Label, *EnName)), MMDGetAccentButtonStyle(),
 						FOnClicked::CreateLambda([this, Env, Name]()
 						{
-							const int32 Count = UMMDLightingEnvironmentLibrary::ApplyLightingEnvironment(nullptr, Env);
-							ShowImportProgress(FString::Printf(TEXT("已应用光照环境：%s（%d 盏灯）"), *Name, Count),
-								Count > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
-							return FReply::Handled();
-						}))
-				]
-				+ SHorizontalBox::Slot().FillWidth(1.0f)
-				[
-					MMDMakeButton(FText::FromString(TEXT("打开")), MMDGetAccentButtonStyle(),
-						FOnClicked::CreateLambda([this, Env, Name]()
-						{
+							// 1) 切换主关卡到该环境 map（可进关卡调整灯光）。
 							const bool bOpened = UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(Env);
+							// 2) 预览视口同步：舞台 + 该环境灯光 + 相机归位（立即看到效果）。
+							if (ViewPanel.IsValid())
+							{
+								ViewPanel->ApplyLightingEnvironment(Env);
+								ViewPanel->ResetPreviewCamera();
+							}
 							ShowImportProgress(bOpened
-								? FString::Printf(TEXT("已打开场景：%s"), *Name)
-								: FString::Printf(TEXT("打开场景失败：%s"), *Name),
+								? FString::Printf(TEXT("已切换到光照场景：%s（可在关卡里调整灯光）"), *Name)
+								: FString::Printf(TEXT("打开光照场景失败：%s"), *Name),
 								bOpened ? EMMDMessageType::Success : EMMDMessageType::Error);
 							return FReply::Handled();
 						}))
@@ -1145,14 +1145,6 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 					Count > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
 				return FReply::Handled();
 			}));
-
-		AddButton(Sec, FText::FromString(TEXT("清除环境光")), MMDGetWarnButtonStyle(),
-			FOnClicked::CreateLambda([this]()
-			{
-				UMMDLightingEnvironmentLibrary::ClearLightingEnvironment(nullptr);
-				ShowImportProgress(TEXT("已清除光照环境"), EMMDMessageType::Info);
-				return FReply::Handled();
-			}));
 	}
 
 	// ================= 右侧预览区 =================
@@ -1174,7 +1166,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 		]
 		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(8.0f, 0.0f, 8.0f, 8.0f)
 		[
-			SAssignNew(PreviewViewport, SMMDToolPreview)
+			ViewPanel.ToSharedRef()
 		];
 
 	// ================= 头部 =================
@@ -1284,22 +1276,22 @@ void MMDImportSetting::SetSelectedAnimTextUI(const FText& Text)
 
 bool MMDImportSetting::SetPreviewActorClassUI(UClass* InClass)
 {
-	return PreviewViewport.IsValid() ? PreviewViewport->SetPreviewActorClass(InClass) : false;
+	return ViewPanel.IsValid() ? ViewPanel->CreatePreviewActor(InClass) : false;
 }
 
 void MMDImportSetting::SetPreviewSkeletalMeshUI(USkeletalMesh* InMesh)
 {
-	if (PreviewViewport.IsValid())
+	if (ViewPanel.IsValid())
 	{
-		PreviewViewport->SetPreviewSkeletalMesh(InMesh);
+		ViewPanel->ShowImportedSkeletalMesh(InMesh);
 	}
 }
 
 void MMDImportSetting::SetPreviewAnimationUI(UAnimSequence* InAnim)
 {
-	if (PreviewViewport.IsValid())
+	if (ViewPanel.IsValid())
 	{
-		PreviewViewport->SetPreviewAnimation(InAnim);
+		ViewPanel->SetPreviewAnimation(InAnim);
 	}
 }
 FReply MMDImportSetting::OnImportModelClicked()

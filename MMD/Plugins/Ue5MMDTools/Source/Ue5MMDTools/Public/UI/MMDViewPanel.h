@@ -8,7 +8,9 @@
 
 class FEditorModeTools; // forward declare editor type
 class UPoseableMeshComponent;
+class UAnimSequence;
 struct FReferenceSkeleton;
+enum class EMMDLightingEnvironment : uint8;
 
 class UE5MMDTOOLS_API MMDViewPanel : public SEditorViewport
 {
@@ -22,6 +24,9 @@ public:
 	void LoadMMDModel(const FString &FilePath);
 
 	void ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh);
+	void SetPreviewAnimation(class UAnimSequence* AnimSequence);
+	int32 ApplyLightingEnvironment(EMMDLightingEnvironment Environment);
+	void ClearLightingEnvironment();
 	bool CreatePreviewActor(UClass* ActorClass);
 	void BeginPhysicsBakePreview(class USkeletalMesh* SkeletalMesh);
 	void PreviewPhysicsBakeFrame(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& ComponentTransforms);
@@ -29,6 +34,12 @@ public:
 
 	// destructor to clean up editor-only pointers
 	virtual ~MMDViewPanel();
+
+	/** 把编辑器主透视视口相机归位到看向舞台中央（模型原点）的标准机位。 */
+	void ResetPreviewCamera();
+
+	/** 在预览场景搭建 MMD 影棚舞台（Cube 地面+背墙+侧墙），与光照环境 map 的舞台一致。 */
+	void BuildPreviewStage();
 
 protected:
 	/** Creates the viewport client for this viewport */

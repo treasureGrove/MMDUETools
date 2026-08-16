@@ -54,6 +54,18 @@ public:
 	 *  布局见 MMDToonLighting.ush 的 SampleMMDShadow 注释。游戏线程调用。 */
 	void SetShadowCameraData(const FVector4f InData[4]);
 
+	/** 设置“预览灯光覆盖”数据（已按 LightDataRT 布局打包，MaxLights*4 个 float4）。
+	 *  预览场景的灯是孤儿组件（无 owner actor），GWorld 扫描收集不到，
+	 *  所以预览视口切光照环境时，直接把打包好的数据推给子系统覆盖 LightDataRT，
+	 *  让预览里的 MMD 材质读到正确的环境灯光。 */
+	void SetPreviewLightOverride(const TArray<FVector4f>& InData);
+
+	/** 清除预览灯光覆盖，恢复从 GWorld 收集主世界灯光。 */
+	void ClearPreviewLightOverride();
+
+	/** 是否有生效中的预览灯光覆盖。 */
+	bool HasPreviewLightOverride() const { return PreviewLightOverrideData.Num() == MaxLights * 4; }
+
 private:
 	void CollectLights(UWorld* World, TArray<FVector4f>& OutData);
 	void OnPostOpaque(FPostOpaqueRenderParameters& Parameters);
@@ -71,6 +83,10 @@ private:
 
 	// Render-thread-owned copy of the latest packed light data.
 	TArray<FVector4f> RenderThreadLightData;
+
+	// Game-thread-owned preview light override (MaxLights*4 float4, LightDataRT row 0 layout).
+	// When set, CollectLightsForFrame uses this instead of scanning GWorld.
+	TArray<FVector4f> PreviewLightOverrideData;
 
 	// Game-thread-owned shadow camera basis (4 float4), written to LightDataRT row 1.
 	FVector4f ShadowCameraData[4] = {

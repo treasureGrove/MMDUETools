@@ -2629,6 +2629,47 @@ static UMaterialInterface* LoadMMDOpaqueParent()      { return LoadMMDBaseParent
 static UMaterialInterface* LoadMMDMaskedParent()      { return LoadMMDBaseParent(TEXT("M_MMD_Base_Masked")); }
 static UMaterialInterface* LoadMMDTransparentParent() { return LoadMMDBaseParent(TEXT("M_MMD_Base_Transparent")); }
 
+// 按部位分流：PMX 材质名命中 眼/发/脸 时挂特化父材质（M_MMD_Eye / M_MMD_Hair / M_MMD_Face）。
+// 透明判定优先（头发阴影贴图 HS.png 等仍走 Transparent）；特化仅在不透明时生效；
+// 特化父材质加载失败一律回退基础父材质，保证不漏连。
+static UMaterialInterface* LoadMMDPartParent(const FString& MaterialName, bool bNeedsAlphaEvaluation)
+{
+	if (!bNeedsAlphaEvaluation)
+	{
+		const FString Lower = MaterialName.ToLower();
+		static const TCHAR* EyeKeys[]  = { TEXT("eye"), TEXT("目"), TEXT("瞳"), TEXT("iris"), TEXT("虹彩") };
+		static const TCHAR* HairKeys[] = { TEXT("hair"), TEXT("髪"), TEXT("发"), TEXT("发"), TEXT("前发") };
+		static const TCHAR* FaceKeys[] = { TEXT("face"), TEXT("顔"), TEXT("颜"), TEXT("kao"), TEXT("肌"), TEXT("skin") };
+
+		// 眼优先（部分模型眼睛材质同时带 face 字样）；发次之；脸最后
+		for (const TCHAR* K : EyeKeys)
+		{
+			if (Lower.Contains(K))
+			{
+				if (UMaterialInterface* P = LoadMMDBaseParent(TEXT("M_MMD_Eye"))) { return P; }
+				break;
+			}
+		}
+		for (const TCHAR* K : HairKeys)
+		{
+			if (Lower.Contains(K))
+			{
+				if (UMaterialInterface* P = LoadMMDBaseParent(TEXT("M_MMD_Hair"))) { return P; }
+				break;
+			}
+		}
+		for (const TCHAR* K : FaceKeys)
+		{
+			if (Lower.Contains(K))
+			{
+				if (UMaterialInterface* P = LoadMMDBaseParent(TEXT("M_MMD_Face"))) { return P; }
+				break;
+			}
+		}
+	}
+	return bNeedsAlphaEvaluation ? LoadMMDTransparentParent() : LoadMMDOpaqueParent();
+}
+
 // 统计贴图 alpha<1 的像素占比（采样一部分像素）。>0.8 说明是大面积半透明贴图（如头发阴影 HS.png）。
 static float TextureAlphaCoverage(UTexture2D* Tex)
 {
@@ -2712,7 +2753,7 @@ UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, UTexture2D*
 	const float AlphaCoverage = TextureAlphaCoverage(Texture2D);
 	const bool bNeedsAlphaEvaluation = MaterialAlpha < 0.999f || AlphaCoverage > 0.8f;
 
-	UMaterialInterface* ParentMaterial = bNeedsAlphaEvaluation ? LoadMMDTransparentParent() : LoadMMDOpaqueParent();
+	UMaterialInterface* ParentMaterial = LoadMMDPartParent(MaterialName, bNeedsAlphaEvaluation);
 	if (!ParentMaterial) {
 		return nullptr;
 	}
@@ -3298,6 +3339,11 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 		Skeleton->RecreateBoneTree(SkeletalMesh);
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("[MMD诊断] ProcessImportMeshSkeleton/RecreateBoneTree后: RefSkeleton.GetNum()=%d, GetRawBoneNum()=%d, Skeleton虚拟骨骼=%d, Skeleton骨骼树=%d"),
+		RefSkeleton.GetNum(), RefSkeleton.GetRawBoneNum(),
+		Skeleton ? Skeleton->GetVirtualBones().Num() : -1,
+		Skeleton ? Skeleton->GetReferenceSkeleton().GetNum() : -1);
+
 	if (SkeletalMesh->GetLODNum() == 0)
 	{
 		FSkeletalMeshLODInfo LODInfo;
@@ -3367,6 +3413,16 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 	if (!bBuildSuccess) {
 		UE_LOG(LogTemp, Error, TEXT("骨骼网格构建失败"));
 		return nullptr;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[MMD诊断] BuildSkeletalMesh后: RefSkeleton.GetNum()=%d, GetRawBoneNum()=%d, LODModel.RequiredBones=%d, LODModel.ActiveBoneIndices=%d, Sections=%d"),
+		RefSkeleton.GetNum(), RefSkeleton.GetRawBoneNum(),
+		LODModel.RequiredBones.Num(), LODModel.ActiveBoneIndices.Num(), LODModel.Sections.Num());
+	for (int32 _mmdSecIdx = 0; _mmdSecIdx < LODModel.Sections.Num(); ++_mmdSecIdx) {
+		const FSkelMeshSection& _mmdSec = LODModel.Sections[_mmdSecIdx];
+		UE_LOG(LogTemp, Warning, TEXT("[MMD诊断] Section[%d] BoneMap=%d, 最大BoneIndex=%d"),
+			_mmdSecIdx, _mmdSec.BoneMap.Num(),
+			_mmdSec.BoneMap.Num() > 0 ? _mmdSec.BoneMap[_mmdSec.BoneMap.Num() - 1] : -1);
 	}
 
 	for (FSkelMeshSection& Section : LODModel.Sections)
@@ -3443,6 +3499,41 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 	else {
 		FBoxSphereBounds DefaultBounds(FBox(FVector(-100, -100, -100), FVector(100, 100, 100)));
 		SkeletalMesh->SetImportedBounds(DefaultBounds);
+	}
+
+	// 修复：确保 LODModel.RequiredBones 与 RefSkeleton 一致
+	// PostEditChange() 会触发 Build()，Build() 内部会调用 CacheDerivedData -> BuildLODModel -> BuildFromLODModel
+	// BuildFromLODModel 会从 LODModel.RequiredBones 拷贝到 LODRenderData.RequiredBones
+	// 如果 LODModel.RequiredBones 被 Build 过程中重建（如 MeshBuilderModule 路径），可能膨胀
+	// 这里在 PostEditChange 之前和之后都做验证，确保数据一致
+	{
+		const int32 BoneCount = RefSkeleton.GetNum();
+		// 验证 LODModel.RequiredBones
+		if (LODModel.RequiredBones.Num() != BoneCount) {
+			UE_LOG(LogTemp, Error, TEXT("[MMD修复] Build后 LODModel.RequiredBones(%d) != RefSkeleton.GetNum(%d)，重新计算"),
+				LODModel.RequiredBones.Num(), BoneCount);
+			USkeletalMesh::CalculateRequiredBones(LODModel, RefSkeleton, nullptr);
+		}
+		// 验证 ActiveBoneIndices 中没有越界索引
+		for (int32 i = LODModel.ActiveBoneIndices.Num() - 1; i >= 0; --i) {
+			if (LODModel.ActiveBoneIndices[i] >= BoneCount) {
+				UE_LOG(LogTemp, Error, TEXT("[MMD修复] ActiveBoneIndices[%d]=%d 越界(骨骼数=%d)，移除"),
+					i, LODModel.ActiveBoneIndices[i], BoneCount);
+				LODModel.ActiveBoneIndices.RemoveAt(i);
+			}
+		}
+		LODModel.ActiveBoneIndices.Sort();
+		// 验证每个 Section 的 BoneMap 没有越界索引
+		for (int32 si = 0; si < LODModel.Sections.Num(); ++si) {
+			FSkelMeshSection& Sec = LODModel.Sections[si];
+			for (int32 bi = Sec.BoneMap.Num() - 1; bi >= 0; --bi) {
+				if (Sec.BoneMap[bi] >= BoneCount) {
+					UE_LOG(LogTemp, Error, TEXT("[MMD修复] Section[%d].BoneMap[%d]=%d 越界(骨骼数=%d)，移除"),
+						si, bi, Sec.BoneMap[bi], BoneCount);
+					Sec.BoneMap.RemoveAt(bi);
+				}
+			}
+		}
 	}
 
 	// 完成构建和初始化

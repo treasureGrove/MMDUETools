@@ -1,1 +1,166 @@
-// TODO: TMMDAnimeHair – Kajiya-Kay anisotropic
+// TMMDAnimeHair.usf
+//
+// 头发材质（单独处理）：Kajiya-Kay 各向异性高光 + toon 明暗。
+// 高光沿发丝走向横跨发束（二次元"天使环"式发丝光泽），与基础材质各向同性高光区分。
+// 明暗部分与 MMDBaseToon 同款（色相保留 + 两阶明暗 + 核心阴影 + 边缘光）。
+// 完全通用：只依赖 BaseColor + LightDataTex + 几何切线，不依赖任何 UV 布局/配套贴图。
+//
+// Custom 节点用法（OutputType: float3）：
+//   Code:
+//     #include "/Plugin/Ue5MMDTools/TMMDShader/TMMDAnimeHair.usf"
+//     return 0;   // 兜底返回值（正常不可达）
+//
+//   节点输入（与 MMDBaseToon 一致，可直接克隆基础材质替换 include）：
+//     BaseColor         (float3)    - 发色
+//     LightDataTex      (Texture2D) - 灯光数据 RT
+//     ShadowStep        (float)     - 卡通阴影阈值（发束明暗分界）
+//     HighlightStep     (float)     - 次级高光强度（0 用默认 0.6；>0 覆盖）
+//     ShadowColor       (float3)    - 阴影压暗色（保留色相）
+//     SpecularPower     (float)     - 各向异性高光锐度（发丝光泽，建议 20~80）
+//     MatCap            (Texture2D) - sphere/matcap（可选）
+//     SphereMode        (float)     - 0=关 1=乘 2=加
+//     MMDShadowMap      (Texture2D) - 场景阴影深度 RT
+//     MMDShadowBias     (float)     - 阴影深度偏移（cm）
+//
+//   节点作用域自动提供：Parameters / LightDataTexSampler / MatCapSampler / MMDShadowMapSampler
+//
+//   注意：各向异性方向取几何切线 TangentToWorld[0]（发丝方向）。若模型切线未沿发丝，
+//   高光方向会偏，属模型问题（可在导入时重排 UV 使切线沿发丝，或换用切线贴图）。
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+
+struct TMMDAnimeHair
+{
+    // Kajiya-Kay 各向异性高光：主高光 + 次级高光（更宽的"天使环"），都横跨发束。
+    // Tangent = 发丝方向；sinTH = 切线到半程向量的正弦（高光在垂直发丝方向最强）。
+    float3 AnisoSpecular(FMaterialPixelParameters Parameters,
+                         Texture2D LightDataTex, SamplerState LightDataTexSampler,
+                         float3 WorldNormal, float3 ViewDir, float3 Tangent,
+                         float SpecPower, float SecondaryStrength, float Intensity)
+    {
+        static const int   MaxLights = 16;
+        static const float TexWidth  = 64.0;
+        static const float ToonPI    = 3.14159265;
+
+        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+
+        TMMDToonLight TL;
+        float3 Acc = float3(0, 0, 0);
+
+        for (int i = 0; i < MaxLights; i++)
+        {
+            float4 P = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
+            float4 C = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
+            float4 D = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
+            float4 T = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.25));
+
+            if (P.w >= 0.5)
+            {
+                float3 L;
+                float  Atten;
+                TL.LightParams(P, D, T, WorldPos, L, Atten);
+
+                float3 H     = normalize(L + ViewDir);
+                float  TdotH = saturate(dot(Tangent, H));
+                float  SinTH = sqrt(max(0.0, 1.0 - TdotH * TdotH));
+
+                float  Power  = max(SpecPower, 4.0);
+                float  Spec1  = pow(SinTH, Power);                    // 主高光（紧）
+                float  Spec2  = pow(SinTH, max(Power * 0.35, 4.0));   // 次级高光（宽）
+                Acc += C.rgb * (C.w / ToonPI) * (Spec1 + Spec2 * SecondaryStrength) * Atten * Intensity;
+            }
+        }
+        return Acc;
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 BaseColor,
+                       Texture2D LightDataTex,
+                       SamplerState LightDataTexSampler,
+                       float ShadowStep,
+                       float HighlightStep,
+                       float3 ShadowColor,
+                       float SpecularPower,
+                       Texture2D MatCap,
+                       SamplerState MatCapSampler,
+                       float SphereMode,
+                       Texture2D MMDShadowMap,
+                       SamplerState MMDShadowMapSampler,
+                       float MMDShadowBias)
+    {
+        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+
+        TMMDToonLight TL;
+        const float3 WorldNormal = normalize((float3)Parameters.TangentToWorld[2]);
+        const float3 Tangent     = normalize((float3)Parameters.TangentToWorld[0]);
+
+        // 原始光照（与基础材质同口径）
+        float3 Diffuse, DirLight, Specular;
+        TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
+                           WorldNormal, ViewDir, Diffuse, DirLight, Specular);
+
+        // 场景阴影
+        float MMDShadowFactor = TL.SampleMMDShadow(Parameters, LightDataTex, LightDataTexSampler,
+                                                   MMDShadowMap, MMDShadowMapSampler,
+                                                   MMDShadowBias);
+        Diffuse  *= MMDShadowFactor;
+        DirLight *= MMDShadowFactor;
+        Specular *= MMDShadowFactor;
+
+        // ---- 受光量 + 两阶明暗（同基础）----
+        const float3 LumaW = float3(0.299, 0.587, 0.114);
+        float LightAmount = saturate(dot(DirLight, LumaW));
+
+        const float Softness = 0.10;
+        float Ramp = smoothstep(ShadowStep - Softness, ShadowStep + Softness, LightAmount);
+
+        float3 ShadowTone = BaseColor * saturate(ShadowColor);
+        float3 LitTone    = BaseColor * Diffuse;
+
+        float3 ShadedDiffuse = lerp(ShadowTone, LitTone, Ramp);
+
+        // 核心阴影（发束交界处压暗，塑造发束体积）
+        float CoreD = LightAmount - ShadowStep;
+        float Core  = exp(-(CoreD * CoreD) / (2.0 * 0.15 * 0.15));
+        ShadedDiffuse *= 1.0 - Core * 0.25;
+
+        // 天空环境光（阴影区压到 40%）
+        float3 SkyLight = TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb * MMDShadowFactor;
+        ShadedDiffuse += BaseColor * SkyLight * lerp(0.40, 1.0, Ramp);
+
+        // ---- 高光：各向异性（Kajiya-Kay）取代各向同性 ----
+        float Secondary = HighlightStep > 0.001 ? HighlightStep : 0.6;
+        float3 AnisoSpec = AnisoSpecular(Parameters, LightDataTex, LightDataTexSampler,
+                                         WorldNormal, ViewDir, Tangent,
+                                         SpecularPower, Secondary, 1.0);
+        AnisoSpec *= Ramp * MMDShadowFactor;
+
+        float3 Final = ShadedDiffuse + AnisoSpec;
+
+        // ---- 边缘光（头发轮廓发光，二次元关键）----
+        float NdotV = saturate(dot(WorldNormal, ViewDir));
+        float Rim   = pow(1.0 - NdotV, 2.5);
+        float LightIntensity = saturate(TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler));
+        Final += float3(0.75, 0.85, 1.0) * Rim * LightIntensity * 0.22;
+
+        // ---- sphere/matcap（可选）----
+        if (SphereMode > 0.5)
+        {
+            float3 Matcap = TL.SampleMatcap(WorldNormal, MatCap, MatCapSampler);
+            if (SphereMode < 1.5)
+                Final = ShadedDiffuse * Matcap + AnisoSpec;
+            else
+                Final += Matcap;
+        }
+
+        return Final;
+    }
+};
+
+TMMDAnimeHair Hair;
+return Hair.OutputColor(Parameters,
+                        BaseColor, LightDataTex, LightDataTexSampler,
+                        ShadowStep, HighlightStep, ShadowColor,
+                        SpecularPower,
+                        MatCap, MatCapSampler, SphereMode,
+                        MMDShadowMap, MMDShadowMapSampler, MMDShadowBias);

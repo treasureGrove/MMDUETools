@@ -1,8 +1,9 @@
 // TMMDAnimeFace.usf
 //
-// 面部材质：声明自己的 struct，调用 Core/MMDToonLighting.ush 的 ComputeLighting 拿原始光照，
-// 组合工具库的标准 toon 阴影（软硬度 0.12，更柔）+ 法线贴图，再加 Rim（强度跟随光强）。
-// 完全通用：只依赖 BaseColor + LightDataTex，不依赖任何 UV 布局/配套贴图（见 AGENTS.md 通用性铁律）。
+// 面部材质（单独处理）：声明自己的 struct，调用 Core/MMDToonLighting.ush 拿原始光照。
+// 与基础材质相比，脸部阴影更柔、阴影更浅（脸不能太黑），边缘光更明显（面部轮廓发光），
+// 高光更收敛（鼻梁/额头一点柔光，避免脸油）。
+// 完全通用：只依赖 BaseColor + LightDataTex + 法线，不依赖任何 UV 布局/配套贴图（见 AGENTS.md 通用性铁律）。
 //
 // Custom 节点用法（OutputType: float3）：
 //   Code:
@@ -12,12 +13,12 @@
 //   节点输入（最少连 BaseColor + LightDataTex 就能完整着色）：
 //     BaseColor         (float3)    - 面部基础色（BaseColor × 面部贴图）
 //     LightDataTex      (Texture2D) - 灯光数据 RT
-//     ShadowStep        (float)     - 卡通阴影阈值
-//     HighlightStep     (float)     - 保留占位（高光阶暂未接）
-//     ShadowColor       (float3)    - 阴影色（建议用 BaseColor 压暗派生，保留色相）
+//     ShadowStep        (float)     - 卡通阴影阈值（脸建议 0.5~0.6）
+//     HighlightStep     (float)     - 锐高光阈值（<=0 用默认 0.85，脸高光很收敛）
+//     ShadowColor       (float3)    - 阴影压暗色（建议 0.6~0.7 灰，脸阴影偏浅）
 //     SpecularPower     (float)     - 高光锐度（鼻梁/额头柔光）
 //     NormalMap         (Texture2D) - 法线贴图（可选；不接或强度 0 用几何法线）
-//     NormalMapStrength (float)     - 法线强度（0=关 1=满，建议 0.5~1.0）
+//     NormalMapStrength (float)     - 法线强度（0=关 1=满）
 //     RimColor          (float3)    - 边缘光颜色（建议偏冷/肤色反光）
 //     RimPower          (float)     - 边缘带宽度（越大越窄，建议 2~4）
 //     RimStrength       (float)     - 边缘光强度
@@ -46,23 +47,42 @@ struct TMMDAnimeFace
         const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
 
         TMMDToonLight TL;
-        // 法线贴图：强度 0 时退化为几何法线
         const float3 WorldNormal = TL.ApplyNormalMap(Parameters, NormalMap, NormalMapSampler, NormalMapStrength);
 
-        // 原始光照（不含阴影、不含 sphere）；DirLight 不含光强，供 toon 阴影 ramp 用
         float3 Diffuse, DirLight, Specular;
         TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
                            WorldNormal, ViewDir, Diffuse, DirLight, Specular);
 
-        // 标准 toon 阴影，脸部更柔（软硬度 0.12，阴影由工具库统一算）
-        float3 ShadedSpecular;
-        float3 ShadedDiffuse = TL.ApplyToonShadow(Diffuse, DirLight, Specular, ShadowStep, ShadowColor, 0.12, ShadedSpecular);
+        // ---- 受光量 ----
+        const float3 LumaW = float3(0.299, 0.587, 0.114);
+        float LightAmount = saturate(dot(DirLight, LumaW));
 
-        // 天空环境光：和直接光一样乘 BaseColor（对齐 PBR/Lit，色相才正确）
-        float3 Final = BaseColor * (ShadedDiffuse + TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb) + ShadedSpecular;
+        // ---- 脸部阴影：更柔（softness 0.15）、更浅（向 BaseColor 抬升，脸不能黑）----
+        const float Softness = 0.15;
+        float Ramp = smoothstep(ShadowStep - Softness, ShadowStep + Softness, LightAmount);
 
-        // ---- Rim（边缘光，跟随光强）----
-        float LightIntensity = TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler);
+        float3 ShadowTone = BaseColor * saturate(ShadowColor);
+        // 脸部阴影抬升：明暗交界不会像硬表面那么黑，保持肤色通透
+        ShadowTone = ShadowTone + BaseColor * 0.12;
+
+        float3 LitTone    = BaseColor * Diffuse;
+        float3 ShadedDiffuse = lerp(ShadowTone, LitTone, Ramp);
+
+        // ---- 天空环境光：阴影区压到 55%（脸比硬表面更亮）----
+        float3 SkyLight = TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb;
+        ShadedDiffuse += BaseColor * SkyLight * lerp(0.55, 1.0, Ramp);
+
+        // ---- 高光：软高光（收敛，脸别油）+ 极收敛锐高光 ----
+        float3 ShadedSpecular = Specular * Ramp * 0.5;
+        float  SpecStep = HighlightStep > 0.01 ? HighlightStep : 0.85;
+        float3 ToonSpec = TL.ToonSpecularLight(Parameters, LightDataTex, LightDataTexSampler,
+                                               WorldNormal, ViewDir, SpecStep, 0.04, 0.8);
+        ToonSpec *= Ramp;
+
+        float3 Final = ShadedDiffuse + ShadedSpecular + ToonSpec;
+
+        // ---- Rim（边缘光，跟随光强；脸轮廓发光是二次元脸关键）----
+        float LightIntensity = saturate(TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler));
         float NdotV = saturate(dot(WorldNormal, ViewDir));
         float Rim   = pow(1.0 - NdotV, max(RimPower, 0.5));
         Final += RimColor * RimStrength * Rim * LightIntensity;

@@ -5,7 +5,6 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
-#include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -84,27 +83,12 @@ void UMMDToolPreviewRenderer::Shutdown()
 	{
 		PreviewScene->RemoveComponent(KeyLightComponent);
 	}
-	if (PreviewScene.IsValid() && FillLightComponent)
-	{
-		PreviewScene->RemoveComponent(FillLightComponent);
-	}
-	if (PreviewScene.IsValid() && RimLightComponent)
-	{
-		PreviewScene->RemoveComponent(RimLightComponent);
-	}
-	if (PreviewScene.IsValid() && SkyLightComponent)
-	{
-		PreviewScene->RemoveComponent(SkyLightComponent);
-	}
 	ClearPreviewActor();
 	ClearPreviewSkeletalMeshComponent();
 
 	SceneCapture = nullptr;
 	PreviewTestMeshComponent = nullptr;
 	KeyLightComponent = nullptr;
-	FillLightComponent = nullptr;
-	RimLightComponent = nullptr;
-	SkyLightComponent = nullptr;
 	PreviewSkeletalMeshComponent = nullptr;
 	PreviewScene.Reset();
 	RenderTarget = nullptr;
@@ -380,6 +364,9 @@ void UMMDToolPreviewRenderer::SetupPreviewLighting()
 		return;
 	}
 
+	// 预览基础照明：只有一盏直射光（无天光/无环境光）。
+	// 光照环境的验证走场景切换（UMMDLightingEnvironmentLibrary 的 .umap），
+	// 预览视口保持干净，避免自带灯光干扰对目标光照环境观感的判断。
 	KeyLightComponent = NewObject<UDirectionalLightComponent>(this, TEXT("MMDToolPreviewKeyLight"), RF_Transient);
 	if (KeyLightComponent)
 	{
@@ -387,33 +374,6 @@ void UMMDToolPreviewRenderer::SetupPreviewLighting()
 		KeyLightComponent->SetIntensity(4.0f);
 		KeyLightComponent->SetLightColor(FLinearColor(1.0f, 0.94f, 0.86f));
 		PreviewScene->AddComponent(KeyLightComponent, FTransform(FRotator(-38.0f, -35.0f, 0.0f)));
-	}
-
-	FillLightComponent = NewObject<UDirectionalLightComponent>(this, TEXT("MMDToolPreviewFillLight"), RF_Transient);
-	if (FillLightComponent)
-	{
-		FillLightComponent->SetMobility(EComponentMobility::Movable);
-		FillLightComponent->SetIntensity(0.75f);
-		FillLightComponent->SetLightColor(FLinearColor(0.68f, 0.82f, 1.0f));
-		PreviewScene->AddComponent(FillLightComponent, FTransform(FRotator(-18.0f, 145.0f, 0.0f)));
-	}
-
-	RimLightComponent = NewObject<UDirectionalLightComponent>(this, TEXT("MMDToolPreviewRimLight"), RF_Transient);
-	if (RimLightComponent)
-	{
-		RimLightComponent->SetMobility(EComponentMobility::Movable);
-		RimLightComponent->SetIntensity(1.35f);
-		RimLightComponent->SetLightColor(FLinearColor(0.75f, 0.92f, 1.0f));
-		PreviewScene->AddComponent(RimLightComponent, FTransform(FRotator(-10.0f, 35.0f, 0.0f)));
-	}
-
-	SkyLightComponent = NewObject<USkyLightComponent>(this, TEXT("MMDToolPreviewSkyLight"), RF_Transient);
-	if (SkyLightComponent)
-	{
-		SkyLightComponent->SetMobility(EComponentMobility::Movable);
-		SkyLightComponent->Intensity = 1.25f;
-		SkyLightComponent->LightColor = FColor(210, 225, 255);
-		PreviewScene->AddComponent(SkyLightComponent, FTransform::Identity);
 	}
 }
 

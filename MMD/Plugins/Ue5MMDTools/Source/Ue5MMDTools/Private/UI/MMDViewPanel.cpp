@@ -34,8 +34,11 @@
 #include "Animation/AnimationAsset.h"
 #include "Animation/SkeletalMeshActor.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "HitProxies.h"
 #include "Templates/SharedPointer.h"
+#include "Rendering/UMMDLightingEnvironmentLibrary.h"
+#include "Rendering/UMMDAnimeLightDataSubsystem.h"
 
 class FMMDViewportClient : public FEditorViewportClient
 {
@@ -430,8 +433,24 @@ private:
 // MMDViewPanel 实现
 void MMDViewPanel::Construct(const FArguments &InArgs)
 {
-    // 创建预览场景
-    PreviewScene = MakeShared<FAdvancedPreviewScene>(FPreviewScene::ConstructionValues());
+    // 创建预览场景（干净基底：无天空球、无天光，仅一盏直射光 —— 光照环境走场景(map)切换，
+    // 预览视口只做模型/材质快速查看，不叠加任何环境灯光）。
+    FPreviewScene::ConstructionValues PreviewCVS;
+    PreviewCVS.SetEditor(true);
+    PreviewScene = MakeShared<FAdvancedPreviewScene>(PreviewCVS);
+
+    // 去掉预览场景的天空球(skybox)：预览窗口不该自带环境背景，否则会干扰判断模型在
+    // 目标光照环境里的实际观感（用户期望看到的是干净背景 + 单直射光）。
+    PreviewScene->SetEnvironmentVisibility(false);
+
+    // 关掉 AdvancedPreviewScene 自带的天光，只保留一盏直射光作为预览基础照明。
+    if (USkyLightComponent* Sky = PreviewScene->SkyLight)
+    {
+        Sky->SetVisibility(false);
+    }
+
+    // 搭建影棚舞台（与光照环境 map 相同的 Cube 地面+墙），切场景时灯光/相机都会围绕它。
+    BuildPreviewStage();
 
     // create local ModeTools instance as shared, required because FEditorViewportClient's ctor calls AsShared()
     LocalModeTools = MakeShared<FEditorModeTools>();
@@ -448,10 +467,9 @@ MMDViewPanel::~MMDViewPanel()
 
 TSharedRef<FEditorViewportClient> MMDViewPanel::MakeEditorViewportClient()
 {
-    // Avoid SharedThis(this) here (may assert before shared instance exists)
-    TWeakPtr<SEditorViewport> NullViewportWidget;
-    CustomViewportClient = MakeShared<FMMDViewportClient>(LocalModeTools.Get(), PreviewScene.Get(), NullViewportWidget);
-    return CustomViewportClient.ToSharedRef();
+	// SEditorViewport 已通过 SNew/SAssignNew 建立 shared 引用，此处 SharedThis(this) 安全（引擎标准做法）。
+	CustomViewportClient = MakeShared<FMMDViewportClient>(LocalModeTools.Get(), PreviewScene.Get(), SharedThis(this));
+	return CustomViewportClient.ToSharedRef();
 }
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 7
@@ -791,6 +809,212 @@ void MMDViewPanel::LoadMMDModel(const FString &FilePath)
 }
 void MMDViewPanel::ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh)
 {
+	if (!PreviewScene.IsValid() || !PreviewScene->GetWorld() || !SkeletalMesh)
+	{
+		return;
+	}
 
+	EndPhysicsBakePreview();
 
+	// 清理旧预览 actor
+	if (IsValid(PreviewActor))
+	{
+		PreviewScene->GetWorld()->DestroyActor(PreviewActor);
+		PreviewActor = nullptr;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.ObjectFlags |= RF_Transient;
+
+	ASkeletalMeshActor* SkelActor = PreviewScene->GetWorld()->SpawnActor<ASkeletalMeshActor>(FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	if (!SkelActor)
+	{
+		return;
+	}
+
+	PreviewActor = SkelActor;
+
+	if (USkeletalMeshComponent* SkelComp = SkelActor->GetSkeletalMeshComponent())
+	{
+		SkelComp->SetSkeletalMesh(SkeletalMesh);
+		SkelComp->SetMobility(EComponentMobility::Movable);
+		SkelComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		SkelComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		SkelComp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	}
+
+	if (FMMDViewportClient* VC = static_cast<FMMDViewportClient*>(CustomViewportClient.Get()))
+	{
+		VC->SetSelectedActor(SkelActor);
+		const FBoxSphereBounds Bounds = SkeletalMesh->GetBounds();
+		VC->FocusViewportOnBox(FBox::BuildAABB(Bounds.Origin, Bounds.BoxExtent));
+		VC->Invalidate();
+	}
+}
+
+void MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
+{
+	USkeletalMeshComponent* SkelComp = nullptr;
+	if (IsValid(PreviewActor))
+	{
+		SkelComp = PreviewActor->FindComponentByClass<USkeletalMeshComponent>();
+	}
+	if (!SkelComp || !AnimSequence)
+	{
+		return;
+	}
+
+	SkelComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	SkelComp->SetAnimation(AnimSequence);
+	SkelComp->Play(true);
+
+	if (CustomViewportClient.IsValid())
+	{
+		CustomViewportClient->Invalidate();
+	}
+}
+
+int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment)
+{
+	int32 Count = 0;
+	if (PreviewScene.IsValid())
+	{
+		// 以当前预览模型的实际包围盒为灯光基准：Center=模型中心，Scale=模型半径/标准半径(100cm)，
+		// 保证灯光聚在模型身上，而不是固定在原点附近。
+		FVector Center = FVector::ZeroVector;
+		float Scale = 1.0f;
+		FBox ModelBounds(ForceInit);
+		if (PreviewActor)
+		{
+			ModelBounds = PreviewActor->GetComponentsBoundingBox(true);
+		}
+		if (ModelBounds.IsValid)
+		{
+			Center = ModelBounds.GetCenter();
+			const float Radius = FMath::Max(ModelBounds.GetExtent().Size(), 1.0f);
+			Scale = Radius / 100.0f; // 标准 MMD 模型半径约 100cm
+		}
+
+		Count = UMMDLightingEnvironmentLibrary::ApplyLightingEnvironmentToPreviewScaled(
+			PreviewScene.Get(), Environment, Center, Scale);
+
+		// 预览场景的灯是孤儿组件（无 owner actor），GWorld 扫描收集不到，
+		// 所以把打包好的灯光数据推给子系统覆盖 LightDataRT，材质才能读到预览灯光。
+		if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
+		{
+			const TArray<FVector4f> Packed = UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled(
+				Environment, Center, Scale);
+			Subsystem->SetPreviewLightOverride(Packed);
+		}
+
+		if (CustomViewportClient.IsValid())
+		{
+			CustomViewportClient->Invalidate();
+		}
+	}
+	return Count;
+}
+
+void MMDViewPanel::ClearLightingEnvironment()
+{
+	if (PreviewScene.IsValid())
+	{
+		UMMDLightingEnvironmentLibrary::ClearLightingEnvironmentFromPreview(PreviewScene.Get());
+
+		// 同步清除预览灯光覆盖，恢复主世界灯光收集。
+		if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
+		{
+			Subsystem->ClearPreviewLightOverride();
+		}
+
+		if (CustomViewportClient.IsValid())
+		{
+			CustomViewportClient->Invalidate();
+		}
+	}
+}
+
+void MMDViewPanel::ResetPreviewCamera()
+{
+	if (!CustomViewportClient.IsValid())
+	{
+		return;
+	}
+
+	// 以当前预览模型包围盒为取景基准；无模型时看向舞台中央（原点）。
+	FBox ModelBounds(ForceInit);
+	if (PreviewActor)
+	{
+		ModelBounds = PreviewActor->GetComponentsBoundingBox(true);
+	}
+
+	// 标准机位（配套设计，不是 aim 追模型）：
+	//   模型在原点，标准 MMD 身高约 160cm（中心 Z≈80cm）。
+	//   相机在模型正前方（Y+ 方向）2.4m、躯干高度 1.1m，forward 朝 -Y 平视模型。
+	//   无模型时同样用这套机位看舞台中央，保证任何时刻都有合理构图。
+	FVector LookAt = FVector(0.0f, 0.0f, 110.0f);
+	float Dist = 240.0f;
+	if (ModelBounds.IsValid)
+	{
+		LookAt = ModelBounds.GetCenter();
+		const float Radius = FMath::Max(ModelBounds.GetExtent().Size(), 1.0f);
+		Dist = FMath::Max(Radius * 3.0f, 400.0f);
+	}
+
+	// 相机在模型正前方（Y+ 方向，UE 中 Y=前），forward 朝 -Y 平视模型。
+	const FVector CamLoc = LookAt + FVector(0.0f, Dist, 0.0f);
+	const FRotator CamRot = (LookAt - CamLoc).Rotation();
+
+	CustomViewportClient->SetViewLocation(CamLoc);
+	CustomViewportClient->SetViewRotation(CamRot);
+	CustomViewportClient->Invalidate();
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 预览相机已归位（LookAt=%s Dist=%.0f）"), *LookAt.ToString(), Dist);
+}
+
+void MMDViewPanel::BuildPreviewStage()
+{
+	if (!PreviewScene.IsValid())
+	{
+		return;
+	}
+
+	// 与光照环境 map（mcp_build_env.py build_stage）相同的影棚舞台：
+	// 地面 20m x 20m(z=0 顶面)、背墙(y=-500)、左右侧墙(x=±500)，半包围。
+	// 用引擎内置 Cube，scale 与 map 一致（Cube 基准 100cm）。
+	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!CubeMesh)
+	{
+		return;
+	}
+
+	struct FStageSpec
+	{
+		FString Name;
+		FVector Loc;
+		FVector Scale;
+	};
+
+	const FStageSpec Specs[] = {
+		{ TEXT("MMDStageFloor"), FVector(0.0f, 0.0f, -20.0f),   FVector(20.0f, 20.0f, 0.4f) },
+		{ TEXT("MMDStageBack"),  FVector(0.0f, -500.0f, 400.0f), FVector(20.0f, 0.4f, 8.0f) },
+		{ TEXT("MMDStageLeft"),  FVector(-500.0f, 0.0f, 400.0f), FVector(0.4f, 10.0f, 8.0f) },
+		{ TEXT("MMDStageRight"), FVector(500.0f, 0.0f, 400.0f),  FVector(0.4f, 10.0f, 8.0f) },
+	};
+
+	for (const FStageSpec& Spec : Specs)
+	{
+		UStaticMeshComponent* CubeComp = NewObject<UStaticMeshComponent>(GetTransientPackage(), NAME_None, RF_Transient);
+		if (!CubeComp)
+		{
+			continue;
+		}
+		CubeComp->SetStaticMesh(CubeMesh);
+		CubeComp->SetMobility(EComponentMobility::Movable);
+		CubeComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PreviewScene->AddComponent(CubeComp, FTransform(FRotator::ZeroRotator, Spec.Loc, Spec.Scale));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 预览舞台已搭建（地面+背墙+侧墙）"));
 }

@@ -14,11 +14,17 @@
 #include "Components/LightComponent.h"
 #include "GameFramework/Actor.h"
 #include "HAL/IConsoleManager.h"
+#include "PreviewScene.h"
+#include "UObject/UObjectGlobals.h"
 
 #if WITH_EDITOR
+#include "Camera/CameraActor.h"
 #include "Editor.h"
+#include "EditorViewportClient.h"
+#include "EngineUtils.h"
 #include "Factories/WorldFactory.h"
 #include "FileHelpers.h"
+#include "LevelEditorViewport.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
@@ -42,6 +48,7 @@ namespace
 	{
 		EMMDLightKind Kind = EMMDLightKind::Directional;
 		FVector Location = FVector::ZeroVector;
+		FVector Aim = FVector(0.0f, 0.0f, 80.0f); // 聚光/矩形光朝向的目标点（默认模型躯干）
 		FRotator Rotation = FRotator::ZeroRotator;
 		FLinearColor Color = FLinearColor::White;
 		float Intensity = 1.0f;
@@ -78,6 +85,7 @@ namespace
 		FMMDLightSpec S;
 		S.Kind = EMMDLightKind::Spot;
 		S.Location = Loc;
+		S.Aim = Aim;
 		S.Rotation = (Aim - Loc).Rotation();
 		S.Color = Color;
 		S.Intensity = Intensity;
@@ -92,6 +100,7 @@ namespace
 		FMMDLightSpec S;
 		S.Kind = EMMDLightKind::Rect;
 		S.Location = Loc;
+		S.Aim = Aim;
 		S.Rotation = (Aim - Loc).Rotation();
 		S.Color = Color;
 		S.Intensity = Intensity;
@@ -117,17 +126,17 @@ namespace
 		switch (Environment)
 		{
 		case EMMDLightingEnvironment::Studio3Point:
-			// 标准三点布光：主光（暖）、辅光（冷）、轮廓光（冷）+ 天光。
-			Specs.Add(MakeDir(FRotator(-38.0f, -35.0f, 0.0f), FLinearColor(1.0f, 0.95f, 0.88f), 4.0f));
-			Specs.Add(MakeDir(FRotator(-18.0f, 145.0f, 0.0f), FLinearColor(0.68f, 0.82f, 1.0f), 0.75f));
-			Specs.Add(MakeDir(FRotator(-10.0f, 35.0f, 0.0f), FLinearColor(0.75f, 0.92f, 1.0f), 1.35f));
+			// 三点布光：主光（聚光）、辅光（点光）、轮廓光（聚光）+ 天光。聚光/点光带距离衰减，塑造体积感。
+			Specs.Add(MakeSpot(FVector(180.0f, 180.0f, 300.0f), FVector(0.0f, 0.0f, 80.0f), FLinearColor(1.0f, 0.95f, 0.88f), 5.0f, 900.0f, 18.0f, 35.0f));
+			Specs.Add(MakePoint(FVector(-220.0f, 120.0f, 170.0f), FLinearColor(0.70f, 0.82f, 1.0f), 2.0f, 650.0f));
+			Specs.Add(MakeSpot(FVector(0.0f, -240.0f, 260.0f), FVector(0.0f, 0.0f, 90.0f), FLinearColor(0.75f, 0.92f, 1.0f), 3.5f, 850.0f, 15.0f, 30.0f));
 			Specs.Add(MakeSky(FLinearColor(0.82f, 0.88f, 1.0f), 1.25f));
 			break;
 
 		case EMMDLightingEnvironment::Daylight:
-			// 户外日光：强太阳 + 天光 + 反向天空补光。
+			// 户外日光：强太阳(唯一直射光) + 反向天空补光(点光) + 天光。
 			Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(1.0f, 0.97f, 0.92f), 5.5f));
-			Specs.Add(MakeDir(FRotator(-10.0f, 180.0f, 0.0f), FLinearColor(0.55f, 0.75f, 1.0f), 1.2f));
+			Specs.Add(MakePoint(FVector(0.0f, -400.0f, 500.0f), FLinearColor(0.55f, 0.75f, 1.0f), 1.2f, 1500.0f));
 			Specs.Add(MakeSky(FLinearColor(0.72f, 0.84f, 1.0f), 2.0f));
 			break;
 
@@ -158,17 +167,17 @@ namespace
 			break;
 
 		case EMMDLightingEnvironment::GoldenHour:
-			// 黄金时刻：低角度暖橙太阳 + 暖色补光 + 暖色天光。
+			// 黄金时刻：低角度暖橙太阳(唯一直射光) + 暖色点光补光 + 暖色天光。
 			Specs.Add(MakeDir(FRotator(-18.0f, -30.0f, 0.0f), FLinearColor(1.0f, 0.55f, 0.25f), 5.0f));
-			Specs.Add(MakeDir(FRotator(-6.0f, 150.0f, 0.0f), FLinearColor(1.0f, 0.72f, 0.50f), 0.8f));
+			Specs.Add(MakePoint(FVector(300.0f, -200.0f, 120.0f), FLinearColor(1.0f, 0.72f, 0.50f), 0.8f, 1200.0f));
 			Specs.Add(MakeSky(FLinearColor(1.0f, 0.70f, 0.50f), 1.0f));
 			break;
 
 		case EMMDLightingEnvironment::HorrorGreen:
-			// 恐怖绿光：底部绿色上打光 + 冷色顶光 + 绿色背光。
+			// 恐怖绿光：底部绿色上打光 + 冷色顶光(唯一直射光) + 绿色聚光背光。
 			Specs.Add(MakePoint(FVector(0.0f, 0.0f, -80.0f), FLinearColor(0.10f, 0.90f, 0.35f), 4.0f, 450.0f));
 			Specs.Add(MakeDir(FRotator(-60.0f, 0.0f, 0.0f), FLinearColor(0.55f, 0.72f, 0.88f), 1.2f));
-			Specs.Add(MakeDir(FRotator(-15.0f, 180.0f, 0.0f), FLinearColor(0.20f, 0.80f, 0.40f), 2.0f));
+			Specs.Add(MakeSpot(FVector(0.0f, -350.0f, 200.0f), FVector(0.0f, 0.0f, 80.0f), FLinearColor(0.20f, 0.80f, 0.40f), 2.0f, 900.0f, 20.0f, 45.0f));
 			break;
 
 		case EMMDLightingEnvironment::None:
@@ -259,6 +268,86 @@ namespace
 
 	// 每个世界各自跟踪已生成的环境光，避免跨世界误删。
 	TMap<TWeakObjectPtr<UWorld>, TArray<TWeakObjectPtr<AActor>>> GSpawnedEnvironmentLights;
+
+	// 创建灯光组件并加到预览场景（不 spawn actor，避免污染关卡）。
+	USceneComponent* CreatePreviewLightComponent(FPreviewScene* PreviewScene, const FMMDLightSpec& Spec)
+	{
+		if (!PreviewScene)
+		{
+			return nullptr;
+		}
+
+		USceneComponent* SceneComp = nullptr;
+		switch (Spec.Kind)
+		{
+		case EMMDLightKind::Directional: SceneComp = NewObject<UDirectionalLightComponent>(GetTransientPackage(), NAME_None, RF_Transient); break;
+		case EMMDLightKind::Point:        SceneComp = NewObject<UPointLightComponent>(GetTransientPackage(), NAME_None, RF_Transient); break;
+		case EMMDLightKind::Spot:         SceneComp = NewObject<USpotLightComponent>(GetTransientPackage(), NAME_None, RF_Transient); break;
+		case EMMDLightKind::Rect:         SceneComp = NewObject<URectLightComponent>(GetTransientPackage(), NAME_None, RF_Transient); break;
+		case EMMDLightKind::Sky:          SceneComp = NewObject<USkyLightComponent>(GetTransientPackage(), NAME_None, RF_Transient); break;
+		}
+		if (!SceneComp)
+		{
+			return nullptr;
+		}
+
+		SceneComp->SetMobility(EComponentMobility::Movable);
+
+		if (Spec.Kind == EMMDLightKind::Sky)
+		{
+			if (USkyLightComponent* Sky = Cast<USkyLightComponent>(SceneComp))
+			{
+				Sky->SetIntensity(Spec.Intensity);
+				Sky->SetLightColor(Spec.Color);
+			}
+		}
+		else if (ULightComponent* Light = Cast<ULightComponent>(SceneComp))
+		{
+			Light->SetIntensity(Spec.Intensity);
+			Light->SetLightColor(Spec.Color);
+			Light->SetCastShadows(true);
+
+			if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
+			{
+				Point->AttenuationRadius = Spec.Radius;
+			}
+			if (USpotLightComponent* Spot = Cast<USpotLightComponent>(Light))
+			{
+				Spot->SetInnerConeAngle(Spec.InnerCone);
+				Spot->SetOuterConeAngle(Spec.OuterCone);
+			}
+			if (URectLightComponent* Rect = Cast<URectLightComponent>(Light))
+			{
+				Rect->SetSourceWidth(Spec.SourceWidth);
+				Rect->SetSourceHeight(Spec.SourceHeight);
+			}
+		}
+
+		PreviewScene->AddComponent(SceneComp, FTransform(Spec.Rotation, Spec.Location));
+		return SceneComp;
+	}
+
+	// 每个预览场景各自跟踪已加的环境光组件，避免跨场景误删。
+	TMap<FPreviewScene*, TArray<TWeakObjectPtr<USceneComponent>>> GPreviewEnvironmentLights;
+
+	// 按模型实际大小变换灯光规格：位置平移到模型中心并缩放，半径/面光尺寸同步缩放。
+	// Scale = 模型半径 / 标准半径(100cm)，灯位 = Center + Spec.Location*Scale。
+	FMMDLightSpec TransformSpec(const FMMDLightSpec& Spec, const FVector& Center, float Scale)
+	{
+		FMMDLightSpec Out = Spec;
+		Out.Location = Center + Spec.Location * Scale;
+		Out.Radius = Spec.Radius * Scale;
+		Out.SourceWidth = Spec.SourceWidth * Scale;
+		Out.SourceHeight = Spec.SourceHeight * Scale;
+		// 聚光/矩形光的朝向目标点也要跟着模型中心走，重算朝向。
+		if (Spec.Kind == EMMDLightKind::Spot || Spec.Kind == EMMDLightKind::Rect)
+		{
+			const FVector NewAim = Center + Spec.Aim * Scale;
+			Out.Aim = NewAim;
+			Out.Rotation = (NewAim - Out.Location).Rotation();
+		}
+		return Out;
+	}
 }
 
 int32 UMMDLightingEnvironmentLibrary::ApplyLightingEnvironment(UWorld* World, EMMDLightingEnvironment Environment)
@@ -319,6 +408,142 @@ void UMMDLightingEnvironmentLibrary::ClearLightingEnvironment(UWorld* World)
 	}
 
 	GSpawnedEnvironmentLights.Remove(World);
+}
+
+int32 UMMDLightingEnvironmentLibrary::ApplyLightingEnvironmentToPreview(FPreviewScene* PreviewScene, EMMDLightingEnvironment Environment)
+{
+	return ApplyLightingEnvironmentToPreviewScaled(PreviewScene, Environment, FVector::ZeroVector, 1.0f);
+}
+
+int32 UMMDLightingEnvironmentLibrary::ApplyLightingEnvironmentToPreviewScaled(FPreviewScene* PreviewScene, EMMDLightingEnvironment Environment,
+	const FVector& Center, float Scale)
+{
+	if (!PreviewScene || Environment == EMMDLightingEnvironment::None)
+	{
+		return 0;
+	}
+
+	ClearLightingEnvironmentFromPreview(PreviewScene);
+
+	const TArray<FMMDLightSpec> Specs = BuildEnvironment(Environment);
+	TArray<TWeakObjectPtr<USceneComponent>>& Tracked = GPreviewEnvironmentLights.FindOrAdd(PreviewScene);
+
+	int32 Count = 0;
+	for (const FMMDLightSpec& RawSpec : Specs)
+	{
+		const FMMDLightSpec Spec = (FMath::IsNearlyEqual(Scale, 1.0f) && Center.IsNearlyZero())
+			? RawSpec : TransformSpec(RawSpec, Center, Scale);
+		if (USceneComponent* Comp = CreatePreviewLightComponent(PreviewScene, Spec))
+		{
+			Tracked.Add(Comp);
+			++Count;
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已应用光照环境到预览场景 %s：%d 盏灯（Center=%s Scale=%.2f）"),
+		*GetEnvironmentDisplayName(Environment), Count, *Center.ToString(), Scale);
+	return Count;
+}
+
+void UMMDLightingEnvironmentLibrary::ClearLightingEnvironmentFromPreview(FPreviewScene* PreviewScene)
+{
+	if (!PreviewScene)
+	{
+		return;
+	}
+
+	TArray<TWeakObjectPtr<USceneComponent>>* Tracked = GPreviewEnvironmentLights.Find(PreviewScene);
+	if (!Tracked)
+	{
+		return;
+	}
+
+	for (const TWeakObjectPtr<USceneComponent>& WeakComp : *Tracked)
+	{
+		if (USceneComponent* Comp = WeakComp.Get())
+		{
+			PreviewScene->RemoveComponent(Comp);
+		}
+	}
+
+	GPreviewEnvironmentLights.Remove(PreviewScene);
+}
+
+TArray<FVector4f> UMMDLightingEnvironmentLibrary::PackEnvironmentLightData(EMMDLightingEnvironment Environment)
+{
+	return PackEnvironmentLightDataScaled(Environment, FVector::ZeroVector, 1.0f);
+}
+
+TArray<FVector4f> UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled(EMMDLightingEnvironment Environment,
+	const FVector& Center, float Scale)
+{
+	// LightDataRT 第 0 行布局（与 UMMDAnimeLightDataSubsystem::CollectLights 打包格式一致）：
+	//   每盏灯 4 个 texel（4 个 float4）：
+	//     +0: (位置.xyz, 类型)   类型: 1=点光 2=聚光 3=平行光 4=面光
+	//     +1: (颜色.rgb, 强度)
+	//     +2: (方向.xyz, 半径)   平行光用方向；点/聚/面光用半径
+	//     +3: (内锥cos, 外锥cos, falloff, 0)   面光: (宽, 高, 0, 0)
+	// 天空光不进 LightDataRT（环境光由引擎 SH/天光处理），与 CollectLights 一致。
+	TArray<FVector4f> Data;
+	Data.SetNumZeroed(16 * 4); // MaxLights = 16
+
+	if (Environment == EMMDLightingEnvironment::None)
+	{
+		return Data;
+	}
+
+	const TArray<FMMDLightSpec> RawSpecs = BuildEnvironment(Environment);
+	int32 Slot = 0;
+	for (const FMMDLightSpec& RawSpec : RawSpecs)
+	{
+		if (Slot >= 16)
+		{
+			break;
+		}
+
+		const FMMDLightSpec Spec = (FMath::IsNearlyEqual(Scale, 1.0f) && Center.IsNearlyZero())
+			? RawSpec : TransformSpec(RawSpec, Center, Scale);
+
+		// FMMDLightSpec::Rotation 的 Forward = 光传播方向（从光源指向场景，同引擎约定），
+		// 与 CollectLights 里 GetActorForwardVector()/GetForwardVector() 一致。
+		const FVector Fwd = Spec.Rotation.Vector();
+		const int32 B = Slot * 4;
+
+		switch (Spec.Kind)
+		{
+		case EMMDLightKind::Directional:
+			Data[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, 3.0f); // Directional
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, 0.0f);
+			break;
+		case EMMDLightKind::Point:
+			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 1.0f); // Point
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, Spec.Radius);
+			break;
+		case EMMDLightKind::Spot:
+			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 2.0f); // Spot
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, Spec.Radius);
+			{
+				const float HalfInner = FMath::DegreesToRadians(Spec.InnerCone);
+				const float HalfOuter = FMath::DegreesToRadians(Spec.OuterCone);
+				Data[B + 3] = FVector4f(FMath::Cos(HalfInner), FMath::Cos(HalfOuter), 2.0f, 0.0f);
+			}
+			break;
+		case EMMDLightKind::Rect:
+			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 4.0f); // Rect
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 2] = FVector4f(-Fwd.X, -Fwd.Y, -Fwd.Z, Spec.Radius); // rect 发射方向沿 -forward（同 CollectLights）
+			Data[B + 3] = FVector4f(Spec.SourceWidth, Spec.SourceHeight, 0.0f, 0.0f);
+			break;
+		case EMMDLightKind::Sky:
+		default:
+			continue; // 天空光不占灯位
+		}
+		Slot++;
+	}
+	return Data;
 }
 
 FString UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(EMMDLightingEnvironment Environment)
@@ -445,6 +670,100 @@ FString UMMDLightingEnvironmentLibrary::CreateEnvironmentLevelAsset(EMMDLighting
 #endif
 }
 
+void UMMDLightingEnvironmentLibrary::ResetLevelViewportCamera()
+{
+#if WITH_EDITOR
+	if (!GEditor)
+	{
+		return;
+	}
+
+	// 标准机位（与场景里 MMDStageCamera 的配套设计一致）：
+	//   相机在模型正前方（Y+ 方向）2.4m、躯干高度 1.1m，forward 朝 -Y 平视模型。
+	//   模型在原点，标准 MMD 身高约 160cm（中心 Z≈80cm）。
+	const FVector CamLoc(0.0f, 240.0f, 110.0f);
+	const FRotator CamRot(0.0f, -90.0f, 0.0f); // yaw=-90: forward 指向 -Y（面向模型）
+
+	for (FLevelEditorViewportClient* EVC : GEditor->GetLevelViewportClients())
+	{
+		if (!EVC || !EVC->IsPerspective())
+		{
+			continue;
+		}
+		EVC->SetViewLocation(CamLoc);
+		EVC->SetViewRotation(CamRot);
+		EVC->Invalidate();
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已归位摄像机到舞台标准机位"));
+#endif
+}
+
+bool UMMDLightingEnvironmentLibrary::SyncToStageCamera()
+{
+#if WITH_EDITOR
+	if (!GEditor)
+	{
+		return false;
+	}
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	if (!World)
+	{
+		return false;
+	}
+
+	// 场景配套机位：找关卡里的 MMDStageCamera（设计师在关卡里放置/调整的机位）。
+	// 兼容两种命名：add 的 name 参数可能不生效（对象名是 CameraActor_UAID_xxx），
+	// 所以优先按名字找，找不到就取关卡里第一个 CameraActor。
+	ACameraActor* StageCam = nullptr;
+	for (TActorIterator<ACameraActor> It(World); It; ++It)
+	{
+		if (It->GetActorLabel() == TEXT("MMDStageCamera") || It->GetName() == TEXT("MMDStageCamera"))
+		{
+			StageCam = *It;
+			break;
+		}
+	}
+	if (!StageCam)
+	{
+		for (TActorIterator<ACameraActor> It(World); It; ++It)
+		{
+			if (It->GetClass() == ACameraActor::StaticClass()) // 跳过 CameraRig 等子类
+			{
+				StageCam = *It;
+				break;
+			}
+		}
+	}
+
+	if (!StageCam)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 关卡里没有 CameraActor，退回标准机位"));
+		return false;
+	}
+
+	const FVector CamLoc = StageCam->GetActorLocation();
+	const FRotator CamRot = StageCam->GetActorRotation();
+
+	for (FLevelEditorViewportClient* EVC : GEditor->GetLevelViewportClients())
+	{
+		if (!EVC || !EVC->IsPerspective())
+		{
+			continue;
+		}
+		EVC->SetViewLocation(CamLoc);
+		EVC->SetViewRotation(CamRot);
+		EVC->Invalidate();
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已同步视口相机到 MMDStageCamera（%s）"), *CamLoc.ToString());
+	return true;
+#else
+	return false;
+#endif
+}
+
 bool UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(EMMDLightingEnvironment Environment, const FString& FolderPath)
 {
 #if WITH_EDITOR
@@ -467,7 +786,16 @@ bool UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(EMMDLightingEnvironmen
 
 	// 用编辑器打开该关卡（FEditorFileUtils::LoadMap 接受包路径，内部转成 .umap 文件）。
 	const bool bLoaded = FEditorFileUtils::LoadMap(PackagePath, /*bLoadAsTemplate*/false, /*bShowProgress*/true);
-	if (!bLoaded)
+	if (bLoaded)
+	{
+		// 归位摄像机：优先同步到场景里配套放置的 MMDStageCamera（机位是场景内容，设计师可在关卡里调整）；
+		// 若关卡里没有该相机，退回标准机位（看向舞台中央）。
+		if (!SyncToStageCamera())
+		{
+			ResetLevelViewportCamera();
+		}
+	}
+	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[MMDLighting] 打开关卡失败：%s"), *PackagePath);
 	}
@@ -545,6 +873,7 @@ static void ExecMMDLighting(const TArray<FString>& Args)
 
 static FAutoConsoleCommand CmdMMDLighting(
 	TEXT("MMD.Lighting"),
-	TEXT("应用/清除 MMD 光照环境。用法: MMD.Lighting <3point|daylight|overcast|indoor|neon|rim|golden|horror|clear>"),
+	TEXT("MMD: 应用/清除光照环境到当前关卡. 用法: MMD.Lighting <3point|daylight|overcast|indoor|neon|rim|golden|horror|clear>"),
 	FConsoleCommandWithArgsDelegate::CreateStatic(ExecMMDLighting));
+
 #endif // WITH_EDITOR

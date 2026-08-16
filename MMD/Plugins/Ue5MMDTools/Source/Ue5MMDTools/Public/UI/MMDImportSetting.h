@@ -8,7 +8,6 @@
 #include "Widgets/Text/STextBlock.h"
 
 class MMDViewPanel;
-class SMMDToolPreview;
 class AActor;
 class UAnimSequence;
 class ULevelSequence;
@@ -132,8 +131,7 @@ private:
     TSharedPtr<STextBlock> StatusText;
     TStrongObjectPtr<UMMDToolPanelWidget> ToolPanelWidget;
 
-    /** 新 Slate 预览视口 + 选中的模型/动画文本 */
-    TSharedPtr<SMMDToolPreview> PreviewViewport;
+    /** 选中的模型/动画文本 */
     TSharedPtr<STextBlock> SelectedModelText;
     TSharedPtr<STextBlock> SelectedAnimText;
 

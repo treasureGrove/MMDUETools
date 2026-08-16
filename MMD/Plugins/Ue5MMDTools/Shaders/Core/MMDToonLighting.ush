@@ -133,7 +133,44 @@ struct TMMDToonLight
         }
     }
 
-    // 天空环境光：�?PBR 相同�?SH 公式，完全跟�?PBR 的天空环境光�?
+    // 二次元锐利高光（toon specular）：逐灯 NdotH 硬阶，与 ComputeLighting 的软高光(pow)互补。
+    // 软高光给材质"光泽"，锐高光给二次元"湿亮/点光"的块状高光。
+    // SpecStep=阈值(建议 0.7~0.9) SpecSoftness=过渡带(建议 0.03~0.08) Intensity=倍率。
+    float3 ToonSpecularLight(FMaterialPixelParameters Parameters,
+                             Texture2D LightDataTex, SamplerState LightDataTexSampler,
+                             float3 WorldNormal, float3 ViewDir,
+                             float SpecStep, float SpecSoftness, float Intensity)
+    {
+        static const int   MaxLights = 16;
+        static const float TexWidth  = 64.0;
+        static const float ToonPI    = 3.14159265;
+
+        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 Acc = float3(0, 0, 0);
+
+        for (int i = 0; i < MaxLights; i++)
+        {
+            float4 P = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
+            float4 C = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
+            float4 D = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
+            float4 T = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.25));
+
+            if (P.w >= 0.5)
+            {
+                float3 L;
+                float  Atten;
+                LightParams(P, D, T, WorldPos, L, Atten);
+
+                float3 H     = normalize(L + ViewDir);
+                float  NdotH = saturate(dot(WorldNormal, H));
+                float  Step  = smoothstep(SpecStep, SpecStep + SpecSoftness, NdotH);
+                Acc += C.rgb * (C.w / ToonPI) * Step * Atten * Intensity;
+            }
+        }
+        return Acc;
+    }
+
+    // 天空环境光：与 PBR 相同的 SH 公式，完全跟随 PBR 的天空环境光。
     float3 SkyAmbient(float3 WorldNormal)
     {
         float4 NrmV = float4(WorldNormal, 1.0);

@@ -11,7 +11,6 @@ class UAnimSequence;
 class UDirectionalLightComponent;
 class USkeletalMesh;
 class USkeletalMeshComponent;
-class USkyLightComponent;
 class UStaticMeshComponent;
 class UTextureRenderTarget2D;
 
@@ -53,15 +52,6 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UDirectionalLightComponent> KeyLightComponent;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UDirectionalLightComponent> FillLightComponent;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UDirectionalLightComponent> RimLightComponent;
-
-	UPROPERTY(Transient)
-	TObjectPtr<USkyLightComponent> SkyLightComponent;
 
 	UPROPERTY(Transient)
 	TObjectPtr<USkeletalMeshComponent> PreviewSkeletalMeshComponent;

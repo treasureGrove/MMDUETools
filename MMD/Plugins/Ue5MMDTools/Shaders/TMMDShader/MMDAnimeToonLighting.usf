@@ -1,0 +1,6 @@
+// MMDAnimeToonLighting.usf —— 兼容转发文件
+// 老版本材质资产（M_MMD_Base_Transparent 等）的 Custom 节点引用的是这个旧文件名，
+// 该文件在 shader 重构时被重命名为 MMDBaseToon.usf。为避免重新编辑资产，
+// 保留一个同名转发文件：内容 = include 新版基础 toon shader。
+// 新材质请直接 include MMDBaseToon.usf，不要引用本文件。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDBaseToon.usf"

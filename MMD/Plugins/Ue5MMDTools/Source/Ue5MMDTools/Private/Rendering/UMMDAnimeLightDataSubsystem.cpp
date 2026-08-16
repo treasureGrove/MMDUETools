@@ -91,6 +91,22 @@ void UMMDAnimeLightDataSubsystem::SetShadowCameraData(const FVector4f InData[4])
 	}
 }
 
+void UMMDAnimeLightDataSubsystem::SetPreviewLightOverride(const TArray<FVector4f>& InData)
+{
+	PreviewLightOverrideData = InData;
+	UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] 预览灯光覆盖已设置：%d 个 float4（%d 盏灯）"),
+		InData.Num(), InData.Num() / 4);
+}
+
+void UMMDAnimeLightDataSubsystem::ClearPreviewLightOverride()
+{
+	if (PreviewLightOverrideData.Num() > 0)
+	{
+		PreviewLightOverrideData.Reset();
+		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] 预览灯光覆盖已清除，恢复主世界灯光收集"));
+	}
+}
+
 void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
 {
 	// 1. Try to load an existing asset.
@@ -160,14 +176,21 @@ void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
 		return;
 	}
 
-	UWorld* World = GWorld;
-	if (!World)
-	{
-		return;
-	}
-
 	TArray<FVector4f> Data;
-	CollectLights(World, Data);
+	if (HasPreviewLightOverride())
+	{
+		// 预览灯光覆盖：直接使用预览场景打包好的灯光数据（预览场景的灯是孤儿组件，
+		// 无法从 GWorld 扫描到，所以由 MMDViewPanel 显式推入）。
+		Data = PreviewLightOverrideData;
+	}
+	else
+	{
+		UWorld* World = GWorld;
+		if (World)
+		{
+			CollectLights(World, Data);
+		}
+	}
 
 	// 追加阴影相机基到第 2 行（y=1）：texel 0..3（写进 LightDataRT 的 64..67）
 	Data.SetNum(MaxLights * 4 + 4);
