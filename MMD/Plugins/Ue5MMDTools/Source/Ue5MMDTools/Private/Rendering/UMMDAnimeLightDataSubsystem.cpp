@@ -34,6 +34,15 @@ namespace MMDAnimeLightType
 	constexpr float Rect = 4.0f;
 }
 
+// H001 修复：光照强度单位归一化系数。
+// UE5 方向光 Intensity 单位 = lux；点/聚/面光 = candelas。
+// 两者量级差约 1000×（方向光默认 10 lux，点光默认 ~8000 cd），
+// 直接塞进同一个 C.w 会让点光在 shader 里过曝。
+// 收集时把点/聚/面光的 cd 值除以此系数，归一到与 lux 同量级的"shader 口径"，
+// 使 shader 里 C.w/π 对所有灯类型都落在合理范围 [0, ~10]。
+// SpawnLight（UMMDLightingEnvironmentLibrary）里做反向 ×1000 换算成真实 cd。
+constexpr float GIntensityCdNormalization = 1000.0f;
+
 namespace
 {
 	const TCHAR* GMMDAnimeLightDataRT_PackagePath = TEXT("/Ue5MMDTools/Rendering");
@@ -395,7 +404,7 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 		}
 		const int32 B = Slot * 4;
 		OutData[B + 0] = FVector4f(C.Pos.X, C.Pos.Y, C.Pos.Z, MMDAnimeLightType::Point);
-		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity / GIntensityCdNormalization);
 		OutData[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, C.Radius);
 		OutData[B + 3] = FVector4f(0.0f, 0.0f, 0.0f, 0.0f);
 		Slot++;
@@ -409,7 +418,7 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 		}
 		const int32 B = Slot * 4;
 		OutData[B + 0] = FVector4f(C.Pos.X, C.Pos.Y, C.Pos.Z, MMDAnimeLightType::Spot);
-		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity / GIntensityCdNormalization);
 		OutData[B + 2] = FVector4f(C.Dir.X, C.Dir.Y, C.Dir.Z, C.Radius);
 		OutData[B + 3] = FVector4f(C.InnerCos, C.OuterCos, 2.0f, 0.0f);
 		Slot++;
@@ -423,7 +432,7 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 		}
 		const int32 B = Slot * 4;
 		OutData[B + 0] = FVector4f(C.Pos.X, C.Pos.Y, C.Pos.Z, MMDAnimeLightType::Rect);
-		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity / GIntensityCdNormalization);
 		OutData[B + 2] = FVector4f(C.Dir.X, C.Dir.Y, C.Dir.Z, C.Radius);
 		OutData[B + 3] = FVector4f(C.SizeX, C.SizeY, 0.0f, 0.0f);
 		Slot++;

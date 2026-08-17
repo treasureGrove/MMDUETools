@@ -236,7 +236,12 @@ namespace
 		{
 			Light->SetMobility(EComponentMobility::Movable);
 			Light->SetLightColor(Spec.Color);
-			Light->SetIntensity(Spec.Intensity);
+			// H001：点/聚/面光 Spec.Intensity 是 shader 口径（小数值，~1-10），
+			// UE Light Component 需要真实 candela 值（×1000）。方向光是 lux，不用换算。
+			const float UeIntensity = (Spec.Kind == EMMDLightKind::Directional)
+				? Spec.Intensity
+				: Spec.Intensity * 1000.0f;
+			Light->SetIntensity(UeIntensity);
 			if (UPointLightComponent* PointLight = Cast<UPointLightComponent>(Light))
 			{
 				PointLight->AttenuationRadius = Spec.Radius;
@@ -305,7 +310,11 @@ namespace
 		}
 		else if (ULightComponent* Light = Cast<ULightComponent>(SceneComp))
 		{
-			Light->SetIntensity(Spec.Intensity);
+			// H001：点/聚/面光 ×1000 换算成 UE candela（同 SpawnLight）
+			const float UeIntensity = (Spec.Kind == EMMDLightKind::Directional)
+				? Spec.Intensity
+				: Spec.Intensity * 1000.0f;
+			Light->SetIntensity(UeIntensity);
 			Light->SetLightColor(Spec.Color);
 			Light->SetCastShadows(true);
 
