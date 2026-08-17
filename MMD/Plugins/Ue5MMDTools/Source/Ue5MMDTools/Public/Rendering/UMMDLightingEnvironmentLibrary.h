@@ -22,6 +22,10 @@ class FPreviewScene;
  *   RimSilhouette 轮廓剪影（强背光，正面极暗）
  *   GoldenHour    黄金时刻（低角度暖橙平行光）
  *   HorrorGreen   恐怖绿光（底部绿光+冷色顶光）
+ *
+ * 技术验证环境（T00-T12，通过整数 ID 访问）：
+ *   用于确定性 Shader 测试，不追求漂亮。
+ *   固定手动曝光、关闭后处理效果。
  */
 UENUM(BlueprintType)
 enum class EMMDLightingEnvironment : uint8
@@ -75,7 +79,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "MMD Tools|Lighting")
 	static FString GetEnvironmentDisplayName(EMMDLightingEnvironment Environment);
 
-	/** 是否为“特殊”风格化环境（区别于标准参考环境）。 */
+	/** 是否为"特殊"风格化环境（区别于标准参考环境）。 */
 	UFUNCTION(BlueprintPure, Category = "MMD Tools|Lighting")
 	static bool IsSpecialEnvironment(EMMDLightingEnvironment Environment);
 
@@ -101,4 +105,23 @@ public:
 	/** 把编辑器主透视视口相机同步到当前关卡里的 MMDStageCamera（场景配套机位）。
 	 *  找到并同步成功返回 true；关卡里没有该相机返回 false。 */
 	static bool SyncToStageCamera();
+
+	// ---- Technical Validation Environments (T00-T12) ----
+
+	/** 应用技术验证环境（灯光 + 后处理）到 World。返回生成的灯数。
+	 *  TechEnvId: 0=T00_NeutralStudio .. 12=T12_IBLRotation。
+	 *  自动创建 PostProcessVolume 锁定手动曝光、关闭 Bloom/DOF/Vignette。 */
+	static int32 ApplyTechnicalEnvironmentToWorld(UWorld* World, int32 TechEnvId);
+
+	/** 应用技术验证环境到 PreviewScene（灯光 + 后处理）。返回生成的灯数。 */
+	static int32 ApplyTechnicalEnvironmentToPreview(FPreviewScene* PreviewScene, int32 TechEnvId);
+
+	/** 获取技术验证环境的短名（如 "T00_NeutralStudio"）。 */
+	static FString GetTechEnvName(int32 TechEnvId);
+
+	/** 在 World 里创建一个后处理体积，锁定手动曝光并关闭 Bloom/DOF/Vignette 等。 */
+	static void CreateTechnicalPostProcessVolume(UWorld* World);
+
+	/** 技术验证环境总数（0..12 共 13 个）。 */
+	static constexpr int32 NumTechnicalEnvironments = 13;
 };

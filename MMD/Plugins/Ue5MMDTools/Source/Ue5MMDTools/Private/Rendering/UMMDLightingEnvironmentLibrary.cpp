@@ -6,6 +6,8 @@
 #include "Engine/SpotLight.h"
 #include "Engine/RectLight.h"
 #include "Engine/SkyLight.h"
+#include "Engine/PostProcessVolume.h"
+#include "Rendering/UMMDAnimeLightDataSubsystem.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
@@ -831,6 +833,288 @@ int32 UMMDLightingEnvironmentLibrary::CreateAllEnvironmentLevelAssets(const FStr
 	return Count;
 }
 
+// ---- Technical Validation Environments (T00-T12) ----
+// These are deterministic test environments for shader validation.
+// They do NOT use the EMMDLightingEnvironment enum — accessed by integer ID.
+
+TArray<FMMDLightSpec> BuildTechnicalEnvSpecs(int32 TechEnvId)
+{
+	TArray<FMMDLightSpec> Specs;
+
+	switch (TechEnvId)
+	{
+	case 0: // T00_NeutralStudio: Basic shader calibration, 18% gray card reference
+		Specs.Add(MakeDir(FRotator(-45.0f, 0.0f, 0.0f), FLinearColor(1.0f, 1.0f, 1.0f), 3.14f));
+		Specs.Add(MakeSky(FLinearColor(0.5f, 0.5f, 0.5f), 1.0f));
+		break;
+
+	case 1: // T01_DirectionalOnly: Validate Toon Ramp / NdotL / Face SDF
+		Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(1.0f, 1.0f, 1.0f), 5.0f));
+		break;
+
+	case 2: // T02_DirectionalSoft: Test soft light layering
+		Specs.Add(MakeDir(FRotator(-80.0f, 0.0f, 0.0f), FLinearColor(0.9f, 0.92f, 0.95f), 2.0f));
+		Specs.Add(MakeSky(FLinearColor(0.6f, 0.65f, 0.7f), 2.0f));
+		break;
+
+	case 3: // T03_SkyOnly: Validate SkyAmbient
+		Specs.Add(MakeSky(FLinearColor(0.7f, 0.8f, 1.0f), 3.0f));
+		break;
+
+	case 4: // T04_PointOnly: Test distance attenuation
+		Specs.Add(MakePoint(FVector(200.0f, -150.0f, 200.0f), FLinearColor(1.0f, 1.0f, 1.0f), 5.0f, 600.0f));
+		break;
+
+	case 5: // T05_SpotOnly: Test spot cone / attenuation
+		Specs.Add(MakeSpot(FVector(200.0f, -200.0f, 300.0f), FVector(0.0f, 0.0f, 80.0f),
+			FLinearColor(1.0f, 1.0f, 1.0f), 5.0f, 800.0f, 20.0f, 35.0f));
+		break;
+
+	case 6: // T06_RectOnly: Test Rect Light
+		Specs.Add(MakeRect(FVector(-200.0f, -200.0f, 200.0f), FVector::ZeroVector,
+			FLinearColor(1.0f, 1.0f, 1.0f), 5.0f, 600.0f, 128.0f, 128.0f));
+		break;
+
+	case 7: // T07_WarmCoolMixed: Multi-light + colored light stability
+		Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(1.0f, 0.92f, 0.82f), 5.0f)); // Warm key
+		Specs.Add(MakePoint(FVector(-200.0f, 100.0f, 180.0f), FLinearColor(0.7f, 0.82f, 1.0f), 1.5f, 700.0f)); // Cool fill
+		Specs.Add(MakeSky(FLinearColor(0.65f, 0.72f, 0.85f), 1.5f));
+		break;
+
+	case 8: // T08_BackLight: Validate Hair / Rim / Silhouette
+		Specs.Add(MakeDir(FRotator(-25.0f, 160.0f, 0.0f), FLinearColor(1.0f, 1.0f, 1.0f), 6.0f));
+		Specs.Add(MakePoint(FVector(60.0f, -60.0f, 140.0f), FLinearColor(0.3f, 0.3f, 0.3f), 0.5f, 400.0f));
+		break;
+
+	case 9: // T09_HighDynamicRange: Strong key + dark env, test highlight clipping
+		Specs.Add(MakeDir(FRotator(-45.0f, -20.0f, 0.0f), FLinearColor(1.0f, 1.0f, 1.0f), 10.0f));
+		Specs.Add(MakeSky(FLinearColor(0.1f, 0.12f, 0.15f), 0.3f));
+		break;
+
+	case 10: // T10_NoSky: Close Skylight, verify shader works without SkyIrradiance
+		Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(1.0f, 1.0f, 1.0f), 5.0f));
+		// No SkyLight — intentionally omitted
+		break;
+
+	case 11: // T11_ShadowOccluder: Directional + standard occluder, test MMD ShadowMap
+		Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(1.0f, 1.0f, 1.0f), 5.0f));
+		Specs.Add(MakeSky(FLinearColor(0.5f, 0.5f, 0.5f), 1.0f));
+		// Occluder geometry should be added separately to the level
+		break;
+
+	case 12: // T12_IBLRotation: Same env at 0/90/180/270°, test material IBL response
+		Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(0.95f, 0.95f, 1.0f), 4.0f));
+		Specs.Add(MakeSky(FLinearColor(0.7f, 0.75f, 0.85f), 2.5f));
+		// Sky rotation should be varied between captures (0°/90°/180°/270°)
+		break;
+
+	default:
+		break;
+	}
+
+	return Specs;
+}
+
+FString UMMDLightingEnvironmentLibrary::GetTechEnvName(int32 TechEnvId)
+{
+	static const TCHAR* Names[] = {
+		TEXT("T00_NeutralStudio"),
+		TEXT("T01_DirectionalOnly"),
+		TEXT("T02_DirectionalSoft"),
+		TEXT("T03_SkyOnly"),
+		TEXT("T04_PointOnly"),
+		TEXT("T05_SpotOnly"),
+		TEXT("T06_RectOnly"),
+		TEXT("T07_WarmCoolMixed"),
+		TEXT("T08_BackLight"),
+		TEXT("T09_HighDynamicRange"),
+		TEXT("T10_NoSky"),
+		TEXT("T11_ShadowOccluder"),
+		TEXT("T12_IBLRotation"),
+	};
+	if (TechEnvId >= 0 && TechEnvId < UE_ARRAY_COUNT(Names))
+	{
+		return FString(Names[TechEnvId]);
+	}
+	return FString();
+}
+
+void UMMDLightingEnvironmentLibrary::CreateTechnicalPostProcessVolume(UWorld* World)
+{
+	if (!World) return;
+
+	// Remove existing technical PP volume
+	for (TActorIterator<APostProcessVolume> It(World); It; ++It)
+	{
+		if (It->GetName().StartsWith(TEXT("MMDTechPP")))
+		{
+			It->Destroy();
+		}
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.Name = FName(TEXT("MMDTechPPVolume"));
+
+	APostProcessVolume* PP = World->SpawnActor<APostProcessVolume>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
+	if (!PP) return;
+
+	PP->bUnbound = true; // Apply to entire scene
+	PP->Priority = 100.0f; // High priority to override other PP
+
+	FPostProcessSettings& S = PP->Settings;
+
+	// Manual Exposure (EV100 = 0)
+	S.bOverride_AutoExposureMethod = true;
+	S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+	S.bOverride_AutoExposureBias = true;
+	S.AutoExposureBias = 0.0f;
+
+	// Disable Bloom
+	S.bOverride_BloomIntensity = true;
+	S.BloomIntensity = 0.0f;
+
+	// Disable DOF
+	S.bOverride_DepthOfFieldEnabled = true;
+	S.DepthOfFieldFocalDistance = 0.0f;
+
+	// Disable Vignette
+	S.bOverride_VignetteIntensity = true;
+	S.VignetteIntensity = 0.0f;
+
+	// Disable Chromatic Aberration
+	S.bOverride_ChromaticAberrationStartOffset = true;
+	S.ChromaticAberrationStartOffset = 0.0f;
+
+	// Disable Lens Flares
+	S.bOverride_LensFlareIntensity = true;
+	S.LensFlareIntensity = 0.0f;
+
+	// Disable Motion Blur
+	S.bOverride_MotionBlurAmount = true;
+	S.MotionBlurAmount = 0.0f;
+
+	// Disable Film Grain
+	S.bOverride_FilmGrainIntensity = true;
+	S.FilmGrainIntensity = 0.0f;
+
+	// Disable Ambient Occlusion
+	S.bOverride_AmbientOcclusionIntensity = true;
+	S.AmbientOcclusionIntensity = 0.0f;
+
+	// Disable Screen Space Reflections
+	S.bOverride_ScreenSpaceReflectionIntensity = true;
+	S.ScreenSpaceReflectionIntensity = 0.0f;
+
+	// Neutral color grading (D65 white balance)
+	S.bOverride_WhiteTemp = true;
+	S.WhiteTemp = 6500.0f;
+	S.bOverride_WhiteTint = true;
+	S.WhiteTint = 0.0f;
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 技术验证后处理体积已创建（手动曝光 EV100=0，后处理效果已关闭）"));
+}
+
+int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToWorld(UWorld* World, int32 TechEnvId)
+{
+	if (!World || TechEnvId < 0 || TechEnvId >= NumTechnicalEnvironments) return 0;
+
+	// Clear existing environment lights
+	ClearLightingEnvironment(World);
+
+	// Build and spawn technical lights
+	const TArray<FMMDLightSpec> Specs = BuildTechnicalEnvSpecs(TechEnvId);
+	int32 Count = 0;
+	for (const FMMDLightSpec& Spec : Specs)
+	{
+		if (SpawnLight(World, Spec))
+		{
+			++Count;
+		}
+	}
+
+	// Apply post-process settings
+	CreateTechnicalPostProcessVolume(World);
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已应用技术验证环境 %s：%d 盏灯"),
+		*GetTechEnvName(TechEnvId), Count);
+	return Count;
+}
+
+int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToPreview(FPreviewScene* PreviewScene, int32 TechEnvId)
+{
+	if (!PreviewScene || TechEnvId < 0 || TechEnvId >= NumTechnicalEnvironments) return 0;
+
+	ClearLightingEnvironmentFromPreview(PreviewScene);
+
+	const TArray<FMMDLightSpec> Specs = BuildTechnicalEnvSpecs(TechEnvId);
+	TArray<TWeakObjectPtr<USceneComponent>>& Tracked = GPreviewEnvironmentLights.FindOrAdd(PreviewScene);
+
+	int32 Count = 0;
+	for (const FMMDLightSpec& Spec : Specs)
+	{
+		if (USceneComponent* Comp = CreatePreviewLightComponent(PreviewScene, Spec))
+		{
+			Tracked.Add(Comp);
+			++Count;
+		}
+	}
+
+	// Pack and push to LightDataRT override
+	if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
+	{
+		// Pack technical env data (same format as PackEnvironmentLightData)
+		TArray<FVector4f> Data;
+		Data.SetNumZeroed(16 * 4);
+		int32 Slot = 0;
+		for (const FMMDLightSpec& Spec : Specs)
+		{
+			if (Slot >= 16) break;
+			const FVector Fwd = Spec.Rotation.Vector();
+			const int32 B = Slot * 4;
+
+			switch (Spec.Kind)
+			{
+			case EMMDLightKind::Directional:
+				Data[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, 3.0f);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, 0.0f);
+				break;
+			case EMMDLightKind::Point:
+				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 1.0f);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, Spec.Radius);
+				break;
+			case EMMDLightKind::Spot:
+				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 2.0f);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, Spec.Radius);
+				{
+					const float HalfInner = FMath::DegreesToRadians(Spec.InnerCone);
+					const float HalfOuter = FMath::DegreesToRadians(Spec.OuterCone);
+					Data[B + 3] = FVector4f(FMath::Cos(HalfInner), FMath::Cos(HalfOuter), 2.0f, 0.0f);
+				}
+				break;
+			case EMMDLightKind::Rect:
+				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 4.0f);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 2] = FVector4f(-Fwd.X, -Fwd.Y, -Fwd.Z, Spec.Radius);
+				Data[B + 3] = FVector4f(Spec.SourceWidth, Spec.SourceHeight, 0.0f, 0.0f);
+				break;
+			case EMMDLightKind::Sky:
+			default:
+				continue; // Sky doesn't occupy light slots
+			}
+			Slot++;
+		}
+		Subsystem->SetPreviewLightOverride(Data);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已应用技术验证环境 %s 到预览场景：%d 盏灯"),
+		*GetTechEnvName(TechEnvId), Count);
+	return Count;
+}
+
 #if WITH_EDITOR
 // 控制台命令：MMD.Lighting <3point|daylight|overcast|indoor|neon|rim|golden|horror|clear>
 static void ExecMMDLighting(const TArray<FString>& Args)
@@ -864,6 +1148,24 @@ static void ExecMMDLighting(const TArray<FString>& Args)
 	}
 	else
 	{
+		// 尝试解析 Technical Validation Environment: T00-T12
+		if (Name.StartsWith(TEXT("t")) && Name.Len() >= 2)
+		{
+			const FString NumStr = Name.Mid(1);
+			int32 TechId = -1;
+			if (NumStr.IsNumeric())
+			{
+				TechId = FCString::Atoi(*NumStr);
+			}
+			if (TechId >= 0 && TechId < UMMDLightingEnvironmentLibrary::NumTechnicalEnvironments)
+			{
+				int32 Count = UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToWorld(World, TechId);
+				UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已应用技术验证环境 %s (%d 灯)"),
+					*UMMDLightingEnvironmentLibrary::GetTechEnvName(TechId), Count);
+				return;
+			}
+		}
+
 		UE_LOG(LogTemp, Warning, TEXT("[MMDLighting] 未知环境名: %s"), *Args[0]);
 		return;
 	}
