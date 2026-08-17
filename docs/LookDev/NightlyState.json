@@ -1,0 +1,83 @@
+{
+    "start_sha": "08e13e7787ab207e1380330b73a234ca9c2348a3",
+    "current_sha": "592915c",
+    "branch": "agent/lookdev-nightly-20260816",
+    "experiment_id": "E001",
+    "phase": "P1_TECHNICAL_ENVIRONMENTS_DONE",
+    "active_hypothesis": null,
+    "changed_files": [
+        "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Public/Rendering/UMMDLightingEnvironmentLibrary.h",
+        "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/UMMDLightingEnvironmentLibrary.cpp",
+        "Docs/LookDev/LightingPipeline.md",
+        "Docs/LookDev/MMD_LIGHTING_CONTRACT.md",
+        "Docs/LookDev/MaterialMatrix.md",
+        "Docs/LookDev/NightlyState.json",
+        "Docs/LookDev/TechnicalValidationPP.md",
+        "Docs/LookDev/ScreenshotPipeline.md",
+        "Docs/LookDev/FirstNightExperiments.md",
+        "Docs/LookDev/RegressionMatrix.md",
+        "Docs/LookDev/EvaluationScorecard.md",
+        "Docs/LookDev/VisualGoals.md"
+    ],
+    "accepted_experiments": [
+        {
+            "id": "E000",
+            "hypothesis": "Lighting pipeline data semantics need formal documentation",
+            "change": "4 new docs: LightingPipeline.md, MMD_LIGHTING_CONTRACT.md, MaterialMatrix.md, NightlyState.json",
+            "commit": "d7861ed"
+        },
+        {
+            "id": "E001",
+            "hypothesis": "Need deterministic technical test environments for shader validation",
+            "change": "Extended UMMDLightingEnvironmentLibrary with T00-T12 environments + PostProcessVolume",
+            "commit": "592915c"
+        }
+    ],
+    "rejected_experiments": [],
+    "current_scores": {
+        "lighting_correctness": 3,
+        "exposure_stability": 3,
+        "world_preview_consistency": 0,
+        "multi_light_stability": 0,
+        "skylight_robustness": 0,
+        "shadow_correctness": 0,
+        "face_readability": 0,
+        "face_light_stability": 0,
+        "skin_quality": 0,
+        "hair_quality": 0,
+        "eye_quality": 0,
+        "cloth_differentiation": 0,
+        "silhouette": 0,
+        "shadow_color": 0,
+        "highlight_control": 0
+    },
+    "known_issues": [
+        {"id": "H001", "title": "Light type intensity units inconsistent (lux vs candelas)", "status": "OPEN", "priority": "P0"},
+        {"id": "H002", "title": "DirLight excludes intensity for toon ramp", "status": "OPEN_NEEDS_EXPERIMENT", "priority": "P1"},
+        {"id": "H003", "title": "Face main-light selection may flip", "status": "OPEN", "priority": "P1"},
+        {"id": "H004", "title": "SkyAmbient depends on SH which may differ Preview vs World", "status": "PARTIALLY_VERIFIED", "priority": "P1"},
+        {"id": "H005", "title": "Preview override vs world collection parity", "status": "OPEN", "priority": "P1"},
+        {"id": "H006", "title": "Material classification by name keywords is fragile", "status": "CONFIRMED", "priority": "P2"},
+        {"id": "H007", "title": "ShadowMap and Toon Ramp interaction", "status": "OPEN", "priority": "P1"},
+        {"id": "H008", "title": "Matcap dependency masking shader issues", "status": "OPEN", "priority": "P2"}
+    ],
+    "next_candidates": [
+        "E002: SkyAmbient Preview vs World (H004/H005)",
+        "E003: Weak Auxiliary Light Ramp (H002)",
+        "E004: Face Main-Light Stability (H003)"
+    ],
+    "deliverables_completed": [
+        "Docs/LookDev/LightingPipeline.md",
+        "Docs/LookDev/MMD_LIGHTING_CONTRACT.md",
+        "Docs/LookDev/MaterialMatrix.md",
+        "Docs/LookDev/NightlyState.json",
+        "Docs/LookDev/TechnicalValidationPP.md",
+        "Docs/LookDev/ScreenshotPipeline.md",
+        "Docs/LookDev/FirstNightExperiments.md",
+        "Docs/LookDev/RegressionMatrix.md",
+        "Docs/LookDev/EvaluationScorecard.md",
+        "Docs/LookDev/VisualGoals.md",
+        "Docs/LookDev/Reports/2026-08-16.md",
+        "T00-T12 Technical Environments (C++ code)"
+    ]
+}
