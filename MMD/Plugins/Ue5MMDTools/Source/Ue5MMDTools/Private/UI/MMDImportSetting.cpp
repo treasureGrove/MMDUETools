@@ -1145,6 +1145,15 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 					Count > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
 				return FReply::Handled();
 			}));
+
+		AddButton(Sec, FText::FromString(TEXT("重建全部 LookDev 场景")), MMDGetPrimaryButtonStyle(),
+			FOnClicked::CreateLambda([this]()
+			{
+				const int32 Count = UMMDLightingEnvironmentLibrary::RebuildAllEnvironmentLevelAssets();
+				ShowImportProgress(FString::Printf(TEXT("已重建 %d/8 个 LookDev 场景（舞台、相机、曝光与灯光）"), Count),
+					Count == 8 ? EMMDMessageType::Success : EMMDMessageType::Warning);
+				return FReply::Handled();
+			}));
 	}
 
 	// ================= 右侧预览区 =================

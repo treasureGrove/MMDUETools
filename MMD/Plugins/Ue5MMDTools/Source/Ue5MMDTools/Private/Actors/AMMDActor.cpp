@@ -83,6 +83,12 @@ void AMMDActor::SetupComponents(const FString& FilePath)
 
     TMMDMeshBuilder MeshBuilder;
     USkeletalMesh* BuiltMesh = MeshBuilder.BuildSkeletalMeshFromPMX(PMXData, TEXT("/Game/MMDModels"), PMXData.ModelNameEN, FilePath);
+    if (!BuiltMesh)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[AMMDActor] PMX 骨骼网格构建失败: %s"), *FilePath);
+        MMDImportSetting::ShowGlobalImportProgress(TEXT("MMD 骨骼网格构建失败"), EMMDMessageType::Error);
+        return;
+    }
 
     if (!SkeletalMeshComponent)
     {
@@ -97,6 +103,12 @@ void AMMDActor::SetupComponents(const FString& FilePath)
     SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
 
     UAnimBlueprint* MMDAnimBP = MeshBuilder.BuildAnimBlueprint(BuiltMesh, FilePath);
+    if (!MMDAnimBP)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[AMMDActor] 动画蓝图创建失败: %s"), *FilePath);
+        MMDImportSetting::ShowGlobalImportProgress(TEXT("MMD 动画蓝图创建失败"), EMMDMessageType::Error);
+        return;
+    }
 
     FMMDAnimGraphHelper::AddMMDNodeToAnimBP(MMDAnimBP,PMXData,true);
     FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(MMDAnimBP);

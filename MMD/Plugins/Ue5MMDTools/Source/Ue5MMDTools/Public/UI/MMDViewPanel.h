@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "SEditorViewport.h"
-#include "AdvancedPreviewScene.h"
+#include "PreviewScene.h"
 #include "EditorViewportClient.h"
 #include "AMMDActor.h"
 
@@ -54,13 +54,14 @@ protected:
 private:
 	void ImportModelClicked();
 
-	TSharedPtr<FAdvancedPreviewScene> PreviewScene;
+	TSharedPtr<FPreviewScene> PreviewScene;
 	AActor *SelectedActor = nullptr;
 	TSharedPtr<FEditorViewportClient> CustomViewportClient;
 	FVector WidgetLocation;
 
 	AActor* PreviewActor = nullptr;
 	UPoseableMeshComponent* PhysicsBakePreviewComponent = nullptr;
+	EMMDLightingEnvironment CurrentLightingEnvironment;
 
 	TSharedPtr<FEditorModeTools> LocalModeTools;
 };

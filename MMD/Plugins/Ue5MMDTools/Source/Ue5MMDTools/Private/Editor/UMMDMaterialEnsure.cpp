@@ -185,6 +185,14 @@ namespace
 				return RT;
 			}
 		}
+		if (FCString::Stricmp(Name, TEXT("MatCap")) == 0)
+		{
+			if (UTexture* BlackTexture = LoadObject<UTexture>(
+				nullptr, TEXT("/Engine/EngineResources/Black.Black")))
+			{
+				return BlackTexture;
+			}
+		}
 		return GEngine ? GEngine->DefaultTexture : nullptr;
 	}
 
@@ -236,7 +244,7 @@ namespace
 		{
 			UMaterialExpressionTextureObjectParameter* TexParam = NewObject<UMaterialExpressionTextureObjectParameter>(Material);
 			TexParam->ParameterName = TEXT("MatCap");
-			TexParam->Texture = GEngine ? GEngine->DefaultTexture : nullptr;
+			TexParam->Texture = DefaultTextureForInput(TEXT("MatCap"));
 			Material->GetExpressionCollection().Expressions.Add(TexParam);
 			TexParam->Material = Material;
 			return TexParam;

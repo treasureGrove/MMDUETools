@@ -16,7 +16,8 @@
 #include "ImportUtils/SkelImport.h"                  
 #include "ImportUtils/SkeletalMeshImportUtils.h"       
 #include "MeshUtilities.h"                             
-#include "Engine/SkinnedAssetCommon.h"     
+#include "Engine/SkinnedAssetCommon.h"
+#include "SkinnedAssetCompiler.h"
 #include "Rendering/SkeletalMeshModel.h"             
 #include "Rendering/SkeletalMeshLODModel.h"           
 #include "Components/SkinnedMeshComponent.h"  
@@ -868,37 +869,75 @@ static UMMDModelDataAsset* CreateMMDModelDataAssetForMesh(USkeletalMesh* Skeleta
 		return nullptr;
 	}
 
-	UMMDModelDataAsset* ModelDataAsset = NewObject<UMMDModelDataAsset>(Package, *AssetName, RF_Public | RF_Standalone);
+	// 重试导入时复用旧 DataAsset，避免同一个 Package 内产生同名导出对象。
+	Package->FullyLoad();
+	UMMDModelDataAsset* ModelDataAsset = FindObject<UMMDModelDataAsset>(Package, *AssetName);
+	const bool bCreatedNewAsset = ModelDataAsset == nullptr;
+	if (bCreatedNewAsset)
+	{
+		ModelDataAsset = NewObject<UMMDModelDataAsset>(
+			Package, *AssetName, RF_Public | RF_Standalone | RF_Transactional);
+	}
 	if (ModelDataAsset == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MMDModelData: Failed to create asset: %s"), *AssetName);
 		return nullptr;
 	}
 
+	ModelDataAsset->Modify();
 	PopulateMMDModelDataAsset(ModelDataAsset, PMXInfo, RefSkeleton, PMXFilePath);
 	ModelDataAsset->MarkPackageDirty();
-	FAssetRegistryModule::AssetCreated(ModelDataAsset);
-
-	UMMDSkeletalMeshUserData* UserData = NewObject<UMMDSkeletalMeshUserData>(SkeletalMesh, UMMDSkeletalMeshUserData::StaticClass(), NAME_None, RF_Public | RF_Transactional);
-	UserData->ModelDataAsset = ModelDataAsset;
-	SkeletalMesh->AddAssetUserData(UserData);
-
-	const FString FilePath = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
-	FSavePackageArgs SaveArgs;
-	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
-	SaveArgs.SaveFlags = SAVE_None;
-	SaveArgs.Error = GError;
-	SaveArgs.bWarnOfLongFilename = false;
-	if (!UPackage::SavePackage(Package, ModelDataAsset, *FilePath, SaveArgs))
+	if (bCreatedNewAsset)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MMDModelData: SavePackage failed: %s"), *FilePath);
+		FAssetRegistryModule::AssetCreated(ModelDataAsset);
 	}
+
+	UMMDSkeletalMeshUserData* UserData = SkeletalMesh->GetAssetUserData<UMMDSkeletalMeshUserData>();
+	if (UserData == nullptr)
+	{
+		UserData = NewObject<UMMDSkeletalMeshUserData>(
+			SkeletalMesh, UMMDSkeletalMeshUserData::StaticClass(), NAME_None, RF_Public | RF_Transactional);
+		SkeletalMesh->AddAssetUserData(UserData);
+	}
+	UserData->Modify();
+	UserData->ModelDataAsset = ModelDataAsset;
+	SkeletalMesh->MarkPackageDirty();
 
 	return ModelDataAsset;
 #else
 	return nullptr;
 #endif
 }
+
+#if WITH_EDITOR
+static bool SaveMMDGeneratedAsset(UObject* Asset, const TCHAR* AssetLabel)
+{
+	if (Asset == nullptr)
+	{
+		return false;
+	}
+
+	UPackage* Package = Asset->GetOutermost();
+	if (Package == nullptr)
+	{
+		return false;
+	}
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(
+		Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	const bool bSaved = UPackage::SavePackage(Package, Asset, *FilePath, SaveArgs);
+	if (!bSaved)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MMD import: failed to save %s: %s"), AssetLabel, *FilePath);
+	}
+	return bSaved;
+}
+#endif
 
 static UMMDModelDataAsset* FindMMDModelDataAsset(USkeletalMesh* SkeletalMesh)
 {
@@ -2468,9 +2507,11 @@ int32 BuildMorphTargetsFromPMX(USkeletalMesh* SkeletalMesh, const PMXDatas& PMXI
 		}
 	}
 
+	// 这里只刷新 Morph 名称映射，不在网格构建中途触发异步 RenderData 重建。
+	// 中途启动 SkinnedAsset 编译后再 SavePackage 会让保存流程等待尚未完成的网格，造成导入卡死。
 	if (bNeedInitMorphTargets)
 	{
-		SkeletalMesh->InitMorphTargetsAndRebuildRenderData();
+		SkeletalMesh->InitMorphTargets();
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("PMX Morph: imported %d vertex morph targets, skipped %d non-imported morphs, missing mapped vertices %d."), ImportedMorphCount, SkippedMorphCount, MissingMappedVertexCount);
@@ -2807,9 +2848,10 @@ UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, UTexture2D*
 	else
 	{
 		// 没有 sphere 贴图：MatCap 用黑色兜底（绝不复用 BaseColor），并强制关闭 sphere 效果。
-		if (GEngine)
+		if (UTexture2D* BlackTexture = LoadObject<UTexture2D>(
+			nullptr, TEXT("/Engine/EngineResources/Black.Black")))
 		{
-			SetTextureParameterIfPresent(MatInst, TEXT("MatCap"), GEngine->DefaultTexture);
+			SetTextureParameterIfPresent(MatInst, TEXT("MatCap"), BlackTexture);
 		}
 		SetScalarParameterIfPresent(MatInst, TEXT("SphereMode"), 0.0f);
 	}
@@ -3544,6 +3586,16 @@ USkeletalMesh* TMMDMeshBuilder::BuildSkeletalMeshFromPMX(const PMXDatas& PMXInfo
 	FAssetRegistryModule::AssetCreated(SkeletalMesh);
 	FAssetRegistryModule::AssetCreated(Skeleton);
 	SkeletonPackage->MarkPackageDirty();
+
+#if WITH_EDITOR
+	// 所有网格修改完成后再等待一次编译并保存；禁止在构建中途 SavePackage。
+	TArray<USkinnedAsset*> SkinnedAssetsToFinish;
+	SkinnedAssetsToFinish.Add(SkeletalMesh);
+	FSkinnedAssetCompilingManager::Get().FinishCompilation(SkinnedAssetsToFinish);
+	SaveMMDGeneratedAsset(ModelDataAsset, TEXT("MMDModelData"));
+	SaveMMDGeneratedAsset(Skeleton, TEXT("Skeleton"));
+	SaveMMDGeneratedAsset(SkeletalMesh, TEXT("SkeletalMesh"));
+#endif
 
 	UE_LOG(LogTemp, Log, TEXT("骨骼网格创建成功: %s"), *PackageName);
 

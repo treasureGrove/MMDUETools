@@ -99,6 +99,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MMD Tools|Lighting")
 	static int32 CreateAllEnvironmentLevelAssets(const FString& FolderPath = TEXT("/Ue5MMDTools/Maps"));
 
+	/** 重建全部 LookDev 关卡。会替换这些 LE_* 关卡内的内容，用于升级插件自带的标准舞台。 */
+	UFUNCTION(BlueprintCallable, Category = "MMD Tools|Lighting")
+	static int32 RebuildAllEnvironmentLevelAssets(const FString& FolderPath = TEXT("/Ue5MMDTools/Maps"));
+
 	/** 把编辑器主透视视口相机归位到看向舞台中央（模型原点）的标准机位。 */
 	static void ResetLevelViewportCamera();
 

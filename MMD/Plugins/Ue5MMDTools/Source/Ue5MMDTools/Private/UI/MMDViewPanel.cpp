@@ -1,6 +1,5 @@
 #include "MMDViewPanel.h"
 #include "Ue5MMDTools.h"
-#include "AdvancedPreviewScene.h"
 #include "EditorViewportClient.h"
 #include "SEditorViewport.h"
 #include "UnrealWidget.h"
@@ -9,6 +8,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SButton.h"
@@ -35,6 +35,7 @@
 #include "Animation/SkeletalMeshActor.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/DirectionalLightComponent.h"
 #include "HitProxies.h"
 #include "Templates/SharedPointer.h"
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
@@ -51,6 +52,9 @@ public:
         // 关键：启用编辑器/后处理/选择描边相关的 ShowFlag（保持兼容）
         EngineShowFlags.SetEditor(true);
         EngineShowFlags.SetPostProcessing(true);
+		// 固定 EV100=10，和 Content LookDev 关卡的 ISO100 / 1/60s / f4 对齐。
+		ExposureSettings.bFixed = true;
+		ExposureSettings.FixedEV100 = 10.0f;
         // 设置默认视角
         SetViewLocation(FVector(300, 300, 300));
         SetViewRotation(FRotator(-25, 45, 0));
@@ -433,20 +437,24 @@ private:
 // MMDViewPanel 实现
 void MMDViewPanel::Construct(const FArguments &InArgs)
 {
-    // 创建预览场景（干净基底：无天空球、无天光，仅一盏直射光 —— 光照环境走场景(map)切换，
-    // 预览视口只做模型/材质快速查看，不叠加任何环境灯光）。
-    FPreviewScene::ConstructionValues PreviewCVS;
-    PreviewCVS.SetEditor(true);
-    PreviewScene = MakeShared<FAdvancedPreviewScene>(PreviewCVS);
+	CurrentLightingEnvironment = EMMDLightingEnvironment::Studio3Point;
 
-    // 去掉预览场景的天空球(skybox)：预览窗口不该自带环境背景，否则会干扰判断模型在
-    // 目标光照环境里的实际观感（用户期望看到的是干净背景 + 单直射光）。
-    PreviewScene->SetEnvironmentVisibility(false);
+	// 使用基础 PreviewScene，避免 AdvancedPreviewScene 隐式加载用户 Asset Viewer 的 HDRI、
+	// 后处理和默认方向光。LookDev 的可见灯光全部由预设显式创建。
+	FPreviewScene::ConstructionValues PreviewCVS;
+	PreviewCVS.SetEditor(true)
+		.SetCreateDefaultLighting(true)
+		.SetLightBrightness(0.0f)
+		.SetSkyBrightness(0.0f);
+	PreviewScene = MakeShared<FPreviewScene>(PreviewCVS);
 
-    // 关掉 AdvancedPreviewScene 自带的天光，只保留一盏直射光作为预览基础照明。
-    if (USkyLightComponent* Sky = PreviewScene->SkyLight)
-    {
-        Sky->SetVisibility(false);
+	if (UDirectionalLightComponent* DefaultLight = PreviewScene->DirectionalLight)
+	{
+		DefaultLight->SetVisibility(false);
+	}
+	if (USkyLightComponent* Sky = PreviewScene->SkyLight)
+	{
+		Sky->SetVisibility(false);
     }
 
     // 搭建影棚舞台（与光照环境 map 相同的 Cube 地面+墙），切场景时灯光/相机都会围绕它。
@@ -455,13 +463,15 @@ void MMDViewPanel::Construct(const FArguments &InArgs)
     // create local ModeTools instance as shared, required because FEditorViewportClient's ctor calls AsShared()
     LocalModeTools = MakeShared<FEditorModeTools>();
 
-    // 首先调用父类的Construct来初始化视口
-    SEditorViewport::Construct(SEditorViewport::FArguments());
+	// 首先调用父类的Construct来初始化视口
+	SEditorViewport::Construct(SEditorViewport::FArguments());
+	ApplyLightingEnvironment(CurrentLightingEnvironment);
 }
 
 MMDViewPanel::~MMDViewPanel()
 {
-    EndPhysicsBakePreview();
+	ClearLightingEnvironment();
+	EndPhysicsBakePreview();
     LocalModeTools.Reset();
 }
 
@@ -469,6 +479,12 @@ TSharedRef<FEditorViewportClient> MMDViewPanel::MakeEditorViewportClient()
 {
 	// SEditorViewport 已通过 SNew/SAssignNew 建立 shared 引用，此处 SharedThis(this) 安全（引擎标准做法）。
 	CustomViewportClient = MakeShared<FMMDViewportClient>(LocalModeTools.Get(), PreviewScene.Get(), SharedThis(this));
+	CustomViewportClient->ExposureSettings.bFixed = true;
+	CustomViewportClient->ExposureSettings.FixedEV100 = 10.0f;
+	CustomViewportClient->EngineShowFlags.SetEyeAdaptation(false);
+	CustomViewportClient->EngineShowFlags.SetBloom(false);
+	CustomViewportClient->EngineShowFlags.SetMotionBlur(false);
+	CustomViewportClient->EngineShowFlags.SetDepthOfField(false);
 	return CustomViewportClient.ToSharedRef();
 }
 
@@ -672,8 +688,9 @@ bool MMDViewPanel::CreatePreviewActor(UClass* InActorClass)
         }
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Success %s"), *PreviewActor->GetName());
-    return true;
+	UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Success %s"), *PreviewActor->GetName());
+	ApplyLightingEnvironment(CurrentLightingEnvironment);
+	return true;
 }
 
 void MMDViewPanel::BeginPhysicsBakePreview(USkeletalMesh* SkeletalMesh)
@@ -851,6 +868,7 @@ void MMDViewPanel::ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh)
 		VC->FocusViewportOnBox(FBox::BuildAABB(Bounds.Origin, Bounds.BoxExtent));
 		VC->Invalidate();
 	}
+	ApplyLightingEnvironment(CurrentLightingEnvironment);
 }
 
 void MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
@@ -877,6 +895,7 @@ void MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
 
 int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment)
 {
+	CurrentLightingEnvironment = Environment;
 	int32 Count = 0;
 	if (PreviewScene.IsValid())
 	{
@@ -980,9 +999,7 @@ void MMDViewPanel::BuildPreviewStage()
 		return;
 	}
 
-	// 与光照环境 map（mcp_build_env.py build_stage）相同的影棚舞台：
-	// 地面 20m x 20m(z=0 顶面)、背墙(y=-500)、左右侧墙(x=±500)，半包围。
-	// 用引擎内置 Cube，scale 与 map 一致（Cube 基准 100cm）。
+	// 与插件 LookDev map 相同的中性灰开放舞台。侧墙会遮光并制造无关反射，因此不创建。
 	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (!CubeMesh)
 	{
@@ -997,11 +1014,11 @@ void MMDViewPanel::BuildPreviewStage()
 	};
 
 	const FStageSpec Specs[] = {
-		{ TEXT("MMDStageFloor"), FVector(0.0f, 0.0f, -20.0f),   FVector(20.0f, 20.0f, 0.4f) },
-		{ TEXT("MMDStageBack"),  FVector(0.0f, -500.0f, 400.0f), FVector(20.0f, 0.4f, 8.0f) },
-		{ TEXT("MMDStageLeft"),  FVector(-500.0f, 0.0f, 400.0f), FVector(0.4f, 10.0f, 8.0f) },
-		{ TEXT("MMDStageRight"), FVector(500.0f, 0.0f, 400.0f),  FVector(0.4f, 10.0f, 8.0f) },
+		{ TEXT("MMDStageFloor"), FVector(0.0f, 0.0f, -5.0f), FVector(12.0f, 12.0f, 0.1f) },
+		{ TEXT("MMDStageBack"), FVector(0.0f, -420.0f, 220.0f), FVector(12.0f, 0.1f, 4.5f) },
 	};
+	UMaterialInterface* NeutralMaterial = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Engine/BasicShapes/BasicShapeMaterial_Inst.BasicShapeMaterial_Inst"));
 
 	for (const FStageSpec& Spec : Specs)
 	{
@@ -1013,8 +1030,12 @@ void MMDViewPanel::BuildPreviewStage()
 		CubeComp->SetStaticMesh(CubeMesh);
 		CubeComp->SetMobility(EComponentMobility::Movable);
 		CubeComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (NeutralMaterial)
+		{
+			CubeComp->SetMaterial(0, NeutralMaterial);
+		}
 		PreviewScene->AddComponent(CubeComp, FTransform(FRotator::ZeroRotator, Spec.Loc, Spec.Scale));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 预览舞台已搭建（地面+背墙+侧墙）"));
+	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 预览舞台已搭建（中性地面+背景墙）"));
 }

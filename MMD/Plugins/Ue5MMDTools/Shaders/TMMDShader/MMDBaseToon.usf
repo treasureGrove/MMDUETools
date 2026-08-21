@@ -1,136 +1,53 @@
-﻿// ============================================================================
-//   MMDBaseToon —— 【基础材质 / BASE MATERIAL】
-//   所有 TMMDAnime* 材质共用的基础 toon 着色器（皮肤/布料/一般硬表面）。
-//   目标：正常光照下颜色与 PBR/Lit 接近（色相正确、亮度同量级），
-//         同时具备明显二次元质感与强塑造感（两阶明暗 + 核心阴影 + 锐高光 + 边缘光）。
-//   光照/阴影/法线/matcap 函数库：Core/MMDToonLighting.ush
-// ============================================================================
-// Custom 节点用法（OutputType: float3）：
-//   Code:
-//     #include "/Plugin/Ue5MMDTools/TMMDShader/MMDBaseToon.usf"
-//     return 0;   // 兜底返回值（正常不可达）
-//
-//   节点输入（需连线）：
-//     BaseColor         (float3)    - 基础色
-//     LightDataTex      (Texture2D) - 灯光数据 RT
-//     ShadowStep        (float)     - 卡通阴影阈值（明暗分界，建议 0.45~0.6）
-//     HighlightStep     (float)     - 锐高光阈值（toon 高光阶，建议 0.75~0.9；<=0 用默认 0.82）
-//     ShadowColor       (float3)    - 阴影压暗色（逐通道乘到 BaseColor，保留色相；建议 0.5~0.6 灰）
-//     SpecularPower     (float)     - 软高光锐度（光泽）
-//     NormalMap         (Texture2D) - 法线贴图（可选；不接或强度 0 用几何法线）
-//     NormalMapStrength (float)     - 法线强度（0=关 1=满）
-//     MatCap            (Texture2D) - sphere/matcap 贴图
-//     SphereMode        (float)     - 0=关 1=乘(matcap烘焙阴影) 2=加(matcap高光)
-//     MMDShadowMap      (Texture2D) - 场景阴影深度 RT
-//     MMDShadowBias     (float)     - 阴影深度偏移（cm）
-//
-//   节点作用域自动提供：Parameters / LightDataTexSampler / NormalMapSampler / MatCapSampler / MMDShadowMapSampler
-#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+﻿#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
 
-struct TMMDBaseToon
+// Light / LightContext 由 Core 库统一提供（引用 LightDataTex / MMDShadowMap 必需输入）
+//----------------------------------------------------------------------------------
+struct InputData
 {
-    float3 OutputColor(FMaterialPixelParameters Parameters,
-                       float3 BaseColor,
-                       Texture2D LightDataTex,
-                       SamplerState LightDataTexSampler,
-                       float ShadowStep,
-                       float HighlightStep,
-                       float3 ShadowColor,
-                       float SpecularPower,
-                       Texture2D NormalMap,
-                       SamplerState NormalMapSampler,
-                       float NormalMapStrength,
-                       Texture2D MatCap,
-                       SamplerState MatCapSampler,
-                       float SphereMode,
-                       Texture2D MMDShadowMap,
-                       SamplerState MMDShadowMapSampler,
-                       float MMDShadowBias)
+    // float
+    float3 BaseColor;
+    // float  MatCapStrength;
+    // float  NormalMapStrength;
+    // // Texture2D
+    // Texture2D    NormalMap;
+    // SamplerState NormalMapSampler;
+    // Texture2D    MatCap;
+    // SamplerState MatCapSampler;
+};
+//----------------------------------------------------------------------------------
+InputData In;
+//float
+In.BaseColor = BaseColor;
+// In.Emission = Emission;
+// In.SpecularPower = SpecularPower;
+// In.NormalMapStrength = NormalMapStrength;
+// In.MatCapStrength = MatCapStrength;
+// //Texture2D
+// In.NormalMap = NormalMap;
+// In.NormalMapSampler = NormalMapSampler;
+// In.MatCap = MatCap;
+// In.MatCapSampler = MatCapSampler;
+struct TMMDMaterialShader
+{
+    // 只有一个函数：先写好各 pass 的颜色（BaseColor/Emission + 法线/光泽），
+    // 再调 TMMDToonLight::ShadeSurface 算光照，最后返回最终颜色。
+    TMMDSurfaceData  SurfaceData(FMaterialPixelParameters Parameters, InputData In)
     {
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+        TMMDSurfaceData Output;
 
-        TMMDToonLight TL;
-        // 法线贴图：强度 0 时退化为几何法线
-        const float3 WorldNormal = TL.ApplyNormalMap(Parameters, NormalMap, NormalMapSampler, NormalMapStrength);
+        // 最少输入（仅 BaseColor）：其余字段给默认值兜底。
+        // 注意：struct 所有字段都必须赋值，否则 ShadeSurface 读到未初始化值会报
+        // "Instructions should not read uninitialized value"。
+        Output.BaseColor     = In.BaseColor;
+        Output.WorldNormal   = normalize((float3)Parameters.TangentToWorld[2]);  // 几何法线（无法线贴图时）
+        Output.SpecularPower = 16.0;                                            // 默认光泽
+        Output.Emission      = float3(0, 0, 0);                                 // 无自发光
 
-        // 原始光照（不含阴影、不含 sphere）：Diffuse 含光强/NdotL（PBR 朗伯同款），
-        // DirLight 不含光强（供 toon ramp 用，光强不移动阴影边界）。
-        float3 Diffuse, DirLight, Specular;
-        TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
-                           WorldNormal, ViewDir, Diffuse, DirLight, Specular);
-
-        // 场景阴影（主平行光遮挡）：关闭/无效时返回 1，不改变原有 toon 光照
-        float MMDShadowFactor = TL.SampleMMDShadow(Parameters, LightDataTex, LightDataTexSampler,
-                                                   MMDShadowMap, MMDShadowMapSampler,
-                                                   MMDShadowBias);
-        Diffuse  *= MMDShadowFactor;
-        DirLight *= MMDShadowFactor;
-        Specular *= MMDShadowFactor;
-
-        // ---- 受光量（不含光强，阴影边界稳定）----
-        const float3 LumaW = float3(0.299, 0.587, 0.114);
-        float LightAmount = saturate(dot(DirLight, LumaW));
-
-        // ---- 两阶明暗 + 柔和 penumbra（塑造感核心）----
-        const float Softness = 0.10;
-        float Ramp = smoothstep(ShadowStep - Softness, ShadowStep + Softness, LightAmount);
-
-        // 阴影色 = BaseColor 压暗派生（保留色相，避免偏灰/偏色）；
-        // 受光色 = BaseColor × 朗伯漫反射（与 PBR 同量级）。
-        float3 ShadowTone = BaseColor * saturate(ShadowColor);
-        float3 LitTone    = BaseColor * Diffuse;
-
-        float3 ShadedDiffuse = lerp(ShadowTone, LitTone, Ramp);
-
-        // ---- 核心阴影（明暗交界线受光侧压暗一条，增强体积塑造）----
-        float CoreD = LightAmount - ShadowStep;
-        float Core  = exp(-(CoreD * CoreD) / (2.0 * 0.15 * 0.15));
-        ShadedDiffuse *= 1.0 - Core * 0.30;
-
-        // ---- 天空环境光（PBR 同款 SH）：阴影区压到 40%，避免死黑同时保持明暗对比 ----
-        float3 SkyLight = TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb * MMDShadowFactor;
-        ShadedDiffuse += BaseColor * SkyLight * lerp(0.40, 1.0, Ramp);
-
-        // ---- 高光：软高光（受光面门控）+ 二次元锐高光 ----
-        float3 ShadedSpecular = Specular * Ramp;
-        float  SpecStep = HighlightStep > 0.01 ? HighlightStep : 0.82;
-        float3 ToonSpec = TL.ToonSpecularLight(Parameters, LightDataTex, LightDataTexSampler,
-                                               WorldNormal, ViewDir, SpecStep, 0.05, 1.5);
-        ToonSpec *= Ramp * MMDShadowFactor;
-
-        float3 Final = ShadedDiffuse + ShadedSpecular + ToonSpec;
-
-        // ---- 边缘光（冷色轮廓，跟随场景光强，塑造感 + 二次元感）----
-        float NdotV = saturate(dot(WorldNormal, ViewDir));
-        float Rim   = pow(1.0 - NdotV, 3.0);
-        float LightIntensity = saturate(TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler));
-        Final += float3(0.75, 0.85, 1.0) * Rim * LightIntensity * 0.18;
-
-        // ---- sphere/matcap ----
-        if (SphereMode > 0.5)
-        {
-            float3 Matcap = TL.SampleMatcap(WorldNormal, MatCap, MatCapSampler);
-
-            if (SphereMode < 1.5)       // 乘：matcap 烘焙阴影，只乘漫反射
-            {
-                Final = ShadedDiffuse * Matcap + ShadedSpecular + ToonSpec;
-            }
-            else                        // 加：matcap 高光，叠加
-            {
-                Final += Matcap;
-            }
-        }
-
-        return Final;
+        return Output;
     }
 };
 
-TMMDBaseToon Toon;
-return Toon.OutputColor(Parameters,
-                        BaseColor, LightDataTex, LightDataTexSampler,
-                        ShadowStep, HighlightStep, ShadowColor,
-                        SpecularPower,
-                        NormalMap, NormalMapSampler, NormalMapStrength,
-                        MatCap, MatCapSampler, SphereMode,
-                        MMDShadowMap, MMDShadowMapSampler, MMDShadowBias);
+TMMDMaterialShader Shader;
+TMMDSurfaceData SurfaceData = Shader.SurfaceData(Parameters, In);
+
+return Light.ShadeSurface(Parameters, SurfaceData, LightContext);

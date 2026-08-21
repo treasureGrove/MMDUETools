@@ -7,6 +7,10 @@
 #include "Engine/RectLight.h"
 #include "Engine/SkyLight.h"
 #include "Engine/PostProcessVolume.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/TextureCube.h"
+#include "Engine/Light.h"
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
@@ -14,6 +18,10 @@
 #include "Components/RectLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/LightComponent.h"
+#include "Components/LocalLightComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Camera/CameraComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "GameFramework/Actor.h"
 #include "HAL/IConsoleManager.h"
 #include "PreviewScene.h"
@@ -59,7 +67,16 @@ namespace
 		float OuterCone = 35.0f;     // 聚光外锥半角（度）
 		float SourceWidth = 64.0f;   // 矩形光宽度（cm）
 		float SourceHeight = 64.0f;  // 矩形光高度（cm）
+		const TCHAR* CubemapPath = TEXT("/Engine/MapTemplates/Sky/DaylightAmbientCubemap.DaylightAmbientCubemap");
+		float CubemapAngle = 0.0f;
 	};
+
+	// 固定 EV100=10 下的统一强度标尺：平行光用 lux，本地点/聚/面光用 lumen。
+	// 37440 经 18% 灰球校准：Studio 的 3.2/1.15 档对应约 120k/43k lm。
+	float GetPhysicalIntensity(const FMMDLightSpec& Spec)
+	{
+		return Spec.Intensity * (Spec.Kind == EMMDLightKind::Directional ? 2000.0f : 37440.0f);
+	}
 
 	FMMDLightSpec MakeDir(FRotator Rot, const FLinearColor& Color, float Intensity)
 	{
@@ -103,6 +120,7 @@ namespace
 		S.Kind = EMMDLightKind::Rect;
 		S.Location = Loc;
 		S.Aim = Aim;
+		// UE5.8 RectLight 的组件 Forward 指向受光目标；采集时再取 -Forward 作为点到灯方向。
 		S.Rotation = (Aim - Loc).Rotation();
 		S.Color = Color;
 		S.Intensity = Intensity;
@@ -112,12 +130,16 @@ namespace
 		return S;
 	}
 
-	FMMDLightSpec MakeSky(const FLinearColor& Color, float Intensity)
+	FMMDLightSpec MakeSky(const FLinearColor& Color, float Intensity,
+		const TCHAR* CubemapPath = TEXT("/Engine/MapTemplates/Sky/DaylightAmbientCubemap.DaylightAmbientCubemap"),
+		float CubemapAngle = 0.0f)
 	{
 		FMMDLightSpec S;
 		S.Kind = EMMDLightKind::Sky;
 		S.Color = Color;
 		S.Intensity = Intensity;
+		S.CubemapPath = CubemapPath;
+		S.CubemapAngle = CubemapAngle;
 		return S;
 	}
 
@@ -128,31 +150,31 @@ namespace
 		switch (Environment)
 		{
 		case EMMDLightingEnvironment::Studio3Point:
-			// 三点布光：主光（聚光）、辅光（点光）、轮廓光（聚光）+ 天光。聚光/点光带距离衰减，塑造体积感。
-			Specs.Add(MakeSpot(FVector(180.0f, 180.0f, 300.0f), FVector(0.0f, 0.0f, 80.0f), FLinearColor(1.0f, 0.95f, 0.88f), 5.0f, 900.0f, 18.0f, 35.0f));
-			Specs.Add(MakePoint(FVector(-220.0f, 120.0f, 170.0f), FLinearColor(0.70f, 0.82f, 1.0f), 2.0f, 650.0f));
-			Specs.Add(MakeSpot(FVector(0.0f, -240.0f, 260.0f), FVector(0.0f, 0.0f, 90.0f), FLinearColor(0.75f, 0.92f, 1.0f), 3.5f, 850.0f, 15.0f, 30.0f));
-			Specs.Add(MakeSky(FLinearColor(0.82f, 0.88f, 1.0f), 1.25f));
+			// 中性影棚：大面积主光、低一档冷辅光、窄轮廓光。D65 天空只负责抬黑位。
+			Specs.Add(MakeRect(FVector(220.0f, 260.0f, 260.0f), FVector(0.0f, 0.0f, 90.0f), FLinearColor(1.0f, 0.98f, 0.95f), 3.2f, 1000.0f, 180.0f, 240.0f));
+			Specs.Add(MakeRect(FVector(-260.0f, 180.0f, 170.0f), FVector(0.0f, 0.0f, 90.0f), FLinearColor(0.78f, 0.86f, 1.0f), 1.15f, 1000.0f, 220.0f, 260.0f));
+			Specs.Add(MakeSpot(FVector(120.0f, -260.0f, 260.0f), FVector(0.0f, 0.0f, 110.0f), FLinearColor(0.82f, 0.90f, 1.0f), 2.1f, 900.0f, 18.0f, 32.0f));
+			Specs.Add(MakeSky(FLinearColor(0.72f, 0.76f, 0.82f), 0.55f));
 			break;
 
 		case EMMDLightingEnvironment::Daylight:
 			// 户外日光：强太阳(唯一直射光) + 反向天空补光(点光) + 天光。
-			Specs.Add(MakeDir(FRotator(-55.0f, -25.0f, 0.0f), FLinearColor(1.0f, 0.97f, 0.92f), 5.5f));
-			Specs.Add(MakePoint(FVector(0.0f, -400.0f, 500.0f), FLinearColor(0.55f, 0.75f, 1.0f), 1.2f, 1500.0f));
-			Specs.Add(MakeSky(FLinearColor(0.72f, 0.84f, 1.0f), 2.0f));
+			Specs.Add(MakeDir(FRotator(-48.0f, -32.0f, 0.0f), FLinearColor(1.0f, 0.96f, 0.90f), 3.8f));
+			Specs.Add(MakeSky(FLinearColor(0.62f, 0.76f, 1.0f), 1.15f));
 			break;
 
 		case EMMDLightingEnvironment::OvercastSoft:
 			// 阴天柔光：顶部柔光 + 高天光，几乎无硬阴影。
-			Specs.Add(MakeDir(FRotator(-80.0f, 0.0f, 0.0f), FLinearColor(0.82f, 0.86f, 0.92f), 1.6f));
-			Specs.Add(MakeSky(FLinearColor(0.75f, 0.80f, 0.88f), 3.0f));
+			Specs.Add(MakeDir(FRotator(-78.0f, -10.0f, 0.0f), FLinearColor(0.86f, 0.90f, 0.98f), 1.55f));
+			Specs.Add(MakeSky(FLinearColor(0.72f, 0.78f, 0.88f), 1.9f));
 			break;
 
 		case EMMDLightingEnvironment::IndoorWarm:
 			// 室内暖光：暖色主点光 + 面光补光 + 暖背光。
-			Specs.Add(MakePoint(FVector(140.0f, -60.0f, 210.0f), FLinearColor(1.0f, 0.80f, 0.60f), 4.0f, 500.0f));
-			Specs.Add(MakeRect(FVector(-160.0f, -80.0f, 150.0f), FVector::ZeroVector, FLinearColor(0.95f, 0.82f, 0.70f), 2.5f, 450.0f, 120.0f, 160.0f));
-			Specs.Add(MakePoint(FVector(0.0f, 240.0f, 190.0f), FLinearColor(1.0f, 0.65f, 0.45f), 2.0f, 400.0f));
+			Specs.Add(MakeRect(FVector(180.0f, 170.0f, 220.0f), FVector(0.0f, 0.0f, 85.0f), FLinearColor(1.0f, 0.72f, 0.48f), 3.0f, 850.0f, 150.0f, 190.0f));
+			Specs.Add(MakeRect(FVector(-220.0f, 120.0f, 170.0f), FVector(0.0f, 0.0f, 85.0f), FLinearColor(0.58f, 0.70f, 1.0f), 0.85f, 850.0f, 180.0f, 220.0f));
+			Specs.Add(MakePoint(FVector(0.0f, -220.0f, 190.0f), FLinearColor(1.0f, 0.55f, 0.32f), 1.35f, 650.0f));
+			Specs.Add(MakeSky(FLinearColor(0.45f, 0.48f, 0.56f), 0.3f));
 			break;
 
 		case EMMDLightingEnvironment::NeonNight:
@@ -170,9 +192,10 @@ namespace
 
 		case EMMDLightingEnvironment::GoldenHour:
 			// 黄金时刻：低角度暖橙太阳(唯一直射光) + 暖色点光补光 + 暖色天光。
-			Specs.Add(MakeDir(FRotator(-18.0f, -30.0f, 0.0f), FLinearColor(1.0f, 0.55f, 0.25f), 5.0f));
+			Specs.Add(MakeDir(FRotator(-14.0f, -30.0f, 0.0f), FLinearColor(1.0f, 0.50f, 0.20f), 3.6f));
 			Specs.Add(MakePoint(FVector(300.0f, -200.0f, 120.0f), FLinearColor(1.0f, 0.72f, 0.50f), 0.8f, 1200.0f));
-			Specs.Add(MakeSky(FLinearColor(1.0f, 0.70f, 0.50f), 1.0f));
+			Specs.Add(MakeSky(FLinearColor(1.0f, 0.68f, 0.46f), 0.8f,
+				TEXT("/Engine/MapTemplates/Sky/SunsetAmbientCubemap.SunsetAmbientCubemap"), 25.0f));
 			break;
 
 		case EMMDLightingEnvironment::HorrorGreen:
@@ -228,7 +251,14 @@ namespace
 			if (USkyLightComponent* Sky = Actor->FindComponentByClass<USkyLightComponent>())
 			{
 				Sky->SetMobility(EComponentMobility::Movable);
-				Sky->SetIntensity(Spec.Intensity);
+				Sky->SourceType = ESkyLightSourceType::SLS_SpecifiedCubemap;
+				Sky->bLowerHemisphereIsBlack = false;
+				if (UTextureCube* Cubemap = LoadObject<UTextureCube>(nullptr, Spec.CubemapPath))
+				{
+					Sky->SetCubemap(Cubemap);
+					Sky->SetSourceCubemapAngle(Spec.CubemapAngle);
+				}
+				Sky->SetIntensity(Spec.Intensity * 1000.0f);
 				Sky->SetLightColor(Spec.Color);
 			}
 		}
@@ -236,12 +266,12 @@ namespace
 		{
 			Light->SetMobility(EComponentMobility::Movable);
 			Light->SetLightColor(Spec.Color);
-			// H001：点/聚/面光 Spec.Intensity 是 shader 口径（小数值，~1-10），
-			// UE Light Component 需要真实 candela 值（×1000）。方向光是 lux，不用换算。
-			const float UeIntensity = (Spec.Kind == EMMDLightKind::Directional)
-				? Spec.Intensity
-				: Spec.Intensity * 1000.0f;
+			const float UeIntensity = GetPhysicalIntensity(Spec);
 			Light->SetIntensity(UeIntensity);
+			if (ULocalLightComponent* LocalLight = Cast<ULocalLightComponent>(Light))
+			{
+				LocalLight->SetIntensityUnits(ELightUnits::Lumens);
+			}
 			if (UPointLightComponent* PointLight = Cast<UPointLightComponent>(Light))
 			{
 				PointLight->AttenuationRadius = Spec.Radius;
@@ -304,19 +334,27 @@ namespace
 		{
 			if (USkyLightComponent* Sky = Cast<USkyLightComponent>(SceneComp))
 			{
-				Sky->SetIntensity(Spec.Intensity);
+				Sky->SourceType = ESkyLightSourceType::SLS_SpecifiedCubemap;
+				Sky->bLowerHemisphereIsBlack = false;
+				if (UTextureCube* Cubemap = LoadObject<UTextureCube>(nullptr, Spec.CubemapPath))
+				{
+					Sky->SetCubemap(Cubemap);
+					Sky->SetSourceCubemapAngle(Spec.CubemapAngle);
+				}
+				Sky->SetIntensity(Spec.Intensity * 1000.0f);
 				Sky->SetLightColor(Spec.Color);
 			}
 		}
 		else if (ULightComponent* Light = Cast<ULightComponent>(SceneComp))
 		{
-			// H001：点/聚/面光 ×1000 换算成 UE candela（同 SpawnLight）
-			const float UeIntensity = (Spec.Kind == EMMDLightKind::Directional)
-				? Spec.Intensity
-				: Spec.Intensity * 1000.0f;
+			const float UeIntensity = GetPhysicalIntensity(Spec);
 			Light->SetIntensity(UeIntensity);
 			Light->SetLightColor(Spec.Color);
 			Light->SetCastShadows(true);
+			if (ULocalLightComponent* LocalLight = Cast<ULocalLightComponent>(Light))
+			{
+				LocalLight->SetIntensityUnits(ELightUnits::Lumens);
+			}
 
 			if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
 			{
@@ -359,6 +397,138 @@ namespace
 		}
 		return Out;
 	}
+
+#if WITH_EDITOR
+	void ConfigureLookDevPostProcess(FPostProcessSettings& S)
+	{
+		S.bOverride_AutoExposureMethod = true;
+		S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+		S.bOverride_AutoExposureBias = true;
+		S.AutoExposureBias = 0.0f;
+		S.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+		S.AutoExposureApplyPhysicalCameraExposure = true;
+		S.bOverride_CameraISO = true;
+		S.CameraISO = 100.0f;
+		S.bOverride_CameraShutterSpeed = true;
+		S.CameraShutterSpeed = 60.0f;
+		S.bOverride_DepthOfFieldFstop = true;
+		S.DepthOfFieldFstop = 4.0f;
+		S.bOverride_BloomIntensity = true;
+		S.BloomIntensity = 0.0f;
+		S.bOverride_VignetteIntensity = true;
+		S.VignetteIntensity = 0.0f;
+		S.bOverride_MotionBlurAmount = true;
+		S.MotionBlurAmount = 0.0f;
+		S.bOverride_DepthOfFieldScale = true;
+		S.DepthOfFieldScale = 0.0f;
+		S.bOverride_FilmGrainIntensity = true;
+		S.FilmGrainIntensity = 0.0f;
+		S.bOverride_LensFlareIntensity = true;
+		S.LensFlareIntensity = 0.0f;
+		S.bOverride_WhiteTemp = true;
+		S.WhiteTemp = 6500.0f;
+		S.bOverride_WhiteTint = true;
+		S.WhiteTint = 0.0f;
+	}
+
+	void ClearGeneratedLookDevActors(UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		TArray<AActor*> ToRemove;
+		for (AActor* Actor : World->PersistentLevel->Actors)
+		{
+			if (Actor && (Actor->IsA<ALight>() || Actor->IsA<AStaticMeshActor>() ||
+				Actor->IsA<APostProcessVolume>() || Actor->IsA<ACameraActor>()))
+			{
+				ToRemove.Add(Actor);
+			}
+		}
+		for (AActor* Actor : ToRemove)
+		{
+			World->DestroyActor(Actor, true);
+		}
+	}
+
+	void BuildLookDevStage(UWorld* World, EMMDLightingEnvironment Environment)
+	{
+		if (!World)
+		{
+			return;
+		}
+
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		UMaterialInterface* NeutralMaterial = LoadObject<UMaterialInterface>(nullptr,
+			TEXT("/Engine/BasicShapes/BasicShapeMaterial_Inst.BasicShapeMaterial_Inst"));
+
+		auto SpawnStageMesh = [World, Cube, NeutralMaterial](const TCHAR* Label, const FVector& Location, const FVector& Scale)
+		{
+			if (!Cube)
+			{
+				return;
+			}
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Params.ObjectFlags |= RF_Transactional;
+			AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(Location, FRotator::ZeroRotator, Params);
+			if (!Actor)
+			{
+				return;
+			}
+			Actor->SetActorScale3D(Scale);
+			Actor->SetActorLabel(Label);
+			Actor->SetFolderPath(TEXT("MMD LookDev/Stage"));
+			UStaticMeshComponent* Comp = Actor->GetStaticMeshComponent();
+			Comp->SetStaticMesh(Cube);
+			Comp->SetMobility(EComponentMobility::Static);
+			Comp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			Comp->SetCastShadow(true);
+			if (NeutralMaterial)
+			{
+				Comp->SetMaterial(0, NeutralMaterial);
+			}
+			Actor->MarkPackageDirty();
+		};
+
+		// 12m 中性灰舞台：地面与背景墙足够大，但不加侧墙，避免遮光和错误反射。
+		SpawnStageMesh(TEXT("MMDStage_Floor"), FVector(0.0f, 0.0f, -5.0f), FVector(12.0f, 12.0f, 0.1f));
+		SpawnStageMesh(TEXT("MMDStage_Backdrop"), FVector(0.0f, -420.0f, 220.0f), FVector(12.0f, 0.1f, 4.5f));
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transactional;
+
+		APostProcessVolume* PP = World->SpawnActor<APostProcessVolume>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
+		if (PP)
+		{
+			PP->SetActorLabel(TEXT("MMDLookDev_PostProcess"));
+			PP->SetFolderPath(TEXT("MMD LookDev"));
+			PP->bUnbound = true;
+			PP->Priority = 100.0f;
+			ConfigureLookDevPostProcess(PP->Settings);
+		}
+
+		ACameraActor* Camera = World->SpawnActor<ACameraActor>(FVector(0.0f, 450.0f, 105.0f), FRotator(0.0f, -90.0f, 0.0f), Params);
+		if (Camera)
+		{
+			Camera->SetActorLabel(TEXT("MMDStageCamera"));
+			Camera->SetFolderPath(TEXT("MMD LookDev"));
+			Camera->GetCameraComponent()->SetFieldOfView(35.0f);
+		}
+
+		for (const FMMDLightSpec& Spec : BuildEnvironment(Environment))
+		{
+			if (AActor* Light = SpawnLight(World, Spec, true))
+			{
+				Light->SetActorLabel(FString::Printf(TEXT("MMDEnv_%s"), *Light->GetClass()->GetName()));
+				Light->SetFolderPath(TEXT("MMD LookDev/Lights"));
+			}
+		}
+	}
+#endif
 }
 
 int32 UMMDLightingEnvironmentLibrary::ApplyLightingEnvironment(UWorld* World, EMMDLightingEnvironment Environment)
@@ -524,17 +694,17 @@ TArray<FVector4f> UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled
 		{
 		case EMMDLightKind::Directional:
 			Data[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, 3.0f); // Directional
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 			Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, 0.0f);
 			break;
 		case EMMDLightKind::Point:
 			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 1.0f); // Point
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 			Data[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, Spec.Radius);
 			break;
 		case EMMDLightKind::Spot:
 			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 2.0f); // Spot
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 			Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, Spec.Radius);
 			{
 				const float HalfInner = FMath::DegreesToRadians(Spec.InnerCone);
@@ -544,7 +714,7 @@ TArray<FVector4f> UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled
 			break;
 		case EMMDLightKind::Rect:
 			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 4.0f); // Rect
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 			Data[B + 2] = FVector4f(-Fwd.X, -Fwd.Y, -Fwd.Z, Spec.Radius); // rect 发射方向沿 -forward（同 CollectLights）
 			Data[B + 3] = FVector4f(Spec.SourceWidth, Spec.SourceHeight, 0.0f, 0.0f);
 			break;
@@ -605,7 +775,9 @@ FString UMMDLightingEnvironmentLibrary::GetEnvironmentAssetName(EMMDLightingEnvi
 	}
 }
 
-FString UMMDLightingEnvironmentLibrary::CreateEnvironmentLevelAsset(EMMDLightingEnvironment Environment, const FString& FolderPath)
+namespace
+{
+FString BuildEnvironmentLevelAsset(EMMDLightingEnvironment Environment, const FString& FolderPath, bool bRebuild)
 {
 #if WITH_EDITOR
 	if (Environment == EMMDLightingEnvironment::None)
@@ -613,7 +785,7 @@ FString UMMDLightingEnvironmentLibrary::CreateEnvironmentLevelAsset(EMMDLighting
 		return FString();
 	}
 
-	const FString AssetName = GetEnvironmentAssetName(Environment);
+	const FString AssetName = UMMDLightingEnvironmentLibrary::GetEnvironmentAssetName(Environment);
 	if (AssetName.IsEmpty())
 	{
 		return FString();
@@ -622,36 +794,44 @@ FString UMMDLightingEnvironmentLibrary::CreateEnvironmentLevelAsset(EMMDLighting
 	const FString PackagePath = FolderPath / AssetName;
 
 	// 已存在则直接返回（不覆盖用户编辑过的场景）。
-	if (FPackageName::DoesPackageExist(PackagePath))
+	const bool bExists = FPackageName::DoesPackageExist(PackagePath);
+	if (bExists && !bRebuild)
 	{
 		UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 关卡资产已存在，跳过生成：%s"), *PackagePath);
 		return PackagePath;
 	}
 
 	// 1) 创建包 + 用 UWorldFactory 生成一个空的 Inactive 世界（带正确的 PersistentLevel）。
-	UPackage* Package = CreatePackage(*PackagePath);
-	if (!Package)
+	UPackage* Package = nullptr;
+	UWorld* NewWorld = nullptr;
+	if (bExists)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[MMDLighting] CreatePackage failed: %s"), *PackagePath);
-		return FString();
+		Package = LoadPackage(nullptr, *PackagePath, LOAD_None);
+		NewWorld = Package ? FindObject<UWorld>(Package, *AssetName) : nullptr;
 	}
-
-	UWorldFactory* Factory = NewObject<UWorldFactory>();
-	UWorld* NewWorld = Cast<UWorld>(Factory->FactoryCreateNew(
-		UWorld::StaticClass(), Package, FName(*AssetName),
-		RF_Public | RF_Standalone, nullptr, GWarn));
+	else
+	{
+		Package = CreatePackage(*PackagePath);
+		if (Package)
+		{
+			UWorldFactory* Factory = NewObject<UWorldFactory>();
+			NewWorld = Cast<UWorld>(Factory->FactoryCreateNew(
+				UWorld::StaticClass(), Package, FName(*AssetName),
+				RF_Public | RF_Standalone, nullptr, GWarn));
+		}
+	}
 	if (!NewWorld)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[MMDLighting] UWorldFactory create failed: %s"), *AssetName);
+		UE_LOG(LogTemp, Error, TEXT("[MMDLighting] 无法创建或加载 LookDev 关卡：%s"), *PackagePath);
 		return FString();
 	}
 
 	// 2) 往关卡里 spawn 灯光（持久 actor，保存进关卡，可在编辑器编辑）。
-	const TArray<FMMDLightSpec> Specs = BuildEnvironment(Environment);
-	for (const FMMDLightSpec& Spec : Specs)
+	if (bRebuild)
 	{
-		SpawnLight(NewWorld, Spec, /*bPersistent*/true);
+		ClearGeneratedLookDevActors(NewWorld);
 	}
+	BuildLookDevStage(NewWorld, Environment);
 
 	NewWorld->MarkPackageDirty();
 
@@ -673,12 +853,18 @@ FString UMMDLightingEnvironmentLibrary::CreateEnvironmentLevelAsset(EMMDLighting
 		return FString();
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已生成光照环境关卡资产：%s（%d 盏灯）"), *PackagePath, Specs.Num());
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已%s LookDev 关卡：%s"), bRebuild ? TEXT("重建") : TEXT("生成"), *PackagePath);
 	return PackagePath;
 #else
 	UE_LOG(LogTemp, Warning, TEXT("[MMDLighting] 生成关卡资产仅编辑器可用。"));
 	return FString();
 #endif
+}
+}
+
+FString UMMDLightingEnvironmentLibrary::CreateEnvironmentLevelAsset(EMMDLightingEnvironment Environment, const FString& FolderPath)
+{
+	return BuildEnvironmentLevelAsset(Environment, FolderPath, false);
 }
 
 void UMMDLightingEnvironmentLibrary::ResetLevelViewportCamera()
@@ -701,6 +887,9 @@ void UMMDLightingEnvironmentLibrary::ResetLevelViewportCamera()
 		{
 			continue;
 		}
+		EVC->ExposureSettings.bFixed = true;
+		EVC->ExposureSettings.FixedEV100 = 10.0f;
+		EVC->SetGameView(true);
 		EVC->SetViewLocation(CamLoc);
 		EVC->SetViewRotation(CamRot);
 		EVC->Invalidate();
@@ -763,6 +952,9 @@ bool UMMDLightingEnvironmentLibrary::SyncToStageCamera()
 		{
 			continue;
 		}
+		EVC->ExposureSettings.bFixed = true;
+		EVC->ExposureSettings.FixedEV100 = 10.0f;
+		EVC->SetGameView(true);
 		EVC->SetViewLocation(CamLoc);
 		EVC->SetViewRotation(CamRot);
 		EVC->Invalidate();
@@ -839,6 +1031,48 @@ int32 UMMDLightingEnvironmentLibrary::CreateAllEnvironmentLevelAssets(const FStr
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 批量生成光照环境关卡完成：%d/%d"), Count, AllEnvs.Num());
+	return Count;
+}
+
+int32 UMMDLightingEnvironmentLibrary::RebuildAllEnvironmentLevelAssets(const FString& FolderPath)
+{
+	const TArray<EMMDLightingEnvironment> AllEnvs = {
+		EMMDLightingEnvironment::Studio3Point,
+		EMMDLightingEnvironment::Daylight,
+		EMMDLightingEnvironment::OvercastSoft,
+		EMMDLightingEnvironment::IndoorWarm,
+		EMMDLightingEnvironment::NeonNight,
+		EMMDLightingEnvironment::RimSilhouette,
+		EMMDLightingEnvironment::GoldenHour,
+		EMMDLightingEnvironment::HorrorGreen,
+	};
+
+	int32 Count = 0;
+	for (EMMDLightingEnvironment Env : AllEnvs)
+	{
+		if (!BuildEnvironmentLevelAsset(Env, FolderPath, true).IsEmpty())
+		{
+			++Count;
+		}
+	}
+
+#if WITH_EDITOR
+	if (GEditor)
+	{
+		for (FLevelEditorViewportClient* EVC : GEditor->GetLevelViewportClients())
+		{
+			if (EVC && EVC->IsPerspective())
+			{
+				EVC->ExposureSettings.bFixed = true;
+				EVC->ExposureSettings.FixedEV100 = 10.0f;
+				EVC->SetGameView(true);
+				EVC->Invalidate();
+			}
+		}
+	}
+#endif
+
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已重建 LookDev 关卡：%d/%d"), Count, AllEnvs.Num());
 	return Count;
 }
 
@@ -1086,17 +1320,17 @@ int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToPreview(FPrevie
 			{
 			case EMMDLightKind::Directional:
 				Data[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, 3.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 				Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, 0.0f);
 				break;
 			case EMMDLightKind::Point:
 				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 1.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 				Data[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, Spec.Radius);
 				break;
 			case EMMDLightKind::Spot:
 				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 2.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 				Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, Spec.Radius);
 				{
 					const float HalfInner = FMath::DegreesToRadians(Spec.InnerCone);
@@ -1106,7 +1340,7 @@ int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToPreview(FPrevie
 				break;
 			case EMMDLightKind::Rect:
 				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 4.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
 				Data[B + 2] = FVector4f(-Fwd.X, -Fwd.Y, -Fwd.Z, Spec.Radius);
 				Data[B + 3] = FVector4f(Spec.SourceWidth, Spec.SourceHeight, 0.0f, 0.0f);
 				break;
