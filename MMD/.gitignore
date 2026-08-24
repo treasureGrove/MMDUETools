@@ -29,6 +29,10 @@
 *.a
 *.lib
 
+# 例外：Bullet 预编译库必须提交（Ue5MMDTools.Build.cs 直接链接这些 .lib）
+!Plugins/Ue5MMDTools/ThirdParty/Bullet/lib/
+!Plugins/Ue5MMDTools/ThirdParty/Bullet/lib/*.lib
+
 # Executables
 *.exe
 *.out
