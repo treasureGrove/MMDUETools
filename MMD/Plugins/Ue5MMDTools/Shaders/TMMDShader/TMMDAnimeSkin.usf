@@ -3,11 +3,11 @@
 // 皮肤材质：复用核心库 TMMDToonLight 的统一光照管线，叠加皮肤特化。
 // 与旧实现的区别：
 //   - 旧版自带 80+ 行重复光照循环（与核心库 TMMDToonLight.LightParams 口径相同）；
-//     新版直接调 TL.ComputeLighting / TL.SampleMMDShadow，与其他材质统一口径。
+//     新版直接调 tl.ComputeLighting / tl.SampleMMDShadow，与其他材质统一口径。
 //   - 旧版不采样场景阴影（SampleMMDShadow）——皮肤永远不受场景遮挡影响；
 //     新版接入 SampleMMDShadow，与 BaseToon/Hair 行为一致。
 //   - 皮肤特化保留：更柔的 toon 过渡（Softness=0.12 vs 标准 0.05/0.10），
-//     轻微 SSS 趋势（阴影区暖偏移），柔高光（低 SpecularPower）。
+//     轻微 SSS 趋势（阴影区暖偏移），柔高光（低 specular_power）。
 //
 // Custom 节点用法（OutputType: float3）：
 //   Code:
@@ -15,123 +15,123 @@
 //     return 0;   // 兜底返回值（正常不可达），防某些编译变体报"无返回值"
 //
 //   节点输入（需连线，与 MMDBaseToon 完全一致——可直接克隆基础材质替换 include）：
-//     BaseColor         (float3)    - 肤色
-//     LightDataTex      (Texture2D) - 灯光数据 RT
-//     ShadowStep        (float)     - 卡通阴影阈值（明暗分界，建议 0.45~0.55）
-//     HighlightStep     (float)     - 锐高光阈值（<=0 用默认 0.82）
-//     ShadowColor       (float3)    - 阴影压暗色（逐通道乘到 BaseColor，保留色相）
-//     SpecularPower     (float)     - 软高光锐度（皮肤建议 8~20，比一般表面低＝更柔的高光）
-//     NormalMap         (Texture2D) - 法线贴图（可选；不接或强度 0 用几何法线）
-//     NormalMapStrength (float)     - 法线强度（0=关 1=满）
-//     MatCap            (Texture2D) - sphere/matcap 贴图
-//     SphereMode        (float)     - 0=关 1=乘 2=加
-//     MMDShadowMap      (Texture2D) - 场景阴影深度 RT
-//     MMDShadowBias     (float)     - 阴影深度偏移（cm）
+//     base_color          (float3)    - 肤色
+//     light_data_tex      (Texture2D) - 灯光数据 RT
+//     shadow_step         (float)     - 卡通阴影阈值（明暗分界，建议 0.45~0.55）
+//     highlight_step      (float)     - 锐高光阈值（<=0 用默认 0.82）
+//     shadow_color        (float3)    - 阴影压暗色（逐通道乘到 base_color，保留色相）
+//     specular_power      (float)     - 软高光锐度（皮肤建议 8~20，比一般表面低＝更柔的高光）
+//     normal_map          (Texture2D) - 法线贴图（可选；不接或强度 0 用几何法线）
+//     normal_map_strength (float)     - 法线强度（0=关 1=满）
+//     mat_cap             (Texture2D) - sphere/matcap 贴图
+//     sphere_mode         (float)     - 0=关 1=乘 2=加
+//     mmd_shadow_map      (Texture2D) - 场景阴影深度 RT
+//     mmd_shadow_bias     (float)     - 阴影深度偏移（cm）
 //
-//   节点作用域自动提供：Parameters / LightDataTexSampler / NormalMapSampler / MatCapSampler / MMDShadowMapSampler
+//   节点作用域自动提供：Parameters / light_data_texSampler / normal_mapSampler / mat_capSampler / mmd_shadow_mapSampler
 #include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
 
 struct TMMDAnimeSkin
 {
     float3 OutputColor(FMaterialPixelParameters Parameters,
-                       float3 BaseColor,
-                       Texture2D LightDataTex,
-                       SamplerState LightDataTexSampler,
-                       float ShadowStep,
-                       float HighlightStep,
-                       float3 ShadowColor,
-                       float SpecularPower,
-                       Texture2D NormalMap,
-                       SamplerState NormalMapSampler,
-                       float NormalMapStrength,
-                       Texture2D MatCap,
-                       SamplerState MatCapSampler,
-                       float SphereMode,
-                       Texture2D MMDShadowMap,
-                       SamplerState MMDShadowMapSampler,
-                       float MMDShadowBias)
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_texSampler,
+                       float shadow_step,
+                       float highlight_step,
+                       float3 shadow_color,
+                       float specular_power,
+                       Texture2D normal_map,
+                       SamplerState normal_mapSampler,
+                       float normal_map_strength,
+                       Texture2D mat_cap,
+                       SamplerState mat_capSampler,
+                       float sphere_mode,
+                       Texture2D mmd_shadow_map,
+                       SamplerState mmd_shadow_mapSampler,
+                       float mmd_shadow_bias)
     {
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 view_dir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
 
-        TMMDToonLight TL;
-        const float3 WorldNormal = TL.ApplyNormalMap(Parameters, NormalMap, NormalMapSampler, NormalMapStrength);
+        TMMDToonLight tl;
+        const float3 world_normal = tl.ApplyNormalMap(Parameters, normal_map, normal_mapSampler, normal_map_strength);
 
         // ---- 统一光照管线（与 BaseToon/Hair 同口径）----
-        float3 Diffuse, DirLight, Specular;
-        TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
-                           WorldNormal, ViewDir, Diffuse, DirLight, Specular);
+        float3 diffuse, dir_light, specular;
+        tl.ComputeLighting(Parameters, light_data_tex, light_data_texSampler, specular_power,
+                           world_normal, view_dir, diffuse, dir_light, specular);
 
         // 场景阴影（主平行光遮挡）——旧版缺失，现已补齐
-        float MMDShadowFactor = TL.SampleMMDShadow(Parameters, LightDataTex, LightDataTexSampler,
-                                                   MMDShadowMap, MMDShadowMapSampler,
-                                                   MMDShadowBias);
-        Diffuse  *= MMDShadowFactor;
-        DirLight *= MMDShadowFactor;
-        Specular *= MMDShadowFactor;
+        float mmd_shadow_factor = tl.SampleMMDShadow(Parameters, light_data_tex, light_data_texSampler,
+                                                     mmd_shadow_map, mmd_shadow_mapSampler,
+                                                     mmd_shadow_bias);
+        diffuse  *= mmd_shadow_factor;
+        dir_light *= mmd_shadow_factor;
+        specular *= mmd_shadow_factor;
 
         // ---- 受光量（不含光强，阴影边界稳定）----
-        const float3 LumaW = float3(0.299, 0.587, 0.114);
-        float LightAmount = saturate(dot(DirLight, LumaW));
+        const float3 luma_w = float3(0.299, 0.587, 0.114);
+        float light_amount = saturate(dot(dir_light, luma_w));
 
         // 皮肤特化：更柔的 toon 过渡（Softness=0.12 vs 标准 0.10）
-        const float Softness = 0.12;
-        float Ramp = smoothstep(ShadowStep - Softness, ShadowStep + Softness, LightAmount);
+        const float softness = 0.12;
+        float ramp = smoothstep(shadow_step - softness, shadow_step + softness, light_amount);
 
-        // 阴影色 = BaseColor 压暗派生；受光色 = BaseColor × 朗伯漫反射
-        float3 ShadowTone = BaseColor * saturate(ShadowColor);
-        float3 LitTone    = BaseColor * Diffuse;
-        float3 ShadedDiffuse = lerp(ShadowTone, LitTone, Ramp);
+        // 阴影色 = base_color 压暗派生；受光色 = base_color × 朗伯漫反射
+        float3 shadow_tone = base_color * saturate(shadow_color);
+        float3 lit_tone    = base_color * diffuse;
+        float3 shaded_diffuse = lerp(shadow_tone, lit_tone, ramp);
 
         // 皮肤特化：阴影区轻微暖偏移（SSS 趋势）——皮肤次表面散射让阴影边缘偏暖
-        float3 SSSWarm = float3(1.08, 1.02, 0.95);  // 暖方向
-        float SSSTransition = smoothstep(ShadowStep - 0.15, ShadowStep + 0.05, LightAmount);
-        ShadedDiffuse = lerp(ShadedDiffuse * SSSWarm, ShadedDiffuse, SSSTransition);
+        float3 sss_warm = float3(1.08, 1.02, 0.95);  // 暖方向
+        float sss_transition = smoothstep(shadow_step - 0.15, shadow_step + 0.05, light_amount);
+        shaded_diffuse = lerp(shaded_diffuse * sss_warm, shaded_diffuse, sss_transition);
 
         // 核心阴影（明暗交界压暗，塑造体积）
-        float CoreD = LightAmount - ShadowStep;
-        float Core  = exp(-(CoreD * CoreD) / (2.0 * 0.18 * 0.18));  // 皮肤核心阴影更宽更柔
-        ShadedDiffuse *= 1.0 - Core * 0.20;  // 压暗力度比 BaseToon 稍弱
+        float core_d = light_amount - shadow_step;
+        float core   = exp(-(core_d * core_d) / (2.0 * 0.18 * 0.18));  // 皮肤核心阴影更宽更柔
+        shaded_diffuse *= 1.0 - core * 0.20;  // 压暗力度比 BaseToon 稍弱
 
         // 天空环境光（阴影区压到 45%，比 BaseToon 稍亮——皮肤不宜过暗）
-        float3 SkyLight = TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb * MMDShadowFactor;
-        ShadedDiffuse += BaseColor * SkyLight * lerp(0.45, 1.0, Ramp);
+        float3 sky_light = tl.SkyAmbient(world_normal) * View.SkyLightColor.rgb * mmd_shadow_factor;
+        shaded_diffuse += base_color * sky_light * lerp(0.45, 1.0, ramp);
 
         // ---- 高光：软高光（受光面门控）+ 二次元锐高光 ----
-        // 皮肤高光比一般表面更柔（SpecularPower 更低 → 更宽的高光），更适合表现皮肤光泽
-        float3 ShadedSpecular = Specular * Ramp;
-        float  SpecStep = HighlightStep > 0.01 ? HighlightStep : 0.82;
-        float3 ToonSpec = TL.ToonSpecularLight(Parameters, LightDataTex, LightDataTexSampler,
-                                               WorldNormal, ViewDir, SpecStep, 0.06, 1.0);
-        ToonSpec *= Ramp * MMDShadowFactor;
+        // 皮肤高光比一般表面更柔（specular_power 更低 → 更宽的高光），更适合表现皮肤光泽
+        float3 shaded_specular = specular * ramp;
+        float  spec_step = highlight_step > 0.01 ? highlight_step : 0.82;
+        float3 toon_spec = tl.ToonSpecularLight(Parameters, light_data_tex, light_data_texSampler,
+                                                world_normal, view_dir, spec_step, 0.06, 1.0);
+        toon_spec *= ramp * mmd_shadow_factor;
 
-        float3 Final = ShadedDiffuse + ShadedSpecular + ToonSpec;
+        float3 final = shaded_diffuse + shaded_specular + toon_spec;
 
         // ---- 边缘光（暖色轮廓——皮肤 rim 偏暖偏有机，区别于 BaseToon 的冷色 rim）----
-        float NdotV = saturate(dot(WorldNormal, ViewDir));
-        float Rim   = pow(1.0 - NdotV, 3.0);
-        float LightIntensity = saturate(TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler));
-        Final += float3(1.0, 0.92, 0.82) * Rim * LightIntensity * 0.15;
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+        float rim     = pow(1.0 - n_dot_v, 3.0);
+        float light_intensity = saturate(tl.TotalLightIntensity(Parameters, light_data_tex, light_data_texSampler));
+        final += float3(1.0, 0.92, 0.82) * rim * light_intensity * 0.15;
 
         // ---- sphere/matcap ----
-        if (SphereMode > 0.5)
+        if (sphere_mode > 0.5)
         {
-            float3 Matcap = TL.SampleMatcap(WorldNormal, MatCap, MatCapSampler);
-            if (SphereMode < 1.5)
-                Final = ShadedDiffuse * Matcap + ShadedSpecular + ToonSpec;
+            float3 matcap = tl.SampleMatcap(world_normal, mat_cap, mat_capSampler);
+            if (sphere_mode < 1.5)
+                final = shaded_diffuse * matcap + shaded_specular + toon_spec;
             else
-                Final += Matcap;
+                final += matcap;
         }
 
-        return Final;
+        return final;
     }
 };
 
-TMMDAnimeSkin Skin;
-return Skin.OutputColor(Parameters,
-                        BaseColor, LightDataTex, LightDataTexSampler,
-                        ShadowStep, HighlightStep, ShadowColor,
-                        SpecularPower,
-                        NormalMap, NormalMapSampler, NormalMapStrength,
-                        MatCap, MatCapSampler, SphereMode,
-                        MMDShadowMap, MMDShadowMapSampler, MMDShadowBias);
+TMMDAnimeSkin skin;
+return skin.OutputColor(Parameters,
+                        base_color, light_data_tex, light_data_texSampler,
+                        shadow_step, highlight_step, shadow_color,
+                        specular_power,
+                        normal_map, normal_mapSampler, normal_map_strength,
+                        mat_cap, mat_capSampler, sphere_mode,
+                        mmd_shadow_map, mmd_shadow_mapSampler, mmd_shadow_bias);

@@ -1,53 +1,53 @@
-﻿#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
 
-// Light / LightContext 由 Core 库统一提供（引用 LightDataTex / MMDShadowMap 必需输入）
+// light / light_context 由 Core 库统一提供（引用 light_data_tex / mmd_shadow_map 必需输入）
 //----------------------------------------------------------------------------------
 struct InputData
 {
     // float
-    float3 BaseColor;
-    // float  MatCapStrength;
-    // float  NormalMapStrength;
+    float3 base_color;
+    // float  mat_cap_strength;
+    // float  normal_map_strength;
     // // Texture2D
-    // Texture2D    NormalMap;
-    // SamplerState NormalMapSampler;
-    // Texture2D    MatCap;
-    // SamplerState MatCapSampler;
+    // Texture2D    normal_map;
+    // SamplerState normal_map_sampler;
+    // Texture2D    mat_cap;
+    // SamplerState mat_cap_sampler;
 };
 //----------------------------------------------------------------------------------
-InputData In;
+InputData input_data;
 //float
-In.BaseColor = BaseColor;
-// In.Emission = Emission;
-// In.SpecularPower = SpecularPower;
-// In.NormalMapStrength = NormalMapStrength;
-// In.MatCapStrength = MatCapStrength;
+input_data.base_color = base_color;
+// input_data.emission = emission;
+// input_data.specular_power = specular_power;
+// input_data.normal_map_strength = normal_map_strength;
+// input_data.mat_cap_strength = mat_cap_strength;
 // //Texture2D
-// In.NormalMap = NormalMap;
-// In.NormalMapSampler = NormalMapSampler;
-// In.MatCap = MatCap;
-// In.MatCapSampler = MatCapSampler;
+// input_data.normal_map = normal_map;
+// input_data.normal_map_sampler = normal_map_sampler;
+// input_data.mat_cap = mat_cap;
+// input_data.mat_cap_sampler = mat_cap_sampler;
 struct TMMDMaterialShader
 {
-    // 只有一个函数：先写好各 pass 的颜色（BaseColor/Emission + 法线/光泽），
+    // 只有一个函数：先写好各 pass 的颜色（base_color/emission + 法线/光泽），
     // 再调 TMMDToonLight::ShadeSurface 算光照，最后返回最终颜色。
-    TMMDSurfaceData  SurfaceData(FMaterialPixelParameters Parameters, InputData In)
+    TMMDSurfaceData  SurfaceData(FMaterialPixelParameters Parameters, InputData input_data)
     {
-        TMMDSurfaceData Output;
+        TMMDSurfaceData output;
 
-        // 最少输入（仅 BaseColor）：其余字段给默认值兜底。
+        // 最少输入（仅 base_color）：其余字段给默认值兜底。
         // 注意：struct 所有字段都必须赋值，否则 ShadeSurface 读到未初始化值会报
         // "Instructions should not read uninitialized value"。
-        Output.BaseColor     = In.BaseColor;
-        Output.WorldNormal   = normalize((float3)Parameters.TangentToWorld[2]);  // 几何法线（无法线贴图时）
-        Output.SpecularPower = 16.0;                                            // 默认光泽
-        Output.Emission      = float3(0, 0, 0);                                 // 无自发光
+        output.base_color     = input_data.base_color;
+        output.world_normal   = normalize((float3)Parameters.TangentToWorld[2]);  // 几何法线（无法线贴图时）
+        output.specular_power = 16.0;                                            // 默认光泽
+        output.emission       = float3(0, 0, 0);                                 // 无自发光
 
-        return Output;
+        return output;
     }
 };
 
-TMMDMaterialShader Shader;
-TMMDSurfaceData SurfaceData = Shader.SurfaceData(Parameters, In);
+TMMDMaterialShader shader;
+TMMDSurfaceData surface_data = shader.SurfaceData(Parameters, input_data);
 
-return Light.ShadeSurface(Parameters, SurfaceData, LightContext);
+return light.ShadeSurface(Parameters, surface_data, light_context);

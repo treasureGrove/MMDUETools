@@ -3,7 +3,7 @@
 // 头发材质（单独处理）：Kajiya-Kay 各向异性高光 + toon 明暗。
 // 高光沿发丝走向横跨发束（二次元"天使环"式发丝光泽），与基础材质各向同性高光区分。
 // 明暗部分与 MMDBaseToon 同款（色相保留 + 两阶明暗 + 核心阴影 + 边缘光）。
-// 完全通用：只依赖 BaseColor + LightDataTex + 几何切线，不依赖任何 UV 布局/配套贴图。
+// 完全通用：只依赖 base_color + light_data_tex + 几何切线，不依赖任何 UV 布局/配套贴图。
 //
 // Custom 节点用法（OutputType: float3）：
 //   Code:
@@ -11,18 +11,18 @@
 //     return 0;   // 兜底返回值（正常不可达）
 //
 //   节点输入（与 MMDBaseToon 一致，可直接克隆基础材质替换 include）：
-//     BaseColor         (float3)    - 发色
-//     LightDataTex      (Texture2D) - 灯光数据 RT
-//     ShadowStep        (float)     - 卡通阴影阈值（发束明暗分界）
-//     HighlightStep     (float)     - 次级高光强度（0 用默认 0.6；>0 覆盖）
-//     ShadowColor       (float3)    - 阴影压暗色（保留色相）
-//     SpecularPower     (float)     - 各向异性高光锐度（发丝光泽，建议 20~80）
-//     MatCap            (Texture2D) - sphere/matcap（可选）
-//     SphereMode        (float)     - 0=关 1=乘 2=加
-//     MMDShadowMap      (Texture2D) - 场景阴影深度 RT
-//     MMDShadowBias     (float)     - 阴影深度偏移（cm）
+//     base_color          (float3)    - 发色
+//     light_data_tex      (Texture2D) - 灯光数据 RT
+//     shadow_step         (float)     - 卡通阴影阈值（发束明暗分界）
+//     highlight_step      (float)     - 次级高光强度（0 用默认 0.6；>0 覆盖）
+//     shadow_color        (float3)    - 阴影压暗色（保留色相）
+//     specular_power      (float)     - 各向异性高光锐度（发丝光泽，建议 20~80）
+//     mat_cap             (Texture2D) - sphere/matcap（可选）
+//     sphere_mode         (float)     - 0=关 1=乘 2=加
+//     mmd_shadow_map      (Texture2D) - 场景阴影深度 RT
+//     mmd_shadow_bias     (float)     - 阴影深度偏移（cm）
 //
-//   节点作用域自动提供：Parameters / LightDataTexSampler / MatCapSampler / MMDShadowMapSampler
+//   节点作用域自动提供：Parameters / light_data_texSampler / mat_capSampler / mmd_shadow_mapSampler
 //
 //   注意：各向异性方向取几何切线 TangentToWorld[0]（发丝方向）。若模型切线未沿发丝，
 //   高光方向会偏，属模型问题（可在导入时重排 UV 使切线沿发丝，或换用切线贴图）。
@@ -31,136 +31,136 @@
 struct TMMDAnimeHair
 {
     // Kajiya-Kay 各向异性高光：主高光 + 次级高光（更宽的"天使环"），都横跨发束。
-    // Tangent = 发丝方向；sinTH = 切线到半程向量的正弦（高光在垂直发丝方向最强）。
+    // Tangent = 发丝方向；sin_th = 切线到半程向量的正弦（高光在垂直发丝方向最强）。
     float3 AnisoSpecular(FMaterialPixelParameters Parameters,
-                         Texture2D LightDataTex, SamplerState LightDataTexSampler,
-                         float3 WorldNormal, float3 ViewDir, float3 Tangent,
-                         float SpecPower, float SecondaryStrength, float Intensity)
+                         Texture2D light_data_tex, SamplerState light_data_texSampler,
+                         float3 world_normal, float3 view_dir, float3 tangent,
+                         float spec_power, float secondary_strength, float intensity)
     {
-        static const int   MaxLights = 16;
-        static const float TexWidth  = 64.0;
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float tex_width  = 64.0;
+        static const float toon_pi    = 3.14159265;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        TMMDToonLight TL;
-        float3 Acc = float3(0, 0, 0);
+        TMMDToonLight tl;
+        float3 acc = float3(0, 0, 0);
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
-            float4 P = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
-            float4 C = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
-            float4 D = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
-            float4 T = Texture2DSample(LightDataTex, LightDataTexSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.25));
+            float4 P = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
+            float4 C = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
+            float4 D = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
+            float4 T = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 3.5) / tex_width, 0.25));
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                TL.LightParams(P, D, T, WorldPos, L, Atten);
+                float  atten;
+                tl.LightParams(P, D, T, world_pos, L, atten);
 
-                float3 H     = normalize(L + ViewDir);
-                float  TdotH = saturate(dot(Tangent, H));
-                float  SinTH = sqrt(max(0.0, 1.0 - TdotH * TdotH));
+                float3 H     = normalize(L + view_dir);
+                float  t_dot_h = saturate(dot(tangent, H));
+                float  sin_th  = sqrt(max(0.0, 1.0 - t_dot_h * t_dot_h));
 
-                float  Power  = max(SpecPower, 4.0);
-                float  Spec1  = pow(SinTH, Power);                    // 主高光（紧）
-                float  Spec2  = pow(SinTH, max(Power * 0.35, 4.0));   // 次级高光（宽）
-                Acc += C.rgb * (C.w / ToonPI) * (Spec1 + Spec2 * SecondaryStrength) * Atten * Intensity;
+                float  power  = max(spec_power, 4.0);
+                float  spec_1 = pow(sin_th, power);                    // 主高光（紧）
+                float  spec_2 = pow(sin_th, max(power * 0.35, 4.0));   // 次级高光（宽）
+                acc += C.rgb * (C.w / toon_pi) * (spec_1 + spec_2 * secondary_strength) * atten * intensity;
             }
         }
-        return Acc;
+        return acc;
     }
 
     float3 OutputColor(FMaterialPixelParameters Parameters,
-                       float3 BaseColor,
-                       Texture2D LightDataTex,
-                       SamplerState LightDataTexSampler,
-                       float ShadowStep,
-                       float HighlightStep,
-                       float3 ShadowColor,
-                       float SpecularPower,
-                       Texture2D MatCap,
-                       SamplerState MatCapSampler,
-                       float SphereMode,
-                       Texture2D MMDShadowMap,
-                       SamplerState MMDShadowMapSampler,
-                       float MMDShadowBias)
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_texSampler,
+                       float shadow_step,
+                       float highlight_step,
+                       float3 shadow_color,
+                       float specular_power,
+                       Texture2D mat_cap,
+                       SamplerState mat_capSampler,
+                       float sphere_mode,
+                       Texture2D mmd_shadow_map,
+                       SamplerState mmd_shadow_mapSampler,
+                       float mmd_shadow_bias)
     {
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 view_dir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
 
-        TMMDToonLight TL;
-        const float3 WorldNormal = normalize((float3)Parameters.TangentToWorld[2]);
-        const float3 Tangent     = normalize((float3)Parameters.TangentToWorld[0]);
+        TMMDToonLight tl;
+        const float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
+        const float3 tangent      = normalize((float3)Parameters.TangentToWorld[0]);
 
         // 原始光照（与基础材质同口径）
-        float3 Diffuse, DirLight, Specular;
-        TL.ComputeLighting(Parameters, LightDataTex, LightDataTexSampler, SpecularPower,
-                           WorldNormal, ViewDir, Diffuse, DirLight, Specular);
+        float3 diffuse, dir_light, specular;
+        tl.ComputeLighting(Parameters, light_data_tex, light_data_texSampler, specular_power,
+                           world_normal, view_dir, diffuse, dir_light, specular);
 
         // 场景阴影
-        float MMDShadowFactor = TL.SampleMMDShadow(Parameters, LightDataTex, LightDataTexSampler,
-                                                   MMDShadowMap, MMDShadowMapSampler,
-                                                   MMDShadowBias);
-        Diffuse  *= MMDShadowFactor;
-        DirLight *= MMDShadowFactor;
-        Specular *= MMDShadowFactor;
+        float mmd_shadow_factor = tl.SampleMMDShadow(Parameters, light_data_tex, light_data_texSampler,
+                                                     mmd_shadow_map, mmd_shadow_mapSampler,
+                                                     mmd_shadow_bias);
+        diffuse  *= mmd_shadow_factor;
+        dir_light *= mmd_shadow_factor;
+        specular *= mmd_shadow_factor;
 
         // ---- 受光量 + 两阶明暗（同基础）----
-        const float3 LumaW = float3(0.299, 0.587, 0.114);
-        float LightAmount = saturate(dot(DirLight, LumaW));
+        const float3 luma_w = float3(0.299, 0.587, 0.114);
+        float light_amount = saturate(dot(dir_light, luma_w));
 
-        const float Softness = 0.10;
-        float Ramp = smoothstep(ShadowStep - Softness, ShadowStep + Softness, LightAmount);
+        const float softness = 0.10;
+        float ramp = smoothstep(shadow_step - softness, shadow_step + softness, light_amount);
 
-        float3 ShadowTone = BaseColor * saturate(ShadowColor);
-        float3 LitTone    = BaseColor * Diffuse;
+        float3 shadow_tone = base_color * saturate(shadow_color);
+        float3 lit_tone    = base_color * diffuse;
 
-        float3 ShadedDiffuse = lerp(ShadowTone, LitTone, Ramp);
+        float3 shaded_diffuse = lerp(shadow_tone, lit_tone, ramp);
 
         // 核心阴影（发束交界处压暗，塑造发束体积）
-        float CoreD = LightAmount - ShadowStep;
-        float Core  = exp(-(CoreD * CoreD) / (2.0 * 0.15 * 0.15));
-        ShadedDiffuse *= 1.0 - Core * 0.25;
+        float core_d = light_amount - shadow_step;
+        float core   = exp(-(core_d * core_d) / (2.0 * 0.15 * 0.15));
+        shaded_diffuse *= 1.0 - core * 0.25;
 
         // 天空环境光（阴影区压到 40%）
-        float3 SkyLight = TL.SkyAmbient(WorldNormal) * View.SkyLightColor.rgb * MMDShadowFactor;
-        ShadedDiffuse += BaseColor * SkyLight * lerp(0.40, 1.0, Ramp);
+        float3 sky_light = tl.SkyAmbient(world_normal) * View.SkyLightColor.rgb * mmd_shadow_factor;
+        shaded_diffuse += base_color * sky_light * lerp(0.40, 1.0, ramp);
 
         // ---- 高光：各向异性（Kajiya-Kay）取代各向同性 ----
-        float Secondary = HighlightStep > 0.001 ? HighlightStep : 0.6;
-        float3 AnisoSpec = AnisoSpecular(Parameters, LightDataTex, LightDataTexSampler,
-                                         WorldNormal, ViewDir, Tangent,
-                                         SpecularPower, Secondary, 1.0);
-        AnisoSpec *= Ramp * MMDShadowFactor;
+        float secondary = highlight_step > 0.001 ? highlight_step : 0.6;
+        float3 aniso_spec = AnisoSpecular(Parameters, light_data_tex, light_data_texSampler,
+                                          world_normal, view_dir, tangent,
+                                          specular_power, secondary, 1.0);
+        aniso_spec *= ramp * mmd_shadow_factor;
 
-        float3 Final = ShadedDiffuse + AnisoSpec;
+        float3 final = shaded_diffuse + aniso_spec;
 
         // ---- 边缘光（头发轮廓发光，二次元关键）----
-        float NdotV = saturate(dot(WorldNormal, ViewDir));
-        float Rim   = pow(1.0 - NdotV, 2.5);
-        float LightIntensity = saturate(TL.TotalLightIntensity(Parameters, LightDataTex, LightDataTexSampler));
-        Final += float3(0.75, 0.85, 1.0) * Rim * LightIntensity * 0.22;
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+        float rim     = pow(1.0 - n_dot_v, 2.5);
+        float light_intensity = saturate(tl.TotalLightIntensity(Parameters, light_data_tex, light_data_texSampler));
+        final += float3(0.75, 0.85, 1.0) * rim * light_intensity * 0.22;
 
         // ---- sphere/matcap（可选）----
-        if (SphereMode > 0.5)
+        if (sphere_mode > 0.5)
         {
-            float3 Matcap = TL.SampleMatcap(WorldNormal, MatCap, MatCapSampler);
-            if (SphereMode < 1.5)
-                Final = ShadedDiffuse * Matcap + AnisoSpec;
+            float3 matcap = tl.SampleMatcap(world_normal, mat_cap, mat_capSampler);
+            if (sphere_mode < 1.5)
+                final = shaded_diffuse * matcap + aniso_spec;
             else
-                Final += Matcap;
+                final += matcap;
         }
 
-        return Final;
+        return final;
     }
 };
 
-TMMDAnimeHair Hair;
-return Hair.OutputColor(Parameters,
-                        BaseColor, LightDataTex, LightDataTexSampler,
-                        ShadowStep, HighlightStep, ShadowColor,
-                        SpecularPower,
-                        MatCap, MatCapSampler, SphereMode,
-                        MMDShadowMap, MMDShadowMapSampler, MMDShadowBias);
+TMMDAnimeHair hair;
+return hair.OutputColor(Parameters,
+                        base_color, light_data_tex, light_data_texSampler,
+                        shadow_step, highlight_step, shadow_color,
+                        specular_power,
+                        mat_cap, mat_capSampler, sphere_mode,
+                        mmd_shadow_map, mmd_shadow_mapSampler, mmd_shadow_bias);

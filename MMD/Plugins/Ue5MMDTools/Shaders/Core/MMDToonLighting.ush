@@ -1,254 +1,235 @@
 // MMDToonLighting.ush
-//
-// 卡通光照工具库（struct TMMDToonLight）。当前已实现：
-//   光照贴图采样：SampleLight（读 LightDataMap 单灯 P/C/D/T） + LightParams（单灯方向/衰减）；
-//   计算光照：ComputeLighting（累加全部灯 → Diffuse/DirLight/Specular）；
-//   toon 明暗：NdotLAmount / ToonRamp / ToonCoreShadow / ApplyToonShadow / SaturationAdjust
-//             （PBR 口径 NdotL 比率，明暗交界线最暗 + 高饱和过渡色，色相/强度加权总受光）；
-//   天空环境光：SkyAmbient（PBR SH 公式，供过渡色色相与天空光计入）；
-//   阴影采样：ShadowCompareBilinear / SampleShadowCascade / SampleMMDShadowInternal / SampleMMDShadow（场景遮挡）；
-//   应用：ShadeSurface（光照贴图采样 → 计算光照 → toon 明暗 → 场景阴影 → 输出）。
-// 其余函数（GetMainLightDirection / GetMainLightData / ApplyNormalMap / SampleMatcap /
-// ToonSpecularLight / TotalLightIntensity）
-// 已归档到同目录 MMDToonLighting_Archived.ush（不被 include，纯留档），后续按需逐个恢复。
-// Custom 节点内不能定义独立函数，而 struct 是"类型声明"、函数体内合法，所以用 struct 包装。
-// 纯插件实现，不改引擎、不用 #define。
-//
-// 用法（材质 usf include 本文件后直接用 Light / LightContext）：
-//   #include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
-//   TMMDLightContext LightContext = Light.MakeLightContext(LightDataTex, LightDataTexSampler,
-//                                                          MMDShadowMap, MMDShadowMapSampler);
-//   return Light.ShadeSurface(Parameters, SurfaceData, LightContext);
+// 卡通光照工具库（struct TMMDToonLight）。
 struct TMMDSurfaceData
 {
-    float3 BaseColor;       // 基础色
-    float3 WorldNormal;     // 世界法线（已做法线贴图）
-    float  SpecularPower;   // 软高光锐度（光泽）
-    float3 Emission;        // 材质侧自发光（rim/matcap 等额外颜色），ShadeSurface 最后直接加
+    float3 base_color;       // 基础色
+    float3 world_normal;     // 世界法线（已做法线贴图）
+    float  specular_power;   // 软高光锐度（光泽）
+    float3 emission;         // 材质侧自发光（rim/matcap 等额外颜色），ShadeSurface 最后直接加
 };
 
 // 光照上下文：ShadeSurface 计算核心光照所需的输入（灯光数据 RT + 阴影 RT）。
 struct TMMDLightContext
 {
-    Texture2D    LightDataMap;
-    SamplerState LightDataMapSampler;
-    Texture2D    ShadowMap;
-    SamplerState ShadowMapSampler;
+    Texture2D    light_data_map;
+    SamplerState light_data_map_sampler;
+    Texture2D    shadow_map;
+    SamplerState shadow_map_sampler;
 };
 
 struct TMMDToonLight
 {
 //-----------------------LightContext--------------------------
-    TMMDLightContext MakeLightContext(Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                                      Texture2D ShadowMap, SamplerState ShadowMapSampler)
+    TMMDLightContext MakeLightContext(Texture2D light_data_map, SamplerState light_data_map_sampler,
+                                      Texture2D shadow_map, SamplerState shadow_map_sampler)
     {
-        TMMDLightContext C;
-        C.LightDataMap        = LightDataMap;
-        C.LightDataMapSampler = LightDataMapSampler;
-        C.ShadowMap           = ShadowMap;
-        C.ShadowMapSampler    = ShadowMapSampler;
-        return C;
+        TMMDLightContext context;
+        context.light_data_map         = light_data_map;
+        context.light_data_map_sampler = light_data_map_sampler;
+        context.shadow_map             = shadow_map;
+        context.shadow_map_sampler     = shadow_map_sampler;
+        return context;
     }
 //-----------------------LightContext--------------------------
 //-----------------------Shadow Sampling-----------------------
     // 对四个比较结果做双线性插值，等价于硬件 comparison sampler 的线性 PCF。
     // 先比较再插值，避免普通 bilinear 深度采样在几何断层处生成不存在的中间深度。
-    float ShadowCompareBilinear(Texture2D ShadowMap, int CascadeIndex,float2 LocalUV, float PixelDepth, float Bias)
+    float ShadowCompareBilinear(Texture2D shadow_map, int cascade_index, float2 local_uv, float pixel_depth, float bias)
     {
-        uint AtlasWidth;
-        uint AtlasHeight;
-        ShadowMap.GetDimensions(AtlasWidth, AtlasHeight);
-        int CascadeResolution = max((int)AtlasWidth / 2, 1);
-        int2 CascadeOffset = int2((CascadeIndex & 1) * CascadeResolution,
-                                  (CascadeIndex >> 1) * CascadeResolution);
+        uint atlas_width;
+        uint atlas_height;
+        shadow_map.GetDimensions(atlas_width, atlas_height);
+        int cascade_resolution = max((int)atlas_width / 2, 1);
+        int2 cascade_offset = int2((cascade_index & 1) * cascade_resolution,
+                                   (cascade_index >> 1) * cascade_resolution);
 
-        float2 TexelPosition = LocalUV * CascadeResolution - 0.5;
-        int2 BaseTexel = int2(floor(TexelPosition));
-        float2 Blend = frac(TexelPosition);
-        int2 P00 = min(max(BaseTexel, int2(0, 0)), int2(CascadeResolution - 1, CascadeResolution - 1));
-        int2 P10 = min(P00 + int2(1, 0), int2(CascadeResolution - 1, CascadeResolution - 1));
-        int2 P01 = min(P00 + int2(0, 1), int2(CascadeResolution - 1, CascadeResolution - 1));
-        int2 P11 = min(P00 + int2(1, 1), int2(CascadeResolution - 1, CascadeResolution - 1));
+        float2 texel_position = local_uv * cascade_resolution - 0.5;
+        int2 base_texel = int2(floor(texel_position));
+        float2 blend = frac(texel_position);
+        int2 p00 = min(max(base_texel, int2(0, 0)), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 p10 = min(p00 + int2(1, 0), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 p01 = min(p00 + int2(0, 1), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 p11 = min(p00 + int2(1, 1), int2(cascade_resolution - 1, cascade_resolution - 1));
 
-        float C00 = step(PixelDepth, ShadowMap.Load(int3(CascadeOffset + P00, 0)).r + Bias);
-        float C10 = step(PixelDepth, ShadowMap.Load(int3(CascadeOffset + P10, 0)).r + Bias);
-        float C01 = step(PixelDepth, ShadowMap.Load(int3(CascadeOffset + P01, 0)).r + Bias);
-        float C11 = step(PixelDepth, ShadowMap.Load(int3(CascadeOffset + P11, 0)).r + Bias);
-        return lerp(lerp(C00, C10, Blend.x), lerp(C01, C11, Blend.x), Blend.y);
+        float c00 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p00, 0)).r + bias);
+        float c10 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p10, 0)).r + bias);
+        float c01 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p01, 0)).r + bias);
+        float c11 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p11, 0)).r + bias);
+        return lerp(lerp(c00, c10, blend.x), lerp(c01, c11, blend.x), blend.y);
     }
 
     // 3x3 tent PCF。九次双线性比较形成近似 5x5 的平滑核，边缘不会出现方形灰阶台阶。
-    void SampleShadowCascade(Texture2D ShadowMap, int CascadeIndex,
-                             float3 WorldPos, float3 WorldNormal,
-                             float4 Data0, float4 Data1, float4 Data2, float4 Data3,
-                             float AdditionalBias, out float Shadow, out float Valid)
+    void SampleShadowCascade(Texture2D shadow_map, int cascade_index,
+                             float3 world_pos, float3 world_normal,
+                             float4 data_0, float4 data_1, float4 data_2, float4 data_3,
+                             float additional_bias, out float shadow, out float valid)
     {
-        Shadow = 1.0;
-        Valid = 0.0;
-        if (Data0.w <= 0.0)
+        shadow = 1.0;
+        valid = 0.0;
+        if (data_0.w <= 0.0)
             return;
 
-        uint AtlasWidth;
-        uint AtlasHeight;
-        ShadowMap.GetDimensions(AtlasWidth, AtlasHeight);
-        float CascadeResolution = max((float)AtlasWidth * 0.5, 1.0);
+        uint atlas_width;
+        uint atlas_height;
+        shadow_map.GetDimensions(atlas_width, atlas_height);
+        float cascade_resolution = max((float)atlas_width * 0.5, 1.0);
 
         // Unity 风格 Normal Bias：按当前级联的世界 texel 尺寸沿表面法线推开接收点。
-        float3 LightDirection = -normalize(Data3.xyz);
-        float NdotL = saturate(dot(WorldNormal, LightDirection));
-        float3 BiasedWorldPos = WorldPos + WorldNormal * Data2.w * (1.0 - NdotL);
-        float3 ToPixel = BiasedWorldPos - Data0.xyz;
-        float2 LocalUV = float2(dot(ToPixel, Data1.xyz) + 0.5,
-                                0.5 - dot(ToPixel, Data2.xyz));
-        float PixelDepth = dot(ToPixel, Data3.xyz);
+        float3 light_direction = -normalize(data_3.xyz);
+        float n_dot_l = saturate(dot(world_normal, light_direction));
+        float3 biased_world_pos = world_pos + world_normal * data_2.w * (1.0 - n_dot_l);
+        float3 to_pixel = biased_world_pos - data_0.xyz;
+        float2 local_uv = float2(dot(to_pixel, data_1.xyz) + 0.5,
+                                 0.5 - dot(to_pixel, data_2.xyz));
+        float pixel_depth = dot(to_pixel, data_3.xyz);
 
-        float Border = 2.5 / CascadeResolution;
-        if (LocalUV.x < Border || LocalUV.x > 1.0 - Border ||
-            LocalUV.y < Border || LocalUV.y > 1.0 - Border ||
-            PixelDepth < 0.0 || PixelDepth > Data0.w)
+        float border = 2.5 / cascade_resolution;
+        if (local_uv.x < border || local_uv.x > 1.0 - border ||
+            local_uv.y < border || local_uv.y > 1.0 - border ||
+            pixel_depth < 0.0 || pixel_depth > data_0.w)
             return;
 
-        static const float2 TentOffsets[9] =
+        static const float2 tent_offsets[9] =
         {
             float2(-1, -1), float2(0, -1), float2(1, -1),
             float2(-1,  0), float2(0,  0), float2(1,  0),
             float2(-1,  1), float2(0,  1), float2(1,  1)
         };
-        static const float TentWeights[9] =
+        static const float tent_weights[9] =
         {
             1, 2, 1,
             2, 4, 2,
             1, 2, 1
         };
 
-        const float FilterRadius = 1.35;
-        float Accumulated = 0.0;
+        const float filter_radius = 1.35;
+        float accumulated = 0.0;
         [unroll]
-        for (int TapIndex = 0; TapIndex < 9; ++TapIndex)
+        for (int tap_index = 0; tap_index < 9; ++tap_index)
         {
-            float2 TapUV = LocalUV + TentOffsets[TapIndex] * (FilterRadius / CascadeResolution);
-            Accumulated += ShadowCompareBilinear(
-                ShadowMap, CascadeIndex, TapUV, PixelDepth, Data1.w + AdditionalBias) * TentWeights[TapIndex];
+            float2 tap_uv = local_uv + tent_offsets[tap_index] * (filter_radius / cascade_resolution);
+            accumulated += ShadowCompareBilinear(
+                shadow_map, cascade_index, tap_uv, pixel_depth, data_1.w + additional_bias) * tent_weights[tap_index];
         }
-        Shadow = Accumulated * (1.0 / 16.0);
-        Valid = 1.0;
+        shadow = accumulated * (1.0 / 16.0);
+        valid = 1.0;
     }
 
     float SampleMMDShadowInternal(FMaterialPixelParameters Parameters,
-                                  Texture2D LightDataMap,
-                                  SamplerState LightDataMapSampler,
-                                  Texture2D ShadowMap,
-                                  SamplerState ShadowMapSampler,
-                                  float AdditionalBias)
+                                  Texture2D light_data_map,
+                                  SamplerState light_data_map_sampler,
+                                  Texture2D shadow_map,
+                                  SamplerState shadow_map_sampler,
+                                  float additional_bias)
     {
-        float4 CameraPosition = LightDataMap.Load(int3(16, 1, 0));
-        float4 CameraForward = LightDataMap.Load(int3(17, 1, 0));
-        if (CameraForward.w < 0.5)
+        float4 camera_position = light_data_map.Load(int3(16, 1, 0));
+        float4 camera_forward = light_data_map.Load(int3(17, 1, 0));
+        if (camera_forward.w < 0.5)
             return 1.0;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 WorldNormal = normalize((float3)Parameters.TangentToWorld[2]);
-        const float ViewDistance = max(dot(WorldPos - CameraPosition.xyz, CameraForward.xyz), 0.0);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
+        const float view_distance = max(dot(world_pos - camera_position.xyz, camera_forward.xyz), 0.0);
 
         [unroll]
-        for (int CascadeIndex = 0; CascadeIndex < 4; ++CascadeIndex)
+        for (int cascade_index = 0; cascade_index < 4; ++cascade_index)
         {
-            int BaseIndex = CascadeIndex * 4;
-            float4 Data0 = LightDataMap.Load(int3(BaseIndex + 0, 1, 0));
-            float4 Data1 = LightDataMap.Load(int3(BaseIndex + 1, 1, 0));
-            float4 Data2 = LightDataMap.Load(int3(BaseIndex + 2, 1, 0));
-            float4 Data3 = LightDataMap.Load(int3(BaseIndex + 3, 1, 0));
-            if (ViewDistance > Data3.w && CascadeIndex < 3)
+            int base_index = cascade_index * 4;
+            float4 data_0 = light_data_map.Load(int3(base_index + 0, 1, 0));
+            float4 data_1 = light_data_map.Load(int3(base_index + 1, 1, 0));
+            float4 data_2 = light_data_map.Load(int3(base_index + 2, 1, 0));
+            float4 data_3 = light_data_map.Load(int3(base_index + 3, 1, 0));
+            if (view_distance > data_3.w && cascade_index < 3)
                 continue;
 
-            float CurrentShadow;
-            float CurrentValid;
-            SampleShadowCascade(ShadowMap, CascadeIndex, WorldPos, WorldNormal,
-                                Data0, Data1, Data2, Data3, AdditionalBias,
-                                CurrentShadow, CurrentValid);
-            if (CurrentValid < 0.5)
+            float current_shadow;
+            float current_valid;
+            SampleShadowCascade(shadow_map, cascade_index, world_pos, world_normal,
+                                data_0, data_1, data_2, data_3, additional_bias,
+                                current_shadow, current_valid);
+            if (current_valid < 0.5)
                 continue;
 
             // 分割末端 10% 与下一级交叉淡化，消除级联分辨率变化形成的接缝。
-            if (CascadeIndex < 3)
+            if (cascade_index < 3)
             {
-                float PreviousSplit = CascadeIndex == 0
+                float previous_split = cascade_index == 0
                     ? 0.0
-                    : LightDataMap.Load(int3(BaseIndex - 1, 1, 0)).w;
-                float FadeStart = lerp(PreviousSplit, Data3.w, 0.90);
-                float CascadeBlend = saturate((ViewDistance - FadeStart) / max(Data3.w - FadeStart, 1.0));
-                if (CascadeBlend > 0.0)
+                    : light_data_map.Load(int3(base_index - 1, 1, 0)).w;
+                float fade_start = lerp(previous_split, data_3.w, 0.90);
+                float cascade_blend = saturate((view_distance - fade_start) / max(data_3.w - fade_start, 1.0));
+                if (cascade_blend > 0.0)
                 {
-                    float4 Next0 = LightDataMap.Load(int3(BaseIndex + 4, 1, 0));
-                    float4 Next1 = LightDataMap.Load(int3(BaseIndex + 5, 1, 0));
-                    float4 Next2 = LightDataMap.Load(int3(BaseIndex + 6, 1, 0));
-                    float4 Next3 = LightDataMap.Load(int3(BaseIndex + 7, 1, 0));
-                    float NextShadow;
-                    float NextValid;
-                    SampleShadowCascade(ShadowMap, CascadeIndex + 1, WorldPos, WorldNormal,
-                                        Next0, Next1, Next2, Next3, AdditionalBias,
-                                        NextShadow, NextValid);
-                    if (NextValid >= 0.5)
-                        CurrentShadow = lerp(CurrentShadow, NextShadow, CascadeBlend);
+                    float4 next_0 = light_data_map.Load(int3(base_index + 4, 1, 0));
+                    float4 next_1 = light_data_map.Load(int3(base_index + 5, 1, 0));
+                    float4 next_2 = light_data_map.Load(int3(base_index + 6, 1, 0));
+                    float4 next_3 = light_data_map.Load(int3(base_index + 7, 1, 0));
+                    float next_shadow;
+                    float next_valid;
+                    SampleShadowCascade(shadow_map, cascade_index + 1, world_pos, world_normal,
+                                        next_0, next_1, next_2, next_3, additional_bias,
+                                        next_shadow, next_valid);
+                    if (next_valid >= 0.5)
+                        current_shadow = lerp(current_shadow, next_shadow, cascade_blend);
                 }
             }
-            return CurrentShadow;
+            return current_shadow;
         }
         return 1.0;
     }
 
     float SampleMMDShadow(FMaterialPixelParameters Parameters,
-                          Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                          Texture2D ShadowMap, SamplerState ShadowMapSampler)
+                          Texture2D light_data_map, SamplerState light_data_map_sampler,
+                          Texture2D shadow_map, SamplerState shadow_map_sampler)
     {
-        return SampleMMDShadowInternal(Parameters, LightDataMap, LightDataMapSampler,
-                                       ShadowMap, ShadowMapSampler, 0.0);
+        return SampleMMDShadowInternal(Parameters, light_data_map, light_data_map_sampler,
+                                       shadow_map, shadow_map_sampler, 0.0);
     }
 
     // 兼容 Skin/Hair 的材质侧附加 Bias 输入；0 表示完全使用子系统默认值。
     float SampleMMDShadow(FMaterialPixelParameters Parameters,
-                          Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                          Texture2D ShadowMap, SamplerState ShadowMapSampler,
-                          float AdditionalBias)
+                          Texture2D light_data_map, SamplerState light_data_map_sampler,
+                          Texture2D shadow_map, SamplerState shadow_map_sampler,
+                          float additional_bias)
     {
-        return SampleMMDShadowInternal(Parameters, LightDataMap, LightDataMapSampler,
-                                       ShadowMap, ShadowMapSampler, AdditionalBias);
+        return SampleMMDShadowInternal(Parameters, light_data_map, light_data_map_sampler,
+                                       shadow_map, shadow_map_sampler, additional_bias);
     }
 //-----------------------Shadow Sampling-----------------------
 //-----------------------Light Sampling-----------------------
     // 采样 LightDataMap 第 0 行的一盏灯（每灯 4 texel：P 位置/类型、C 颜色/强度、D 方向/半径、T 附加）。
     // 布局：MaxLights=16、宽 64（=16*4）、高 2；第 0 行 y=0 存灯光，第 1 行 y=1 存阴影级联数据。
-    void SampleLight(Texture2D LightDataMap, SamplerState LightDataMapSampler, int LightIndex,
+    void SampleLight(Texture2D light_data_map, SamplerState light_data_map_sampler, int light_index,
                      out float4 P, out float4 C, out float4 D, out float4 T)
     {
-        static const float TexWidth = 64.0;   // MaxLights(16) * 4
-        P = Texture2DSample(LightDataMap, LightDataMapSampler, float2((LightIndex * 4.0 + 0.5) / TexWidth, 0.25));
-        C = Texture2DSample(LightDataMap, LightDataMapSampler, float2((LightIndex * 4.0 + 1.5) / TexWidth, 0.25));
-        D = Texture2DSample(LightDataMap, LightDataMapSampler, float2((LightIndex * 4.0 + 2.5) / TexWidth, 0.25));
-        T = Texture2DSample(LightDataMap, LightDataMapSampler, float2((LightIndex * 4.0 + 3.5) / TexWidth, 0.25));
+        static const float tex_width = 64.0;   // MaxLights(16) * 4
+        P = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 0.5) / tex_width, 0.25));
+        C = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 1.5) / tex_width, 0.25));
+        D = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 2.5) / tex_width, 0.25));
+        T = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 3.5) / tex_width, 0.25));
     }
 
     // 取一盏灯的方向 L（指向光源）与衰减 Atten（按灯光类型分派）。
     // P=位置/类型(<1.5点光 <2.5聚光 <3.5平行光 否则面光)  D=方向/半径  T=聚光内外角/面光朝向。
-    void LightParams(float4 P, float4 D, float4 T, float3 WorldPos,
-                     out float3 L, out float Atten)
+    void LightParams(float4 P, float4 D, float4 T, float3 world_pos,
+                     out float3 L, out float atten)
     {
-        Atten = 1.0;
+        atten = 1.0;
 
         if (P.w < 1.5)          // 点光
         {
-            float3 ToLight = P.xyz - WorldPos;
-            float  Dist    = length(ToLight);
-            L = ToLight / max(Dist, 0.0001);
-            Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
+            float3 to_light = P.xyz - world_pos;
+            float  dist     = length(to_light);
+            L = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(D.w, 0.001));
         }
         else if (P.w < 2.5)     // 聚光
         {
-            float3 ToLight = P.xyz - WorldPos;
-            float  Dist    = length(ToLight);
-            L = ToLight / max(Dist, 0.0001);
-            Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
-            Atten *= smoothstep(T.y, T.x, dot(-L, D.xyz));
+            float3 to_light = P.xyz - world_pos;
+            float  dist     = length(to_light);
+            L = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(D.w, 0.001));
+            atten *= smoothstep(T.y, T.x, dot(-L, D.xyz));
         }
         else if (P.w < 3.5)     // 平行光
         {
@@ -256,11 +237,11 @@ struct TMMDToonLight
         }
         else                    // 矩形/面光
         {
-            float3 ToLight = P.xyz - WorldPos;
-            float  Dist    = length(ToLight);
-            L = ToLight / max(Dist, 0.0001);
-            Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
-            Atten *= smoothstep(0.0, 0.25, dot(L, D.xyz));
+            float3 to_light = P.xyz - world_pos;
+            float  dist     = length(to_light);
+            L = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(D.w, 0.001));
+            atten *= smoothstep(0.0, 0.25, dot(L, D.xyz));
         }
     }
 //-----------------------Light Sampling-----------------------
@@ -268,46 +249,45 @@ struct TMMDToonLight
 
 
 
-
 //-----------------------Lighting------------------------------
     // 计算直接光照：累加全部灯（不含 toon 阴影、不含天空环境光）。
-    //   DiffuseLight  = Σ C.rgb * (C.w / PI) * NdotL * Atten    （最终着色用，带光强）
-    //   DirLight      = Σ C.rgb * NdotL * Atten                 （不含光强，供 toon 阴影 ramp 用）
-    //   SpecularLight = Σ C.rgb * (C.w / PI) * pow(NdotH, SpecularPower) * Atten
+    //   diffuse_light  = Σ C.rgb * (C.w / PI) * NdotL * Atten    （最终着色用，带光强）
+    //   dir_light      = Σ C.rgb * NdotL * Atten                 （不含光强，供 toon 阴影 ramp 用）
+    //   specular_light = Σ C.rgb * (C.w / PI) * pow(NdotH, specular_power) * Atten
     void ComputeLighting(FMaterialPixelParameters Parameters,
-                         Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                         float SpecularPower, float3 WorldNormal, float3 ViewDir,
-                         out float3 DiffuseLight, out float3 DirLight, out float3 SpecularLight)
+                         Texture2D light_data_map, SamplerState light_data_map_sampler,
+                         float specular_power, float3 world_normal, float3 view_dir,
+                         out float3 diffuse_light, out float3 dir_light, out float3 specular_light)
     {
-        static const int   MaxLights = 16;
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float toon_pi    = 3.14159265;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        DiffuseLight  = float3(0, 0, 0);
-        DirLight      = float3(0, 0, 0);
-        SpecularLight = float3(0, 0, 0);
+        diffuse_light  = float3(0, 0, 0);
+        dir_light      = float3(0, 0, 0);
+        specular_light = float3(0, 0, 0);
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
             float4 P, C, D, T;
-            SampleLight(LightDataMap, LightDataMapSampler, i, P, C, D, T);
+            SampleLight(light_data_map, light_data_map_sampler, i, P, C, D, T);
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                LightParams(P, D, T, WorldPos, L, Atten);
+                float  atten;
+                LightParams(P, D, T, world_pos, L, atten);
 
-                float NdotL = saturate(dot(WorldNormal, L));
-                DiffuseLight += C.rgb * (C.w / ToonPI) * NdotL * Atten;
-                DirLight     += C.rgb * NdotL * Atten;   // 不含光强：光强不改变 toon 阴影位置
+                float n_dot_l = saturate(dot(world_normal, L));
+                diffuse_light += C.rgb * (C.w / toon_pi) * n_dot_l * atten;
+                dir_light     += C.rgb * n_dot_l * atten;   // 不含光强：光强不改变 toon 阴影位置
 
-                // 软高光：颜色用灯光色，锐度由 SpecularPower 控制（toon 阴影门控后续叠加）
-                float3 H     = normalize(L + ViewDir);
-                float  NdotH = saturate(dot(WorldNormal, H));
-                float  Spec  = pow(NdotH, max(SpecularPower, 1.0));
-                SpecularLight += C.rgb * (C.w / ToonPI) * Spec * Atten;
+                // 软高光：颜色用灯光色，锐度由 specular_power 控制（toon 阴影门控后续叠加）
+                float3 H     = normalize(L + view_dir);
+                float  n_dot_h = saturate(dot(world_normal, H));
+                float  spec  = pow(n_dot_h, max(specular_power, 1.0));
+                specular_light += C.rgb * (C.w / toon_pi) * spec * atten;
             }
         }
     }
@@ -317,196 +297,185 @@ struct TMMDToonLight
     // toon 亮部受光色（不含 NdotL）：Σ C.rgb*(C.w/π)*Atten。
     // 亮部平涂——NdotL 渐变交给 Ramp 处理，避免 LitTone 在背光区为 0 把阴影范围锁死在 NoL=0。
     float3 ComputeLightColor(FMaterialPixelParameters Parameters,
-                             Texture2D LightDataMap, SamplerState LightDataMapSampler)
+                             Texture2D light_data_map, SamplerState light_data_map_sampler)
     {
-        static const int   MaxLights = 16;
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float toon_pi    = 3.14159265;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        float3 Acc = float3(0, 0, 0);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 acc = float3(0, 0, 0);
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
             float4 P, C, D, T;
-            SampleLight(LightDataMap, LightDataMapSampler, i, P, C, D, T);
+            SampleLight(light_data_map, light_data_map_sampler, i, P, C, D, T);
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                LightParams(P, D, T, WorldPos, L, Atten);
-                Acc += C.rgb * (C.w / ToonPI) * Atten;
+                float  atten;
+                LightParams(P, D, T, world_pos, L, atten);
+                acc += C.rgb * (C.w / toon_pi) * atten;
             }
         }
-        return Acc;
+        return acc;
     }
 
     // toon 明暗分界：保留 NoL 原始值 [-1,1]（不 saturate）。
     //   取所有灯中受光最强的一盏（max NoL·Atten）。NoL>0 受光、NoL<0 背光、NoL=-1 完全背光。
     //   保留负值才能让阴影阈值区分"深度背光"，否则 saturate 把整个背光半球压成 0，阴影范围失控。
     float NdotLAmount(FMaterialPixelParameters Parameters,
-                      Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                      float3 WorldNormal)
+                      Texture2D light_data_map, SamplerState light_data_map_sampler,
+                      float3 world_normal)
     {
-        static const int MaxLights = 16;
+        static const int max_lights = 16;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        float MaxNoL = -1.0;   // 受光最强的一盏（NoL ∈ [-1,1]）
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float max_no_l = -1.0;   // 受光最强的一盏（NoL ∈ [-1,1]）
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
             float4 P, C, D, T;
-            SampleLight(LightDataMap, LightDataMapSampler, i, P, C, D, T);
+            SampleLight(light_data_map, light_data_map_sampler, i, P, C, D, T);
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                LightParams(P, D, T, WorldPos, L, Atten);
-                MaxNoL = max(MaxNoL, dot(WorldNormal, L) * Atten);
+                float  atten;
+                LightParams(P, D, T, world_pos, L, atten);
+                max_no_l = max(max_no_l, dot(world_normal, L) * atten);
             }
         }
-        return clamp(MaxNoL, -1.0, 1.0);   // 保留负值（背光），供阈值正确分界
+        return clamp(max_no_l, -1.0, 1.0);   // 保留负值（背光），供阈值正确分界
     }
 
-    // 基础 toon ramp：NoL ∈ [-1,1]，ShadowStep 也是 [-1,1] 域的阴影分界。
-    //   NoL <  ShadowStep       → 0（阴影）
-    //   NoL >  ShadowStep+Soft  → 1（亮）
-    //   反向 smoothstep：NoL 越高越接近受光（1），越低越接近阴影（0）。
-    //   ShadowStep=-1（完全背光）→ 无阴影；ShadowStep=1（正对光）→ 全阴影。
-    float ToonRamp(float ShadowStep, float NoL, float Softness)
+    // 基础 toon ramp：no_l ∈ [-1,1]，shadow_step 也是 [-1,1] 域的阴影分界。
+    //   no_l <  shadow_step            → 0（阴影）
+    //   no_l >  shadow_step + softness → 1（亮）
+    //   反向 smoothstep：no_l 越高越接近受光（1），越低越接近阴影（0）。
+    //   shadow_step=-1（完全背光）→ 无阴影；shadow_step=1（正对光）→ 全阴影。
+    float ToonRamp(float shadow_step, float no_l, float softness)
     {
-        return 1.0 - smoothstep(ShadowStep, ShadowStep + Softness, NoL);
+        return 1.0 - smoothstep(shadow_step, shadow_step + softness, no_l);
     }
 
-    // 核心阴影黑线：NoL ≈ ShadowStep 处最深，向两侧高斯过渡。返回 [0,1]，1=最暗（黑线）。
-    float ToonCoreShadow(float ShadowStep, float NoL, float CoreWidth)
+    // 核心阴影黑线：no_l ≈ shadow_step 处最深，向两侧高斯过渡。返回 [0,1]，1=最暗（黑线）。
+    float ToonCoreShadow(float shadow_step, float no_l, float core_width)
     {
-        float Dist = NoL - ShadowStep;
-        return exp(-(Dist * Dist) / (2.0 * CoreWidth * CoreWidth));
+        float dist = no_l - shadow_step;
+        return exp(-(dist * dist) / (2.0 * core_width * core_width));
     }
 
     // 饱和度调整：Saturation = 1 原样，>1 提升，<1 降低（保持亮度不变）。
     // 提升后 clamp 负值：已饱和的颜色再提饱和会产生负通道，负值会反转色相，必须压掉。
-    float3 SaturationAdjust(float3 Color, float Saturation)
+    float3 SaturationAdjust(float3 color, float saturation)
     {
-        float Luma = dot(Color, float3(0.299, 0.587, 0.114));
-        float3 Result = lerp(float3(Luma, Luma, Luma), Color, Saturation);
-        return max(Result, 0.0);
+        float luma = dot(color, float3(0.299, 0.587, 0.114));
+        float3 result = lerp(float3(luma, luma, luma), color, saturation);
+        return max(result, 0.0);
     }
 
     // 天空环境光（PBR SH，与 PBR 同公式）。过渡色色相需要把天空光也计入。
-    float3 SkyAmbient(float3 WorldNormal)
+    float3 SkyAmbient(float3 world_normal)
     {
-        float4 NrmV = float4(WorldNormal, 1.0);
-        float3 I0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], NrmV),
-                           dot(View.SkyIrradianceEnvironmentMap[1], NrmV),
-                           dot(View.SkyIrradianceEnvironmentMap[2], NrmV));
-        float4 VB = NrmV.xyzz * NrmV.yzzx;
-        float3 I1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], VB),
-                           dot(View.SkyIrradianceEnvironmentMap[4], VB),
-                           dot(View.SkyIrradianceEnvironmentMap[5], VB));
-        float  VC  = NrmV.x * NrmV.x - NrmV.y * NrmV.y;
-        return max(float3(0, 0, 0), I0 + I1 + View.SkyIrradianceEnvironmentMap[6].xyz * VC);
+        float4 nrm_v = float4(world_normal, 1.0);
+        float3 i0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[1], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[2], nrm_v));
+        float4 vb = nrm_v.xyzz * nrm_v.yzzx;
+        float3 i1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[4], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[5], vb));
+        float  vc  = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
+        return max(float3(0, 0, 0), i0 + i1 + View.SkyIrradianceEnvironmentMap[6].xyz * vc);
     }
 
     // toon 明暗合成（自暗部往亮部的层次）：
     //   暗部阴影色 → 高饱和过渡带（暗部一侧）→ 核心黑线（最黑、线条状）→ 亮部。
-    //   阴影色 = BaseColor 压暗派生（保留色相）；受光色 = BaseColor * LitColor（亮部平涂，不含 NdotL）。
+    //   阴影色 = base_color 压暗派生（保留色相）；受光色 = base_color * lit_color（亮部平涂，不含 NdotL）。
     //   过渡色：
     //     - 色相以直射光为主导向、天空光兜底（直射光弱时切换）；
-    //     - 白色/中性直射光 → 色相不偏移、只提饱和 → 保留 BaseColor 自己的饱和色；
+    //     - 白色/中性直射光 → 色相不偏移、只提饱和 → 保留 base_color 自己的饱和色；
     //     - 亮度对齐到"压黑线之前"的明暗，保证过渡带不被黑线压没。
     //   核心黑线最后叠加（最上层、最黑、线条状）。
-    float3 ApplyToonShadow(float3 BaseColor, float3 LitColor, float3 DirectLight, float3 SkyLight, float NdotL,
-                           float ShadowStep, float Softness,
-                           float ShadowDarken, float CoreStrength, float CoreWidth,
-                           float TerminatorSaturation, float TerminatorStrength,
-                           float TerminatorWidth, float TerminatorOffset, float TerminatorHueStrength)
+    float3 ApplyToonShadow(float3 base_color, float3 lit_color, float3 direct_light, float3 sky_light, float n_dot_l,
+                           float shadow_step, float softness,
+                           float shadow_darken, float core_strength, float core_width,
+                           float terminator_saturation, float terminator_strength,
+                           float terminator_width, float terminator_offset, float terminator_hue_strength)
     {
-        const float3 LumaW = float3(0.299, 0.587, 0.114);
+        const float3 luma_w = float3(0.299, 0.587, 0.114);
 
-        float Ramp = ToonRamp(ShadowStep, NdotL, Softness);
-        float Core = ToonCoreShadow(ShadowStep, NdotL, CoreWidth);   // 黑线贴在分界点 ShadowStep（[-1,1] 域）
+        float ramp = ToonRamp(shadow_step, n_dot_l, softness);
+        float core = ToonCoreShadow(shadow_step, n_dot_l, core_width);   // 黑线贴在分界点 shadow_step（[-1,1] 域）
 
-        float3 ShadowTone = BaseColor * ShadowDarken;   // 阴影压暗，保留色相
-        float3 LitTone    = BaseColor * LitColor;       // 亮部平涂（不含 NdotL，明暗完全由 Ramp 控制）
-        float3 Shaded     = lerp(ShadowTone, LitTone, Ramp);
+        float3 shadow_tone = base_color * shadow_darken;   // 阴影压暗，保留色相
+        float3 lit_tone    = base_color * lit_color;       // 亮部平涂（不含 NdotL，明暗完全由 Ramp 控制）
+        float3 shaded      = lerp(shadow_tone, lit_tone, ramp);
 
         // ---- 直射光色相（主导向）+ 天空光色相（兜底）----
-        float DirectLuma = dot(DirectLight, LumaW);
-        float SkyLuma    = dot(SkyLight, LumaW);
-        float3 DirectHue = DirectLight / max(DirectLuma, 0.001);
-        float3 SkyHue    = SkyLight / max(SkyLuma, 0.001);
+        float direct_luma = dot(direct_light, luma_w);
+        float sky_luma    = dot(sky_light, luma_w);
+        float3 direct_hue = direct_light / max(direct_luma, 0.001);
+        float3 sky_hue    = sky_light / max(sky_luma, 0.001);
 
         // 直射光越强越主导色相；直射光弱（背光/夜晚）时切到天空光色相兜底。
-        // 白色直射光 → DirectHue ≈ (1,1,1)，乘 BaseColor 不偏移色相 → 只提饱和。
-        float DirectWeight = saturate(DirectLuma);
-        float3 LightHue = lerp(SkyHue, DirectHue, DirectWeight);
+        // 白色直射光 → direct_hue ≈ (1,1,1)，乘 base_color 不偏移色相 → 只提饱和。
+        float direct_weight = saturate(direct_luma);
+        float3 light_hue = lerp(sky_hue, direct_hue, direct_weight);
 
         // 色相偏移量由总受光强度调制：光越弱越贴近贴图本色
-        float LightStrength = DirectLuma + SkyLuma;
-        float HueBlend = saturate(LightStrength) * TerminatorHueStrength;
+        float light_strength = direct_luma + sky_luma;
+        float hue_blend = saturate(light_strength) * terminator_hue_strength;
 
         // 过渡色 = 贴图本色向受光色相偏移，再提饱和（白光 → 只提饱和）
-        float3 TerminatorColor = lerp(BaseColor, BaseColor * LightHue, HueBlend);
-        TerminatorColor = SaturationAdjust(TerminatorColor, TerminatorSaturation);
+        float3 terminator_color = lerp(base_color, base_color * light_hue, hue_blend);
+        terminator_color = SaturationAdjust(terminator_color, terminator_saturation);
 
         // 亮度对齐到压黑线之前的明暗，只换色相/饱和，避免过渡带被黑线压没
-        float ShadedLuma = dot(Shaded, LumaW);
-        float TermLuma   = dot(TerminatorColor, LumaW);
-        TerminatorColor *= ShadedLuma / max(TermLuma, 0.001);
+        float shaded_luma = dot(shaded, luma_w);
+        float term_luma   = dot(terminator_color, luma_w);
+        terminator_color *= shaded_luma / max(term_luma, 0.001);
 
         // 先在交界线暗部一侧叠高饱和过渡带（贴在分界点暗侧，[-1,1] 域）
-        float TermDist = NdotL - (ShadowStep - TerminatorOffset);
-        float TerminatorMask = exp(-(TermDist * TermDist) / (2.0 * TerminatorWidth * TerminatorWidth));
-        float TermBlend = TerminatorStrength * saturate(LightStrength) * TerminatorMask;
-        Shaded = lerp(Shaded, TerminatorColor, saturate(TermBlend));
+        float term_dist = n_dot_l - (shadow_step - terminator_offset);
+        float terminator_mask = exp(-(term_dist * term_dist) / (2.0 * terminator_width * terminator_width));
+        float term_blend = terminator_strength * saturate(light_strength) * terminator_mask;
+        shaded = lerp(shaded, terminator_color, saturate(term_blend));
 
         // 最后叠核心黑线（最黑、线条状，压在最上层）
-        Shaded *= (1.0 - CoreStrength * Core);
-        return Shaded;
+        shaded *= (1.0 - core_strength * core);
+        return shaded;
     }
 //-----------------------Toon Shading-----------------------
 
     // 着色主流程：光照贴图采样 → 计算光照 → toon 明暗 → 场景阴影 → 输出。
     // toon 参数先在此内置默认值（后续可逐个提升为 SurfaceData 输入）。
-    float3 ShadeSurface(FMaterialPixelParameters Parameters, TMMDSurfaceData S, TMMDLightContext Light)
+    float3 ShadeSurface(FMaterialPixelParameters Parameters, TMMDSurfaceData surface_data, TMMDLightContext light_context)
     {
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 ViewDir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - WorldPos);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 view_dir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
+//SkyLight
+        float3 sky_light_color = SkyAmbient(surface_data.world_normal) * View.SkyLightColor.rgb;
+//LightColor
 
-        // 光照贴图采样 + 直接光照（漫反射 + 软高光）
 
-        // 直射光（Σ 全部灯，含光强）= Diffuse；天空光（PBR SH）= SkyLightColor。
-        // 直射光色相主导过渡色，天空光色相兜底（直射光弱时切换）。
-        float3 SkyLightColor = SkyAmbient(S.WorldNormal) * View.SkyLightColor.rgb;
-
-        // 亮部平涂色（不含 NdotL）：Σ C.rgb*(C.w/π)*Atten，交给 ApplyToonShadow 做 lit 侧
-        // float3 LitColor = ComputeLightColor(Parameters, Light.LightDataMap, Light.LightDataMapSampler);
-
-        // float NdotL = NdotLAmount(Parameters, Light.LightDataMap, Light.LightDataMapSampler, S.WorldNormal);
-        // float3 ShadedDiffuse = ApplyToonShadow(S.BaseColor, LitColor, Diffuse, SkyLightColor, NdotL,
-        //                                        ToonShadowStep, ToonSoftness,
-        //                                        ToonShadowDarken, ToonCoreStrength, ToonCoreWidth,
-        //                                        TerminatorSaturation, TerminatorStrength,
-        //                                        TerminatorWidth, TerminatorOffset, TerminatorHueStrength);
-
-        // 场景阴影（主平行光遮挡）
-        float ShadowFactor = SampleMMDShadow(Parameters, Light.LightDataMap, Light.LightDataMapSampler,
-                                             Light.ShadowMap, Light.ShadowMapSampler);
+        
+//SceneShadow
+        float obstruction_shadow = SampleMMDShadow(Parameters, light_context.light_data_map, light_context.light_data_map_sampler,
+                                             light_context.shadow_map, light_context.shadow_map_sampler);
 
         // toon 漫反射 + 软高光 + 自发光，整体压场景阴影
-        return S.BaseColor * ShadowFactor;
+        return surface_data.base_color * obstruction_shadow;
     }
 };
 
 // ============================================================================
 // 光照工具实例 + 光照上下文。
-// MMD 光照数据只来源于 LightDataMap / MMDShadowMap 这几张 RT——没有它们无从 shading，
-// 故在此统一构造；各材质 include 后直接复用 Light / LightContext，无需各自再声明。
+// MMD 光照数据只来源于 light_data_map / mmd_shadow_map 这几张 RT——没有它们无从 shading，
+// 故在此统一构造；各材质 include 后直接复用 light / light_context，无需各自再声明。
 // ============================================================================
-TMMDToonLight Light;
+TMMDToonLight light;
 
-TMMDLightContext LightContext = Light.MakeLightContext(LightDataTex, LightDataTexSampler,
-                                                       MMDShadowMap, MMDShadowMapSampler);
+TMMDLightContext light_context = light.MakeLightContext(light_data_tex, light_data_texSampler,
+                                                        mmd_shadow_map, mmd_shadow_mapSampler);

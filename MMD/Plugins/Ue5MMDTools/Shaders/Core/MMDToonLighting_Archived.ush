@@ -11,148 +11,148 @@ struct TMMDToonLightArchived
 {
     // toon 阴影 ramp：阴影与受光之间的硬阈值。
     // Softness 控制过渡带宽度（标准 0.05，脸部可用 0.12 更柔）。
-    float ToonRamp(float ShadowStep, float NdotL, float Softness)
+    float ToonRamp(float shadow_step, float n_dot_l, float softness)
     {
-        return smoothstep(ShadowStep - Softness, ShadowStep + Softness, NdotL);
+        return smoothstep(shadow_step - softness, shadow_step + softness, n_dot_l);
     }
 
     // 标准 toon 阴影合成：以"不含光强的方向响应 DirLight"亮度做 ramp（光强不改变阴影位置），
     // 对齐原版逐灯 NdotL 的口径），再混阴影色。
-    // 返回阴影漫反射；ShadedSpecular 输出"门控到受光面"的高光。
-    float3 ApplyToonShadow(float3 Diffuse, float3 DirLight, float3 Specular,
-                           float ShadowStep, float3 ShadowColor, float Softness,
-                           out float3 ShadedSpecular)
+    // 返回阴影漫反射；shaded_specular 输出"门控到受光面"的高光。
+    float3 ApplyToonShadow(float3 diffuse, float3 dir_light, float3 specular,
+                           float shadow_step, float3 shadow_color, float softness,
+                           out float3 shaded_specular)
     {
-        float LightAmount = saturate(dot(DirLight, float3(0.299, 0.587, 0.114)));
-        float Ramp        = ToonRamp(ShadowStep, LightAmount, Softness);
-        ShadedSpecular = Specular * Ramp;
-        return lerp(ShadowColor, float3(1, 1, 1), Ramp) * Diffuse;
+        float light_amount = saturate(dot(dir_light, float3(0.299, 0.587, 0.114)));
+        float ramp         = ToonRamp(shadow_step, light_amount, softness);
+        shaded_specular = specular * ramp;
+        return lerp(shadow_color, float3(1, 1, 1), ramp) * diffuse;
     }
 
     // 从 LightDataMap 找最强的"方向性"主光源（directional/spot/point 取最强者）。
     // 返回世界空间光方向（指向光源），找不到时返回 (1, 0, 0) 兜底。
     // 用于面部 SDF 阴影——需要单一主光向来确定脸阴影分布。
-    float3 GetMainLightDirection(Texture2D LightDataMap, SamplerState LightDataMapSampler)
+    float3 GetMainLightDirection(Texture2D light_data_map, SamplerState light_data_map_sampler)
     {
-        static const int   MaxLights = 16;
-        static const float TexWidth  = 64.0;
+        static const int   max_lights = 16;
+        static const float tex_width  = 64.0;
 
-        float3 BestDir = float3(1, 0, 0);
-        float  BestWeight = -1.0;
+        float3 best_dir = float3(1, 0, 0);
+        float  best_weight = -1.0;
 
         // 注意：这里没法知道 WorldPos（不是基于像素的函数），所以对点光/聚光只能用方向近似。
         //       不带距离衰减；做"找最强主光"已经够用了——脸 SDF 阴影主要看角度。
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
-            float4 P = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
-            float4 C = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
-            float4 D = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
+            float4 P = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
+            float4 C = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
+            float4 D = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
 
             if (P.w >= 0.5)
             {
-                float Weight = C.w;   // 用强度做权重（点光/聚光加距离衰减会更准，但这里没像素位置）
-                if (Weight > BestWeight)
+                float weight = C.w;   // 用强度做权重（点光/聚光加距离衰减会更准，但这里没像素位置）
+                if (weight > best_weight)
                 {
-                    BestWeight = Weight;
+                    best_weight = weight;
                     // D 是光指向的方向，取负 = 光源方向（点光/聚光/平行光/矩形光口径一致）
-                    BestDir = normalize(-D.xyz + float3(1e-5, 1e-5, 1e-5));
+                    best_dir = normalize(-D.xyz + float3(1e-5, 1e-5, 1e-5));
                 }
             }
         }
-        return BestDir;
+        return best_dir;
     }
 
     // 主光完整数据（方向 + 颜色×强度/PI），口径与 ComputeLighting 一致。
     // 用于脸部 SDF 的漫反射——脸明暗完全由 SDF 贴图 + 头朝向决定，光色直接从
     // LightDataMap 取，**不依赖表面法线 NdotL**，所以法线平面化的脸（MMD 常见）
     // 转动、侧光也不会发黑。
-    // 输出：MainLightDirWS 指向光源；MainLightColor 已含强度/PI，可直接当漫反射系数乘。
-    void GetMainLightData(Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                          out float3 MainLightDirWS, out float3 MainLightColor)
+    // 输出：main_light_dir_ws 指向光源；main_light_color 已含强度/PI，可直接当漫反射系数乘。
+    void GetMainLightData(Texture2D light_data_map, SamplerState light_data_map_sampler,
+                          out float3 main_light_dir_ws, out float3 main_light_color)
     {
-        static const int   MaxLights = 16;
-        static const float TexWidth  = 64.0;
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float tex_width  = 64.0;
+        static const float toon_pi    = 3.14159265;
 
-        MainLightDirWS = float3(1, 0, 0);
-        MainLightColor = float3(0, 0, 0);
-        float BestWeight = -1.0;
+        main_light_dir_ws = float3(1, 0, 0);
+        main_light_color = float3(0, 0, 0);
+        float best_weight = -1.0;
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
-            float4 P = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
-            float4 C = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
-            float4 D = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
+            float4 P = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
+            float4 C = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
+            float4 D = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
 
             if (P.w >= 0.5)
             {
-                float Weight = C.w;
-                if (Weight > BestWeight)
+                float weight = C.w;
+                if (weight > best_weight)
                 {
-                    BestWeight  = Weight;
-                    MainLightDirWS = normalize(-D.xyz + float3(1e-5, 1e-5, 1e-5));
-                    MainLightColor = C.rgb * (C.w / ToonPI);
+                    best_weight  = weight;
+                    main_light_dir_ws = normalize(-D.xyz + float3(1e-5, 1e-5, 1e-5));
+                    main_light_color = C.rgb * (C.w / toon_pi);
                 }
             }
         }
     }
 
     float3 ApplyNormalMap(FMaterialPixelParameters Parameters,
-                          Texture2D NormalMap,
-                          SamplerState NormalMapSampler,
-                          float NormalMapStrength)
+                          Texture2D normal_map,
+                          SamplerState normal_map_sampler,
+                          float normal_map_strength)
     {
-        float3 GeoNormal = normalize((float3)Parameters.TangentToWorld[2]);
+        float3 geo_normal = normalize((float3)Parameters.TangentToWorld[2]);
 
-        if (NormalMapStrength <= 0.01)
-            return GeoNormal;
+        if (normal_map_strength <= 0.01)
+            return geo_normal;
 
-        float2 UV = Parameters.TexCoords[0];
-        float3 TangentNormal = Texture2DSample(NormalMap, NormalMapSampler, UV).xyz;
+        float2 uv = Parameters.TexCoords[0];
+        float3 tangent_normal = Texture2DSample(normal_map, normal_map_sampler, uv).xyz;
 
         // BC5 法线解码：RG 到 [-1,1]（只解扰动量 x,y）
-        float2 Nxy = TangentNormal.xy * 2.0 - 1.0;
+        float2 n_xy = tangent_normal.xy * 2.0 - 1.0;
 
         // 法线强度：缩放扰动量 xy，再重建 z（1=原样 0=纯几何法线）
-        Nxy *= NormalMapStrength;
-        float3 TNormal = float3(Nxy, sqrt(1.0 - saturate(dot(Nxy, Nxy))));
+        n_xy *= normal_map_strength;
+        float3 t_normal = float3(n_xy, sqrt(1.0 - saturate(dot(n_xy, n_xy))));
 
         // 切线空间 到 世界空间（TangentToWorld 行 = T, B, N）
-        float3x3 TBN = (float3x3)Parameters.TangentToWorld;
-        return normalize(mul(TNormal, TBN));
+        float3x3 tbn = (float3x3)Parameters.TangentToWorld;
+        return normalize(mul(t_normal, tbn));
     }
 
     // 标准 MMD sphere/matcap：视图空间查找 + 采样（相机转动时 matcap 跟着转）。
     // 只采样不应用——是用(matcap烘焙阴影)还是加(matcap高光)由各材质自己决定。
-    float3 SampleMatcap(float3 WorldNormal, Texture2D MatCap, SamplerState MatCapSampler)
+    float3 SampleMatcap(float3 world_normal, Texture2D mat_cap, SamplerState mat_cap_sampler)
     {
-        float3 ViewNormal = mul(WorldNormal, (float3x3)ResolvedView.TranslatedWorldToView);
-        float2 MatcapUV = ViewNormal.xy * 0.5 + 0.5;
-        return Texture2DSample(MatCap, MatCapSampler, MatcapUV).rgb;
+        float3 view_normal = mul(world_normal, (float3x3)ResolvedView.TranslatedWorldToView);
+        float2 matcap_uv = view_normal.xy * 0.5 + 0.5;
+        return Texture2DSample(mat_cap, mat_cap_sampler, matcap_uv).rgb;
     }
 
     // 取一盏灯的方向 L 与衰减 Atten（按灯光类型分派）。
     // P=位置/类型  D=方向  T=附加参数（聚光内外角、面光朝向）。
     // 复用自 ComputeLighting 与 TotalLightIntensity，保证口径一致。
-    void LightParams(float4 P, float4 D, float4 T, float3 WorldPos,
-                     out float3 L, out float Atten)
+    void LightParams(float4 P, float4 D, float4 T, float3 world_pos,
+                     out float3 L, out float atten)
     {
-        Atten = 1.0;
+        atten = 1.0;
 
         if (P.w < 1.5)          // 点光
         {
-            float3 ToLight = P.xyz - WorldPos;
-            float  Dist    = length(ToLight);
-            L = ToLight / max(Dist, 0.0001);
-            Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
+            float3 to_light = P.xyz - world_pos;
+            float  dist     = length(to_light);
+            L = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(D.w, 0.001));
         }
         else if (P.w < 2.5)     // 聚光
         {
-            float3 ToLight = P.xyz - WorldPos;
-            float  Dist    = length(ToLight);
-            L = ToLight / max(Dist, 0.0001);
-            Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
-            Atten *= smoothstep(T.y, T.x, dot(-L, D.xyz));
+            float3 to_light = P.xyz - world_pos;
+            float  dist     = length(to_light);
+            L = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(D.w, 0.001));
+            atten *= smoothstep(T.y, T.x, dot(-L, D.xyz));
         }
         else if (P.w < 3.5)     // 平行光
         {
@@ -160,60 +160,60 @@ struct TMMDToonLightArchived
         }
         else                    // 矩形/面光
         {
-            float3 ToLight = P.xyz - WorldPos;
-            float  Dist    = length(ToLight);
-            L = ToLight / max(Dist, 0.0001);
-            Atten = 1.0 - saturate(Dist / max(D.w, 0.001));
-            Atten *= smoothstep(0.0, 0.25, dot(L, D.xyz));
+            float3 to_light = P.xyz - world_pos;
+            float  dist     = length(to_light);
+            L = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(D.w, 0.001));
+            atten *= smoothstep(0.0, 0.25, dot(L, D.xyz));
         }
     }
 
     // 光照计算：累加直接光漫反射 + 高光（不含 toon 阴影、不含 sphere、不含天空环境光）。
-    // DiffuseLight  = Σ C.rgb * (C.w / PI) * NdotL * Atten    （最终着色用，带光强）
-    // DirLight      = Σ C.rgb * NdotL * Atten                  （不含光强，供 toon 阴影 ramp 用）
-    // SpecularLight = Σ C.rgb * (C.w / PI) * pow(NdotH, SpecularPower) * Atten
+    // diffuse_light  = Σ C.rgb * (C.w / PI) * NdotL * Atten    （最终着色用，带光强）
+    // dir_light      = Σ C.rgb * NdotL * Atten                  （不含光强，供 toon 阴影 ramp 用）
+    // specular_light = Σ C.rgb * (C.w / PI) * pow(NdotH, specular_power) * Atten
     void ComputeLighting(FMaterialPixelParameters Parameters,
-                         Texture2D LightDataMap,
-                         SamplerState LightDataMapSampler,
-                         float SpecularPower,
-                         float3 WorldNormal,
-                         float3 ViewDir,
-                         out float3 DiffuseLight,
-                         out float3 DirLight,
-                         out float3 SpecularLight)
+                         Texture2D light_data_map,
+                         SamplerState light_data_map_sampler,
+                         float specular_power,
+                         float3 world_normal,
+                         float3 view_dir,
+                         out float3 diffuse_light,
+                         out float3 dir_light,
+                         out float3 specular_light)
     {
-        static const int   MaxLights = 16;
-        static const float TexWidth  = 64.0;   // MaxLights * 4
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float tex_width  = 64.0;   // MaxLights * 4
+        static const float toon_pi    = 3.14159265;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        DiffuseLight  = float3(0, 0, 0);
-        DirLight      = float3(0, 0, 0);
-        SpecularLight = float3(0, 0, 0);
+        diffuse_light  = float3(0, 0, 0);
+        dir_light      = float3(0, 0, 0);
+        specular_light = float3(0, 0, 0);
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
-            float4 P = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
-            float4 C = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
-            float4 D = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
-            float4 T = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.25));
+            float4 P = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
+            float4 C = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
+            float4 D = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
+            float4 T = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 3.5) / tex_width, 0.25));
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                LightParams(P, D, T, WorldPos, L, Atten);
+                float  atten;
+                LightParams(P, D, T, world_pos, L, atten);
 
-                float NdotL = saturate(dot(WorldNormal, L));
-                DiffuseLight += C.rgb * (C.w / ToonPI) * NdotL * Atten;
-                DirLight     += C.rgb * NdotL * Atten;   // 不含光强：光强不改变 toon 阴影位置
+                float n_dot_l = saturate(dot(world_normal, L));
+                diffuse_light += C.rgb * (C.w / toon_pi) * n_dot_l * atten;
+                dir_light     += C.rgb * n_dot_l * atten;   // 不含光强：光强不改变 toon 阴影位置
 
-                // 高光：颜色用灯光色，锐度由 SpecularPower 控制（阴影门控交给各 usf）。
-                float3 H     = normalize(L + ViewDir);
-                float  NdotH = saturate(dot(WorldNormal, H));
-                float  Spec  = pow(NdotH, max(SpecularPower, 1.0));
-                SpecularLight += C.rgb * (C.w / ToonPI) * Spec * Atten;
+                // 高光：颜色用灯光色，锐度由 specular_power 控制（阴影门控交给各 usf）。
+                float3 H     = normalize(L + view_dir);
+                float  n_dot_h = saturate(dot(world_normal, H));
+                float  spec  = pow(n_dot_h, max(specular_power, 1.0));
+                specular_light += C.rgb * (C.w / toon_pi) * spec * atten;
             }
         }
     }
@@ -222,83 +222,82 @@ struct TMMDToonLightArchived
     // 软高光给材质"光泽"，锐高光给二次元"湿亮/点光"的块状高光。
     // SpecStep=阈值(建议 0.7~0.9) SpecSoftness=过渡带(建议 0.03~0.08) Intensity=倍率。
     float3 ToonSpecularLight(FMaterialPixelParameters Parameters,
-                             Texture2D LightDataMap, SamplerState LightDataMapSampler,
-                             float3 WorldNormal, float3 ViewDir,
-                             float SpecStep, float SpecSoftness, float Intensity)
+                             Texture2D light_data_map, SamplerState light_data_map_sampler,
+                             float3 world_normal, float3 view_dir,
+                             float spec_step, float spec_softness, float intensity)
     {
-        static const int   MaxLights = 16;
-        static const float TexWidth  = 64.0;
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float tex_width  = 64.0;
+        static const float toon_pi    = 3.14159265;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        float3 Acc = float3(0, 0, 0);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 acc = float3(0, 0, 0);
 
-        for (int i = 0; i < MaxLights; i++)
+        for (int i = 0; i < max_lights; i++)
         {
-            float4 P = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
-            float4 C = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
-            float4 D = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
-            float4 T = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.25));
+            float4 P = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
+            float4 C = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
+            float4 D = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
+            float4 T = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 3.5) / tex_width, 0.25));
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                LightParams(P, D, T, WorldPos, L, Atten);
+                float  atten;
+                LightParams(P, D, T, world_pos, L, atten);
 
-                float3 H     = normalize(L + ViewDir);
-                float  NdotH = saturate(dot(WorldNormal, H));
-                float  Step  = smoothstep(SpecStep, SpecStep + SpecSoftness, NdotH);
-                Acc += C.rgb * (C.w / ToonPI) * Step * Atten * Intensity;
+                float3 H     = normalize(L + view_dir);
+                float  n_dot_h = saturate(dot(world_normal, H));
+                float  step  = smoothstep(spec_step, spec_step + spec_softness, n_dot_h);
+                acc += C.rgb * (C.w / toon_pi) * step * atten * intensity;
             }
         }
-        return Acc;
+        return acc;
     }
 
     // 天空环境光：与 PBR 相同的 SH 公式，完全跟随 PBR 的天空环境光。
-    float3 SkyAmbient(float3 WorldNormal)
+    float3 SkyAmbient(float3 world_normal)
     {
-        float4 NrmV = float4(WorldNormal, 1.0);
-        float3 I0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], NrmV),
-                           dot(View.SkyIrradianceEnvironmentMap[1], NrmV),
-                           dot(View.SkyIrradianceEnvironmentMap[2], NrmV));
-        float4 VB = NrmV.xyzz * NrmV.yzzx;
-        float3 I1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], VB),
-                           dot(View.SkyIrradianceEnvironmentMap[4], VB),
-                           dot(View.SkyIrradianceEnvironmentMap[5], VB));
-        float  VC  = NrmV.x * NrmV.x - NrmV.y * NrmV.y;
-        return max(float3(0, 0, 0), I0 + I1 + View.SkyIrradianceEnvironmentMap[6].xyz * VC);
+        float4 nrm_v = float4(world_normal, 1.0);
+        float3 i0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[1], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[2], nrm_v));
+        float4 vb = nrm_v.xyzz * nrm_v.yzzx;
+        float3 i1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[4], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[5], vb));
+        float  vc  = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
+        return max(float3(0, 0, 0), i0 + i1 + View.SkyIrradianceEnvironmentMap[6].xyz * vc);
     }
 
     // 总光强（不含天空）：累加每盏灯 C.w / PI * Atten，口径与 ComputeLighting 一致。
     // 用于给 Rim/自发光等后处理跟随场景实际光照强弱（光弱/背光时自动变弱）。
     float TotalLightIntensity(FMaterialPixelParameters Parameters,
-                              Texture2D LightDataMap,
-                              SamplerState LightDataMapSampler)
+                              Texture2D light_data_map,
+                              SamplerState light_data_map_sampler)
     {
-        static const int   MaxLights = 16;
-        static const float TexWidth  = 64.0;   // MaxLights * 4
-        static const float ToonPI    = 3.14159265;
+        static const int   max_lights = 16;
+        static const float tex_width  = 64.0;   // MaxLights * 4
+        static const float toon_pi    = 3.14159265;
 
-        const float3 WorldPos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        float Total = 0.0;
-        for (int i = 0; i < MaxLights; i++)
+        float total = 0.0;
+        for (int i = 0; i < max_lights; i++)
         {
-            float4 P = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 0.5) / TexWidth, 0.25));
-            float4 C = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 1.5) / TexWidth, 0.25));
-            float4 D = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 2.5) / TexWidth, 0.25));
-            float4 T = Texture2DSample(LightDataMap, LightDataMapSampler, float2((i * 4.0 + 3.5) / TexWidth, 0.25));
+            float4 P = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
+            float4 C = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
+            float4 D = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
+            float4 T = Texture2DSample(light_data_map, light_data_map_sampler, float2((i * 4.0 + 3.5) / tex_width, 0.25));
 
             if (P.w >= 0.5)
             {
                 float3 L;
-                float  Atten;
-                LightParams(P, D, T, WorldPos, L, Atten);
-                Total += C.w / ToonPI * Atten;
+                float  atten;
+                LightParams(P, D, T, world_pos, L, atten);
+                total += C.w / toon_pi * atten;
             }
         }
-        return Total;
+        return total;
     }
 };
-

@@ -100,7 +100,7 @@ int32 UMMDMigrateShadowCommandlet::Main(const FString& Params)
 
 		bool bChanged = false;
 
-		// MMDShadowMap 贴图输入（连到 MMDShadowMapRT）
+		// mmd_shadow_map 贴图输入（连到 MMDShadowMapRT）
 		auto FindOrCreateInput = [&](const FName& InputName) -> FCustomInput*
 		{
 			for (FCustomInput& In : Custom->Inputs)
@@ -117,7 +117,7 @@ int32 UMMDMigrateShadowCommandlet::Main(const FString& Params)
 		};
 
 		{
-			FCustomInput* ShadowMapIn = FindOrCreateInput(TEXT("MMDShadowMap"));
+			FCustomInput* ShadowMapIn = FindOrCreateInput(TEXT("mmd_shadow_map"));
 			if (!ShadowMapIn->Input.Expression)
 			{
 				UMaterialExpressionTextureObject* TexObj = NewObject<UMaterialExpressionTextureObject>(Material);
@@ -146,7 +146,7 @@ int32 UMMDMigrateShadowCommandlet::Main(const FString& Params)
 		};
 
 		// 阴影默认开启（无平行光/子系统关闭时相机基 Valid=0，SampleMMDShadow 自动返回 1）
-		EnsureFloatInput(TEXT("MMDShadowBias"), 0.0f);
+		EnsureFloatInput(TEXT("mmd_shadow_bias"), 0.0f);
 
 		if (bChanged)
 		{

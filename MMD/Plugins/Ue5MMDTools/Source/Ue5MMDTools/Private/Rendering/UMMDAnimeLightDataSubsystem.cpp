@@ -471,8 +471,8 @@ void UMMDAnimeLightDataSubsystem::WriteLightData_RenderThread(FRDGBuilder& Graph
 
 	FMMDAnimeWriteLightsCS::FParameters* Params =
 		GraphBuilder.AllocParameters<FMMDAnimeWriteLightsCS::FParameters>();
-	Params->LightData = LightSRV;
-	Params->OutputTexture = OutputUAV;
+	Params->light_data = LightSRV;
+	Params->output_texture = OutputUAV;
 
 	TShaderMapRef<FMMDAnimeWriteLightsCS> CS(GetGlobalShaderMap(GMaxRHIFeatureLevel));
 	if (!CS.GetShader())

@@ -2842,24 +2842,24 @@ UMaterialInterface* CreateMaterialFromMMDBase(UTexture2D* Texture2D, UTexture2D*
 	}
 	if (MatCapTexture2D)
 	{
-		SetTextureParameterIfPresent(MatInst, TEXT("MatCap"), MatCapTexture2D);
-		SetScalarParameterIfPresent(MatInst, TEXT("SphereMode"), (float)PMXMaterial.SphereMode);
+		SetTextureParameterIfPresent(MatInst, TEXT("mat_cap"), MatCapTexture2D);
+		SetScalarParameterIfPresent(MatInst, TEXT("sphere_mode"), (float)PMXMaterial.SphereMode);
 	}
 	else
 	{
-		// 没有 sphere 贴图：MatCap 用黑色兜底（绝不复用 BaseColor），并强制关闭 sphere 效果。
+		// 没有 sphere 贴图：mat_cap 用黑色兜底（绝不复用 base_color），并强制关闭 sphere 效果。
 		if (UTexture2D* BlackTexture = LoadObject<UTexture2D>(
 			nullptr, TEXT("/Engine/EngineResources/Black.Black")))
 		{
-			SetTextureParameterIfPresent(MatInst, TEXT("MatCap"), BlackTexture);
+			SetTextureParameterIfPresent(MatInst, TEXT("mat_cap"), BlackTexture);
 		}
-		SetScalarParameterIfPresent(MatInst, TEXT("SphereMode"), 0.0f);
+		SetScalarParameterIfPresent(MatInst, TEXT("sphere_mode"), 0.0f);
 	}
 
 	// ---- PMX 标量/向量参数 ----
-	// DiffuseColor.RGB 乘到 BaseColor（材质里 BaseColor = DiffuseColor × BaseColorMap）
+	// DiffuseColor.RGB 乘到 base_color（材质里 base_color = DiffuseColor × BaseColorMap）
 	SetVectorParameterIfPresent(MatInst, TEXT("DiffuseColor"), FLinearColor(PMXMaterial.DiffuseColor));
-	SetScalarParameterIfPresent(MatInst, TEXT("SpecularPower"), PMXMaterial.SpecularPower);
+	SetScalarParameterIfPresent(MatInst, TEXT("specular_power"), PMXMaterial.SpecularPower);
 	SetVectorParameterIfPresent(MatInst, TEXT("SpecularColor"), FLinearColor(PMXMaterial.SpecularColor));
 	SetVectorParameterIfPresent(MatInst, TEXT("AmbientColor"), FLinearColor(PMXMaterial.AmbientColor));
 	SetVectorParameterIfPresent(MatInst, TEXT("EdgeColor"), FLinearColor(PMXMaterial.EdgeColor));

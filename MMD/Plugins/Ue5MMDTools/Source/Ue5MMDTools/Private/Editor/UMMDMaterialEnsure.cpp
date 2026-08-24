@@ -50,65 +50,65 @@ namespace
 
 	// ---- MMDBaseToon.usf（基础/透明共用）----
 	static const FMMDCustomInputSpec GBaseToonInputs[] = {
-		{ TEXT("BaseColor"),         EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
-		{ TEXT("LightDataTex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("ShadowStep"),        EMMDInputKind::Float,   0.5f, 0.0f, 0.0f },
-		{ TEXT("HighlightStep"),     EMMDInputKind::Float,   0.82f, 0.0f, 0.0f },
-		{ TEXT("ShadowColor"),       EMMDInputKind::Float3,  0.55f, 0.55f, 0.55f },
-		{ TEXT("SpecularPower"),     EMMDInputKind::Float,   32.0f, 0.0f, 0.0f },
-		{ TEXT("NormalMap"),         EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("NormalMapStrength"), EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
-		{ TEXT("MatCap"),            EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("SphereMode"),        EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
-		{ TEXT("MMDShadowMap"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("MMDShadowBias"),     EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("base_color"),          EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
+		{ TEXT("light_data_tex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("shadow_step"),         EMMDInputKind::Float,   0.5f, 0.0f, 0.0f },
+		{ TEXT("highlight_step"),      EMMDInputKind::Float,   0.82f, 0.0f, 0.0f },
+		{ TEXT("shadow_color"),        EMMDInputKind::Float3,  0.55f, 0.55f, 0.55f },
+		{ TEXT("specular_power"),      EMMDInputKind::Float,   32.0f, 0.0f, 0.0f },
+		{ TEXT("normal_map"),          EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("normal_map_strength"), EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("mat_cap"),             EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("sphere_mode"),         EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("mmd_shadow_map"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("mmd_shadow_bias"),     EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
 	};
 
 	// ---- TMMDAnimeFace.usf（脸：柔和阴影 + 边缘光）----
 	static const FMMDCustomInputSpec GFaceInputs[] = {
-		{ TEXT("BaseColor"),         EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
-		{ TEXT("LightDataTex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("ShadowStep"),        EMMDInputKind::Float,   0.55f, 0.0f, 0.0f },
-		{ TEXT("HighlightStep"),     EMMDInputKind::Float,   0.85f, 0.0f, 0.0f },
-		{ TEXT("ShadowColor"),       EMMDInputKind::Float3,  0.65f, 0.65f, 0.65f },
-		{ TEXT("SpecularPower"),     EMMDInputKind::Float,   64.0f, 0.0f, 0.0f },
-		{ TEXT("NormalMap"),         EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("NormalMapStrength"), EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
-		{ TEXT("RimColor"),          EMMDInputKind::Float3,  0.9f, 0.95f, 1.0f },
-		{ TEXT("RimPower"),          EMMDInputKind::Float,   3.0f, 0.0f, 0.0f },
-		{ TEXT("RimStrength"),       EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
+		{ TEXT("base_color"),          EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
+		{ TEXT("light_data_tex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("shadow_step"),         EMMDInputKind::Float,   0.55f, 0.0f, 0.0f },
+		{ TEXT("highlight_step"),      EMMDInputKind::Float,   0.85f, 0.0f, 0.0f },
+		{ TEXT("shadow_color"),        EMMDInputKind::Float3,  0.65f, 0.65f, 0.65f },
+		{ TEXT("specular_power"),      EMMDInputKind::Float,   64.0f, 0.0f, 0.0f },
+		{ TEXT("normal_map"),          EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("normal_map_strength"), EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("rim_color"),           EMMDInputKind::Float3,  0.9f, 0.95f, 1.0f },
+		{ TEXT("rim_power"),           EMMDInputKind::Float,   3.0f, 0.0f, 0.0f },
+		{ TEXT("rim_strength"),        EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
 	};
 
 	// ---- TMMDAnimeHair.usf（发：Kajiya-Kay 各向异性高光）----
 	static const FMMDCustomInputSpec GHairInputs[] = {
-		{ TEXT("BaseColor"),         EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
-		{ TEXT("LightDataTex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("ShadowStep"),        EMMDInputKind::Float,   0.5f, 0.0f, 0.0f },
-		{ TEXT("HighlightStep"),     EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
-		{ TEXT("ShadowColor"),       EMMDInputKind::Float3,  0.55f, 0.55f, 0.55f },
-		{ TEXT("SpecularPower"),     EMMDInputKind::Float,   48.0f, 0.0f, 0.0f },
-		{ TEXT("MatCap"),            EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("SphereMode"),        EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
-		{ TEXT("MMDShadowMap"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("MMDShadowBias"),     EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("base_color"),          EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
+		{ TEXT("light_data_tex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("shadow_step"),         EMMDInputKind::Float,   0.5f, 0.0f, 0.0f },
+		{ TEXT("highlight_step"),      EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
+		{ TEXT("shadow_color"),        EMMDInputKind::Float3,  0.55f, 0.55f, 0.55f },
+		{ TEXT("specular_power"),      EMMDInputKind::Float,   48.0f, 0.0f, 0.0f },
+		{ TEXT("mat_cap"),             EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("sphere_mode"),         EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("mmd_shadow_map"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("mmd_shadow_bias"),     EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
 	};
 
 	// ---- MMDAnimeEye.usf（眼：虹膜自发光/白高光/睫毛阴影）----
 	static const FMMDCustomInputSpec GEyeInputs[] = {
-		{ TEXT("BaseColor"),         EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
-		{ TEXT("LightDataTex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("ShadowStep"),        EMMDInputKind::Float,   0.5f, 0.0f, 0.0f },
-		{ TEXT("HighlightStep"),     EMMDInputKind::Float,   0.85f, 0.0f, 0.0f },
-		{ TEXT("ShadowColor"),       EMMDInputKind::Float3,  0.55f, 0.55f, 0.55f },
-		{ TEXT("SpecularPower"),     EMMDInputKind::Float,   100.0f, 0.0f, 0.0f },
-		{ TEXT("MatCap"),            EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
-		{ TEXT("SphereMode"),        EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
-		{ TEXT("IrisGlow"),          EMMDInputKind::Float,   1.0f, 0.0f, 0.0f },
-		{ TEXT("GlintStrength"),     EMMDInputKind::Float,   1.5f, 0.0f, 0.0f },
-		{ TEXT("GlintPos"),          EMMDInputKind::Float2,  0.5f, 0.42f, 0.0f },
-		{ TEXT("GlintSize"),         EMMDInputKind::Float,   0.05f, 0.0f, 0.0f },
-		{ TEXT("TopShadow"),         EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
-		{ TEXT("BottomLift"),        EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
+		{ TEXT("base_color"),          EMMDInputKind::Float3,  1.0f, 1.0f, 1.0f },
+		{ TEXT("light_data_tex"),      EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("shadow_step"),         EMMDInputKind::Float,   0.5f, 0.0f, 0.0f },
+		{ TEXT("highlight_step"),      EMMDInputKind::Float,   0.85f, 0.0f, 0.0f },
+		{ TEXT("shadow_color"),        EMMDInputKind::Float3,  0.55f, 0.55f, 0.55f },
+		{ TEXT("specular_power"),      EMMDInputKind::Float,   100.0f, 0.0f, 0.0f },
+		{ TEXT("mat_cap"),             EMMDInputKind::Texture, 0.0f, 0.0f, 0.0f },
+		{ TEXT("sphere_mode"),         EMMDInputKind::Float,   0.0f, 0.0f, 0.0f },
+		{ TEXT("iris_glow"),           EMMDInputKind::Float,   1.0f, 0.0f, 0.0f },
+		{ TEXT("glint_strength"),      EMMDInputKind::Float,   1.5f, 0.0f, 0.0f },
+		{ TEXT("glint_pos"),           EMMDInputKind::Float2,  0.5f, 0.42f, 0.0f },
+		{ TEXT("glint_size"),          EMMDInputKind::Float,   0.05f, 0.0f, 0.0f },
+		{ TEXT("top_shadow"),          EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
+		{ TEXT("bottom_lift"),         EMMDInputKind::Float,   0.6f, 0.0f, 0.0f },
 	};
 
 	static const FMMDMaterialSpec GMaterialSpecs[] = {
@@ -168,24 +168,24 @@ namespace
 		return nullptr;
 	}
 
-	/** 输入名 → 默认纹理（LightDataTex/MMDShadowMap 用真实 RT，其余用引擎默认纹理兜底）。 */
+	/** 输入名 → 默认纹理（light_data_tex/mmd_shadow_map 用真实 RT，其余用引擎默认纹理兜底）。 */
 	UTexture* DefaultTextureForInput(const TCHAR* Name)
 	{
-		if (FCString::Stricmp(Name, TEXT("LightDataTex")) == 0)
+		if (FCString::Stricmp(Name, TEXT("light_data_tex")) == 0)
 		{
 			if (UTexture* RT = LoadObject<UTextureRenderTarget2D>(nullptr, GLightDataRT_Path))
 			{
 				return RT;
 			}
 		}
-		if (FCString::Stricmp(Name, TEXT("MMDShadowMap")) == 0)
+		if (FCString::Stricmp(Name, TEXT("mmd_shadow_map")) == 0)
 		{
 			if (UTexture* RT = LoadObject<UTextureRenderTarget2D>(nullptr, GShadowRT_Path))
 			{
 				return RT;
 			}
 		}
-		if (FCString::Stricmp(Name, TEXT("MatCap")) == 0)
+		if (FCString::Stricmp(Name, TEXT("mat_cap")) == 0)
 		{
 			if (UTexture* BlackTexture = LoadObject<UTexture>(
 				nullptr, TEXT("/Engine/EngineResources/Black.Black")))
@@ -199,18 +199,18 @@ namespace
 	/**
 	 * 为 Custom 输入创建默认表达式并连线。
 	 * 与导入脚本（CreateMaterialFromMMDBase）写入的材质实例参数对齐：
-	 *   BaseColor  -> DiffuseColor(VectorParam, 白) × BaseColorMap(TextureSampleParam2D, 默认白贴图) → RGB
-	 *   MatCap     -> MatCap(TextureObjectParameter)   （实例可覆盖 sphere 贴图，sampler 由节点自动生成）
-	 *   SphereMode -> ScalarParameter "SphereMode"
-	 *   SpecularPower -> ScalarParameter "SpecularPower"
+	 *   base_color    -> DiffuseColor(VectorParam, 白) × BaseColorMap(TextureSampleParam2D, 默认白贴图) → RGB
+	 *   mat_cap       -> mat_cap(TextureObjectParameter)   （实例可覆盖 sphere 贴图，sampler 由节点自动生成）
+	 *   sphere_mode   -> ScalarParameter "sphere_mode"
+	 *   specular_power -> ScalarParameter "specular_power"
 	 * 其余输入按类型给默认常量/纹理对象。
 	 */
 	UMaterialExpression* CreateInputExpression(UMaterial* Material, const FMMDCustomInputSpec& Spec)
 	{
 		const FName InName(Spec.Name);
 
-		// ---- BaseColor：参数链（贴图 × 漫反射色），实例参数写入才生效 ----
-		if (InName == TEXT("BaseColor"))
+		// ---- base_color：参数链（贴图 × 漫反射色），实例参数写入才生效 ----
+		if (InName == TEXT("base_color"))
 		{
 			UMaterialExpressionTextureSampleParameter2D* TexSample = NewObject<UMaterialExpressionTextureSampleParameter2D>(Material);
 			TexSample->ParameterName = TEXT("BaseColorMap");
@@ -239,19 +239,19 @@ namespace
 			return Mask; // float3
 		}
 
-		// ---- MatCap：纹理对象参数（贴 shader 的 Texture2D 输入，不是采样值）----
-		if (InName == TEXT("MatCap"))
+		// ---- mat_cap：纹理对象参数（贴 shader 的 Texture2D 输入，不是采样值）----
+		if (InName == TEXT("mat_cap"))
 		{
 			UMaterialExpressionTextureObjectParameter* TexParam = NewObject<UMaterialExpressionTextureObjectParameter>(Material);
-			TexParam->ParameterName = TEXT("MatCap");
-			TexParam->Texture = DefaultTextureForInput(TEXT("MatCap"));
+			TexParam->ParameterName = TEXT("mat_cap");
+			TexParam->Texture = DefaultTextureForInput(TEXT("mat_cap"));
 			Material->GetExpressionCollection().Expressions.Add(TexParam);
 			TexParam->Material = Material;
 			return TexParam;
 		}
 
 		// ---- 标量参数（实例可覆盖）----
-		if (InName == TEXT("SphereMode") || InName == TEXT("SpecularPower"))
+		if (InName == TEXT("sphere_mode") || InName == TEXT("specular_power"))
 		{
 			UMaterialExpressionScalarParameter* ScalarParam = NewObject<UMaterialExpressionScalarParameter>(Material);
 			ScalarParam->ParameterName = Spec.Name;
@@ -382,8 +382,8 @@ namespace
 					const FString ActualClass = Existing->Input.Expression->GetClass()->GetName();
 					bool bHealthy = true;
 
-					// BaseColor (Float3) 必须是 ComponentMask（链末端），不能是裸 TextureSample
-					if (InSpec.Kind == EMMDInputKind::Float3 && FCString::Stricmp(InSpec.Name, TEXT("BaseColor")) == 0)
+					// base_color (Float3) 必须是 ComponentMask（链末端），不能是裸 TextureSample
+					if (InSpec.Kind == EMMDInputKind::Float3 && FCString::Stricmp(InSpec.Name, TEXT("base_color")) == 0)
 					{
 						if (ActualClass.Contains(TEXT("TextureSample")))
 						{
@@ -424,7 +424,7 @@ namespace
 			UMaterialExpression* DefExpr = CreateInputExpression(Material, InSpec);
 			if (DefExpr)
 			{
-				// 参数链（BaseColor 等）已在链内注册子节点；这里只补顶层节点，避免重复入图
+				// 参数链（base_color 等）已在链内注册子节点；这里只补顶层节点，避免重复入图
 				if (!Material->GetExpressionCollection().Expressions.Contains(DefExpr))
 				{
 					Material->GetExpressionCollection().Expressions.Add(DefExpr);
