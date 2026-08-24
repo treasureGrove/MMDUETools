@@ -1,7 +1,5 @@
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
 
-#include "EngineModule.h"
-#include "RendererInterface.h"
 #include "RenderGraphUtils.h"
 #include "EngineUtils.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -47,11 +45,8 @@ namespace
 void UMMDAnimeLightDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-
-	PostOpaqueDelegateHandle = GetRendererModule().RegisterPostOpaqueRenderDelegate(
-		FPostOpaqueRenderDelegate::CreateUObject(this, &UMMDAnimeLightDataSubsystem::OnPostOpaque));
-
-	UE_LOG(LogTemp, Log, TEXT("[MMDAnimeLight] Subsystem initialized, PostOpaque delegate registered."));
+	ShadowCameraData.Init(FVector4f(0.0f, 0.0f, 0.0f, 0.0f), 18);
+	UE_LOG(LogTemp, Log, TEXT("[MMDAnimeLight] Subsystem initialized."));
 }
 
 UMMDAnimeLightDataSubsystem* UMMDAnimeLightDataSubsystem::Get()
@@ -62,13 +57,6 @@ UMMDAnimeLightDataSubsystem* UMMDAnimeLightDataSubsystem::Get()
 void UMMDAnimeLightDataSubsystem::Deinitialize()
 {
 	FlushRenderingCommands();
-
-	if (PostOpaqueDelegateHandle.IsValid())
-	{
-		GetRendererModule().RemovePostOpaqueRenderDelegate(PostOpaqueDelegateHandle);
-		PostOpaqueDelegateHandle.Reset();
-	}
-
 	Super::Deinitialize();
 }
 
@@ -86,9 +74,13 @@ void UMMDAnimeLightDataSubsystem::SetLightDataRenderTarget(UTextureRenderTarget2
 	}
 }
 
-void UMMDAnimeLightDataSubsystem::SetShadowCameraData(const FVector4f InData[4])
+void UMMDAnimeLightDataSubsystem::SetShadowCameraData(const FVector4f InData[18])
 {
-	for (int32 i = 0; i < 4; i++)
+	if (ShadowCameraData.Num() != 18)
+	{
+		ShadowCameraData.SetNumUninitialized(18);
+	}
+	for (int32 i = 0; i < 18; i++)
 	{
 		ShadowCameraData[i] = InData[i];
 	}
@@ -195,17 +187,14 @@ void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
 		}
 	}
 
-	// 追加阴影相机基到第 2 行（y=1）：texel 0..3（写进 LightDataRT 的 64..67）
-	Data.SetNum(MaxLights * 4 + 4);
-	for (int32 i = 0; i < 4; i++)
+	// 第 2 行：texel 0..15 为四级联基，texel 16/17 为主相机位置/前向。
+	Data.SetNum(MaxLights * 4 + 18);
+	for (int32 i = 0; i < 18; i++)
 	{
 		Data[MaxLights * 4 + i] = ShadowCameraData[i];
 	}
 
-	// Push to the render thread. Both the writer (this command) and the reader
-	// (OnPostOpaque) run on the render thread, so no lock is needed. This runs
-	// from SetupViewFamily (before the scene render is dispatched), so PostOpaque
-	// reads the data for the CURRENT frame - no one-frame latency.
+	// SetupView 在场景渲染提交前推到渲染线程；PreRenderViewFamily 随后在同帧写 RT。
 	TArray<FVector4f> DataCopy = MoveTemp(Data);
 	ENQUEUE_RENDER_COMMAND(MMDAnimeUpdateLightData)(
 		[this, DataCopy = MoveTemp(DataCopy)](FRHICommandListImmediate& RHICmdList) mutable
@@ -446,15 +435,15 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 	}
 }
 
-void UMMDAnimeLightDataSubsystem::OnPostOpaque(FPostOpaqueRenderParameters& Parameters)
+void UMMDAnimeLightDataSubsystem::WriteLightData_RenderThread(FRDGBuilder& GraphBuilder)
 {
+	check(IsInRenderingThread());
 	if (!bCollectionEnabled || !LightDataRT || !LightDataRT->GetRenderTargetResource())
 	{
 		return;
 	}
 
-	FRDGBuilder* GraphBuilder = Parameters.GraphBuilder;
-	if (!GraphBuilder || RenderThreadLightData.Num() == 0)
+	if (RenderThreadLightData.Num() == 0)
 	{
 		return;
 	}
@@ -465,22 +454,23 @@ void UMMDAnimeLightDataSubsystem::OnPostOpaque(FPostOpaqueRenderParameters& Para
 		return;
 	}
 
-	FRDGTextureRef RT = GraphBuilder->RegisterExternalTexture(
+	FRDGTextureRef RT = GraphBuilder.RegisterExternalTexture(
 		CreateRenderTarget(RTTex, TEXT("MMDAnimeLightDataRT")));
+	GraphBuilder.UseInternalAccessMode(RT);
 
 	FRDGBufferRef LightBuffer = CreateStructuredBuffer(
-		*GraphBuilder,
+		GraphBuilder,
 		TEXT("MMDAnimeLightData"),
 		sizeof(FVector4f),
 		RenderThreadLightData.Num(),
 		RenderThreadLightData.GetData(),
 		RenderThreadLightData.Num() * sizeof(FVector4f));
 
-	FRDGBufferSRVRef LightSRV = GraphBuilder->CreateSRV(FRDGBufferSRVDesc(LightBuffer));
-	FRDGTextureUAVRef OutputUAV = GraphBuilder->CreateUAV(FRDGTextureUAVDesc(RT));
+	FRDGBufferSRVRef LightSRV = GraphBuilder.CreateSRV(FRDGBufferSRVDesc(LightBuffer));
+	FRDGTextureUAVRef OutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(RT));
 
 	FMMDAnimeWriteLightsCS::FParameters* Params =
-		GraphBuilder->AllocParameters<FMMDAnimeWriteLightsCS::FParameters>();
+		GraphBuilder.AllocParameters<FMMDAnimeWriteLightsCS::FParameters>();
 	Params->LightData = LightSRV;
 	Params->OutputTexture = OutputUAV;
 
@@ -498,9 +488,10 @@ void UMMDAnimeLightDataSubsystem::OnPostOpaque(FPostOpaqueRenderParameters& Para
 	}
 
 	FComputeShaderUtils::AddPass(
-		*GraphBuilder,
+		GraphBuilder,
 		RDG_EVENT_NAME("MMDAnimeWriteLights"),
 		CS,
 		Params,
-		FIntVector(MaxLights * 4 + 4, 1, 1));   // 64 灯光 + 4 阴影基
+		FIntVector(FMath::DivideAndRoundUp(MaxLights * 4 + 18, 64), 1, 1));
+	GraphBuilder.UseExternalAccessMode(RT, ERHIAccess::SRVMask);
 }

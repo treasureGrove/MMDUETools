@@ -8,7 +8,9 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/TextureCube.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SButton.h"
@@ -34,12 +36,14 @@
 #include "Animation/AnimationAsset.h"
 #include "Animation/SkeletalMeshActor.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/PostProcessComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "HitProxies.h"
 #include "Templates/SharedPointer.h"
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
+#include "UObject/UnrealType.h"
 
 class FMMDViewportClient : public FEditorViewportClient
 {
@@ -75,6 +79,7 @@ public:
         EngineShowFlags.SetSelection(true);
         EngineShowFlags.SetSelectionOutline(true);
         EngineShowFlags.SetModeWidgets(true);
+		EngineShowFlags.SetGrid(false);
         // 连接到编辑器选择系统
         USelection::SelectionChangedEvent.AddRaw(this, &FMMDViewportClient::OnActorSelectionChanged);
         
@@ -896,6 +901,7 @@ void MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
 int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment)
 {
 	CurrentLightingEnvironment = Environment;
+	SyncPreviewStageToEnvironment(Environment);
 	int32 Count = 0;
 	if (PreviewScene.IsValid())
 	{
@@ -929,6 +935,8 @@ int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment
 
 		if (CustomViewportClient.IsValid())
 		{
+			// SEditorViewport 会在客户端构造后恢复部分编辑器显示标志；环境切换末尾再次锁定 LookDev 视口。
+			CustomViewportClient->EngineShowFlags.SetGrid(false);
 			CustomViewportClient->Invalidate();
 		}
 	}
@@ -999,43 +1007,148 @@ void MMDViewPanel::BuildPreviewStage()
 		return;
 	}
 
-	// 与插件 LookDev map 相同的中性灰开放舞台。侧墙会遮光并制造无关反射，因此不创建。
+	// 与 Content LookDev map 相同的中性灰开放舞台。
 	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (!CubeMesh)
 	{
 		return;
 	}
 
-	struct FStageSpec
-	{
-		FString Name;
-		FVector Loc;
-		FVector Scale;
-	};
-
-	const FStageSpec Specs[] = {
-		{ TEXT("MMDStageFloor"), FVector(0.0f, 0.0f, -5.0f), FVector(12.0f, 12.0f, 0.1f) },
-		{ TEXT("MMDStageBack"), FVector(0.0f, -420.0f, 220.0f), FVector(12.0f, 0.1f, 4.5f) },
-	};
 	UMaterialInterface* NeutralMaterial = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Engine/BasicShapes/BasicShapeMaterial_Inst.BasicShapeMaterial_Inst"));
+		TEXT("/Ue5MMDTools/LookDev/Materials/MI_LookDevGray18.MI_LookDevGray18"));
+	UMaterialInterface* ReferenceMaterial = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Ue5MMDTools/LookDev/Materials/M_LookDevReference.M_LookDevReference"));
+	if (!NeutralMaterial)
+	{
+		NeutralMaterial = ReferenceMaterial;
+	}
+	// 这些材质只由 Panel 动态引用；创建 scene proxy 前等待其 shader map，避免 WorldGridMaterial 回退。
+	if (ReferenceMaterial)
+	{
+		ReferenceMaterial->EnsureIsComplete();
+	}
+	if (NeutralMaterial && NeutralMaterial != ReferenceMaterial)
+	{
+		NeutralMaterial->EnsureIsComplete();
+	}
 
-	for (const FStageSpec& Spec : Specs)
+	auto CreateStageComponent = [this, CubeMesh, NeutralMaterial, ReferenceMaterial](const FVector& Location, const FVector& Scale)
 	{
 		UStaticMeshComponent* CubeComp = NewObject<UStaticMeshComponent>(GetTransientPackage(), NAME_None, RF_Transient);
 		if (!CubeComp)
 		{
-			continue;
+			return static_cast<UStaticMeshComponent*>(nullptr);
 		}
 		CubeComp->SetStaticMesh(CubeMesh);
-		CubeComp->SetMobility(EComponentMobility::Movable);
+		CubeComp->SetMobility(EComponentMobility::Static);
 		CubeComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		if (NeutralMaterial)
+		CubeComp->SetCastShadow(true);
+		if (ReferenceMaterial)
+		{
+			UMaterialInstanceDynamic* GrayMaterial = UMaterialInstanceDynamic::Create(ReferenceMaterial, CubeComp);
+			GrayMaterial->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.18f, 0.18f, 0.18f));
+			GrayMaterial->SetScalarParameterValue(TEXT("Metallic"), 0.0f);
+			GrayMaterial->SetScalarParameterValue(TEXT("Roughness"), 0.5f);
+			CubeComp->SetMaterial(0, GrayMaterial);
+		}
+		else if (NeutralMaterial)
 		{
 			CubeComp->SetMaterial(0, NeutralMaterial);
 		}
-		PreviewScene->AddComponent(CubeComp, FTransform(FRotator::ZeroRotator, Spec.Loc, Spec.Scale));
+		PreviewScene->AddComponent(CubeComp, FTransform(FRotator::ZeroRotator, Location, Scale));
+		return CubeComp;
+	};
+
+	PreviewFloorComponent = CreateStageComponent(
+		FVector(0.0f, 0.0f, -5.0f), FVector(12.0f, 12.0f, 0.1f));
+	PreviewBackdropComponent = CreateStageComponent(
+		FVector(0.0f, -420.0f, 220.0f), FVector(12.0f, 0.1f, 4.5f));
+
+	// 与 Content LookDev map 使用同一个 HDRIBackdrop Blueprint；关闭其 Skylight，只保留可见穹顶。
+	UClass* HDRIBackdropClass = LoadClass<AActor>(nullptr,
+		TEXT("/HDRIBackdrop/Blueprints/HDRIBackdrop.HDRIBackdrop_C"));
+	UTextureCube* SkyCubemap = LoadObject<UTextureCube>(nullptr,
+		TEXT("/Engine/MapTemplates/Sky/DaylightAmbientCubemap.DaylightAmbientCubemap"));
+	if (HDRIBackdropClass && SkyCubemap && PreviewScene->GetWorld())
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		PreviewHDRIBackdropActor = PreviewScene->GetWorld()->SpawnActor<AActor>(
+			HDRIBackdropClass, FVector(0.0f, 0.0f, -75.0f), FRotator::ZeroRotator, Params);
+		if (PreviewHDRIBackdropActor)
+		{
+			if (FObjectPropertyBase* CubemapProperty = FindFProperty<FObjectPropertyBase>(HDRIBackdropClass, TEXT("Cubemap")))
+			{
+				CubemapProperty->SetObjectPropertyValue_InContainer(PreviewHDRIBackdropActor, SkyCubemap);
+			}
+			if (FFloatProperty* IntensityProperty = FindFProperty<FFloatProperty>(HDRIBackdropClass, TEXT("Intensity")))
+			{
+				IntensityProperty->SetPropertyValue_InContainer(PreviewHDRIBackdropActor, 1000.0f);
+			}
+			if (FFloatProperty* SizeProperty = FindFProperty<FFloatProperty>(HDRIBackdropClass, TEXT("Size")))
+			{
+				SizeProperty->SetPropertyValue_InContainer(PreviewHDRIBackdropActor, 100.0f);
+			}
+			if (FStructProperty* ProjectionProperty = FindFProperty<FStructProperty>(HDRIBackdropClass, TEXT("ProjectionCenter")))
+			{
+				*ProjectionProperty->ContainerPtrToValuePtr<FVector>(PreviewHDRIBackdropActor) = FVector(0.0f, 0.0f, 165.0f);
+			}
+			PreviewHDRIBackdropActor->RerunConstructionScripts();
+			if (FObjectPropertyBase* GeometryProperty = FindFProperty<FObjectPropertyBase>(HDRIBackdropClass, TEXT("Geometry")))
+			{
+				PreviewSkyboxComponent = Cast<UStaticMeshComponent>(
+					GeometryProperty->GetObjectPropertyValue_InContainer(PreviewHDRIBackdropActor));
+				if (PreviewSkyboxComponent)
+				{
+					const FTransform GeometryTransform = PreviewSkyboxComponent->GetComponentTransform();
+					PreviewSkyboxComponent->UnregisterComponent();
+					PreviewScene->AddComponent(PreviewSkyboxComponent, GeometryTransform);
+				}
+			}
+			if (USkyLightComponent* BackdropSky = PreviewHDRIBackdropActor->FindComponentByClass<USkyLightComponent>())
+			{
+				BackdropSky->SetVisibility(false);
+				BackdropSky->SetIntensity(0.0f);
+			}
+		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 预览舞台已搭建（中性地面+背景墙）"));
+	PreviewPostProcessComponent = NewObject<UPostProcessComponent>(GetTransientPackage(), NAME_None, RF_Transient);
+	if (PreviewPostProcessComponent)
+	{
+		PreviewPostProcessComponent->bUnbound = true;
+		PreviewPostProcessComponent->Priority = 100.0f;
+		PreviewPostProcessComponent->BlendWeight = 1.0f;
+		UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(PreviewPostProcessComponent->Settings);
+		PreviewScene->AddComponent(PreviewPostProcessComponent, FTransform::Identity);
+	}
+
+	SyncPreviewStageToEnvironment(CurrentLightingEnvironment);
+	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] Panel LookDev 已同步（18%% 灰地面、背景、Skybox、默认曝光）"));
+}
+
+void MMDViewPanel::SyncPreviewStageToEnvironment(EMMDLightingEnvironment Environment)
+{
+	const bool bUseHDRI = Environment == EMMDLightingEnvironment::Daylight ||
+		Environment == EMMDLightingEnvironment::OvercastSoft ||
+		Environment == EMMDLightingEnvironment::GoldenHour;
+
+	if (PreviewFloorComponent)
+	{
+		PreviewFloorComponent->SetVisibility(true);
+	}
+	if (PreviewBackdropComponent)
+	{
+		PreviewBackdropComponent->SetVisibility(!bUseHDRI);
+	}
+	if (PreviewSkyboxComponent)
+	{
+		PreviewSkyboxComponent->SetHiddenInGame(!bUseHDRI, true);
+		PreviewSkyboxComponent->SetVisibility(bUseHDRI, true);
+	}
+	if (PreviewPostProcessComponent)
+	{
+		UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(PreviewPostProcessComponent->Settings);
+	}
 }

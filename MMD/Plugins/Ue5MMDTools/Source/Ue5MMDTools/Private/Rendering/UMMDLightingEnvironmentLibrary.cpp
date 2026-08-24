@@ -67,6 +67,7 @@ namespace
 		float OuterCone = 35.0f;     // 聚光外锥半角（度）
 		float SourceWidth = 64.0f;   // 矩形光宽度（cm）
 		float SourceHeight = 64.0f;  // 矩形光高度（cm）
+		float SourceAngle = 0.5357f; // 平行光角直径（度）；阴天使用更大角度获得软阴影
 		const TCHAR* CubemapPath = TEXT("/Engine/MapTemplates/Sky/DaylightAmbientCubemap.DaylightAmbientCubemap");
 		float CubemapAngle = 0.0f;
 	};
@@ -78,13 +79,14 @@ namespace
 		return Spec.Intensity * (Spec.Kind == EMMDLightKind::Directional ? 2000.0f : 37440.0f);
 	}
 
-	FMMDLightSpec MakeDir(FRotator Rot, const FLinearColor& Color, float Intensity)
+	FMMDLightSpec MakeDir(FRotator Rot, const FLinearColor& Color, float Intensity, float SourceAngle = 0.5357f)
 	{
 		FMMDLightSpec S;
 		S.Kind = EMMDLightKind::Directional;
 		S.Rotation = Rot;
 		S.Color = Color;
 		S.Intensity = Intensity;
+		S.SourceAngle = SourceAngle;
 		return S;
 	}
 
@@ -165,8 +167,8 @@ namespace
 
 		case EMMDLightingEnvironment::OvercastSoft:
 			// 阴天柔光：顶部柔光 + 高天光，几乎无硬阴影。
-			Specs.Add(MakeDir(FRotator(-78.0f, -10.0f, 0.0f), FLinearColor(0.86f, 0.90f, 0.98f), 1.55f));
-			Specs.Add(MakeSky(FLinearColor(0.72f, 0.78f, 0.88f), 1.9f));
+			Specs.Add(MakeDir(FRotator(-78.0f, -10.0f, 0.0f), FLinearColor(0.86f, 0.90f, 0.98f), 2.4f, 5.0f));
+			Specs.Add(MakeSky(FLinearColor(0.72f, 0.78f, 0.88f), 2.2f));
 			break;
 
 		case EMMDLightingEnvironment::IndoorWarm:
@@ -258,7 +260,9 @@ namespace
 					Sky->SetCubemap(Cubemap);
 					Sky->SetSourceCubemapAngle(Spec.CubemapAngle);
 				}
-				Sky->SetIntensity(Spec.Intensity * 1000.0f);
+				// SkyLight Intensity 是无量纲倍率（引擎默认 1），不能按 lux/lumen 再乘 1000。
+				// 可见 HDRI 的亮度由 Backdrop 单独控制，IBL 只使用这里的场景规格。
+				Sky->SetIntensity(Spec.Intensity);
 				Sky->SetLightColor(Spec.Color);
 			}
 		}
@@ -277,6 +281,10 @@ namespace
 				PointLight->AttenuationRadius = Spec.Radius;
 			}
 			Light->SetCastShadows(true);
+		}
+		if (UDirectionalLightComponent* Directional = Actor->FindComponentByClass<UDirectionalLightComponent>())
+		{
+			Directional->SetLightSourceAngle(Spec.SourceAngle);
 		}
 
 		if (USpotLightComponent* Spot = Actor->FindComponentByClass<USpotLightComponent>())
@@ -341,7 +349,7 @@ namespace
 					Sky->SetCubemap(Cubemap);
 					Sky->SetSourceCubemapAngle(Spec.CubemapAngle);
 				}
-				Sky->SetIntensity(Spec.Intensity * 1000.0f);
+				Sky->SetIntensity(Spec.Intensity);
 				Sky->SetLightColor(Spec.Color);
 			}
 		}
@@ -372,6 +380,11 @@ namespace
 			}
 		}
 
+		if (UDirectionalLightComponent* Directional = Cast<UDirectionalLightComponent>(SceneComp))
+		{
+			Directional->SetLightSourceAngle(Spec.SourceAngle);
+		}
+
 		PreviewScene->AddComponent(SceneComp, FTransform(Spec.Rotation, Spec.Location));
 		return SceneComp;
 	}
@@ -399,7 +412,7 @@ namespace
 	}
 
 #if WITH_EDITOR
-	void ConfigureLookDevPostProcess(FPostProcessSettings& S)
+	void ConfigureLookDevPostProcessSettings(FPostProcessSettings& S)
 	{
 		S.bOverride_AutoExposureMethod = true;
 		S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
@@ -462,7 +475,12 @@ namespace
 
 		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 		UMaterialInterface* NeutralMaterial = LoadObject<UMaterialInterface>(nullptr,
-			TEXT("/Engine/BasicShapes/BasicShapeMaterial_Inst.BasicShapeMaterial_Inst"));
+			TEXT("/Ue5MMDTools/LookDev/Materials/MI_LookDevGray18.MI_LookDevGray18"));
+		if (!NeutralMaterial)
+		{
+			NeutralMaterial = LoadObject<UMaterialInterface>(nullptr,
+				TEXT("/Engine/BasicShapes/BasicShapeMaterial_Inst.BasicShapeMaterial_Inst"));
+		}
 
 		auto SpawnStageMesh = [World, Cube, NeutralMaterial](const TCHAR* Label, const FVector& Location, const FVector& Scale)
 		{
@@ -508,7 +526,7 @@ namespace
 			PP->SetFolderPath(TEXT("MMD LookDev"));
 			PP->bUnbound = true;
 			PP->Priority = 100.0f;
-			ConfigureLookDevPostProcess(PP->Settings);
+			ConfigureLookDevPostProcessSettings(PP->Settings);
 		}
 
 		ACameraActor* Camera = World->SpawnActor<ACameraActor>(FVector(0.0f, 450.0f, 105.0f), FRotator(0.0f, -90.0f, 0.0f), Params);
@@ -529,6 +547,21 @@ namespace
 		}
 	}
 #endif
+}
+
+void UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(FPostProcessSettings& Settings)
+{
+	#if WITH_EDITOR
+	ConfigureLookDevPostProcessSettings(Settings);
+	Settings.bOverride_AutoExposureMethod = false;
+	Settings.bOverride_AutoExposureBias = false;
+	Settings.bOverride_AutoExposureApplyPhysicalCameraExposure = false;
+	Settings.bOverride_CameraISO = false;
+	Settings.bOverride_CameraShutterSpeed = false;
+	Settings.bOverride_DepthOfFieldFstop = false;
+	#else
+	Settings = FPostProcessSettings();
+	#endif
 }
 
 int32 UMMDLightingEnvironmentLibrary::ApplyLightingEnvironment(UWorld* World, EMMDLightingEnvironment Environment)
@@ -851,6 +884,44 @@ FString BuildEnvironmentLevelAsset(EMMDLightingEnvironment Environment, const FS
 	{
 		UE_LOG(LogTemp, Error, TEXT("[MMDLighting] 保存关卡失败：%s"), *FileName);
 		return FString();
+	}
+
+	// World Partition 会把舞台、灯光等 Actor 存到独立 External Actor 包。
+	// 只保存主 .umap 会留下旧 Actor，下一次加载时就会把刚重建的内容覆盖掉。
+	TArray<UPackage*> DirtyWorldPackages;
+	FEditorFileUtils::GetDirtyWorldPackages(DirtyWorldPackages);
+	FString PluginRoot = FolderPath;
+	int32 LastSlash = INDEX_NONE;
+	if (PluginRoot.FindLastChar(TEXT('/'), LastSlash))
+	{
+		PluginRoot.LeftInline(LastSlash, EAllowShrinking::No);
+	}
+	const FString ExternalActorPrefix = PluginRoot / TEXT("__ExternalActors__") / TEXT("Maps") / AssetName;
+	const FString ExternalObjectPrefix = PluginRoot / TEXT("__ExternalObjects__") / TEXT("Maps") / AssetName;
+	TArray<UPackage*> ExternalPackages;
+	for (UPackage* DirtyPackage : DirtyWorldPackages)
+	{
+		if (!DirtyPackage)
+		{
+			continue;
+		}
+		const FString DirtyName = DirtyPackage->GetName();
+		if (DirtyName.StartsWith(ExternalActorPrefix) || DirtyName.StartsWith(ExternalObjectPrefix))
+		{
+			ExternalPackages.AddUnique(DirtyPackage);
+		}
+	}
+	if (ExternalPackages.Num() > 0)
+	{
+		TArray<UPackage*> FailedPackages;
+		const FEditorFileUtils::EPromptReturnCode SaveResult = FEditorFileUtils::PromptForCheckoutAndSave(
+			ExternalPackages, false, false, &FailedPackages, false, false);
+		if (SaveResult == FEditorFileUtils::PR_Failure || FailedPackages.Num() > 0)
+		{
+			UE_LOG(LogTemp, Error, TEXT("[MMDLighting] External Actor 保存失败：%s (%d 个包)"),
+				*PackagePath, FailedPackages.Num());
+			return FString();
+		}
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 已%s LookDev 关卡：%s"), bRebuild ? TEXT("重建") : TEXT("生成"), *PackagePath);
@@ -1420,5 +1491,14 @@ static FAutoConsoleCommand CmdMMDLighting(
 	TEXT("MMD.Lighting"),
 	TEXT("MMD: 应用/清除光照环境到当前关卡. 用法: MMD.Lighting <3point|daylight|overcast|indoor|neon|rim|golden|horror|clear>"),
 	FConsoleCommandWithArgsDelegate::CreateStatic(ExecMMDLighting));
+
+static FAutoConsoleCommand CmdMMDRebuildLookDev(
+	TEXT("MMD.RebuildLookDev"),
+	TEXT("MMD: 重建并保存插件内全部 LookDev 关卡。"),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		const int32 Count = UMMDLightingEnvironmentLibrary::RebuildAllEnvironmentLevelAssets();
+		UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 控制台重建完成：%d/8"), Count);
+	}));
 
 #endif // WITH_EDITOR

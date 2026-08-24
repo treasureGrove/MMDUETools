@@ -5,18 +5,12 @@
 #include "Engine/EngineTypes.h"
 #include "SceneView.h"
 
-void FMMDAnimeLightViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
+void FMMDAnimeLightViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
 {
-	// 只在主视角 ViewFamily 上注入阴影 CustomRenderPass 和收集灯光数据。
-	//
-	// 区分主视角 vs SceneCapture 的方法：
-	// FSceneViewFamily 没有 bIsSceneCapture 字段，且 bIsMainViewFamily 只在 PIE/Game 视口才被设 true，
-	// 编辑器视口里永远是 false，不能用。FSceneView::bIsSceneCapture 此时还没初始化（Views 还没建）。
-	// 只能用 ViewFamily.SceneCaptureSource：构造默认值是 SCS_FinalColorLDR，
-	// SceneCaptureComponent 在 SetupViewFamilyForSceneCapture 里会改成它自己的 CaptureSource
-	// （SCS_SceneDepth / SCS_FinalColorLDR 等）。但 SCS_FinalColorLDR 也是 FinalColor 类 capture 的值，
-	// 所以此判断会把 FinalColor 类 capture 也放过去（保守安全，宁可漏注也不能错注入导致 RDG 崩溃）。
-	if (InViewFamily.SceneCaptureSource != ESceneCaptureSource::SCS_FinalColorLDR)
+	// SetupView 已有准确的主相机位置、旋转与投影矩阵，可直接按真实视锥构造 CSM。
+	// 只处理 ViewFamily 的第一个非 SceneCapture 视图，避免分屏/立体视图重复提交。
+	if (InView.bIsSceneCapture ||
+		(InViewFamily.Views.Num() > 0 && InViewFamily.Views[0] != &InView))
 	{
 		return;
 	}
@@ -25,12 +19,27 @@ void FMMDAnimeLightViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily
 	//    必须在 CollectLightsForFrame 之前，保证同一帧的相机基被一起打包进 LightDataRT。
 	if (UMMDShadowMapSubsystem* ShadowSubsystem = UMMDShadowMapSubsystem::Get())
 	{
-		ShadowSubsystem->UpdateShadowForFrame(&InViewFamily);
+		ShadowSubsystem->UpdateShadowForFrame(&InViewFamily, &InView);
 	}
 
-	// 2. 收集场景灯光 + 阴影相机基，一起打包推到 render thread，本帧 PostOpaque 写入 LightDataRT。
+	// 2. 收集场景灯光 + 阴影相机基，一起推到 render thread，本帧 BasePass 前写入 LightDataRT。
 	if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
 	{
 		Subsystem->CollectLightsForFrame();
+	}
+}
+
+void FMMDAnimeLightViewExtension::PreRenderViewFamily_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	FSceneViewFamily& InViewFamily)
+{
+	if (InViewFamily.Views.Num() == 0 || InViewFamily.Views[0]->bIsSceneCapture)
+	{
+		return;
+	}
+
+	if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
+	{
+		Subsystem->WriteLightData_RenderThread(GraphBuilder);
 	}
 }

@@ -9,6 +9,9 @@
 class FEditorModeTools; // forward declare editor type
 class UPoseableMeshComponent;
 class UAnimSequence;
+class UMaterialInterface;
+class UPostProcessComponent;
+class UStaticMeshComponent;
 struct FReferenceSkeleton;
 enum class EMMDLightingEnvironment : uint8;
 
@@ -38,7 +41,7 @@ public:
 	/** 把编辑器主透视视口相机归位到看向舞台中央（模型原点）的标准机位。 */
 	void ResetPreviewCamera();
 
-	/** 在预览场景搭建 MMD 影棚舞台（Cube 地面+背墙+侧墙），与光照环境 map 的舞台一致。 */
+	/** 在预览场景搭建 MMD LookDev 舞台、后处理与可见天空，与 Content 环境关卡一致。 */
 	void BuildPreviewStage();
 
 protected:
@@ -62,6 +65,13 @@ private:
 	AActor* PreviewActor = nullptr;
 	UPoseableMeshComponent* PhysicsBakePreviewComponent = nullptr;
 	EMMDLightingEnvironment CurrentLightingEnvironment;
+	UStaticMeshComponent* PreviewFloorComponent = nullptr;
+	UStaticMeshComponent* PreviewBackdropComponent = nullptr;
+	AActor* PreviewHDRIBackdropActor = nullptr;
+	UStaticMeshComponent* PreviewSkyboxComponent = nullptr;
+	UPostProcessComponent* PreviewPostProcessComponent = nullptr;
+
+	void SyncPreviewStageToEnvironment(EMMDLightingEnvironment Environment);
 
 	TSharedPtr<FEditorModeTools> LocalModeTools;
 };

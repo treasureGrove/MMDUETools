@@ -4,14 +4,14 @@
 #include "UMMDAnimeLightDataSubsystem.generated.h"
 
 class UTextureRenderTarget2D;
-class FPostOpaqueRenderParameters;
+class FRDGBuilder;
 
 /**
  * Collects scene lights on the game thread (triggered from a view extension's
  * SetupViewFamily, so it stays synchronized with the current frame), packs them
  * into a light data buffer (16 lights x 4 float4 per light), and writes it into
- * a user-provided UTextureRenderTarget2D via a compute pass hooked to the
- * renderer's PostOpaque delegate.
+ * a user-provided UTextureRenderTarget2D from the view extension's render-thread
+ * pre-render callback, before the current frame's BasePass.
  *
  * Light data texture layout (width = 16 * 4 = 64, height = 2, RGBA32F):
  *   row 0, slot i occupies texels x = i*4+0 .. i*4+3:
@@ -19,7 +19,7 @@ class FPostOpaqueRenderParameters;
  *     +1 : float4(color.rgb, intensity)
  *     +2 : float4(direction.rgb, radius)  directional uses direction, point/spot use radius
  *     +3 : float4(innerCos, outerCos, falloff, 0)   rect: (sizeX, sizeY, 0, 0)
- *   row 1, texels x = 0..3 : MMD 阴影相机基（见 UMMDShadowMapSubsystem，材质侧由
+ *   row 1, texels x = 0..17 : MMD 四级联阴影相机数据（见 UMMDShadowMapSubsystem，材质侧由
  *   MMDToonLighting.ush 的 SampleMMDShadow 读取）。
  */
 UCLASS()
@@ -37,8 +37,11 @@ public:
 	virtual void Deinitialize() override;
 
 	/** Collects lights and pushes them to the render thread for the current frame.
-	 *  Called from a view extension's SetupViewFamily on the game thread. */
+	 *  Called from a view extension's SetupView on the game thread. */
 	void CollectLightsForFrame();
+
+	/** 渲染线程在场景渲染开始时写入 LightDataRT，保证阴影 atlas 与相机基来自同一帧。 */
+	void WriteLightData_RenderThread(FRDGBuilder& GraphBuilder);
 
 	/** Register the render target that will receive the packed light data. */
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|LightData")
@@ -50,9 +53,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|LightData")
 	void SetLightDataCollectionEnabled(bool bInEnabled) { bCollectionEnabled = bInEnabled; }
 
-	/** 设置本帧的阴影相机基数据（4 个 float4），会被写进 LightDataRT 第 2 行（y=1）。
-	 *  布局见 MMDToonLighting.ush 的 SampleMMDShadow 注释。游戏线程调用。 */
-	void SetShadowCameraData(const FVector4f InData[4]);
+	/** 设置本帧的阴影相机数据（18 个 float4 = 4 级联基 + 主相机位置/前向），
+	 *  会被写进 LightDataRT 第 2 行（y=1）。布局见 MMDToonLighting.ush 的 SampleMMDShadow 注释。
+	 *  游戏线程调用。 */
+	void SetShadowCameraData(const FVector4f InData[18]);
 
 	/** 设置“预览灯光覆盖”数据（已按 LightDataRT 布局打包，MaxLights*4 个 float4）。
 	 *  预览场景的灯是孤儿组件（无 owner actor），GWorld 扫描收集不到，
@@ -68,7 +72,6 @@ public:
 
 private:
 	void CollectLights(UWorld* World, TArray<FVector4f>& OutData);
-	void OnPostOpaque(FPostOpaqueRenderParameters& Parameters);
 
 	/** Auto-loads (or auto-creates in the editor) the light data RT asset and registers it. */
 	void AutoSetupLightDataRT();
@@ -79,8 +82,6 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> LightDataRT = nullptr;
 
-	FDelegateHandle PostOpaqueDelegateHandle;
-
 	// Render-thread-owned copy of the latest packed light data.
 	TArray<FVector4f> RenderThreadLightData;
 
@@ -88,10 +89,6 @@ private:
 	// When set, CollectLightsForFrame uses this instead of scanning GWorld.
 	TArray<FVector4f> PreviewLightOverrideData;
 
-	// Game-thread-owned shadow camera basis (4 float4), written to LightDataRT row 1.
-	FVector4f ShadowCameraData[4] = {
-		FVector4f(0.f, 0.f, 0.f, 0.f),
-		FVector4f(0.f, 0.f, 0.f, 0.f),
-		FVector4f(0.f, 0.f, 0.f, 0.f),
-		FVector4f(0.f, 0.f, 0.f, 0.f) };
+	// Game-thread-owned shadow camera data, written to LightDataRT row 1.
+	TArray<FVector4f> ShadowCameraData;
 };

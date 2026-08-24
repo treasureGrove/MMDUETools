@@ -1101,20 +1101,36 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().FillWidth(2.0f).Padding(0.0f, 0.0f, 2.0f, 0.0f)
 				[
-					MMDMakeButton(FText::FromString(FString::Printf(TEXT("打开场景：%s (%s)"), *Label, *EnName)), MMDGetAccentButtonStyle(),
+					MMDMakeButton(FText::FromString(FString::Printf(TEXT("Panel 预览：%s"), *Label)), MMDGetAccentButtonStyle(),
 						FOnClicked::CreateLambda([this, Env, Name]()
 						{
-							// 1) 切换主关卡到该环境 map（可进关卡调整灯光）。
-							const bool bOpened = UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(Env);
-							// 2) 预览视口同步：舞台 + 该环境灯光 + 相机归位（立即看到效果）。
 							if (ViewPanel.IsValid())
+							{
+								ViewPanel->ApplyLightingEnvironment(Env);
+								ViewPanel->ResetPreviewCamera();
+								ShowImportProgress(FString::Printf(TEXT("Panel 已切换：%s"), *Name), EMMDMessageType::Success);
+							}
+							else
+							{
+								ShowImportProgress(TEXT("Panel 预览视口尚未初始化"), EMMDMessageType::Error);
+							}
+							return FReply::Handled();
+						}))
+				]
+				+ SHorizontalBox::Slot().FillWidth(0.85f).Padding(2.0f, 0.0f, 0.0f, 0.0f)
+				[
+					MMDMakeButton(FText::FromString(FString::Printf(TEXT("打开关卡 (%s)"), *EnName)), MMDGetSecondaryButtonStyle(),
+						FOnClicked::CreateLambda([this, Env, Name]()
+						{
+							const bool bOpened = UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(Env);
+							if (bOpened && ViewPanel.IsValid())
 							{
 								ViewPanel->ApplyLightingEnvironment(Env);
 								ViewPanel->ResetPreviewCamera();
 							}
 							ShowImportProgress(bOpened
-								? FString::Printf(TEXT("已切换到光照场景：%s（可在关卡里调整灯光）"), *Name)
-								: FString::Printf(TEXT("打开光照场景失败：%s"), *Name),
+								? FString::Printf(TEXT("已打开光照关卡并同步 Panel：%s"), *Name)
+								: FString::Printf(TEXT("打开光照关卡失败：%s"), *Name),
 								bOpened ? EMMDMessageType::Success : EMMDMessageType::Error);
 							return FReply::Handled();
 						}))

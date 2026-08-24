@@ -4,7 +4,7 @@
 //
 // 走 FSceneInterface::AddCustomRenderPass 注入主渲染器内部执行：
 // 引擎为本 pass 跑一次深度渲染（视点=光源、正交投影），
-// 输出直接写入外部 UTextureRenderTarget2D（MMDShadowMapRT），
+// 输出先写共享 scratch，再复制进 MMDShadowMapRT 的 2x2 级联 atlas，
 // 主视角材质本帧即可采样，无需任何 AActor / USceneCaptureComponent2D。
 
 #pragma once
@@ -55,7 +55,12 @@ class FMMDShadowCustomRenderPass final : public FCustomRenderPassBase
 public:
 	IMPLEMENT_CUSTOM_RENDER_PASS(FMMDShadowCustomRenderPass);
 
-	FMMDShadowCustomRenderPass(UTextureRenderTarget2D* InRenderTarget, const FIntPoint& InRenderTargetSize);
+	FMMDShadowCustomRenderPass(
+		UTextureRenderTarget2D* InRenderTarget,
+		const FIntPoint& InRenderTargetSize,
+		UTextureRenderTarget2D* InAtlasRenderTarget,
+		const FIntPoint& InAtlasOffset,
+		bool bInFinalizeAtlas);
 
 	virtual void OnPreRender(FRDGBuilder& GraphBuilder) override;
 	virtual void OnEndPass(FRDGBuilder& GraphBuilder) override;
@@ -63,4 +68,7 @@ public:
 private:
 	// 外部 RT 的 render target resource（game thread 取一次，render thread 用）。
 	FRenderTarget* ExternalRenderTarget = nullptr;
+	FRenderTarget* AtlasRenderTarget = nullptr;
+	FIntPoint AtlasOffset = FIntPoint::ZeroValue;
+	bool bFinalizeAtlas = false;
 };

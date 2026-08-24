@@ -6,6 +6,7 @@
 
 class UWorld;
 class FPreviewScene;
+struct FPostProcessSettings;
 
 /**
  * MMD 光照环境库：一键在编辑器/关卡里搭好一套预设灯光，用于验证 toon 材质在各种
@@ -65,6 +66,9 @@ public:
 
 	/** 清除之前通过 ApplyLightingEnvironmentToPreview 加到该预览场景的环境光组件。 */
 	static void ClearLightingEnvironmentFromPreview(FPreviewScene* PreviewScene);
+
+	/** 写入 Panel LookDev 的中性后处理设置，曝光保持 UE 默认。 */
+	static void ConfigureLookDevPostProcess(FPostProcessSettings& Settings);
 
 	/** 把光照环境打包成 LightDataRT 第 0 行布局的灯光数据（MaxLights*4 个 float4，16 盏灯）。
 	 *  预览场景的灯是孤儿组件，GWorld 扫描收集不到，需用本函数打包后经

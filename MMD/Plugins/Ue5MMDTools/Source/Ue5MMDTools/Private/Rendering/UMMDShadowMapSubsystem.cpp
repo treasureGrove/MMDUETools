@@ -8,6 +8,7 @@
 #include "Engine/SceneCapture2D.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
@@ -31,14 +32,10 @@ namespace
 	const TCHAR* GMMDShadowMapRT_PackagePath = TEXT("/Ue5MMDTools/Rendering");
 	const TCHAR* GMMDShadowMapRT_AssetName   = TEXT("MMDShadowMapRT");
 	const TCHAR* GMMDShadowMapRT_AssetPath   = TEXT("/Ue5MMDTools/Rendering/MMDShadowMapRT.MMDShadowMapRT");
-	const int32  GShadowMapResolution = 2048;
 
-	// 与引擎 SceneCaptureRendering.cpp 内部一致的轴交换矩阵（向量 (x,y,z) -> (y,z,x)）。
-	const FMatrix GMMDShadowAxisSwap(
-		FPlane(0.f, 0.f, 1.f, 0.f),
-		FPlane(1.f, 0.f, 0.f, 0.f),
-		FPlane(0.f, 1.f, 0.f, 0.f),
-		FPlane(0.f, 0.f, 0.f, 1.f));
+	// 把这个 Tag 挂到 actor（或组件）上，即可让该物体不参与阴影投射（不自投影、不投给别处）。
+	// 相当于给任意 mesh 一个"类似 AMMDActor"的属性，见 CollectHiddenMMDPrimitives。
+	const FName GMMDShadowExcludeTag(TEXT("MMDShadowExclude"));
 }
 
 UMMDShadowMapSubsystem* UMMDShadowMapSubsystem::Get()
@@ -103,10 +100,10 @@ void UMMDShadowMapSubsystem::CleanupStaleCaptureActors(UWorld* World)
 	}
 }
 
-void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily)
+void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily, const FSceneView* InView)
 {
 	UWorld* World = GWorld;
-	if (!World || !InViewFamily)
+	if (!World || !InViewFamily || !InView)
 	{
 		return;
 	}
@@ -127,12 +124,8 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 		return;
 	}
 
-	// 未启用 / 无 RT / 无平行光 / 无 scene -> 写无效标记（Valid=0），材质侧自动退回不受影。
-	FVector4f Invalid[4] = {
-		FVector4f(0.f, 0.f, 0.f, 0.f),
-		FVector4f(0.f, 0.f, 0.f, 0.f),
-		FVector4f(0.f, 0.f, 0.f, 0.f),
-		FVector4f(0.f, 0.f, 0.f, 0.f) };
+	FVector4f Invalid[18];
+	FMemory::Memzero(Invalid, sizeof(Invalid));
 
 	if (!bEnabled || !ShadowMapRT)
 	{
@@ -154,89 +147,166 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 		return;
 	}
 
-	FVector CamPos;
-	if (!GetCameraPosition(World, CamPos))
+	// 四级联共用一个 scratch，结果逐级复制到现有 MMDShadowMapRT 的 2x2 atlas。
+	if (!ShadowMapScratchRT)
+	{
+		ShadowMapScratchRT = NewObject<UTextureRenderTarget2D>(GetTransientPackage());
+		if (ShadowMapScratchRT)
+		{
+			ShadowMapScratchRT->RenderTargetFormat = RTF_R32f;
+			ShadowMapScratchRT->bAutoGenerateMips = false;
+			ShadowMapScratchRT->InitAutoFormat(ShadowMapResolution, ShadowMapResolution);
+			ShadowMapScratchRT->UpdateResourceImmediate(true);
+		}
+	}
+	if (!ShadowMapScratchRT)
 	{
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
 	}
 
 	const FVector D = LightDir.GetSafeNormal();
-
-	// ---- 阴影相机：放在主相机沿光来源方向后退 ShadowDistance 处，看向 +D ----
-	// Origin 是阴影相机的世界位置；从此点看向 +D（光前进方向）即为阴影相机视角。
-	const FVector Origin = CamPos - D * ShadowDistance;
-
-	// ---- 选择世界向上方向（避免与光方向平行时退化）----
 	const FVector WorldUp = FMath::Abs(FVector::DotProduct(D, FVector::UpVector)) > 0.99f
 		? FVector::RightVector : FVector::UpVector;
-
-	// ---- 构造 ViewMatrix（与 FLookFromMatrix 同一约定：视空间 +Z = LookDirection = D）----
-	//
-	// 这是引擎内部球形阴影、cloud shadow 等通用做法（HairStrandsUtils.cpp:208 用 FLookAtMatrix）。
-	// 列向量 = 视空间 +X/+Y/+Z 在世界中的方向：
-	//   R = Up ^ D           (世界中的"右"方向)
-	//   U = D ^ R            (世界中的"上"方向)
-	//   F = D                (世界中的"前"方向 = 光前进方向)
-	//
-	// ViewMatrix.TransformVector((1,0,0)) = 列 0 = R，正好对应 shader 端要用的轴。
 	const FVector R = (WorldUp ^ D).GetSafeNormal();
 	const FVector U = (D ^ R).GetSafeNormal();
 	const FVector F = D;
 
-	FMatrix ViewMatrix = FMatrix::Identity;
-	ViewMatrix.SetColumn(0, FVector4(R, 0.f));
-	ViewMatrix.SetColumn(1, FVector4(U, 0.f));
-	ViewMatrix.SetColumn(2, FVector4(F, 0.f));
-	ViewMatrix.SetColumn(3, FVector4(FVector::ZeroVector, 1.f));
+	const FVector CamPos = InView->ViewLocation;
+	const FRotationMatrix CamRotation(InView->ViewRotation);
+	const FVector CamForward = CamRotation.GetUnitAxis(EAxis::X);
+	const FVector CamRight = CamRotation.GetUnitAxis(EAxis::Y);
+	const FVector CamUp = CamRotation.GetUnitAxis(EAxis::Z);
+	const FMatrix& CameraProjection = InView->ViewMatrices.GetViewToClip();
+	const bool bPerspective = CameraProjection.M[3][3] < 1.0f;
+	const float TanHalfHorizontal = 1.0f / FMath::Max(FMath::Abs(CameraProjection.M[0][0]), 0.0001f);
+	const float TanHalfVertical = 1.0f / FMath::Max(FMath::Abs(CameraProjection.M[1][1]), 0.0001f);
+	const float NearClip = bPerspective
+		? FMath::Max(static_cast<float>(CameraProjection.M[3][2]), 5.0f)
+		: 0.0f;
+	const float MaxShadowDistance = FMath::Max(ShadowDistance, NearClip + 100.0f);
 
-	// 加 translation（把世界原点搬到 Origin）：
-	//   ViewMatrix * (p - Origin) = (R|U|F|0) * (p-Origin) 视空间向量
-	//   translation = -dot(Origin, R/U/F)，对应 FLookFromMatrix line 970-972
-	ViewMatrix.M[3][0] = -FVector::DotProduct(Origin, R);
-	ViewMatrix.M[3][1] = -FVector::DotProduct(Origin, U);
-	ViewMatrix.M[3][2] = -FVector::DotProduct(Origin, F);
+	CollectHiddenMMDPrimitives(World, CachedHiddenPrimitives);
 
-	// 引擎 CustomRenderPass 需要的 ViewRotationMatrix（不含 translation）+ ProjectionMatrix 分别传：
-	//   ViewRotationMatrix 用于 ViewInitOptions；最终引擎自己构造完整 ViewMatrix
-	//   所以这里要把 translation 拆出去：
-	FMatrix ViewRotationMatrix = ViewMatrix;
-	ViewRotationMatrix.M[3][0] = 0.0;
-	ViewRotationMatrix.M[3][1] = 0.0;
-	ViewRotationMatrix.M[3][2] = 0.0;
-
-	// ---- 正交投影（覆盖范围 = OrthoWidth × OrthoWidth，深度 = ShadowDistance × 2 + OrthoWidth）----
-	// 引擎方向光投影用的是 FShadowProjectionMatrix（MinProjected/MaxProjected 决定 off-center 范围），
-	// 这里简化为对称正交，视空间 XY 范围 [-OrthoWidth/2, +OrthoWidth/2]。
-	// ⚠️ FReversedZOrthoMatrix 的 Width/Height 是【半宽】（引擎 SceneCapture/VSM/相机均传半宽，
-	//    见 SceneCaptureRendering.cpp BuildOrthoMatrix: OrthoWidth = InOrthoWidth/2）。
-	//    要覆盖 OrthoWidth 全宽，必须传 OrthoWidth/2，与 shader 端 UV = dot(ToPix,R)/OrthoWidth + 0.5 对齐。
-	const float Far = FMath::Max(ShadowDistance * 2.0f + OrthoWidth, 1000.0f);
-	const FMatrix ProjectionMatrix =
-		FReversedZOrthoMatrix(OrthoWidth * 0.5f, OrthoWidth * 0.5f, 1.0 / Far, 0.0);
-
-	// ---- 提交 CustomRenderPass（无 actor / 无 component，纯引擎 API）----
-	FSceneInterface::FCustomRenderPassRendererInput PassInput;
-	PassInput.ViewLocation = Origin;
-	PassInput.ViewRotationMatrix = ViewRotationMatrix;
-	PassInput.ProjectionMatrix = ProjectionMatrix;
-	PassInput.bIsSceneCapture = true;
-	PassInput.CustomRenderPass =
-		new FMMDShadowCustomRenderPass(ShadowMapRT, FIntPoint(GShadowMapResolution, GShadowMapResolution));
-
-	// 排除 MMD 模型自身（避免自阴影与 toon ramp 叠加双重变暗）。
-	if (bHideMMDActors)
+	static constexpr int32 CascadeCount = 4;
+	struct FCascadeData
 	{
-		int32 CachedCount = CachedHiddenPrimitives.Num();
-		CollectHiddenMMDPrimitives(World, CachedHiddenPrimitives);
-		if (CachedHiddenPrimitives.Num() != CachedCount)
+		FVector Origin = FVector::ZeroVector;
+		FMatrix ViewRotation = FMatrix::Identity;
+		FMatrix Projection = FMatrix::Identity;
+		float Width = 0.0f;
+		float DepthRange = 0.0f;
+		float SplitFar = 0.0f;
+		float WorldUnitsPerTexel = 0.0f;
+	};
+	FCascadeData Cascades[CascadeCount];
+
+	// Unity/UE 常用 practical split：线性与对数分割混合。每级用该段视锥的
+	// 包围球生成稳定方形投影，再把光空间中心吸附到阴影 texel，避免相机移动时游泳。
+	float SplitNear = NearClip;
+	for (int32 CascadeIndex = 0; CascadeIndex < CascadeCount; ++CascadeIndex)
+	{
+		const float Ratio = static_cast<float>(CascadeIndex + 1) / static_cast<float>(CascadeCount);
+		const float LinearSplit = FMath::Lerp(NearClip, MaxShadowDistance, Ratio);
+		const float LogSplit = NearClip > 0.0f
+			? NearClip * FMath::Pow(MaxShadowDistance / NearClip, Ratio)
+			: LinearSplit;
+		const float SplitFar = FMath::Lerp(LinearSplit, LogSplit, CascadeSplitLambda);
+
+		FVector Corners[8];
+		int32 CornerIndex = 0;
+		for (int32 PlaneIndex = 0; PlaneIndex < 2; ++PlaneIndex)
 		{
-			LastHiddenPrimitiveCount = CachedHiddenPrimitives.Num();
+			const float PlaneDistance = PlaneIndex == 0 ? SplitNear : SplitFar;
+			const float HalfWidth = bPerspective ? PlaneDistance * TanHalfHorizontal : TanHalfHorizontal;
+			const float HalfHeight = bPerspective ? PlaneDistance * TanHalfVertical : TanHalfVertical;
+			const FVector PlaneCenter = CamPos + CamForward * PlaneDistance;
+			for (int32 Y = -1; Y <= 1; Y += 2)
+			{
+				for (int32 X = -1; X <= 1; X += 2)
+				{
+					Corners[CornerIndex++] = PlaneCenter
+						+ CamRight * (HalfWidth * static_cast<float>(X))
+						+ CamUp * (HalfHeight * static_cast<float>(Y));
+				}
+			}
 		}
-		PassInput.HiddenPrimitives = CachedHiddenPrimitives;
+
+		FVector Center = FVector::ZeroVector;
+		for (const FVector& Corner : Corners)
+		{
+			Center += Corner;
+		}
+		Center /= UE_ARRAY_COUNT(Corners);
+
+		float Radius = 0.0f;
+		for (const FVector& Corner : Corners)
+		{
+			Radius = FMath::Max(Radius, static_cast<float>(FVector::Distance(Center, Corner)));
+		}
+		Radius = FMath::CeilToFloat(Radius * 16.0f) / 16.0f;
+
+		FCascadeData& Out = Cascades[CascadeIndex];
+		Out.Width = FMath::Max(Radius * 2.0f, 100.0f);
+		Out.WorldUnitsPerTexel = Out.Width / static_cast<float>(ShadowMapResolution);
+		Out.SplitFar = SplitFar;
+		Out.DepthRange = FMath::Max(OrthoWidth, Out.Width + 1000.0f);
+
+		const double CenterR = FVector::DotProduct(Center, R);
+		const double CenterU = FVector::DotProduct(Center, U);
+		const double SnappedR = FMath::RoundToDouble(CenterR / Out.WorldUnitsPerTexel) * Out.WorldUnitsPerTexel;
+		const double SnappedU = FMath::RoundToDouble(CenterU / Out.WorldUnitsPerTexel) * Out.WorldUnitsPerTexel;
+		Center += R * (SnappedR - CenterR) + U * (SnappedU - CenterU);
+		Out.Origin = Center - D * (Out.DepthRange * 0.5f);
+
+		FMatrix ViewMatrix = FMatrix::Identity;
+		ViewMatrix.SetColumn(0, FVector4(R, 0.f));
+		ViewMatrix.SetColumn(1, FVector4(U, 0.f));
+		ViewMatrix.SetColumn(2, FVector4(F, 0.f));
+		ViewMatrix.M[3][0] = -FVector::DotProduct(Out.Origin, R);
+		ViewMatrix.M[3][1] = -FVector::DotProduct(Out.Origin, U);
+		ViewMatrix.M[3][2] = -FVector::DotProduct(Out.Origin, F);
+		Out.ViewRotation = ViewMatrix;
+		Out.ViewRotation.M[3][0] = 0.0;
+		Out.ViewRotation.M[3][1] = 0.0;
+		Out.ViewRotation.M[3][2] = 0.0;
+		Out.Projection = FReversedZOrthoMatrix(
+			Out.Width * 0.5f,
+			Out.Width * 0.5f,
+			1.0 / Out.DepthRange,
+			0.0);
+		SplitNear = SplitFar;
 	}
 
-	const bool bPassAdded = Scene->AddCustomRenderPass(InViewFamily, PassInput);
+	bool bCascadeValid[CascadeCount] = { false, false, false, false };
+	int32 AddedPassCount = 0;
+	for (int32 CascadeIndex = 0; CascadeIndex < CascadeCount; ++CascadeIndex)
+	{
+		const FCascadeData& Cascade = Cascades[CascadeIndex];
+		FSceneInterface::FCustomRenderPassRendererInput PassInput;
+		PassInput.ViewLocation = Cascade.Origin;
+		PassInput.ViewRotationMatrix = Cascade.ViewRotation;
+		PassInput.ProjectionMatrix = Cascade.Projection;
+		PassInput.bIsSceneCapture = true;
+		const FIntPoint AtlasOffset(
+			(CascadeIndex & 1) * ShadowMapResolution,
+			(CascadeIndex >> 1) * ShadowMapResolution);
+		PassInput.CustomRenderPass = new FMMDShadowCustomRenderPass(
+			ShadowMapScratchRT,
+			FIntPoint(ShadowMapResolution, ShadowMapResolution),
+			ShadowMapRT,
+			AtlasOffset,
+			CascadeIndex == CascadeCount - 1);
+		if (CachedHiddenPrimitives.Num() > 0)
+		{
+			PassInput.HiddenPrimitives = CachedHiddenPrimitives;
+		}
+		if (Scene->AddCustomRenderPass(InViewFamily, PassInput))
+		{
+			bCascadeValid[CascadeIndex] = true;
+			++AddedPassCount;
+		}
+	}
 
 	// 周期性诊断输出（每 ~5 秒一次，避免刷屏）。
 	static double LastDiagTime = 0.0;
@@ -245,30 +315,32 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 	{
 		LastDiagTime = Now;
 		UE_LOG(LogTemp, Log,
-			TEXT("[MMDShadowMap] Diag: PassAdded=%d Origin=(%.0f,%.0f,%.0f) LightDir=(%.2f,%.2f,%.2f) "
-				 "OrthoWidth=%.0f ShadowDist=%.0f HiddenPrims=%d RT=%s(%dx%d)"),
-			bPassAdded ? 1 : 0,
-			Origin.X, Origin.Y, Origin.Z,
+			TEXT("[MMDShadowMap] CSM: Passes=%d/4 LightDir=(%.2f,%.2f,%.2f) "
+				 "Splits=(%.0f,%.0f,%.0f,%.0f) CascadeRes=%d Atlas=%d Hidden=%d"),
+			AddedPassCount,
 			D.X, D.Y, D.Z,
-			OrthoWidth, ShadowDistance,
-			bHideMMDActors ? CachedHiddenPrimitives.Num() : 0,
-			ShadowMapRT ? *ShadowMapRT->GetName() : TEXT("null"),
-			ShadowMapRT ? ShadowMapRT->SizeX : 0,
-			ShadowMapRT ? ShadowMapRT->SizeY : 0);
+			Cascades[0].SplitFar, Cascades[1].SplitFar,
+			Cascades[2].SplitFar, Cascades[3].SplitFar,
+			ShadowMapResolution,
+			ShadowMapResolution * 2,
+			CachedHiddenPrimitives.Num());
 	}
 
-	// ---- 打包阴影相机基（写入 LightDataRT 第 2 行）----
-	// 直接用上面构造的 ViewMatrix 列向量（与渲染严格一致）。
-	//   texel0 = (Origin.xyz, Valid)
-	//   texel1 = (R/OrthoWidth, GlobalBias)        R = view+X 在世界中的方向
-	//   texel2 = (U/OrthoWidth, 0)                 U = view+Y 在世界中的方向
-	//   texel3 = (F.xyz, TexelSize)                F = view+Z 在世界中的方向 = 光方向
-	const float ShadowTexel = 1.0f / (float)GShadowMapResolution;
-	FVector4f Data[4];
-	Data[0] = FVector4f(Origin.X, Origin.Y, Origin.Z, 1.f);
-	Data[1] = FVector4f(R.X / OrthoWidth, R.Y / OrthoWidth, R.Z / OrthoWidth, GlobalBias);
-	Data[2] = FVector4f(U.X / OrthoWidth, U.Y / OrthoWidth, U.Z / OrthoWidth, 0.f);
-	Data[3] = FVector4f(F.X, F.Y, F.Z, ShadowTexel);
+	// 每级 4 texel，最后 2 texel 保存主相机位置和前向。Data0.w 是深度范围，0 表示无效。
+	FVector4f Data[18];
+	for (int32 CascadeIndex = 0; CascadeIndex < CascadeCount; ++CascadeIndex)
+	{
+		const FCascadeData& Cascade = Cascades[CascadeIndex];
+		const float DepthRange = bCascadeValid[CascadeIndex] ? Cascade.DepthRange : 0.0f;
+		Data[CascadeIndex * 4 + 0] = FVector4f(Cascade.Origin.X, Cascade.Origin.Y, Cascade.Origin.Z, DepthRange);
+		Data[CascadeIndex * 4 + 1] = FVector4f(R.X / Cascade.Width, R.Y / Cascade.Width, R.Z / Cascade.Width, GlobalBias);
+		Data[CascadeIndex * 4 + 2] = FVector4f(U.X / Cascade.Width, U.Y / Cascade.Width, U.Z / Cascade.Width,
+			Cascade.WorldUnitsPerTexel * NormalBiasInTexels);
+		Data[CascadeIndex * 4 + 3] = FVector4f(F.X, F.Y, F.Z, Cascade.SplitFar);
+	}
+	Data[16] = FVector4f(CamPos.X, CamPos.Y, CamPos.Z, 0.0f);
+	Data[17] = FVector4f(CamForward.X, CamForward.Y, CamForward.Z,
+		AddedPassCount == CascadeCount ? 1.0f : 0.0f);
 
 	LightSubsystem->SetShadowCameraData(Data);
 }
@@ -284,12 +356,12 @@ void UMMDShadowMapSubsystem::SetShadowMapRenderTarget(UTextureRenderTarget2D* In
 	if (ShadowMapRT)
 	{
 		ShadowMapRT->bCanCreateUAV = true;
-		ShadowMapRT->RenderTargetFormat = RTF_RGBA16f;
+		ShadowMapRT->RenderTargetFormat = RTF_R32f;
 		ShadowMapRT->bAutoGenerateMips = false;
-		ShadowMapRT->InitAutoFormat(GShadowMapResolution, GShadowMapResolution);
+		ShadowMapRT->InitAutoFormat(ShadowMapResolution * 2, ShadowMapResolution * 2);
 		ShadowMapRT->UpdateResourceImmediate(true);
 
-		UE_LOG(LogTemp, Log, TEXT("[MMDShadowMap] Shadow depth RT set: %s (%dx%d RGBA16F)"),
+		UE_LOG(LogTemp, Log, TEXT("[MMDShadowMap] Shadow depth RT set: %s (%dx%d R32F)"),
 			*ShadowMapRT->GetName(), ShadowMapRT->SizeX, ShadowMapRT->SizeY);
 	}
 }
@@ -307,6 +379,32 @@ void UMMDShadowMapSubsystem::SetOrthoWidth(float InWidth)
 void UMMDShadowMapSubsystem::SetGlobalBias(float InBias)
 {
 	GlobalBias = InBias;
+}
+
+void UMMDShadowMapSubsystem::SetShadowMapResolution(int32 InResolution)
+{
+	// 这是单级分辨率；atlas 为 2x2，因此总边长不超过 8192。
+	ShadowMapResolution = FMath::Clamp(InResolution, 256, 4096);
+	if (ShadowMapRT)
+	{
+		ShadowMapRT->InitAutoFormat(ShadowMapResolution * 2, ShadowMapResolution * 2);
+		ShadowMapRT->UpdateResourceImmediate(true);
+	}
+	if (ShadowMapScratchRT)
+	{
+		ShadowMapScratchRT->InitAutoFormat(ShadowMapResolution, ShadowMapResolution);
+		ShadowMapScratchRT->UpdateResourceImmediate(true);
+	}
+}
+
+void UMMDShadowMapSubsystem::SetCascadeSplitLambda(float InLambda)
+{
+	CascadeSplitLambda = FMath::Clamp(InLambda, 0.0f, 1.0f);
+}
+
+void UMMDShadowMapSubsystem::SetNormalBias(float InBiasInTexels)
+{
+	NormalBiasInTexels = FMath::Clamp(InBiasInTexels, 0.0f, 8.0f);
 }
 
 void UMMDShadowMapSubsystem::SetHideMMDActors(bool bInHide)
@@ -335,51 +433,58 @@ bool UMMDShadowMapSubsystem::GetMainLightDirection(UWorld* World, FVector& OutDi
 	return false;
 }
 
-bool UMMDShadowMapSubsystem::GetCameraPosition(UWorld* World, FVector& OutPos)
+void UMMDShadowMapSubsystem::SetShadowMapExcludedActors(const TArray<AActor*>& Actors)
 {
-	if (APlayerController* PC = World->GetFirstPlayerController())
+	ExcludedActors.Reset();
+	for (AActor* Actor : Actors)
 	{
-		if (PC->PlayerCameraManager)
+		if (Actor)
 		{
-			OutPos = PC->PlayerCameraManager->GetCameraLocation();
-			return true;
+			ExcludedActors.Add(Actor);
 		}
 	}
-#if WITH_EDITOR
-	if (GEditor)
-	{
-		for (FLevelEditorViewportClient* EVC : GEditor->GetLevelViewportClients())
-		{
-			if (EVC)
-			{
-				OutPos = EVC->GetViewLocation();
-				return true;
-			}
-		}
-	}
-#endif
-	return false;
 }
 
 void UMMDShadowMapSubsystem::CollectHiddenMMDPrimitives(UWorld* World, TSet<FPrimitiveComponentId>& OutHidden)
 {
 	OutHidden.Reset();
-	for (TActorIterator<AMMDActor> It(World); It; ++It)
+
+	// 单趟遍历所有 actor，命中任一条即从阴影 capture 剔除：
+	//   1) MMD 模型自身（bHideMMDActors，默认 true）
+	//   2) 显式排除的 actor（SetShadowMapExcludedActors）
+	//   3) 挂上 GMMDShadowExcludeTag 的 actor 或组件（给任意 mesh 一个"类似 AMMDActor"的属性）
+	// 避免自阴影与 toon ramp 叠加双重变暗。
+	for (TActorIterator<AActor> It(World); It; ++It)
 	{
-		AMMDActor* MMDActor = *It;
-		if (!MMDActor || MMDActor->IsHidden())
+		AActor* Actor = *It;
+		if (!Actor || Actor->IsHidden())
 		{
 			continue;
 		}
-		// 把骨骼网格的 PrimitiveComponentId 加入隐藏集合，
-		// CustomRenderPass 渲染时引擎会跳过这些 primitive。
-		TArray<USkeletalMeshComponent*> Comps;
-		MMDActor->GetComponents<USkeletalMeshComponent>(Comps);
-		for (USkeletalMeshComponent* Skc : Comps)
+
+		bool bExcludeActor = Actor->Tags.Contains(GMMDShadowExcludeTag)
+			|| (bHideMMDActors && Actor->IsA<AMMDActor>());
+
+		if (!bExcludeActor)
 		{
-			if (Skc && Skc->IsVisible() && Skc->SceneProxy)
+			for (TWeakObjectPtr<AActor> Weak : ExcludedActors)
 			{
-				OutHidden.Add(Skc->GetPrimitiveSceneId());
+				if (Weak.Get() == Actor)
+				{
+					bExcludeActor = true;
+					break;
+				}
+			}
+		}
+
+		TArray<UPrimitiveComponent*> Comps;
+		Actor->GetComponents<UPrimitiveComponent>(Comps);
+		for (UPrimitiveComponent* Comp : Comps)
+		{
+			const bool bExcludeComp = bExcludeActor || Comp->ComponentTags.Contains(GMMDShadowExcludeTag);
+			if (bExcludeComp && Comp->IsVisible() && Comp->SceneProxy)
+			{
+				OutHidden.Add(Comp->GetPrimitiveSceneId());
 			}
 		}
 	}
@@ -404,10 +509,10 @@ void UMMDShadowMapSubsystem::AutoSetupShadowMapRT()
 
 		if (NewRT)
 		{
-			NewRT->RenderTargetFormat = RTF_RGBA16f;
+			NewRT->RenderTargetFormat = RTF_R32f;
 			NewRT->bCanCreateUAV = true;
 			NewRT->bAutoGenerateMips = false;
-			NewRT->InitAutoFormat(GShadowMapResolution, GShadowMapResolution);
+			NewRT->InitAutoFormat(ShadowMapResolution * 2, ShadowMapResolution * 2);
 			NewRT->UpdateResourceImmediate(true);
 			NewRT->MarkPackageDirty();
 

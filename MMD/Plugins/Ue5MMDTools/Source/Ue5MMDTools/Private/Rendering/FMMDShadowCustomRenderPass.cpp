@@ -3,15 +3,23 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "TextureResource.h"
 #include "RenderGraphBuilder.h"
+#include "RenderGraphUtils.h"
 
 FMMDShadowCustomRenderPass::FMMDShadowCustomRenderPass(
-	UTextureRenderTarget2D* InRenderTarget, const FIntPoint& InRenderTargetSize)
+	UTextureRenderTarget2D* InRenderTarget,
+	const FIntPoint& InRenderTargetSize,
+	UTextureRenderTarget2D* InAtlasRenderTarget,
+	const FIntPoint& InAtlasOffset,
+	bool bInFinalizeAtlas)
 	: FCustomRenderPassBase(
 		TEXT("MMDDirectionalShadowDepth"),
 		ERenderMode::DepthPass,
 		ERenderOutput::SceneDepth,
 		InRenderTargetSize)
 	, ExternalRenderTarget(InRenderTarget ? InRenderTarget->GameThread_GetRenderTargetResource() : nullptr)
+	, AtlasRenderTarget(InAtlasRenderTarget ? InAtlasRenderTarget->GameThread_GetRenderTargetResource() : nullptr)
+	, AtlasOffset(InAtlasOffset)
+	, bFinalizeAtlas(bInFinalizeAtlas)
 {
 	// 挂上 bMainViewFamily=true 的 user data —— 让引擎只在主视角渲染时消费本 pass，
 	// 避免 pass 被 SceneCapture 渲染器吃掉导致 RDG 外部访问状态冲突。
@@ -24,9 +32,7 @@ void FMMDShadowCustomRenderPass::OnPreRender(FRDGBuilder& GraphBuilder)
 	{
 		// 与 FSceneCapturePass 一致：把外部 RT 注册进 RDG（GetRenderTargetTexture 返回 RDG 纹理），
 		// 引擎把深度渲染写入它，材质本帧即可采样。
-		// 注意：FTextureRenderTarget2DResource::Resize 是 FSceneCapturePass 的 friend，
-		// 插件调用不了。但我们的 RT 大小在 SetShadowMapRenderTarget 里固定为 2048²，运行时不变，
-		// 不需要 Resize，直接注册即可。
+		// 尺寸由 SetShadowMapResolution 在游戏线程统一重建，不在渲染线程 Resize。
 		RenderTargetTexture = ExternalRenderTarget->GetRenderTargetTexture(GraphBuilder);
 
 		// 关键修复：若上一帧 OnEndPass 的 UseExternalAccessMode(SRVMask) 或别的消费方
@@ -40,10 +46,26 @@ void FMMDShadowCustomRenderPass::OnPreRender(FRDGBuilder& GraphBuilder)
 
 void FMMDShadowCustomRenderPass::OnEndPass(FRDGBuilder& GraphBuilder)
 {
-	// 让 RDG 在本 pass 结束时把 RT 切回 SRV，材质在主视角渲染时可以直接采样，
-	// 不必等整帧 RDG 结束才可用。
-	if (RenderTargetTexture)
+	if (!RenderTargetTexture || !AtlasRenderTarget)
 	{
-		GraphBuilder.UseExternalAccessMode(RenderTargetTexture, ERHIAccess::SRVMask);
+		return;
+	}
+
+	// 四个级联共用 scratch RT。每个 pass 完成后立刻复制到 atlas 对应象限，
+	// RDG 会按 写 scratch -> copy -> 下一次写 scratch 的依赖顺序执行。
+	FRDGTextureRef AtlasTexture = AtlasRenderTarget->GetRenderTargetTexture(GraphBuilder);
+	GraphBuilder.UseInternalAccessMode(AtlasTexture);
+	AddCopyTexturePass(
+		GraphBuilder,
+		RenderTargetTexture,
+		AtlasTexture,
+		FIntPoint::ZeroValue,
+		AtlasOffset,
+		RenderTargetSize);
+
+	// 最后一级完成后再把 atlas 切到 SRV，供主视角材质本帧采样。
+	if (bFinalizeAtlas)
+	{
+		GraphBuilder.UseExternalAccessMode(AtlasTexture, ERHIAccess::SRVMask);
 	}
 }

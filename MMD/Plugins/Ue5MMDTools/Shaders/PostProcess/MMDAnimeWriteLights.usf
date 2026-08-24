@@ -4,10 +4,15 @@ StructuredBuffer<float4> LightData;
 RWTexture2D<float4> OutputTexture;
 
 // LightData 前 64 项 = 16 盏灯（每灯 4 texel，写第 0 行）；
-// 后 4 项 = 阴影相机基（写第 1 行 x=0..3）。
+// 后 18 项 = 四级联相机基 + 主相机位置/前向（写第 1 行 x=0..17）。
 [numthreads(64, 1, 1)]
 void WriteCS(uint3 DTid : SV_DispatchThreadID)
 {
+	if (DTid.x >= 82)
+	{
+		return;
+	}
+
     if (DTid.x < 64)
     {
         OutputTexture[uint2(DTid.x, 0)] = LightData[DTid.x];
