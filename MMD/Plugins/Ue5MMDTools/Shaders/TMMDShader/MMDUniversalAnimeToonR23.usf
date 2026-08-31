@@ -1,0 +1,2 @@
+// R23 独立实现路径：收回过亮值，恢复头发与黑缎的深色分段。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR23.usf"

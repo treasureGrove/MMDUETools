@@ -1,0 +1,112 @@
+// R26 轮廓精修：复用 R25 主光照，再增强暖肤、白布转折与黑缎折面。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR25.usf"
+
+struct TMMDUniversalAnimeToonR26
+{
+    float3 RefineColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        TMMDUniversalAnimeToonR25 base_toon;
+        float3 shaded_color = base_toon.OutputColor(
+            Parameters,
+            base_color,
+            light_data_tex,
+            light_data_tex_sampler,
+            shadow_step,
+            shadow_softness,
+            shadow_strength,
+            ambient_strength,
+            light_color_influence,
+            highlight_step,
+            highlight_strength,
+            rim_strength,
+            rim_power,
+            local_light_strength,
+            local_specular_strength,
+            glamour_rim_strength,
+            directional_sheen_strength,
+            surface_profile,
+            base_texture_color,
+            diffuse_color
+        );
+
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_white_cloth = 1.0 - step(0.5, abs(surface_profile - 3.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = base_toon.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                      float3(0.0, 0.0, 1.0));
+        float3 view_direction = base_toon.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+            float3(0.0, 0.0, 1.0));
+        float3 hero_key = base_toon.SafeNormalize(view_direction + float3(-0.62, 0.0, 0.38),
+                                                  view_direction);
+        float n_dot_l = dot(world_normal, hero_key);
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+
+        float3 warm_skin = shaded_color * float3(1.07, 0.91, 0.87) +
+                           float3(0.034, 0.014, 0.011);
+        float skin_side = smoothstep(0.18, 0.68, 1.0 - n_dot_v) *
+                          (1.0 - smoothstep(0.18, 0.48, n_dot_l));
+        warm_skin += float3(0.030, 0.004, 0.006) * skin_side;
+        shaded_color = lerp(shaded_color, warm_skin, profile_skin * 0.72);
+
+        float white_light = smoothstep(-0.10, 0.32, n_dot_l);
+        float white_factor = lerp(0.76, 1.055, white_light);
+        float3 white_layered = shaded_color * white_factor +
+                               float3(0.010, 0.012, 0.018) * white_light;
+        shaded_color = lerp(shaded_color, white_layered, profile_white_cloth * 0.58);
+
+        float black_facet = smoothstep(-0.30, 0.04, n_dot_l) *
+                            (1.0 - smoothstep(0.48, 0.78, n_dot_l));
+        float black_lit = smoothstep(0.18, 0.46, n_dot_l);
+        float silhouette_gate = 1.0 - smoothstep(0.72, 0.96, 1.0 - n_dot_v);
+        float3 black_facet_color = float3(0.11, 0.12, 0.15) * black_facet +
+                                   float3(0.055, 0.062, 0.078) * black_lit;
+        shaded_color += black_facet_color * profile_black_satin * silhouette_gate;
+
+        return min(max(shaded_color, 0.0), 1.04);
+    }
+};
+
+TMMDUniversalAnimeToonR26 universal_anime_toon;
+return universal_anime_toon.RefineColor(
+    Parameters,
+    base_color,
+    light_data_tex,
+    light_data_texSampler,
+    shadow_step,
+    shadow_softness,
+    shadow_strength,
+    ambient_strength,
+    light_color_influence,
+    highlight_step,
+    highlight_strength,
+    rim_strength,
+    rim_power,
+    local_light_strength,
+    local_specular_strength,
+    glamour_rim_strength,
+    directional_sheen_strength,
+    surface_profile,
+    base_texture_color,
+    diffuse_color
+);

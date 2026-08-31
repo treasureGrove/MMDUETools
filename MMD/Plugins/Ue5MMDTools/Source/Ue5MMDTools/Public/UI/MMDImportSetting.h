@@ -11,9 +11,17 @@ class MMDViewPanel;
 class AActor;
 class UAnimSequence;
 class ULevelSequence;
+class UMaterialInterface;
+class UMeshComponent;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 struct FAssetData;
+
+struct FMMDMaterialPresetUndoEntry
+{
+    TWeakObjectPtr<UMeshComponent> Component;
+    TArray<TWeakObjectPtr<UMaterialInterface>> Materials;
+};
 
 enum class EMMDMessageType : uint8
 {
@@ -52,6 +60,10 @@ private:
     FReply OnOpenSequenceComposerClicked();
 
     FReply OnOpenPhysicsBakeClicked();
+
+    FReply OnApplyAuroraJewelToonClicked();
+
+    FReply OnUndoShaderPresetClicked();
 
     void LoadSelectedMMDActor();
 
@@ -158,6 +170,8 @@ private:
     TSharedPtr<STextBlock> PhysicsBakeAnimText;
     float PhysicsBakeFrameRate = 30.0f;
     int32 PhysicsBakeWarmupFrames = 0;
+
+    TArray<FMMDMaterialPresetUndoEntry> MaterialPresetUndoEntries;
         
     // 🔧 添加静态成员，保存当前实例的弱引用
     static TWeakPtr<MMDImportSetting> CurrentInstance;

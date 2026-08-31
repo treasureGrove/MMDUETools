@@ -1,0 +1,452 @@
+// MMDUniversalAnimeToonImplementationR22.usf
+// 华丽收敛 Toon：明确分离肤色、白布、黑缎和头发，同时保留场景粉青双色边光。
+struct TMMDUniversalAnimeToonR06
+{
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001 ? value * rsqrt(length_squared) : fallback;
+    }
+
+    float Luminance(float3 color)
+    {
+        return dot(color, float3(0.299, 0.587, 0.114));
+    }
+
+    float3 SkyAmbient(float3 world_normal)
+    {
+        float4 normal_vector = float4(world_normal, 1.0);
+        float3 irradiance_0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], normal_vector),
+                                     dot(View.SkyIrradianceEnvironmentMap[1], normal_vector),
+                                     dot(View.SkyIrradianceEnvironmentMap[2], normal_vector));
+        float4 irradiance_vector = normal_vector.xyzz * normal_vector.yzzx;
+        float3 irradiance_1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], irradiance_vector),
+                                     dot(View.SkyIrradianceEnvironmentMap[4], irradiance_vector),
+                                     dot(View.SkyIrradianceEnvironmentMap[5], irradiance_vector));
+        float irradiance_c = normal_vector.x * normal_vector.x - normal_vector.y * normal_vector.y;
+        return max(irradiance_0 + irradiance_1 +
+                   View.SkyIrradianceEnvironmentMap[6].xyz * irradiance_c, 0.0) *
+               max(View.SkyLightColor.rgb, 0.0);
+    }
+
+    void SampleLight(Texture2D light_data_tex, SamplerState light_data_tex_sampler, int light_index,
+                     out float4 P, out float4 C, out float4 D, out float4 T)
+    {
+        float base_index = light_index * 4.0;
+        P = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                            float2((base_index + 0.5) / 64.0, 0.25));
+        C = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                            float2((base_index + 1.5) / 64.0, 0.25));
+        D = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                            float2((base_index + 2.5) / 64.0, 0.25));
+        T = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                            float2((base_index + 3.5) / 64.0, 0.25));
+    }
+
+    void LightParams(float4 P, float4 D, float4 T, float3 world_pos,
+                     out float3 L, out float attenuation)
+    {
+        L = float3(-0.35, -0.45, 0.82);
+        attenuation = 0.0;
+
+        if (P.w < 1.5)
+        {
+            float3 to_light = P.xyz - world_pos;
+            float distance_to_light = length(to_light);
+            L = SafeNormalize(to_light, L);
+            float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+            attenuation = range_fade * range_fade;
+        }
+        else if (P.w < 2.5)
+        {
+            float3 to_light = P.xyz - world_pos;
+            float distance_to_light = length(to_light);
+            L = SafeNormalize(to_light, L);
+            float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+            float cone_fade = smoothstep(T.y, T.x,
+                                         dot(-L, SafeNormalize(D.xyz, float3(0.0, 0.0, -1.0))));
+            attenuation = range_fade * range_fade * cone_fade;
+        }
+        else if (P.w < 3.5)
+        {
+            L = -SafeNormalize(D.xyz, float3(0.35, 0.45, -0.82));
+            attenuation = 1.0;
+        }
+        else
+        {
+            float3 to_light = P.xyz - world_pos;
+            float distance_to_light = length(to_light);
+            L = SafeNormalize(to_light, L);
+            float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+            attenuation = range_fade * range_fade;
+        }
+    }
+
+    void FindPrimaryLight(Texture2D light_data_tex, SamplerState light_data_tex_sampler,
+                          float3 world_pos,
+                          out float3 key_direction, out float3 key_color, out float key_energy,
+                          out float3 scene_light_color, out float scene_light_energy)
+    {
+        key_direction = SafeNormalize(float3(-0.35, -0.45, 0.82), float3(0.0, 0.0, 1.0));
+        key_color = float3(1.0, 0.97, 0.94);
+        key_energy = -1.0;
+        scene_light_color = float3(1.0, 0.97, 0.94);
+        scene_light_energy = 0.0;
+        float best_score = 0.0;
+        float3 scene_color_sum = 0.0;
+        float scene_weight_sum = 0.0;
+
+        [unroll]
+        for (int i = 0; i < 16; ++i)
+        {
+            float4 P;
+            float4 C;
+            float4 D;
+            float4 T;
+            SampleLight(light_data_tex, light_data_tex_sampler, i, P, C, D, T);
+            if (P.w >= 0.5)
+            {
+                float3 L;
+                float attenuation;
+                LightParams(P, D, T, world_pos, L, attenuation);
+                float score = (1.0 - exp(-max(C.w, 0.0))) * attenuation;
+                float color_max = max(max(C.r, C.g), max(C.b, 0.001));
+                float3 light_hue = max(C.rgb, 0.0) / color_max;
+                scene_color_sum += light_hue * score;
+                scene_weight_sum += score;
+                bool can_drive_main_toon = P.w >= 1.5 && P.w < 3.5;
+                if (can_drive_main_toon && score > best_score)
+                {
+                    best_score = score;
+                    key_direction = L;
+                    key_color = max(C.rgb, 0.0);
+                    key_energy = score;
+                }
+            }
+        }
+        if (scene_weight_sum > 0.0001)
+        {
+            scene_light_color = scene_color_sum / scene_weight_sum;
+            scene_light_energy = saturate(scene_weight_sum * 0.42);
+        }
+    }
+
+    void ComputeLocalLights(Texture2D light_data_tex,
+                            SamplerState light_data_tex_sampler,
+                            float3 world_pos,
+                            float3 world_normal,
+                            float3 view_direction,
+                            float highlight_step,
+                            float rim_power,
+                            float light_color_influence,
+                            float local_light_strength,
+                            float local_specular_strength,
+                            float glamour_rim_strength,
+                            out float3 local_diffuse,
+                            out float3 local_specular,
+                            out float3 local_rim)
+    {
+        float3 diffuse_sum = 0.0;
+        float3 specular_sum = 0.0;
+        float3 rim_sum = 0.0;
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+
+        [unroll]
+        for (int i = 0; i < 16; ++i)
+        {
+            float4 P;
+            float4 C;
+            float4 D;
+            float4 T;
+            SampleLight(light_data_tex, light_data_tex_sampler, i, P, C, D, T);
+            if (P.w >= 0.5 && !(P.w >= 2.5 && P.w < 3.5))
+            {
+                float3 L;
+                float attenuation;
+                LightParams(P, D, T, world_pos, L, attenuation);
+
+                float color_max = max(max(C.r, C.g), max(C.b, 0.001));
+                float3 light_hue = max(C.rgb, 0.0) / color_max;
+                float color_amount = saturate(0.12 + light_color_influence * 0.85);
+                float3 artistic_color = lerp(float3(1.0, 1.0, 1.0), light_hue, color_amount);
+                float3 specular_color = lerp(artistic_color, light_hue, 0.68);
+                float3 rim_light_color = lerp(artistic_color, light_hue, 0.84);
+                float energy = (1.0 - exp(-max(C.w, 0.0))) * attenuation;
+
+                float n_dot_l = dot(world_normal, L);
+                float toon_mask = smoothstep(-0.06, 0.16, n_dot_l);
+                float local_band = smoothstep(0.18, 0.62, n_dot_l);
+                float local_fill = lerp(0.025, 0.58, toon_mask) *
+                                   lerp(0.72, 1.0, local_band) * energy;
+                diffuse_sum += artistic_color * local_fill;
+
+                float3 half_vector = SafeNormalize(L + view_direction, view_direction);
+                float n_dot_h = saturate(dot(world_normal, half_vector));
+                float compact_highlight = smoothstep(saturate(highlight_step - 0.09),
+                                                     saturate(highlight_step - 0.035), n_dot_h);
+                float core_highlight = smoothstep(saturate(highlight_step - 0.025),
+                                                  min(highlight_step + 0.015, 1.0), n_dot_h);
+                float local_highlight = compact_highlight * 0.16 + core_highlight * 0.72;
+                specular_sum += specular_color * local_highlight * energy;
+
+                float view_rim = smoothstep(0.70, 0.91, saturate(1.0 - n_dot_v));
+                float backlight_gate = smoothstep(-0.16, 0.56, -n_dot_l);
+                rim_sum += rim_light_color * view_rim * backlight_gate * energy;
+            }
+        }
+
+        local_diffuse = 1.0 - exp(-diffuse_sum * max(local_light_strength, 0.0) * 0.18);
+        local_specular = 1.0 - exp(-specular_sum * max(local_specular_strength, 0.0));
+        local_rim = 1.0 - exp(-rim_sum * max(glamour_rim_strength, 0.0) * 0.90);
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        float diffuse_max = max(max(diffuse_color.r, diffuse_color.g), diffuse_color.b);
+        float3 safe_diffuse = diffuse_max > 0.001 ? max(diffuse_color, 0.0) : float3(1.0, 1.0, 1.0);
+        float3 resolved_base_color = max(base_texture_color, 0.0) * safe_diffuse;
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                            float3(0.0, 0.0, 1.0));
+        float3 view_direction = SafeNormalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+                                              float3(0.0, 0.0, 1.0));
+
+        float3 key_direction;
+        float3 key_color;
+        float key_energy;
+        float3 scene_light_color;
+        float scene_light_energy;
+        FindPrimaryLight(light_data_tex, light_data_tex_sampler, world_pos,
+                         key_direction, key_color, key_energy,
+                         scene_light_color, scene_light_energy);
+        if (key_energy < 0.0)
+        {
+            key_direction = SafeNormalize(view_direction + float3(-0.28, 0.0, 0.52),
+                                          view_direction);
+            key_color = float3(1.0, 0.97, 0.94);
+            key_energy = 0.72;
+        }
+
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_hair = 1.0 - step(0.5, abs(surface_profile - 2.0));
+        float profile_white_cloth = 1.0 - step(0.5, abs(surface_profile - 3.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+
+        float raw_base_luma = Luminance(resolved_base_color);
+        float black_toon_luma = 0.032 + step(0.030, raw_base_luma) * 0.038 +
+                                step(0.075, raw_base_luma) * 0.060 +
+                                step(0.16, raw_base_luma) * 0.090;
+        float3 black_toon_color = resolved_base_color *
+                                  (black_toon_luma / max(raw_base_luma, 0.001));
+        resolved_base_color = lerp(resolved_base_color, black_toon_color, profile_black_satin * 0.86);
+
+        float key_max = max(max(key_color.r, key_color.g), max(key_color.b, 0.001));
+        float3 key_hue = key_color / key_max;
+        float tint_influence = saturate(light_color_influence);
+        tint_influence *= lerp(1.0, 0.38, profile_skin);
+        tint_influence *= lerp(1.0, 0.58, profile_white_cloth);
+        float3 light_tint = lerp(float3(1.0, 1.0, 1.0), key_hue, tint_influence);
+
+        float n_dot_l = dot(world_normal, key_direction);
+        float profile_shadow_step = shadow_step;
+        profile_shadow_step = lerp(profile_shadow_step, shadow_step - 0.22, profile_skin);
+        profile_shadow_step = lerp(profile_shadow_step, shadow_step - 0.12, profile_white_cloth);
+        float softness = max(shadow_softness, 0.001);
+        softness = lerp(softness, max(softness, 0.105), profile_skin);
+        softness = lerp(softness, min(softness, 0.032), profile_hair);
+        float lit_mask = smoothstep(profile_shadow_step - softness,
+                                    profile_shadow_step + softness, n_dot_l);
+        float mid_step = profile_shadow_step - 0.30;
+        float mid_mask = smoothstep(mid_step - softness, mid_step + softness, n_dot_l);
+        float darken = saturate(shadow_strength);
+
+        float shadow_depth = 0.72;
+        float mid_depth = 0.30;
+        shadow_depth = lerp(shadow_depth, 0.38, profile_skin);
+        shadow_depth = lerp(shadow_depth, 0.44, profile_white_cloth);
+        shadow_depth = lerp(shadow_depth, 0.36, profile_black_satin);
+        mid_depth = lerp(mid_depth, 0.14, profile_skin);
+        mid_depth = lerp(mid_depth, 0.16, profile_white_cloth);
+        mid_depth = lerp(mid_depth, 0.14, profile_black_satin);
+        float3 shadow_hue = float3(0.96, 0.985, 1.04);
+        shadow_hue = lerp(shadow_hue, float3(1.06, 0.90, 0.93), profile_skin);
+        shadow_hue = lerp(shadow_hue, float3(0.91, 0.97, 1.08), profile_hair);
+        shadow_hue = lerp(shadow_hue, float3(0.94, 0.98, 1.06), profile_white_cloth);
+        float3 shadow_tone = resolved_base_color * (1.0 - darken * shadow_depth) * shadow_hue;
+        float3 mid_tone = resolved_base_color * (1.0 - darken * mid_depth);
+        float3 lit_tone = resolved_base_color * light_tint * (0.91 + saturate(key_energy) * 0.10);
+        shadow_tone = lerp(shadow_tone, resolved_base_color * 0.58 * shadow_hue, profile_hair);
+        mid_tone = lerp(mid_tone, resolved_base_color * 0.92, profile_hair);
+        lit_tone = lerp(lit_tone, resolved_base_color * light_tint * 1.30, profile_hair);
+        shadow_tone = lerp(shadow_tone, resolved_base_color * 0.46 * shadow_hue,
+                           profile_black_satin);
+        mid_tone = lerp(mid_tone, resolved_base_color * 1.08, profile_black_satin);
+        lit_tone = lerp(lit_tone, resolved_base_color * light_tint * 1.58,
+                        profile_black_satin);
+        float3 shaded_color = lerp(shadow_tone, mid_tone, mid_mask);
+        shaded_color = lerp(shaded_color, lit_tone, lit_mask);
+
+        float base_luma = Luminance(resolved_base_color);
+        float dark_surface = 1.0 - smoothstep(0.06, 0.34, base_luma);
+        float terminator_distance = (n_dot_l - shadow_step) / max(softness * 1.8, 0.045);
+        float terminator_line = exp(-terminator_distance * terminator_distance);
+        shaded_color *= 1.0 - terminator_line * (0.10 + dark_surface * 0.08);
+
+        float3 sky_ambient = SkyAmbient(world_normal);
+        float sky_luma = Luminance(sky_ambient);
+        float3 scene_hue = scene_light_color / max(Luminance(scene_light_color), 0.001);
+        float3 scene_fill_tint = lerp(float3(1.0, 1.0, 1.0), scene_hue,
+                                      tint_influence * 0.20);
+        float scene_fill = max(ambient_strength, 0.0) *
+                           (0.10 + scene_light_energy * 0.075);
+        float3 environment_fill = sky_ambient * max(ambient_strength, 0.0) * 0.22 +
+                                  scene_fill_tint * scene_fill;
+        float environment_luma = Luminance(environment_fill);
+        environment_fill *= min(1.0, 0.16 / max(environment_luma, 0.001));
+        shaded_color += resolved_base_color * environment_fill;
+
+        float3 skin_flat_tone = resolved_base_color * float3(1.055, 0.93, 0.95) +
+                                float3(0.025, 0.008, 0.012);
+        shaded_color = lerp(shaded_color, skin_flat_tone, profile_skin * 0.25);
+        shaded_color = lerp(shaded_color, resolved_base_color * 0.94,
+                            profile_white_cloth * 0.28);
+        float3 hair_flat_tone = resolved_base_color * 1.32 +
+                                sqrt(max(resolved_base_color, 0.0)) * 0.055;
+        shaded_color = lerp(shaded_color, hair_flat_tone, profile_hair * 0.34);
+
+        float3 half_vector = SafeNormalize(key_direction + view_direction, view_direction);
+        float n_dot_h = saturate(dot(world_normal, half_vector));
+        float surface_highlight_step = saturate(highlight_step + (1.0 - dark_surface) * 0.10);
+        float highlight_mask = smoothstep(surface_highlight_step,
+                                          min(surface_highlight_step + 0.025, 1.0), n_dot_h);
+        float band_enter = smoothstep(saturate(highlight_step - 0.20),
+                                      saturate(highlight_step - 0.14), n_dot_h);
+        float band_exit = smoothstep(saturate(highlight_step - 0.08),
+                                     saturate(highlight_step - 0.025), n_dot_h);
+        float secondary_band = saturate(band_enter - band_exit);
+        float highlight_gate = lerp(0.16, 0.84, dark_surface);
+        float profile_specular = 0.46 + dark_surface * 0.60;
+        profile_specular = lerp(profile_specular, 0.14, profile_skin);
+        profile_specular = lerp(profile_specular, 1.05, profile_hair);
+        profile_specular = lerp(profile_specular, 0.22, profile_white_cloth);
+        profile_specular = lerp(profile_specular, 1.18, profile_black_satin);
+        float material_specular = max(highlight_strength, 0.0) * profile_specular;
+        shaded_color += lerp(light_tint, float3(1.0, 1.0, 1.0), 0.72) *
+                        (highlight_mask + secondary_band * 0.16 * dark_surface) *
+                        material_specular * highlight_gate * lerp(0.35, 1.0, lit_mask);
+
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+        float rim_mask = smoothstep(0.72, 0.92, saturate(1.0 - n_dot_v));
+        rim_mask *= smoothstep(0.18, 0.72, 1.0 - n_dot_l * 0.5);
+        float3 rim_color = lerp(sqrt(max(resolved_base_color, 0.0)),
+                                float3(0.80, 0.90, 1.0), 0.34);
+        shaded_color += rim_color * rim_mask * max(rim_strength, 0.0) *
+                        (0.42 + dark_surface * 0.36);
+
+        float inner_contour = smoothstep(0.88, 0.975, saturate(1.0 - n_dot_v));
+        shaded_color *= 1.0 - inner_contour * (0.08 + dark_surface * 0.08);
+
+        float3 world_tangent = SafeNormalize((float3)Parameters.TangentToWorld[0],
+                                              float3(1.0, 0.0, 0.0));
+        float color_min = min(resolved_base_color.r,
+                              min(resolved_base_color.g, resolved_base_color.b));
+        float color_max = max(resolved_base_color.r,
+                              max(resolved_base_color.g, resolved_base_color.b));
+        float color_saturation = color_max - color_min;
+        float sheen_gate = smoothstep(0.10, 0.30, color_saturation) *
+                           smoothstep(0.04, 0.30, base_luma);
+        float tangent_dot_h = dot(world_tangent, half_vector);
+        float shifted_dot_h = dot(SafeNormalize(world_tangent + world_normal * 0.24,
+                                                world_tangent), half_vector);
+        float strand_lobe = pow(sqrt(saturate(1.0 - tangent_dot_h * tangent_dot_h)), 22.0);
+        float shifted_lobe = pow(sqrt(saturate(1.0 - shifted_dot_h * shifted_dot_h)), 46.0);
+        float3 sheen_color = lerp(sqrt(max(resolved_base_color, 0.0)),
+                                  light_tint, 0.24);
+        float ribbon_lobe = smoothstep(0.72, 0.84, strand_lobe) *
+                            (1.0 - smoothstep(0.94, 0.995, strand_lobe));
+        float normal_hair_band = smoothstep(0.48, 0.62, n_dot_h) *
+                                 (1.0 - smoothstep(0.78, 0.88, n_dot_h));
+        float light_hair_band = smoothstep(0.08, 0.24, n_dot_l) *
+                                (1.0 - smoothstep(0.54, 0.70, n_dot_l));
+        float facing_hair_band = smoothstep(0.48, 0.64, n_dot_v) *
+                                 (1.0 - smoothstep(0.82, 0.91, n_dot_v));
+        float hair_sheen_gate = max(sheen_gate * 0.38, profile_hair);
+        shaded_color += sheen_color *
+                        (strand_lobe * 0.08 + shifted_lobe * 0.07 + ribbon_lobe * 0.20 +
+                         normal_hair_band * profile_hair * 0.30 +
+                         light_hair_band * profile_hair * 0.36 +
+                         facing_hair_band * profile_hair * 0.24) *
+                        hair_sheen_gate * lerp(0.42, 1.0, lit_mask) *
+                        max(directional_sheen_strength, 0.0);
+
+        float black_satin_band = smoothstep(0.36, 0.40, n_dot_h) *
+                                 (1.0 - smoothstep(0.58, 0.63, n_dot_h));
+        float black_satin_core = smoothstep(0.66, 0.70, n_dot_h) *
+                                 (1.0 - smoothstep(0.76, 0.80, n_dot_h));
+        shaded_color += lerp(light_tint, float3(0.88, 0.94, 1.0), 0.56) *
+                        (black_satin_band * 0.085 + black_satin_core * 0.13) *
+                        profile_black_satin;
+
+        float3 local_diffuse;
+        float3 local_specular;
+        float3 local_rim;
+        ComputeLocalLights(light_data_tex, light_data_tex_sampler,
+                           world_pos, world_normal, view_direction,
+                           highlight_step, rim_power, light_color_influence,
+                           local_light_strength, local_specular_strength,
+                           glamour_rim_strength,
+                           local_diffuse, local_specular, local_rim);
+
+        shaded_color += resolved_base_color * local_diffuse * 0.06;
+        shaded_color += local_specular * (0.06 + dark_surface * 0.12);
+        float profile_rim_gain = 0.92 + dark_surface * 0.44;
+        profile_rim_gain = lerp(profile_rim_gain, 0.58, profile_skin);
+        shaded_color += local_rim * profile_rim_gain;
+
+        return min(max(shaded_color, 0.0), 1.02);
+    }
+};
+
+TMMDUniversalAnimeToonR06 universal_anime_toon;
+return universal_anime_toon.OutputColor(
+    Parameters,
+    base_color,
+    light_data_tex,
+    light_data_texSampler,
+    shadow_step,
+    shadow_softness,
+    shadow_strength,
+    ambient_strength,
+    light_color_influence,
+    highlight_step,
+    highlight_strength,
+    rim_strength,
+    rim_power,
+    local_light_strength,
+    local_specular_strength,
+    glamour_rim_strength,
+    directional_sheen_strength,
+    surface_profile,
+    base_texture_color,
+    diffuse_color
+);

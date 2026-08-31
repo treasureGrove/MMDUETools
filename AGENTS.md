@@ -74,7 +74,7 @@ Code:
 - **类型名（struct）**：PascalCase，保留 `TMMD` 前缀作类型标记，如 `TMMDSurfaceData`、`TMMDToonLight`。
 - **函数名（成员函数）**：PascalCase，如 `ComputeLighting`、`ShadeSurface`、`SampleMMDShadow`。
 - **引擎固定名不碰**：`Parameters`、`View`、`ResolvedView`、`LWCToFloat`、`GetWorldCameraOrigin`、`Texture2DSample` 等。
-- **单字母局部量保留原样**：灯光数据 `P`/`C`/`D`/`T`、方向 `L`、半程向量 `H`、循环 `i`。
+- **单字母局部量保留原样**：方向 `L`、半程向量 `H`、循环 `i`。
 - **Texture 输入自动生成的采样器** = `<输入名>Sampler`（引擎固定后缀，不可改），故为混合形：`light_data_tex` → `light_data_texSampler`、`mat_cap` → `mat_capSampler`、`mmd_shadow_map` → `mmd_shadow_mapSampler`。
 
 区分逻辑（四层一眼分清）：类型 = PascalCase + `TMMD` 前缀；函数 = PascalCase；变量/参数 = snake_case；HLSL 内置 = 全小写（`saturate`/`dot`/`lerp`）。

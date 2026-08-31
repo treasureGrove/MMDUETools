@@ -1,0 +1,2 @@
+// R38 面部对齐：宽暖柔光和浅蓝虹膜。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR37.usf"

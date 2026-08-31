@@ -2,18 +2,18 @@
 // 卡通光照工具库（struct TMMDToonLight）。
 struct TMMDSurfaceData
 {
-    float3 base_color;       // 基础色
-    float3 world_normal;     // 世界法线（已做法线贴图）
-    float  specular_power;   // 软高光锐度（光泽）
-    float3 emission;         // 材质侧自发光（rim/matcap 等额外颜色），ShadeSurface 最后直接加
+    float3 base_color;    // 基础色
+    float3 world_normal;  // 世界法线（已做法线贴图）
+    float specular_power; // 软高光锐度（光泽）
+    float3 emission;      // 材质侧自发光（rim/matcap 等额外颜色），ShadeSurface 最后直接加
 };
 
 // 光照上下文：ShadeSurface 计算核心光照所需的输入（灯光数据 RT + 阴影 RT）。
 struct TMMDLightContext
 {
-    Texture2D    light_data_map;
+    Texture2D light_data_map;
     SamplerState light_data_map_sampler;
-    Texture2D    shadow_map;
+    Texture2D shadow_map;
     SamplerState shadow_map_sampler;
 };
 
@@ -24,10 +24,10 @@ struct TMMDToonLight
                                       Texture2D shadow_map, SamplerState shadow_map_sampler)
     {
         TMMDLightContext context;
-        context.light_data_map         = light_data_map;
+        context.light_data_map = light_data_map;
         context.light_data_map_sampler = light_data_map_sampler;
-        context.shadow_map             = shadow_map;
-        context.shadow_map_sampler     = shadow_map_sampler;
+        context.shadow_map = shadow_map;
+        context.shadow_map_sampler = shadow_map_sampler;
         return context;
     }
 //-----------------------LightContext--------------------------
@@ -90,26 +90,24 @@ struct TMMDToonLight
             return;
 
         static const float2 tent_offsets[9] =
-        {
-            float2(-1, -1), float2(0, -1), float2(1, -1),
-            float2(-1,  0), float2(0,  0), float2(1,  0),
-            float2(-1,  1), float2(0,  1), float2(1,  1)
-        };
+            {
+                float2(-1, -1), float2(0, -1), float2(1, -1),
+                float2(-1, 0), float2(0, 0), float2(1, 0),
+                float2(-1, 1), float2(0, 1), float2(1, 1)};
         static const float tent_weights[9] =
-        {
-            1, 2, 1,
-            2, 4, 2,
-            1, 2, 1
-        };
+            {
+                1, 2, 1,
+                2, 4, 2,
+                1, 2, 1};
 
         const float filter_radius = 1.35;
         float accumulated = 0.0;
-        [unroll]
-        for (int tap_index = 0; tap_index < 9; ++tap_index)
+        [unroll] for (int tap_index = 0; tap_index < 9; ++tap_index)
         {
             float2 tap_uv = local_uv + tent_offsets[tap_index] * (filter_radius / cascade_resolution);
             accumulated += ShadowCompareBilinear(
-                shadow_map, cascade_index, tap_uv, pixel_depth, data_1.w + additional_bias) * tent_weights[tap_index];
+                               shadow_map, cascade_index, tap_uv, pixel_depth, data_1.w + additional_bias) *
+                           tent_weights[tap_index];
         }
         shadow = accumulated * (1.0 / 16.0);
         valid = 1.0;
@@ -131,8 +129,7 @@ struct TMMDToonLight
         const float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
         const float view_distance = max(dot(world_pos - camera_position.xyz, camera_forward.xyz), 0.0);
 
-        [unroll]
-        for (int cascade_index = 0; cascade_index < 4; ++cascade_index)
+        [unroll] for (int cascade_index = 0; cascade_index < 4; ++cascade_index)
         {
             int base_index = cascade_index * 4;
             float4 data_0 = light_data_map.Load(int3(base_index + 0, 1, 0));
@@ -154,8 +151,8 @@ struct TMMDToonLight
             if (cascade_index < 3)
             {
                 float previous_split = cascade_index == 0
-                    ? 0.0
-                    : light_data_map.Load(int3(base_index - 1, 1, 0)).w;
+                                           ? 0.0
+                                           : light_data_map.Load(int3(base_index - 1, 1, 0)).w;
                 float fade_start = lerp(previous_split, data_3.w, 0.90);
                 float cascade_blend = saturate((view_distance - fade_start) / max(data_3.w - fade_start, 1.0));
                 if (cascade_blend > 0.0)
@@ -197,125 +194,123 @@ struct TMMDToonLight
     }
 //-----------------------Shadow Sampling-----------------------
 //-----------------------Light Sampling-----------------------
-    // 采样 LightDataMap 第 0 行的一盏灯（每灯 4 texel：P 位置/类型、C 颜色/强度、D 方向/半径、T 附加）。
+    // 采样 LightDataMap 第 0 行的一盏灯（每灯 4 texel：light_pos 位置/类型、light_color 颜色/强度、light_dir 方向/半径、light_extra 附加）。
     // 布局：MaxLights=16、宽 64（=16*4）、高 2；第 0 行 y=0 存灯光，第 1 行 y=1 存阴影级联数据。
     void SampleLight(Texture2D light_data_map, SamplerState light_data_map_sampler, int light_index,
-                     out float4 P, out float4 C, out float4 D, out float4 T)
+                     out float4 light_pos, out float4 light_color, out float4 light_dir, out float4 light_extra)
     {
-        static const float tex_width = 64.0;   // MaxLights(16) * 4
-        P = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 0.5) / tex_width, 0.25));
-        C = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 1.5) / tex_width, 0.25));
-        D = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 2.5) / tex_width, 0.25));
-        T = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 3.5) / tex_width, 0.25));
+        static const float tex_width = 64.0; // MaxLights(16) * 4
+        light_pos = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 0.5) / tex_width, 0.25));
+        light_color = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 1.5) / tex_width, 0.25));
+        light_dir = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 2.5) / tex_width, 0.25));
+        light_extra = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 3.5) / tex_width, 0.25));
     }
 
     // 取一盏灯的方向 L（指向光源）与衰减 Atten（按灯光类型分派）。
-    // P=位置/类型(<1.5点光 <2.5聚光 <3.5平行光 否则面光)  D=方向/半径  T=聚光内外角/面光朝向。
-    void LightParams(float4 P, float4 D, float4 T, float3 world_pos,
-                     out float3 L, out float atten)
+    // light_pos=位置/类型(<1.5点光 <2.5聚光 <3.5平行光 否则面光)  light_dir=方向/半径  light_extra=聚光内外角/面光朝向。
+    void LightParams(float4 light_pos, float4 light_dir, float4 light_extra, float3 world_pos,
+                     out float3 to_light_direction, out float atten)
     {
         atten = 1.0;
 
-        if (P.w < 1.5)          // 点光
+        //light_dir.w是灯的半径，light_extra.x是聚光内角cos，light_extra.y是聚光外角cos
+        if (light_pos.w < 1.5) // 点光
         {
-            float3 to_light = P.xyz - world_pos;
-            float  dist     = length(to_light);
-            L = to_light / max(dist, 0.0001);
-            atten = 1.0 - saturate(dist / max(D.w, 0.001));
+            float3 to_light = light_pos.xyz - world_pos;
+            float dist = length(to_light);
+            to_light_direction = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
         }
-        else if (P.w < 2.5)     // 聚光
+        else if (light_pos.w < 2.5) // 聚光
         {
-            float3 to_light = P.xyz - world_pos;
-            float  dist     = length(to_light);
-            L = to_light / max(dist, 0.0001);
-            atten = 1.0 - saturate(dist / max(D.w, 0.001));
-            atten *= smoothstep(T.y, T.x, dot(-L, D.xyz));
+            float3 to_light = light_pos.xyz - world_pos;
+            float dist = length(to_light);
+            to_light_direction = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
+            atten *= smoothstep(light_extra.y, light_extra.x, dot(-to_light_direction, light_dir.xyz));
         }
-        else if (P.w < 3.5)     // 平行光
+        else if (light_pos.w < 3.5) // 平行光
         {
-            L = -normalize(D.xyz);
+            to_light_direction = -normalize(light_dir.xyz);
         }
-        else                    // 矩形/面光
+        else // 矩形/面光
         {
-            float3 to_light = P.xyz - world_pos;
-            float  dist     = length(to_light);
-            L = to_light / max(dist, 0.0001);
-            atten = 1.0 - saturate(dist / max(D.w, 0.001));
-            atten *= smoothstep(0.0, 0.25, dot(L, D.xyz));
+            float3 to_light = light_pos.xyz - world_pos;
+            float dist = length(to_light);
+            to_light_direction = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
+            atten *= smoothstep(0.0, 0.25, dot(-to_light_direction, light_dir.xyz));
         }
     }
 //-----------------------Light Sampling-----------------------
 
-
-
-
 //-----------------------Lighting------------------------------
     // 计算直接光照：累加全部灯（不含 toon 阴影、不含天空环境光）。
-    //   diffuse_light  = Σ C.rgb * (C.w / PI) * NdotL * Atten    （最终着色用，带光强）
-    //   dir_light      = Σ C.rgb * NdotL * Atten                 （不含光强，供 toon 阴影 ramp 用）
-    //   specular_light = Σ C.rgb * (C.w / PI) * pow(NdotH, specular_power) * Atten
+    //   diffuse_light  = Σ light_color.rgb * (light_color.w / PI) * NdotL * Atten    （最终着色用，带光强）
+    //   dir_light      = Σ light_color.rgb * NdotL * Atten                            （不含光强，供 toon 阴影 ramp 用）
+    //   specular_light = Σ light_color.rgb * (light_color.w / PI) * pow(NdotH, specular_power) * Atten
     void ComputeLighting(FMaterialPixelParameters Parameters,
                          Texture2D light_data_map, SamplerState light_data_map_sampler,
                          float specular_power, float3 world_normal, float3 view_dir,
                          out float3 diffuse_light, out float3 dir_light, out float3 specular_light)
     {
-        static const int   max_lights = 16;
-        static const float toon_pi    = 3.14159265;
+        static const int max_lights = 16;
+        static const float toon_pi = 3.14159265;
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        diffuse_light  = float3(0, 0, 0);
-        dir_light      = float3(0, 0, 0);
+        diffuse_light = float3(0, 0, 0);
+        dir_light = float3(0, 0, 0);
         specular_light = float3(0, 0, 0);
 
-        for (int i = 0; i < max_lights; i++)
+        for (int light_index = 0; light_index < max_lights; light_index++)
         {
-            float4 P, C, D, T;
-            SampleLight(light_data_map, light_data_map_sampler, i, P, C, D, T);
+            float4 light_pos, light_color, light_dir, light_extra;
+            SampleLight(light_data_map, light_data_map_sampler, light_index, light_pos, light_color, light_dir, light_extra);
 
-            if (P.w >= 0.5)
+            if (light_pos.w >= 0.5)//TOD3: 排除无效灯，后续可能会使用去写入MaxLights的方式来避免无效灯的采样
             {
-                float3 L;
-                float  atten;
-                LightParams(P, D, T, world_pos, L, atten);
+                float3 to_light_direction;
+                float atten;
+                LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
 
-                float n_dot_l = saturate(dot(world_normal, L));
-                diffuse_light += C.rgb * (C.w / toon_pi) * n_dot_l * atten;
-                dir_light     += C.rgb * n_dot_l * atten;   // 不含光强：光强不改变 toon 阴影位置
+                float n_dot_l = saturate(dot(world_normal, to_light_direction));
+                diffuse_light += light_color.rgb * (light_color.w / toon_pi) * n_dot_l * atten;
+                dir_light += light_color.rgb * n_dot_l * atten; // 不含光强：光强不改变 toon 阴影位置
 
                 // 软高光：颜色用灯光色，锐度由 specular_power 控制（toon 阴影门控后续叠加）
-                float3 H     = normalize(L + view_dir);
-                float  n_dot_h = saturate(dot(world_normal, H));
-                float  spec  = pow(n_dot_h, max(specular_power, 1.0));
-                specular_light += C.rgb * (C.w / toon_pi) * spec * atten;
+                float3 H = normalize(to_light_direction + view_dir);
+                float n_dot_h = saturate(dot(world_normal, H));
+                float spec = pow(n_dot_h, max(specular_power, 1.0));
+                specular_light += light_color.rgb * (light_color.w / toon_pi) * spec * atten;
             }
         }
     }
 //-----------------------Lighting------------------------------
 
-//-----------------------Toon Shading-----------------------
-    // toon 亮部受光色（不含 NdotL）：Σ C.rgb*(C.w/π)*Atten。
+    //-----------------------Toon Shading-----------------------
+    // toon 亮部受光色（不含 NdotL）：Σ light_color.rgb*(light_color.w/π)*Atten。
     // 亮部平涂——NdotL 渐变交给 Ramp 处理，避免 LitTone 在背光区为 0 把阴影范围锁死在 NoL=0。
     float3 ComputeLightColor(FMaterialPixelParameters Parameters,
                              Texture2D light_data_map, SamplerState light_data_map_sampler)
     {
-        static const int   max_lights = 16;
-        static const float toon_pi    = 3.14159265;
+        static const int max_lights = 16;
+        static const float toon_pi = 3.14159265;
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
         float3 acc = float3(0, 0, 0);
 
-        for (int i = 0; i < max_lights; i++)
+        for (int light_index = 0; light_index < max_lights; light_index++)
         {
-            float4 P, C, D, T;
-            SampleLight(light_data_map, light_data_map_sampler, i, P, C, D, T);
+            float4 light_pos, light_color, light_dir, light_extra;
+            SampleLight(light_data_map, light_data_map_sampler, light_index, light_pos, light_color, light_dir, light_extra);
 
-            if (P.w >= 0.5)
+            if (light_pos.w >= 0.5)
             {
-                float3 L;
-                float  atten;
-                LightParams(P, D, T, world_pos, L, atten);
-                acc += C.rgb * (C.w / toon_pi) * atten;
+                float3 to_light_direction;
+                float atten;
+                LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
+                acc += light_color.rgb * (light_color.w / toon_pi) * atten;
             }
         }
         return acc;
@@ -331,22 +326,22 @@ struct TMMDToonLight
         static const int max_lights = 16;
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        float max_no_l = -1.0;   // 受光最强的一盏（NoL ∈ [-1,1]）
+        float max_no_l = -1.0; // 受光最强的一盏（NoL ∈ [-1,1]）
 
-        for (int i = 0; i < max_lights; i++)
+        for (int light_index = 0; light_index < max_lights; light_index++)
         {
-            float4 P, C, D, T;
-            SampleLight(light_data_map, light_data_map_sampler, i, P, C, D, T);
+            float4 light_pos, light_color, light_dir, light_extra;
+            SampleLight(light_data_map, light_data_map_sampler, light_index, light_pos, light_color, light_dir, light_extra);
 
-            if (P.w >= 0.5)
+            if (light_pos.w >= 0.5)
             {
-                float3 L;
-                float  atten;
-                LightParams(P, D, T, world_pos, L, atten);
-                max_no_l = max(max_no_l, dot(world_normal, L) * atten);
+                float3 to_light_direction;
+                float atten;
+                LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
+                max_no_l = max(max_no_l, dot(world_normal, to_light_direction) * atten);
             }
         }
-        return clamp(max_no_l, -1.0, 1.0);   // 保留负值（背光），供阈值正确分界
+        return clamp(max_no_l, -1.0, 1.0); // 保留负值（背光），供阈值正确分界
     }
 
     // 基础 toon ramp：no_l ∈ [-1,1]，shadow_step 也是 [-1,1] 域的阴影分界。
@@ -386,7 +381,7 @@ struct TMMDToonLight
         float3 i1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], vb),
                            dot(View.SkyIrradianceEnvironmentMap[4], vb),
                            dot(View.SkyIrradianceEnvironmentMap[5], vb));
-        float  vc  = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
+        float vc = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
         return max(float3(0, 0, 0), i0 + i1 + View.SkyIrradianceEnvironmentMap[6].xyz * vc);
     }
 
@@ -407,17 +402,17 @@ struct TMMDToonLight
         const float3 luma_w = float3(0.299, 0.587, 0.114);
 
         float ramp = ToonRamp(shadow_step, n_dot_l, softness);
-        float core = ToonCoreShadow(shadow_step, n_dot_l, core_width);   // 黑线贴在分界点 shadow_step（[-1,1] 域）
+        float core = ToonCoreShadow(shadow_step, n_dot_l, core_width); // 黑线贴在分界点 shadow_step（[-1,1] 域）
 
-        float3 shadow_tone = base_color * shadow_darken;   // 阴影压暗，保留色相
-        float3 lit_tone    = base_color * lit_color;       // 亮部平涂（不含 NdotL，明暗完全由 Ramp 控制）
-        float3 shaded      = lerp(shadow_tone, lit_tone, ramp);
+        float3 shadow_tone = base_color * shadow_darken; // 阴影压暗，保留色相
+        float3 lit_tone = base_color * lit_color;        // 亮部平涂（不含 NdotL，明暗完全由 Ramp 控制）
+        float3 shaded = lerp(shadow_tone, lit_tone, ramp);
 
         // ---- 直射光色相（主导向）+ 天空光色相（兜底）----
         float direct_luma = dot(direct_light, luma_w);
-        float sky_luma    = dot(sky_light, luma_w);
+        float sky_luma = dot(sky_light, luma_w);
         float3 direct_hue = direct_light / max(direct_luma, 0.001);
-        float3 sky_hue    = sky_light / max(sky_luma, 0.001);
+        float3 sky_hue = sky_light / max(sky_luma, 0.001);
 
         // 直射光越强越主导色相；直射光弱（背光/夜晚）时切到天空光色相兜底。
         // 白色直射光 → direct_hue ≈ (1,1,1)，乘 base_color 不偏移色相 → 只提饱和。
@@ -434,7 +429,7 @@ struct TMMDToonLight
 
         // 亮度对齐到压黑线之前的明暗，只换色相/饱和，避免过渡带被黑线压没
         float shaded_luma = dot(shaded, luma_w);
-        float term_luma   = dot(terminator_color, luma_w);
+        float term_luma = dot(terminator_color, luma_w);
         terminator_color *= shaded_luma / max(term_luma, 0.001);
 
         // 先在交界线暗部一侧叠高饱和过渡带（贴在分界点暗侧，[-1,1] 域）
@@ -447,26 +442,28 @@ struct TMMDToonLight
         shaded *= (1.0 - core_strength * core);
         return shaded;
     }
-//-----------------------Toon Shading-----------------------
+    //-----------------------Toon Shading-----------------------
 
     // 着色主流程：光照贴图采样 → 计算光照 → toon 明暗 → 场景阴影 → 输出。
     // toon 参数先在此内置默认值（后续可逐个提升为 SurfaceData 输入）。
     float3 ShadeSurface(FMaterialPixelParameters Parameters, TMMDSurfaceData surface_data, TMMDLightContext light_context)
     {
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 view_dir  = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
-//SkyLight
-        float3 sky_light_color = SkyAmbient(surface_data.world_normal) * View.SkyLightColor.rgb;
-//LightColor
+        const float3 view_dir = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
 
-
-        
-//SceneShadow
+        // SceneShadow
         float obstruction_shadow = SampleMMDShadow(Parameters, light_context.light_data_map, light_context.light_data_map_sampler,
-                                             light_context.shadow_map, light_context.shadow_map_sampler);
+                                                   light_context.shadow_map, light_context.shadow_map_sampler);
 
-        // toon 漫反射 + 软高光 + 自发光，整体压场景阴影
-        return surface_data.base_color * obstruction_shadow;
+        // SkyLight
+        // float ao = GetScreenSpaceAmbientOcclusion(Parameters.ScreenPosition); // TOD2: 先不做 AO，等后续做效果的时候再考虑
+        float3 sky_irradiance = SkyAmbient(surface_data.world_normal) * View.SkyLightColor.rgb;
+        sky_irradiance /= toon_pi;
+        float sky_shadow = lerp(0.3, 1.0, obstruction_shadow);  //TOD3: 0.3 是经验值，等后面入学手续寝室搬完做完之后再说
+        float3 sky_light_color = surface_data.base_color * sky_irradiance * sky_shadow;
+        // LightColor
+
+        return (surface_data.base_color) * obstruction_shadow + sky_light_color;
     }
 };
 

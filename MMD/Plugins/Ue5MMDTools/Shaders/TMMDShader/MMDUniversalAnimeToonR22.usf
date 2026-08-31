@@ -1,0 +1,2 @@
+// R22 独立实现路径：中性 hero key 塑形，场景点光负责双色边光与环境色。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR22.usf"

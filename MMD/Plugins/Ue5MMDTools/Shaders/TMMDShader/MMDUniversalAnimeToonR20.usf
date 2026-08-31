@@ -1,0 +1,2 @@
+// R20 独立实现路径：黑缎开层次，头发增加硬边主光亮带。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR20.usf"

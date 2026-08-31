@@ -1,0 +1,2 @@
+// R35 自然脸部：保留原脸纹理，以几何光照叠加暖肤色和清澈眼睛。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR34.usf"

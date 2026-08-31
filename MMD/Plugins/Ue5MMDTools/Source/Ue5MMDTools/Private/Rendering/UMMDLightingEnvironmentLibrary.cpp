@@ -72,13 +72,6 @@ namespace
 		float CubemapAngle = 0.0f;
 	};
 
-	// 固定 EV100=10 下的统一强度标尺：平行光用 lux，本地点/聚/面光用 lumen。
-	// 37440 经 18% 灰球校准：Studio 的 3.2/1.15 档对应约 120k/43k lm。
-	float GetPhysicalIntensity(const FMMDLightSpec& Spec)
-	{
-		return Spec.Intensity * (Spec.Kind == EMMDLightKind::Directional ? 2000.0f : 37440.0f);
-	}
-
 	FMMDLightSpec MakeDir(FRotator Rot, const FLinearColor& Color, float Intensity, float SourceAngle = 0.5357f)
 	{
 		FMMDLightSpec S;
@@ -260,8 +253,7 @@ namespace
 					Sky->SetCubemap(Cubemap);
 					Sky->SetSourceCubemapAngle(Spec.CubemapAngle);
 				}
-				// SkyLight Intensity 是无量纲倍率（引擎默认 1），不能按 lux/lumen 再乘 1000。
-				// 可见 HDRI 的亮度由 Backdrop 单独控制，IBL 只使用这里的场景规格。
+				// 天空光与其他预设灯统一使用直观的艺术强度。
 				Sky->SetIntensity(Spec.Intensity);
 				Sky->SetLightColor(Spec.Color);
 			}
@@ -270,11 +262,10 @@ namespace
 		{
 			Light->SetMobility(EComponentMobility::Movable);
 			Light->SetLightColor(Spec.Color);
-			const float UeIntensity = GetPhysicalIntensity(Spec);
-			Light->SetIntensity(UeIntensity);
+			Light->SetIntensity(Spec.Intensity);
 			if (ULocalLightComponent* LocalLight = Cast<ULocalLightComponent>(Light))
 			{
-				LocalLight->SetIntensityUnits(ELightUnits::Lumens);
+				LocalLight->SetIntensityUnits(ELightUnits::Unitless);
 			}
 			if (UPointLightComponent* PointLight = Cast<UPointLightComponent>(Light))
 			{
@@ -355,13 +346,12 @@ namespace
 		}
 		else if (ULightComponent* Light = Cast<ULightComponent>(SceneComp))
 		{
-			const float UeIntensity = GetPhysicalIntensity(Spec);
-			Light->SetIntensity(UeIntensity);
+			Light->SetIntensity(Spec.Intensity);
 			Light->SetLightColor(Spec.Color);
 			Light->SetCastShadows(true);
 			if (ULocalLightComponent* LocalLight = Cast<ULocalLightComponent>(Light))
 			{
-				LocalLight->SetIntensityUnits(ELightUnits::Lumens);
+				LocalLight->SetIntensityUnits(ELightUnits::Unitless);
 			}
 
 			if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
@@ -414,18 +404,12 @@ namespace
 #if WITH_EDITOR
 	void ConfigureLookDevPostProcessSettings(FPostProcessSettings& S)
 	{
-		S.bOverride_AutoExposureMethod = true;
-		S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
-		S.bOverride_AutoExposureBias = true;
-		S.AutoExposureBias = 0.0f;
-		S.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
-		S.AutoExposureApplyPhysicalCameraExposure = true;
-		S.bOverride_CameraISO = true;
-		S.CameraISO = 100.0f;
-		S.bOverride_CameraShutterSpeed = true;
-		S.CameraShutterSpeed = 60.0f;
-		S.bOverride_DepthOfFieldFstop = true;
-		S.DepthOfFieldFstop = 4.0f;
+		S.bOverride_AutoExposureMethod = false;
+		S.bOverride_AutoExposureBias = false;
+		S.bOverride_AutoExposureApplyPhysicalCameraExposure = false;
+		S.bOverride_CameraISO = false;
+		S.bOverride_CameraShutterSpeed = false;
+		S.bOverride_DepthOfFieldFstop = false;
 		S.bOverride_BloomIntensity = true;
 		S.BloomIntensity = 0.0f;
 		S.bOverride_VignetteIntensity = true;
@@ -553,12 +537,6 @@ void UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(FPostProcessSet
 {
 	#if WITH_EDITOR
 	ConfigureLookDevPostProcessSettings(Settings);
-	Settings.bOverride_AutoExposureMethod = false;
-	Settings.bOverride_AutoExposureBias = false;
-	Settings.bOverride_AutoExposureApplyPhysicalCameraExposure = false;
-	Settings.bOverride_CameraISO = false;
-	Settings.bOverride_CameraShutterSpeed = false;
-	Settings.bOverride_DepthOfFieldFstop = false;
 	#else
 	Settings = FPostProcessSettings();
 	#endif
@@ -727,17 +705,17 @@ TArray<FVector4f> UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled
 		{
 		case EMMDLightKind::Directional:
 			Data[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, 3.0f); // Directional
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 			Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, 0.0f);
 			break;
 		case EMMDLightKind::Point:
 			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 1.0f); // Point
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 			Data[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, Spec.Radius);
 			break;
 		case EMMDLightKind::Spot:
 			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 2.0f); // Spot
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 			Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, Spec.Radius);
 			{
 				const float HalfInner = FMath::DegreesToRadians(Spec.InnerCone);
@@ -747,7 +725,7 @@ TArray<FVector4f> UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled
 			break;
 		case EMMDLightKind::Rect:
 			Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 4.0f); // Rect
-			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+			Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 			Data[B + 2] = FVector4f(-Fwd.X, -Fwd.Y, -Fwd.Z, Spec.Radius); // rect 发射方向沿 -forward（同 CollectLights）
 			Data[B + 3] = FVector4f(Spec.SourceWidth, Spec.SourceHeight, 0.0f, 0.0f);
 			break;
@@ -958,8 +936,7 @@ void UMMDLightingEnvironmentLibrary::ResetLevelViewportCamera()
 		{
 			continue;
 		}
-		EVC->ExposureSettings.bFixed = true;
-		EVC->ExposureSettings.FixedEV100 = 10.0f;
+		EVC->ExposureSettings.bFixed = false;
 		EVC->SetGameView(true);
 		EVC->SetViewLocation(CamLoc);
 		EVC->SetViewRotation(CamRot);
@@ -1023,8 +1000,7 @@ bool UMMDLightingEnvironmentLibrary::SyncToStageCamera()
 		{
 			continue;
 		}
-		EVC->ExposureSettings.bFixed = true;
-		EVC->ExposureSettings.FixedEV100 = 10.0f;
+		EVC->ExposureSettings.bFixed = false;
 		EVC->SetGameView(true);
 		EVC->SetViewLocation(CamLoc);
 		EVC->SetViewRotation(CamRot);
@@ -1134,8 +1110,7 @@ int32 UMMDLightingEnvironmentLibrary::RebuildAllEnvironmentLevelAssets(const FSt
 		{
 			if (EVC && EVC->IsPerspective())
 			{
-				EVC->ExposureSettings.bFixed = true;
-				EVC->ExposureSettings.FixedEV100 = 10.0f;
+				EVC->ExposureSettings.bFixed = false;
 				EVC->SetGameView(true);
 				EVC->Invalidate();
 			}
@@ -1278,11 +1253,10 @@ void UMMDLightingEnvironmentLibrary::CreateTechnicalPostProcessVolume(UWorld* Wo
 
 	FPostProcessSettings& S = PP->Settings;
 
-	// Manual Exposure (EV100 = 0)
-	S.bOverride_AutoExposureMethod = true;
-	S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
-	S.bOverride_AutoExposureBias = true;
-	S.AutoExposureBias = 0.0f;
+	// 技术验证也沿用 UE 默认曝光，只关闭会干扰像素判断的镜头效果。
+	S.bOverride_AutoExposureMethod = false;
+	S.bOverride_AutoExposureBias = false;
+	S.bOverride_AutoExposureApplyPhysicalCameraExposure = false;
 
 	// Disable Bloom
 	S.bOverride_BloomIntensity = true;
@@ -1326,7 +1300,7 @@ void UMMDLightingEnvironmentLibrary::CreateTechnicalPostProcessVolume(UWorld* Wo
 	S.bOverride_WhiteTint = true;
 	S.WhiteTint = 0.0f;
 
-	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 技术验证后处理体积已创建（手动曝光 EV100=0，后处理效果已关闭）"));
+	UE_LOG(LogTemp, Log, TEXT("[MMDLighting] 技术验证后处理体积已创建（UE 默认曝光，干扰性后处理已关闭）"));
 }
 
 int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToWorld(UWorld* World, int32 TechEnvId)
@@ -1391,17 +1365,17 @@ int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToPreview(FPrevie
 			{
 			case EMMDLightKind::Directional:
 				Data[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, 3.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 				Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, 0.0f);
 				break;
 			case EMMDLightKind::Point:
 				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 1.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 				Data[B + 2] = FVector4f(0.0f, 0.0f, 0.0f, Spec.Radius);
 				break;
 			case EMMDLightKind::Spot:
 				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 2.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 				Data[B + 2] = FVector4f(Fwd.X, Fwd.Y, Fwd.Z, Spec.Radius);
 				{
 					const float HalfInner = FMath::DegreesToRadians(Spec.InnerCone);
@@ -1411,7 +1385,7 @@ int32 UMMDLightingEnvironmentLibrary::ApplyTechnicalEnvironmentToPreview(FPrevie
 				break;
 			case EMMDLightKind::Rect:
 				Data[B + 0] = FVector4f(Spec.Location.X, Spec.Location.Y, Spec.Location.Z, 4.0f);
-				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, GetPhysicalIntensity(Spec));
+				Data[B + 1] = FVector4f(Spec.Color.R, Spec.Color.G, Spec.Color.B, Spec.Intensity);
 				Data[B + 2] = FVector4f(-Fwd.X, -Fwd.Y, -Fwd.Z, Spec.Radius);
 				Data[B + 3] = FVector4f(Spec.SourceWidth, Spec.SourceHeight, 0.0f, 0.0f);
 				break;

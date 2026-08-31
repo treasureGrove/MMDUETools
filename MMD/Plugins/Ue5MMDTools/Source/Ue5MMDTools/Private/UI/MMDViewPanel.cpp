@@ -56,9 +56,8 @@ public:
         // 关键：启用编辑器/后处理/选择描边相关的 ShowFlag（保持兼容）
         EngineShowFlags.SetEditor(true);
         EngineShowFlags.SetPostProcessing(true);
-		// 固定 EV100=10，和 Content LookDev 关卡的 ISO100 / 1/60s / f4 对齐。
-		ExposureSettings.bFixed = true;
-		ExposureSettings.FixedEV100 = 10.0f;
+		// 使用 UE 默认自动曝光，不在插件视口里锁定摄影参数。
+		ExposureSettings.bFixed = false;
         // 设置默认视角
         SetViewLocation(FVector(300, 300, 300));
         SetViewRotation(FRotator(-25, 45, 0));
@@ -484,9 +483,8 @@ TSharedRef<FEditorViewportClient> MMDViewPanel::MakeEditorViewportClient()
 {
 	// SEditorViewport 已通过 SNew/SAssignNew 建立 shared 引用，此处 SharedThis(this) 安全（引擎标准做法）。
 	CustomViewportClient = MakeShared<FMMDViewportClient>(LocalModeTools.Get(), PreviewScene.Get(), SharedThis(this));
-	CustomViewportClient->ExposureSettings.bFixed = true;
-	CustomViewportClient->ExposureSettings.FixedEV100 = 10.0f;
-	CustomViewportClient->EngineShowFlags.SetEyeAdaptation(false);
+	CustomViewportClient->ExposureSettings.bFixed = false;
+	CustomViewportClient->EngineShowFlags.SetEyeAdaptation(true);
 	CustomViewportClient->EngineShowFlags.SetBloom(false);
 	CustomViewportClient->EngineShowFlags.SetMotionBlur(false);
 	CustomViewportClient->EngineShowFlags.SetDepthOfField(false);

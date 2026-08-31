@@ -1,0 +1,19 @@
+// MMDUniversalAnimeToonR04.usf
+// R04：在色相正确的 Opaque 基线上增加分界线、暗色布料宽高光与细边缘光。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR03.usf"
+
+TMMDUniversalAnimeToonR03 universal_toon_r04;
+return universal_toon_r04.OutputColor(Parameters,
+                                      base_color,
+                                      light_data_tex,
+                                      shadow_step,
+                                      shadow_softness,
+                                      shadow_strength,
+                                      ambient_strength,
+                                      light_color_influence,
+                                      highlight_step,
+                                      highlight_strength,
+                                      rim_strength,
+                                      rim_power,
+                                      base_texture_color,
+                                      diffuse_color);

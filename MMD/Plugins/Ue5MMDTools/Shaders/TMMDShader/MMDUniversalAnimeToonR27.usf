@@ -1,0 +1,148 @@
+// R27 华丽强化：提高粉润肤色、黑缎折面与场景双色边光。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR25.usf"
+
+struct TMMDUniversalAnimeToonR27
+{
+    float3 RefineColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        TMMDUniversalAnimeToonR25 base_toon;
+        float3 shaded_color = base_toon.OutputColor(
+            Parameters,
+            base_color,
+            light_data_tex,
+            light_data_tex_sampler,
+            shadow_step,
+            shadow_softness,
+            shadow_strength,
+            ambient_strength,
+            light_color_influence,
+            highlight_step,
+            highlight_strength,
+            rim_strength,
+            rim_power,
+            local_light_strength,
+            local_specular_strength,
+            glamour_rim_strength,
+            directional_sheen_strength,
+            surface_profile,
+            base_texture_color,
+            diffuse_color
+        );
+
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_hair = 1.0 - step(0.5, abs(surface_profile - 2.0));
+        float profile_white_cloth = 1.0 - step(0.5, abs(surface_profile - 3.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = base_toon.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                      float3(0.0, 0.0, 1.0));
+        float3 view_direction = base_toon.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+            float3(0.0, 0.0, 1.0));
+        float3 hero_key = base_toon.SafeNormalize(view_direction + float3(-0.62, 0.0, 0.38),
+                                                  view_direction);
+        float n_dot_l = dot(world_normal, hero_key);
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+        float silhouette = saturate(1.0 - n_dot_v);
+
+        float diffuse_max = max(max(diffuse_color.r, diffuse_color.g), diffuse_color.b);
+        float3 safe_diffuse = diffuse_max > 0.001 ? max(diffuse_color, 0.0) :
+                              float3(1.0, 1.0, 1.0);
+        float3 source_color = max(base_texture_color, 0.0) * safe_diffuse;
+        float3 skin_target = source_color * float3(1.13, 0.91, 0.88) +
+                             float3(0.046, 0.018, 0.016);
+        float skin_shadow = 1.0 - smoothstep(-0.14, 0.22, n_dot_l);
+        skin_target *= lerp(float3(1.02, 0.84, 0.88), float3(1.0, 1.0, 1.0),
+                            1.0 - skin_shadow);
+        float skin_side = smoothstep(0.18, 0.66, silhouette) *
+                          (1.0 - smoothstep(0.82, 0.97, silhouette));
+        skin_target += float3(0.038, 0.004, 0.008) * skin_side;
+        shaded_color = lerp(shaded_color, skin_target, profile_skin * 0.64);
+
+        float white_mid = smoothstep(-0.18, 0.10, n_dot_l);
+        float white_lit = smoothstep(0.24, 0.48, n_dot_l);
+        float white_grazing = smoothstep(0.28, 0.72, silhouette);
+        float white_factor = 0.73 + white_mid * 0.20 + white_lit * 0.14 -
+                             white_grazing * 0.08;
+        float3 white_layered = shaded_color * white_factor +
+                               float3(0.014, 0.018, 0.028) * white_lit;
+        shaded_color = lerp(shaded_color, white_layered, profile_white_cloth * 0.66);
+
+        float black_mid = smoothstep(-0.40, 0.08, n_dot_l);
+        float black_facet = black_mid * (1.0 - smoothstep(0.42, 0.74, n_dot_l));
+        float black_lit = smoothstep(0.16, 0.44, n_dot_l);
+        float silhouette_gate = 1.0 - smoothstep(0.70, 0.96, silhouette);
+        float3 black_facet_color = float3(0.145, 0.155, 0.185) * black_facet +
+                                   float3(0.070, 0.080, 0.105) * black_lit +
+                                   float3(0.018, 0.020, 0.026);
+        shaded_color += black_facet_color * profile_black_satin * silhouette_gate;
+
+        float3 unused_diffuse;
+        float3 unused_specular;
+        float3 extra_local_rim;
+        base_toon.ComputeLocalLights(
+            light_data_tex,
+            light_data_tex_sampler,
+            world_pos,
+            world_normal,
+            view_direction,
+            highlight_step,
+            rim_power,
+            light_color_influence,
+            0.0,
+            0.0,
+            glamour_rim_strength * 1.20,
+            unused_diffuse,
+            unused_specular,
+            extra_local_rim
+        );
+        float rim_profile_gain = 0.24 + profile_hair * 0.24 +
+                                 profile_black_satin * 0.14 - profile_skin * 0.07;
+        shaded_color += extra_local_rim * rim_profile_gain;
+
+        return min(max(shaded_color, 0.0), 1.04);
+    }
+};
+
+TMMDUniversalAnimeToonR27 universal_anime_toon;
+return universal_anime_toon.RefineColor(
+    Parameters,
+    base_color,
+    light_data_tex,
+    light_data_texSampler,
+    shadow_step,
+    shadow_softness,
+    shadow_strength,
+    ambient_strength,
+    light_color_influence,
+    highlight_step,
+    highlight_strength,
+    rim_strength,
+    rim_power,
+    local_light_strength,
+    local_specular_strength,
+    glamour_rim_strength,
+    directional_sheen_strength,
+    surface_profile,
+    base_texture_color,
+    diffuse_color
+);

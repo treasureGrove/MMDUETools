@@ -1,0 +1,2 @@
+// R24 独立实现路径：横向 Hero Key 和高阈值深色分块。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR24.usf"

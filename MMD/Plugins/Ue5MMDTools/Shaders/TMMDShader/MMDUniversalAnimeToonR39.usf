@@ -1,0 +1,2 @@
+// R39 场景亮度匹配：独立发影档位，并压暗角色大面保留彩色边光。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR38.usf"

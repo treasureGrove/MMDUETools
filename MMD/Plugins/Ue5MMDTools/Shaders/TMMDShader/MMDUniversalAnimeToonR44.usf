@@ -1,0 +1,89 @@
+// R44 暗场曝光：顶层独立收敛整体能量，并按表面类型保留必要可读性。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR39.usf"
+
+struct TMMDUniversalAnimeToonR44
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        TMMDUniversalAnimeToonR32 layered_toon;
+        float3 shaded_color = layered_toon.OutputColor(
+            Parameters,
+            base_color,
+            light_data_tex,
+            light_data_tex_sampler,
+            shadow_step,
+            shadow_softness,
+            shadow_strength,
+            ambient_strength,
+            light_color_influence,
+            highlight_step,
+            highlight_strength,
+            rim_strength,
+            rim_power,
+            local_light_strength,
+            local_specular_strength,
+            glamour_rim_strength,
+            directional_sheen_strength,
+            surface_profile,
+            base_texture_color,
+            diffuse_color
+        );
+
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_hair = 1.0 - step(0.5, abs(surface_profile - 2.0));
+        float profile_white_cloth = 1.0 - step(0.5, abs(surface_profile - 3.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+        float profile_hair_shadow = 1.0 - step(0.5, abs(surface_profile - 6.0));
+
+        float scene_exposure = saturate(0.72 + max(ambient_strength, 0.0) * 0.80);
+        float profile_exposure = 1.0 + profile_skin * 0.050 -
+                                 profile_hair * 0.060 -
+                                 profile_white_cloth * 0.160 +
+                                 profile_black_satin * 0.080 -
+                                 profile_hair_shadow * 0.120;
+        return min(max(shaded_color * scene_exposure * profile_exposure, 0.0), 3.50);
+    }
+};
+
+TMMDUniversalAnimeToonR44 universal_anime_toon;
+return universal_anime_toon.OutputColor(
+    Parameters,
+    base_color,
+    light_data_tex,
+    light_data_texSampler,
+    shadow_step,
+    shadow_softness,
+    shadow_strength,
+    ambient_strength,
+    light_color_influence,
+    highlight_step,
+    highlight_strength,
+    rim_strength,
+    rim_power,
+    local_light_strength,
+    local_specular_strength,
+    glamour_rim_strength,
+    directional_sheen_strength,
+    surface_profile,
+    base_texture_color,
+    diffuse_color
+);
