@@ -1,0 +1,130 @@
+// R46 局部塑形：发顶亮带回染发色，发影变柔，黑缎增加受光宽灰面。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR45.usf"
+
+struct TMMDUniversalAnimeToonR46
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        TMMDUniversalAnimeToonR45 layered_toon;
+        float3 shaded_color = layered_toon.OutputColor(
+            Parameters,
+            base_color,
+            light_data_tex,
+            light_data_tex_sampler,
+            shadow_step,
+            shadow_softness,
+            shadow_strength,
+            ambient_strength,
+            light_color_influence,
+            highlight_step,
+            highlight_strength,
+            rim_strength,
+            rim_power,
+            local_light_strength,
+            local_specular_strength,
+            glamour_rim_strength,
+            directional_sheen_strength,
+            surface_profile,
+            base_texture_color,
+            diffuse_color
+        );
+
+        TMMDUniversalAnimeToonR25 base_toon;
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_hair = 1.0 - step(0.5, abs(surface_profile - 2.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+        float profile_hair_shadow = 1.0 - step(0.5, abs(surface_profile - 6.0));
+
+        float diffuse_max = max(max(diffuse_color.r, diffuse_color.g), diffuse_color.b);
+        float3 safe_diffuse = diffuse_max > 0.001 ? max(diffuse_color, 0.0) :
+                              float3(1.0, 1.0, 1.0);
+        float3 source_color = max(base_texture_color, 0.0) * safe_diffuse;
+        float source_luma = base_toon.Luminance(source_color);
+        float3 vivid_source = max(source_luma + (source_color - source_luma) * 1.34, 0.0);
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = base_toon.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                      float3(0.0, 0.0, 1.0));
+        float3 view_direction = base_toon.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+            float3(0.0, 0.0, 1.0));
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+        float scene_exposure = saturate(0.72 + max(ambient_strength, 0.0) * 0.80);
+
+        float shaded_luma = base_toon.Luminance(shaded_color);
+        float vivid_luma = max(base_toon.Luminance(vivid_source), 0.025);
+        float3 hair_recolored = vivid_source * (shaded_luma / vivid_luma);
+        float hair_interior = smoothstep(0.46, 0.84, n_dot_v) *
+                              smoothstep(0.08, 0.70, world_normal.z);
+        shaded_color = lerp(shaded_color, hair_recolored,
+                            profile_hair * hair_interior * 0.38);
+
+        float3 key_direction;
+        float3 key_color;
+        float key_energy;
+        float3 scene_light_color;
+        float scene_light_energy;
+        base_toon.FindPrimaryLight(
+            light_data_tex,
+            light_data_tex_sampler,
+            world_pos,
+            key_direction,
+            key_color,
+            key_energy,
+            scene_light_color,
+            scene_light_energy
+        );
+        if (key_energy < 0.0)
+        {
+            key_direction = base_toon.SafeNormalize(
+                view_direction + float3(-0.62, 0.0, 0.38),
+                view_direction
+            );
+        }
+        float black_light = smoothstep(-0.10, 0.36, dot(world_normal, key_direction));
+        float black_front = smoothstep(0.30, 0.90, n_dot_v);
+        float3 black_volume = float3(0.145, 0.150, 0.175) *
+                              black_front * lerp(0.54, 1.0, black_light) *
+                              scene_exposure;
+        shaded_color = lerp(shaded_color,
+                            max(shaded_color, black_volume),
+                            profile_black_satin * 0.90);
+
+        float3 muted_hair = max(source_luma + (source_color - source_luma) * 0.50, 0.0);
+        float shadow_level = lerp(0.20, 0.29, n_dot_v);
+        float3 hair_shadow_tone = muted_hair * shadow_level *
+                                  float3(0.90, 0.99, 1.01) +
+                                  float3(0.008, 0.011, 0.012);
+        shaded_color = lerp(shaded_color,
+                            hair_shadow_tone * scene_exposure,
+                            profile_hair_shadow);
+
+        float skin_front = smoothstep(0.58, 0.92, n_dot_v);
+        float3 skin_fill = source_color * float3(0.93, 0.99, 1.015) *
+                           scene_exposure * 0.82;
+        shaded_color = lerp(shaded_color,
+                            max(shaded_color, skin_fill),
+                            profile_skin * skin_front * 0.12);
+
+        return min(max(shaded_color, 0.0), 3.50);
+    }
+};

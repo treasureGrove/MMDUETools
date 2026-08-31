@@ -1,0 +1,19 @@
+// MMDUniversalAnimeToonR05.usf
+// R05：宽高光只强调暗色材质，浅色表面使用窄高光，避免白袖塑料感。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR03.usf"
+
+TMMDUniversalAnimeToonR03 universal_toon_r05;
+return universal_toon_r05.OutputColor(Parameters,
+                                      base_color,
+                                      light_data_tex,
+                                      shadow_step,
+                                      shadow_softness,
+                                      shadow_strength,
+                                      ambient_strength,
+                                      light_color_influence,
+                                      highlight_step,
+                                      highlight_strength,
+                                      rim_strength,
+                                      rim_power,
+                                      base_texture_color,
+                                      diffuse_color);

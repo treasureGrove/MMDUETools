@@ -1,0 +1,114 @@
+// MMDReferenceToonGlamorous.usf
+// 独立参考材质入口；所有造型信息仅来自几何与 base_color，不读取 UV 阈值图。
+// R04 当前基线：暖白亮面、蓝紫阴影、窄丝绸高光与皮肤暖色保底。
+// Custom 输入：
+// base_color, light_data_tex, mmd_shadow_map, shadow_threshold, shadow_softness,
+// midtone_width, shadow_strength, ambient_strength, light_saturation,
+// scene_shadow_strength, mmd_shadow_bias, specular_threshold, specular_strength,
+// rim_power, rim_strength, rim_color, anisotropy_strength。
+#include "/Plugin/Ue5MMDTools/Experimental/MMDReferenceToonGlamorousLighting.ush"
+
+struct TMMDReferenceToon
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       Texture2D mmd_shadow_map,
+                       float shadow_threshold,
+                       float shadow_softness,
+                       float midtone_width,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_saturation,
+                       float scene_shadow_strength,
+                       float mmd_shadow_bias,
+                       float specular_threshold,
+                       float specular_strength,
+                       float rim_power,
+                       float rim_strength,
+                       float3 rim_color,
+                       float anisotropy_strength)
+    {
+        TMMDReferenceToonLight light;
+        float3 shaded_color = light.Shade(Parameters,
+                                          max(base_color, 0.0),
+                                          light_data_tex,
+                                          mmd_shadow_map,
+                                          shadow_threshold,
+                                          shadow_softness,
+                                          midtone_width,
+                                          shadow_strength,
+                                          ambient_strength,
+                                          light_saturation,
+                                          scene_shadow_strength,
+                                          mmd_shadow_bias,
+                                          specular_threshold,
+                                          specular_strength,
+                                          rim_power,
+                                          rim_strength,
+                                          rim_color,
+                                          anisotropy_strength);
+
+        float base_luma = dot(base_color, float3(0.299, 0.587, 0.114));
+        float base_max = max(max(base_color.r, base_color.g), base_color.b);
+        float base_min = min(min(base_color.r, base_color.g), base_color.b);
+        float base_chroma = saturate(base_max - base_min);
+        float neutral_surface = smoothstep(0.025, 0.18, base_luma) *
+                                (1.0 - smoothstep(0.06, 0.32, base_chroma));
+        float skin_profile = smoothstep(0.075, 0.12, shadow_softness);
+        float cloth_profile = neutral_surface * (1.0 - skin_profile);
+        float hair_profile = saturate(anisotropy_strength * 2.0);
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
+        float3 view_direction = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
+        float3 camera_right = normalize(cross(float3(0.0, 0.0, 1.0), view_direction) +
+                                        float3(0.001, 0.0, 0.0));
+        float side_mask = smoothstep(-0.36, 0.36, dot(world_normal, camera_right));
+        float facing = saturate(dot(world_normal, view_direction));
+        float edge = pow(saturate(1.0 - facing), 2.2);
+
+        float3 cloth_tint = lerp(float3(1.04, 0.91, 1.03),
+                                 float3(0.88, 1.04, 1.08), side_mask);
+        float3 cloth_grade = shaded_color * cloth_tint * (0.96 + facing * 0.06);
+        cloth_grade += base_luma * edge *
+                       lerp(float3(1.18, 0.12, 0.64), float3(0.04, 0.82, 1.22), side_mask) * 0.24;
+        float cloth_sheen = smoothstep(0.30, 0.52, facing) *
+                            (1.0 - smoothstep(0.67, 0.84, facing));
+        cloth_grade += base_luma * cloth_sheen *
+                       lerp(float3(1.04, 0.46, 0.86), float3(0.28, 0.92, 1.16), side_mask) * 0.11;
+        shaded_color = lerp(shaded_color, cloth_grade, cloth_profile * 0.20);
+
+        float shaded_luma = dot(shaded_color, float3(0.299, 0.587, 0.114));
+        float skin_band = lerp(0.76, 1.06, smoothstep(0.12, 0.68, shaded_luma));
+        float3 skin_grade = base_color * float3(1.08, 0.95, 0.91) * skin_band +
+                            base_luma * edge * float3(1.0, 0.26, 0.44) * 0.08;
+        shaded_color = lerp(shaded_color, skin_grade, skin_profile * 0.76);
+
+        float3 hair_glint = lerp(float3(1.05, 0.16, 0.68),
+                                 float3(0.08, 0.92, 1.26), side_mask);
+        shaded_color += hair_glint * edge * hair_profile * 0.34;
+        shaded_color = min(max(shaded_color, 0.0), 1.35);
+        return shaded_color;
+    }
+};
+
+TMMDReferenceToon reference_toon;
+return reference_toon.OutputColor(Parameters,
+                                  base_color,
+                                  light_data_tex,
+                                  mmd_shadow_map,
+                                  shadow_threshold,
+                                  shadow_softness,
+                                  midtone_width,
+                                  shadow_strength,
+                                  ambient_strength,
+                                  light_saturation,
+                                  scene_shadow_strength,
+                                  mmd_shadow_bias,
+                                  specular_threshold,
+                                  specular_strength,
+                                  rim_power,
+                                  rim_strength,
+                                  rim_color,
+                                  anisotropy_strength);

@@ -11,6 +11,15 @@
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
 #include "Engine/Engine.h"
+#include "Engine/Texture.h"
+#include "Components/MeshComponent.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstance.h"
+#include "Materials/MaterialInstanceConstant.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialParameters.h"
+#include "MaterialShared.h"
 #include "Framework/Application/SlateApplication.h"
 #include "IPropertyUtilities.h"
 #include "PropertyCustomizationHelpers.h"
@@ -48,6 +57,7 @@
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "Factories/BlueprintFactory.h"
+#include "Factories/MaterialInstanceConstantFactoryNew.h"
 #include "Editor.h"
 #include "Engine/Selection.h"
 #include "Engine/World.h"
@@ -60,6 +70,8 @@
 #include "MovieSceneSpawnable.h"
 #include "Modules/ModuleManager.h" 
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Kismet2/BlueprintEditorUtils.h"
+#include "MaterialEditingLibrary.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
@@ -75,9 +87,247 @@
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 #include "Misc/PackageName.h"
+#include "ScopedTransaction.h"
 #endif // WITH_EDITOR
 
+namespace
+{
+	constexpr const TCHAR* AuroraJewelOpaquePath = TEXT("/Ue5MMDTools/Resources/MaterialPresets/M_TMMD_AuroraJewelToon.M_TMMD_AuroraJewelToon");
+	constexpr const TCHAR* AuroraJewelTranslucentPath = TEXT("/Ue5MMDTools/Resources/MaterialPresets/M_TMMD_AuroraJewelToon_Translucent.M_TMMD_AuroraJewelToon_Translucent");
+
+	bool MMDContainsAny(const FString& Source, const TCHAR* const* Tokens, int32 TokenCount)
+	{
+		for (int32 Index = 0; Index < TokenCount; ++Index)
+		{
+			if (Source.Contains(Tokens[Index]))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	UTexture* MMDGetBaseColorTexture(UMaterialInterface* SourceMaterial)
+	{
+		if (!SourceMaterial)
+		{
+			return nullptr;
+		}
+
+		static const FName ParameterNames[] = {
+			TEXT("BaseColorMap"),
+			TEXT("BaseColorTexture"),
+			TEXT("BaseColor")
+		};
+		for (const FName ParameterName : ParameterNames)
+		{
+			UTexture* Texture = nullptr;
+			if (SourceMaterial->GetTextureParameterValue(FHashedMaterialParameterInfo(ParameterName), Texture) && Texture)
+			{
+				return Texture;
+			}
+		}
+		return nullptr;
+	}
+
+	FLinearColor MMDGetDiffuseColor(UMaterialInterface* SourceMaterial)
+	{
+		FLinearColor DiffuseColor = FLinearColor::White;
+		if (SourceMaterial)
+		{
+			SourceMaterial->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("DiffuseColor")), DiffuseColor);
+		}
+		return DiffuseColor;
+	}
+
+	float MMDGetOpacity(UMaterialInterface* SourceMaterial)
+	{
+		float Opacity = 1.0f;
+		if (SourceMaterial)
+		{
+			SourceMaterial->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Opacity);
+		}
+		return Opacity;
+	}
+
+	float MMDClassifySurfaceProfile(UMaterialInterface* SourceMaterial, UTexture* BaseColorTexture)
+	{
+		if (!SourceMaterial)
+		{
+			return 0.0f;
+		}
+
+		FString SemanticName = SourceMaterial->GetName().ToLower();
+		if (UMaterial* BaseMaterial = SourceMaterial->GetBaseMaterial())
+		{
+			SemanticName += TEXT(" ") + BaseMaterial->GetName().ToLower();
+		}
+		const FString TextureName = BaseColorTexture ? BaseColorTexture->GetName().ToLower() : FString();
+
+		static const TCHAR* SkinTokens[] = { TEXT("skin"), TEXT("face"), TEXT("facial"), TEXT("body"), TEXT("hada"), TEXT("肌"), TEXT("顔"), TEXT("脸"), TEXT("身体") };
+		static const TCHAR* EyeTokens[] = { TEXT("eye"), TEXT("eyeball"), TEXT("iris"), TEXT("hl"), TEXT("瞳"), TEXT("目") };
+		static const TCHAR* HairShadowTokens[] = { TEXT("hairshadow"), TEXT("hair_shadow"), TEXT("髪影"), TEXT("发影") };
+		static const TCHAR* HairTokens[] = { TEXT("hair"), TEXT("kami"), TEXT("bang"), TEXT("tail"), TEXT("髪"), TEXT("发") };
+		static const TCHAR* DarkTokens[] = { TEXT("black"), TEXT("skirt"), TEXT("dress"), TEXT("ribbon"), TEXT("shoe"), TEXT("metal"), TEXT("gold"), TEXT("スカート"), TEXT("リボン"), TEXT("クロスタイ"), TEXT("ボタン"), TEXT("金属") };
+		static const TCHAR* LightTokens[] = { TEXT("white"), TEXT("shirt"), TEXT("blouse"), TEXT("apron"), TEXT("frill"), TEXT("tops"), TEXT("tooth"), TEXT("围裙"), TEXT("白"), TEXT("フリル"), TEXT("レース") };
+
+		if (MMDContainsAny(SemanticName, SkinTokens, UE_ARRAY_COUNT(SkinTokens))) return 1.0f;
+		if (MMDContainsAny(SemanticName, EyeTokens, UE_ARRAY_COUNT(EyeTokens))) return 5.0f;
+		if (MMDContainsAny(SemanticName, HairShadowTokens, UE_ARRAY_COUNT(HairShadowTokens))) return 6.0f;
+		if (MMDContainsAny(SemanticName, HairTokens, UE_ARRAY_COUNT(HairTokens))) return 2.0f;
+		if (MMDContainsAny(SemanticName, DarkTokens, UE_ARRAY_COUNT(DarkTokens))) return 4.0f;
+		if (MMDContainsAny(SemanticName, LightTokens, UE_ARRAY_COUNT(LightTokens))) return 3.0f;
+		if (TextureName.Contains(TEXT("black")) || TextureName.Contains(TEXT("dark"))) return 4.0f;
+		if (TextureName.Contains(TEXT("white")) || TextureName.Contains(TEXT("shirt")) || TextureName.Contains(TEXT("blouse")) || TextureName.Contains(TEXT("cloth"))) return 3.0f;
+		return 0.0f;
+	}
+
+	bool MMDNeedsTranslucentPreset(UMaterialInterface* SourceMaterial, const FLinearColor& DiffuseColor)
+	{
+		return DiffuseColor.A < 0.98f || (SourceMaterial && IsTranslucentBlendMode(*SourceMaterial));
+	}
+
+	UMaterialInstanceDynamic* MMDCreateAuroraJewelInstance(
+		UMeshComponent* Component,
+		int32 SlotIndex,
+		UMaterialInterface* SourceMaterial,
+		UMaterialInterface* OpaquePreset,
+		UMaterialInterface* TranslucentPreset)
+	{
+		const FLinearColor DiffuseColor = MMDGetDiffuseColor(SourceMaterial);
+		UMaterialInterface* Parent = MMDNeedsTranslucentPreset(SourceMaterial, DiffuseColor) ? TranslucentPreset : OpaquePreset;
+		if (!Component || !Parent)
+		{
+			return nullptr;
+		}
+
+		const FName InstanceName = MakeUniqueObjectName(
+			Component,
+			UMaterialInstanceDynamic::StaticClass(),
+			*FString::Printf(TEXT("MID_AuroraJewel_%02d"), SlotIndex));
+		UMaterialInstanceDynamic* Instance = UMaterialInstanceDynamic::Create(Parent, Component, InstanceName);
+		if (!Instance)
+		{
+			return nullptr;
+		}
+
+		UTexture* BaseColorTexture = MMDGetBaseColorTexture(SourceMaterial);
+		if (BaseColorTexture)
+		{
+			Instance->SetTextureParameterValue(TEXT("BaseColorMap"), BaseColorTexture);
+		}
+		Instance->SetVectorParameterValue(TEXT("DiffuseColor"), DiffuseColor);
+		Instance->SetScalarParameterValue(TEXT("Opacity"), MMDGetOpacity(SourceMaterial));
+		Instance->SetScalarParameterValue(TEXT("shadow_step"), 0.00f);
+		Instance->SetScalarParameterValue(TEXT("shadow_softness"), 0.045f);
+		Instance->SetScalarParameterValue(TEXT("shadow_strength"), 0.64f);
+		Instance->SetScalarParameterValue(TEXT("ambient_strength"), 0.10f);
+		Instance->SetScalarParameterValue(TEXT("light_color_influence"), 0.32f);
+		Instance->SetScalarParameterValue(TEXT("highlight_step"), 0.82f);
+		Instance->SetScalarParameterValue(TEXT("highlight_strength"), 0.28f);
+		Instance->SetScalarParameterValue(TEXT("rim_strength"), 0.10f);
+		Instance->SetScalarParameterValue(TEXT("rim_power"), 3.20f);
+		Instance->SetScalarParameterValue(TEXT("local_light_strength"), 0.72f);
+		Instance->SetScalarParameterValue(TEXT("local_specular_strength"), 0.55f);
+		Instance->SetScalarParameterValue(TEXT("glamour_rim_strength"), 3.00f);
+		Instance->SetScalarParameterValue(TEXT("directional_sheen_strength"), 0.95f);
+		Instance->SetScalarParameterValue(TEXT("surface_profile"), MMDClassifySurfaceProfile(SourceMaterial, BaseColorTexture));
+		return Instance;
+	}
+}
+
 #if WITH_EDITOR
+static bool MMDSaveAssetPackage(UObject* Asset)
+{
+	if (!Asset || !Asset->GetOutermost())
+	{
+		return false;
+	}
+
+	UPackage* Package = Asset->GetOutermost();
+	Package->MarkPackageDirty();
+	const FString PackageFilePath = FPackageName::LongPackageNameToFilename(
+		Package->GetName(),
+		FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	SaveArgs.bWarnOfLongFilename = false;
+	return UPackage::SavePackage(Package, Asset, *PackageFilePath, SaveArgs);
+}
+
+static UMaterialInstanceConstant* MMDCreateOrUpdateAuroraJewelAssetInstance(
+	const FString& AssetFolder,
+	const FString& AssetName,
+	UMaterialInterface* SourceMaterial,
+	UMaterialInterface* OpaquePreset,
+	UMaterialInterface* TranslucentPreset,
+	FString& OutError)
+{
+	OutError.Reset();
+	const FLinearColor DiffuseColor = MMDGetDiffuseColor(SourceMaterial);
+	UMaterialInterface* Parent = MMDNeedsTranslucentPreset(SourceMaterial, DiffuseColor) ? TranslucentPreset : OpaquePreset;
+	if (!Parent)
+	{
+		OutError = TEXT("预设父材质为空");
+		return nullptr;
+	}
+
+	const FString PackageName = AssetFolder / AssetName;
+	const FString ObjectPath = PackageName + TEXT(".") + AssetName;
+	UMaterialInstanceConstant* Instance = LoadObject<UMaterialInstanceConstant>(nullptr, *ObjectPath);
+	if (!Instance)
+	{
+		UPackage* Package = CreatePackage(*PackageName);
+		UMaterialInstanceConstantFactoryNew* Factory = NewObject<UMaterialInstanceConstantFactoryNew>();
+		Factory->InitialParent = Parent;
+		Instance = Cast<UMaterialInstanceConstant>(Factory->FactoryCreateNew(
+			UMaterialInstanceConstant::StaticClass(),
+			Package,
+			FName(*AssetName),
+			RF_Public | RF_Standalone | RF_Transactional,
+			nullptr,
+			GWarn));
+		if (!Instance)
+		{
+			OutError = FString::Printf(TEXT("创建材质实例失败：%s"), *ObjectPath);
+			return nullptr;
+		}
+		FAssetRegistryModule::AssetCreated(Instance);
+	}
+
+	Instance->SetFlags(RF_Transactional);
+	Instance->Modify();
+	UMaterialEditingLibrary::SetMaterialInstanceParent(Instance, Parent);
+	if (UTexture* BaseColorTexture = MMDGetBaseColorTexture(SourceMaterial))
+	{
+		UMaterialEditingLibrary::SetMaterialInstanceTextureParameterValue(Instance, TEXT("BaseColorMap"), BaseColorTexture);
+	}
+	UMaterialEditingLibrary::SetMaterialInstanceVectorParameterValue(Instance, TEXT("DiffuseColor"), DiffuseColor);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("Opacity"), MMDGetOpacity(SourceMaterial));
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("shadow_step"), 0.00f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("shadow_softness"), 0.045f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("shadow_strength"), 0.64f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("ambient_strength"), 0.10f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("light_color_influence"), 0.32f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("highlight_step"), 0.82f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("highlight_strength"), 0.28f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("rim_strength"), 0.10f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("rim_power"), 3.20f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("local_light_strength"), 0.72f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("local_specular_strength"), 0.55f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("glamour_rim_strength"), 3.00f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(Instance, TEXT("directional_sheen_strength"), 0.95f);
+	UMaterialEditingLibrary::SetMaterialInstanceScalarParameterValue(
+		Instance,
+		TEXT("surface_profile"),
+		MMDClassifySurfaceProfile(SourceMaterial, MMDGetBaseColorTexture(SourceMaterial)));
+	UMaterialEditingLibrary::UpdateMaterialInstance(Instance);
+	Instance->MarkPackageDirty();
+	return Instance;
+}
+
 static UBlueprint* CreateMMDLevelSequenceActorBlueprint(ULevelSequence* LevelSequence, const FString& FolderPath, const FString& AssetName, FString& OutError)
 {
 	OutError.Reset();
@@ -1086,6 +1336,22 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 		AddButton(Sec, FText::FromString(TEXT("烘焙物理")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
 	}
 
+	// ---- 着色器预设 ----
+	{
+		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("着色器预设")), GMMDColorPurple);
+		Sec->AddSlot()
+			.AutoHeight()
+			.Padding(2.0f, 1.0f, 2.0f, 5.0f)
+			[
+				SNew(STextBlock)
+					.Text(FText::FromString(TEXT("TMMD Aurora Jewel Toon · R56")))
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+					.ColorAndOpacity(FSlateColor(GMMDTextDim))
+			];
+		AddButton(Sec, FText::FromString(TEXT("应用并保存到 Actor 资产")), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnApplyAuroraJewelToonClicked));
+		AddButton(Sec, FText::FromString(TEXT("撤回 Actor 资产材质")), MMDGetWarnButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnUndoShaderPresetClicked));
+	}
+
 	// ---- 光照环境（场景切换：每个环境是一个可编辑的 .umap，点"打开"切换到该场景调灯）----
 	auto AddLightingEnvRow = [this](TSharedRef<SVerticalBox> Sec, EMMDLightingEnvironment Env)
 	{
@@ -1348,6 +1614,220 @@ FReply MMDImportSetting::OnOpenSequenceComposerClicked()
 FReply MMDImportSetting::OnOpenPhysicsBakeClicked()
 {
 	OpenPhysicsBakeWindow();
+	return FReply::Handled();
+}
+
+FReply MMDImportSetting::OnApplyAuroraJewelToonClicked()
+{
+#if WITH_EDITOR
+	UClass* ActorClass = LastLoadedMMDActorClass.Get();
+	if (!ActorClass)
+	{
+		TArray<FAssetData> SelectedAssets;
+		FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+		ContentBrowserModule.Get().GetSelectedAssets(SelectedAssets);
+		for (const FAssetData& AssetData : SelectedAssets)
+		{
+			ActorClass = ResolveMMDActorClassFromAssetData(AssetData);
+			if (ActorClass)
+			{
+				break;
+			}
+		}
+	}
+	if (!ActorClass && LastImportedMMDActor.IsValid())
+	{
+		ActorClass = LastImportedMMDActor->GetClass();
+	}
+	if (!ActorClass && GEditor && GEditor->GetSelectedActors())
+	{
+		for (FSelectionIterator Iterator(*GEditor->GetSelectedActors()); Iterator; ++Iterator)
+		{
+			if (AActor* SelectedActor = Cast<AActor>(*Iterator))
+			{
+				if (SelectedActor->IsA<AMMDActor>())
+				{
+					ActorClass = SelectedActor->GetClass();
+					break;
+				}
+			}
+		}
+	}
+
+	UBlueprint* ActorBlueprint = ActorClass ? Cast<UBlueprint>(ActorClass->ClassGeneratedBy) : nullptr;
+	FMMDSelectedAnimationTarget Target;
+	if (!ActorBlueprint || !TryGetAnimationTargetFromActorClass(ActorClass, Target) || !Target.SkeletalMeshComponent)
+	{
+		ShowImportProgress(TEXT("请先加载或在内容浏览器选择一个 MMD Actor 蓝图资产"), EMMDMessageType::Warning);
+		return FReply::Handled();
+	}
+	USkeletalMeshComponent* Component = Target.SkeletalMeshComponent;
+
+	UMaterialInterface* OpaquePreset = LoadObject<UMaterialInterface>(nullptr, AuroraJewelOpaquePath);
+	UMaterialInterface* TranslucentPreset = LoadObject<UMaterialInterface>(nullptr, AuroraJewelTranslucentPath);
+	if (!OpaquePreset || !TranslucentPreset)
+	{
+		ShowImportProgress(TEXT("Aurora Jewel Toon 预设资产缺失，请重新生成插件预设"), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+
+	if (Component->GetNumMaterials() <= 0)
+	{
+		ShowImportProgress(TEXT("当前 MMD Actor 资产没有可切换的材质槽"), EMMDMessageType::Warning);
+		return FReply::Handled();
+	}
+
+	bool bAlreadyApplied = true;
+	for (int32 SlotIndex = 0; SlotIndex < Component->GetNumMaterials(); ++SlotIndex)
+	{
+		UMaterialInstance* Instance = Cast<UMaterialInstance>(Component->GetMaterial(SlotIndex));
+		if (!Instance || (!Instance->IsChildOf(OpaquePreset) && !Instance->IsChildOf(TranslucentPreset)))
+		{
+			bAlreadyApplied = false;
+			break;
+		}
+	}
+	if (bAlreadyApplied)
+	{
+		ShowImportProgress(TEXT("当前 MMD Actor 资产已经使用 TMMD Aurora Jewel Toon"), EMMDMessageType::Info);
+		return FReply::Handled();
+	}
+
+	const FString ActorFolder = FPackageName::GetLongPackagePath(ActorBlueprint->GetOutermost()->GetName());
+	const FString MaterialFolder = ActorFolder / TEXT("Materials/AuroraJewel");
+	TArray<UMaterialInterface*> ReplacementMaterials;
+	TArray<UMaterialInstanceConstant*> CreatedOrUpdatedInstances;
+	for (int32 SlotIndex = 0; SlotIndex < Component->GetNumMaterials(); ++SlotIndex)
+	{
+		UMaterialInterface* SourceMaterial = Component->GetMaterial(SlotIndex);
+		const FString AssetName = FString::Printf(
+			TEXT("MI_%s_AuroraJewel_%02d"),
+			*ActorBlueprint->GetName(),
+			SlotIndex);
+		FString CreateError;
+		UMaterialInstanceConstant* Replacement = MMDCreateOrUpdateAuroraJewelAssetInstance(
+			MaterialFolder,
+			AssetName,
+			SourceMaterial,
+			OpaquePreset,
+			TranslucentPreset,
+			CreateError);
+		if (!Replacement)
+		{
+			ShowImportProgress(CreateError, EMMDMessageType::Error);
+			return FReply::Handled();
+		}
+		ReplacementMaterials.Add(Replacement);
+		CreatedOrUpdatedInstances.Add(Replacement);
+	}
+
+	for (UMaterialInstanceConstant* Instance : CreatedOrUpdatedInstances)
+	{
+		if (!MMDSaveAssetPackage(Instance))
+		{
+			ShowImportProgress(FString::Printf(TEXT("保存材质实例失败：%s"), *Instance->GetPathName()), EMMDMessageType::Error);
+			return FReply::Handled();
+		}
+	}
+
+	const FScopedTransaction Transaction(FText::FromString(TEXT("应用 TMMD Aurora Jewel Toon 到 Actor 资产")));
+	FMMDMaterialPresetUndoEntry UndoEntry;
+	UndoEntry.Component = Component;
+	for (UMaterialInterface* OverrideMaterial : Component->OverrideMaterials)
+	{
+		UndoEntry.Materials.Add(OverrideMaterial);
+	}
+
+	MaterialPresetUndoEntries.Reset();
+	ActorBlueprint->Modify();
+	Component->SetFlags(RF_Transactional);
+	Component->Modify();
+	for (int32 SlotIndex = 0; SlotIndex < ReplacementMaterials.Num(); ++SlotIndex)
+	{
+		Component->SetMaterial(SlotIndex, ReplacementMaterials[SlotIndex]);
+	}
+	Component->MarkRenderStateDirty();
+	FBlueprintEditorUtils::MarkBlueprintAsModified(ActorBlueprint);
+	MaterialPresetUndoEntries.Add(MoveTemp(UndoEntry));
+
+	if (!MMDSaveAssetPackage(ActorBlueprint))
+	{
+		ShowImportProgress(TEXT("材质已生成，但保存 MMD Actor 蓝图资产失败"), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	LastLoadedMMDActorClass = ActorClass;
+	SetPreviewActorClassUI(ActorClass);
+
+	ShowImportProgress(
+		FString::Printf(
+			TEXT("已保存到 Actor 资产 %s：%d 个材质槽；实例位于 %s，可点击面板撤回"),
+			*ActorBlueprint->GetName(),
+			ReplacementMaterials.Num(),
+			*MaterialFolder),
+		EMMDMessageType::Success);
+#else
+	ShowImportProgress(TEXT("着色器预设切换仅在编辑器中可用"), EMMDMessageType::Error);
+#endif
+	return FReply::Handled();
+}
+
+FReply MMDImportSetting::OnUndoShaderPresetClicked()
+{
+#if WITH_EDITOR
+	if (MaterialPresetUndoEntries.IsEmpty())
+	{
+		ShowImportProgress(TEXT("没有可撤回的材质切换"), EMMDMessageType::Info);
+		return FReply::Handled();
+	}
+
+	const FScopedTransaction Transaction(FText::FromString(TEXT("撤回 MMD 着色器预设")));
+	int32 RestoredCount = 0;
+	UBlueprint* RestoredBlueprint = nullptr;
+	UClass* RestoredActorClass = nullptr;
+	for (FMMDMaterialPresetUndoEntry& Entry : MaterialPresetUndoEntries)
+	{
+		UMeshComponent* Component = Entry.Component.Get();
+		if (!Component)
+		{
+			continue;
+		}
+
+		AActor* Owner = Component->GetOwner();
+		RestoredActorClass = Owner ? Owner->GetClass() : nullptr;
+		RestoredBlueprint = RestoredActorClass ? Cast<UBlueprint>(RestoredActorClass->ClassGeneratedBy) : nullptr;
+		if (RestoredBlueprint)
+		{
+			RestoredBlueprint->Modify();
+		}
+		Component->SetFlags(RF_Transactional);
+		Component->Modify();
+		Component->EmptyOverrideMaterials();
+		for (int32 SlotIndex = 0; SlotIndex < Entry.Materials.Num(); ++SlotIndex)
+		{
+			Component->SetMaterial(SlotIndex, Entry.Materials[SlotIndex].Get());
+			++RestoredCount;
+		}
+		Component->MarkRenderStateDirty();
+		if (RestoredBlueprint)
+		{
+			FBlueprintEditorUtils::MarkBlueprintAsModified(RestoredBlueprint);
+			MMDSaveAssetPackage(RestoredBlueprint);
+		}
+	}
+	MaterialPresetUndoEntries.Reset();
+	if (RestoredActorClass)
+	{
+		SetPreviewActorClassUI(RestoredActorClass);
+	}
+
+	ShowImportProgress(
+		RestoredCount > 0
+			? FString::Printf(TEXT("已恢复并保存 Actor 资产原来的材质覆盖（%d 项）"), RestoredCount)
+			: TEXT("已恢复 Actor 资产原来的空材质覆盖列表"),
+		RestoredCount > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
+#else
+	ShowImportProgress(TEXT("着色器预设撤回仅在编辑器中可用"), EMMDMessageType::Error);
+#endif
 	return FReply::Handled();
 }
 

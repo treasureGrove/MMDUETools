@@ -26,7 +26,7 @@ struct FPostProcessSettings;
  *
  * 技术验证环境（T00-T12，通过整数 ID 访问）：
  *   用于确定性 Shader 测试，不追求漂亮。
- *   固定手动曝光、关闭后处理效果。
+ *   沿用 UE 默认曝光，只关闭会干扰像素判断的后处理效果。
  */
 UENUM(BlueprintType)
 enum class EMMDLightingEnvironment : uint8
@@ -118,7 +118,7 @@ public:
 
 	/** 应用技术验证环境（灯光 + 后处理）到 World。返回生成的灯数。
 	 *  TechEnvId: 0=T00_NeutralStudio .. 12=T12_IBLRotation。
-	 *  自动创建 PostProcessVolume 锁定手动曝光、关闭 Bloom/DOF/Vignette。 */
+	 *  自动创建 PostProcessVolume，沿用 UE 默认曝光并关闭 Bloom/DOF/Vignette。 */
 	static int32 ApplyTechnicalEnvironmentToWorld(UWorld* World, int32 TechEnvId);
 
 	/** 应用技术验证环境到 PreviewScene（灯光 + 后处理）。返回生成的灯数。 */
@@ -127,7 +127,7 @@ public:
 	/** 获取技术验证环境的短名（如 "T00_NeutralStudio"）。 */
 	static FString GetTechEnvName(int32 TechEnvId);
 
-	/** 在 World 里创建一个后处理体积，锁定手动曝光并关闭 Bloom/DOF/Vignette 等。 */
+	/** 在 World 里创建一个后处理体积，沿用 UE 默认曝光并关闭 Bloom/DOF/Vignette 等。 */
 	static void CreateTechnicalPostProcessVolume(UWorld* World);
 
 	/** 技术验证环境总数（0..12 共 13 个）。 */

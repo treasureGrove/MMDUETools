@@ -1,0 +1,2 @@
+// R37 面部收敛：程序化对称淡腮红和偏蓝虹膜。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR36.usf"

@@ -1,0 +1,2 @@
+// R19 使用独立实现路径，规避 UE 进程内 shader include 源缓存。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR19.usf"

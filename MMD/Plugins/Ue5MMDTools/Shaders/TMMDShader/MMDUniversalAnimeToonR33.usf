@@ -1,0 +1,2 @@
+// R33 华丽块面：硬色阶灰裙、冷影白布与更明确的场景染色。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR32.usf"

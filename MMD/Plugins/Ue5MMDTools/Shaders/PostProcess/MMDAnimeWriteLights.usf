@@ -1,7 +1,7 @@
 #include "/Engine/Private/Common.ush"
 
-StructuredBuffer<float4> light_data;
-RWTexture2D<float4> output_texture;
+StructuredBuffer<float4> LightData;
+RWTexture2D<float4> OutputTexture;
 
 // light_data 前 64 项 = 16 盏灯（每灯 4 texel，写第 0 行）；
 // 后 18 项 = 四级联相机基 + 主相机位置/前向（写第 1 行 x=0..17）。
@@ -15,10 +15,10 @@ void WriteCS(uint3 d_tid : SV_DispatchThreadID)
 
     if (d_tid.x < 64)
     {
-        output_texture[uint2(d_tid.x, 0)] = light_data[d_tid.x];
+        OutputTexture[uint2(d_tid.x, 0)] = LightData[d_tid.x];
     }
     else
     {
-        output_texture[uint2(d_tid.x - 64, 1)] = light_data[d_tid.x];
+        OutputTexture[uint2(d_tid.x - 64, 1)] = LightData[d_tid.x];
     }
 }

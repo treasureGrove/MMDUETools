@@ -1,0 +1,2 @@
+// R34 视角块面：黑布宽灰面由几何朝向稳定触发。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR33.usf"

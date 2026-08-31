@@ -87,3 +87,7 @@ MMD/DerivedDataCache/
 
 # Local MMD model assets
 MMD/Content/MMDModels/
+
+# Python cache / bytecode
+__pycache__/
+*.pyc

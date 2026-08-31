@@ -1,0 +1,3 @@
+// R08 正式入口：用新路径绕过编辑器进程内 include 缓存。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR06.usf"
+return 0;

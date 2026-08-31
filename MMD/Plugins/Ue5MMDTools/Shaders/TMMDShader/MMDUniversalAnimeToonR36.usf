@@ -1,0 +1,2 @@
+// R36 暖肤塑形：正面暖桃补光、侧面收暗和下向法线红润。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR35.usf"

@@ -1,0 +1,196 @@
+// MMDUniversalAnimeToon.usf
+// 通用二次元 Toon：只依赖 base_color 与几何法线，LightDataRT 缺失时也能稳定显示。
+// Custom 输入：base_color、light_data_tex、shadow_step、shadow_softness、shadow_strength、
+// ambient_strength、light_color_influence、highlight_step、highlight_strength、rim_strength、rim_power。
+struct TMMDUniversalAnimeToon
+{
+    float Luminance(float3 color)
+    {
+        return dot(color, float3(0.299, 0.587, 0.114));
+    }
+
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001 ? value * rsqrt(length_squared) : fallback;
+    }
+
+    void SampleLight(Texture2D light_data_tex, int light_index,
+                     out float4 P, out float4 C, out float4 D, out float4 T)
+    {
+        int base_index = light_index * 4;
+        P = light_data_tex.Load(int3(base_index + 0, 0, 0));
+        C = light_data_tex.Load(int3(base_index + 1, 0, 0));
+        D = light_data_tex.Load(int3(base_index + 2, 0, 0));
+        T = light_data_tex.Load(int3(base_index + 3, 0, 0));
+    }
+
+    void LightParams(float4 P, float4 D, float4 T, float3 world_pos,
+                     out float3 L, out float attenuation)
+    {
+        L = float3(0.0, 0.0, 1.0);
+        attenuation = 0.0;
+
+        if (P.w < 1.5)
+        {
+            float3 to_light = P.xyz - world_pos;
+            float distance_to_light = length(to_light);
+            L = SafeNormalize(to_light, L);
+            float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+            attenuation = range_fade * range_fade;
+        }
+        else if (P.w < 2.5)
+        {
+            float3 to_light = P.xyz - world_pos;
+            float distance_to_light = length(to_light);
+            L = SafeNormalize(to_light, L);
+            float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+            float cone_fade = smoothstep(T.y, T.x,
+                                         dot(-L, SafeNormalize(D.xyz, float3(0.0, 0.0, -1.0))));
+            attenuation = range_fade * range_fade * cone_fade;
+        }
+        else if (P.w < 3.5)
+        {
+            L = -SafeNormalize(D.xyz, float3(-0.35, 0.45, -0.82));
+            attenuation = 1.0;
+        }
+        else
+        {
+            float3 to_light = P.xyz - world_pos;
+            float distance_to_light = length(to_light);
+            L = SafeNormalize(to_light, L);
+            float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+            attenuation = range_fade * range_fade;
+        }
+    }
+
+    void FindKeyLight(Texture2D light_data_tex, float3 world_pos,
+                      out float3 key_direction, out float3 key_color,
+                      out float key_energy, out float valid_light)
+    {
+        key_direction = SafeNormalize(float3(-0.35, -0.45, 0.82), float3(0.0, 0.0, 1.0));
+        key_color = float3(1.0, 0.97, 0.94);
+        key_energy = 0.82;
+        valid_light = 0.0;
+        float best_score = -1.0;
+
+        [unroll]
+        for (int i = 0; i < 16; ++i)
+        {
+            float4 P;
+            float4 C;
+            float4 D;
+            float4 T;
+            SampleLight(light_data_tex, i, P, C, D, T);
+
+            if (P.w >= 0.5)
+            {
+                float3 L;
+                float attenuation;
+                LightParams(P, D, T, world_pos, L, attenuation);
+                float artistic_energy = 1.0 - exp(-max(C.w, 0.0));
+                float score = artistic_energy * attenuation;
+                if (score > best_score)
+                {
+                    best_score = score;
+                    key_direction = L;
+                    key_color = max(C.rgb, 0.0);
+                    key_energy = score;
+                    valid_light = 1.0;
+                }
+            }
+        }
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        // 一些 PMX 把 DiffuseColor 写成全零，但有效颜色仍完整存在于主贴图中。
+        // 全零按“未提供色调”处理为白色；非零值照常参与染色，兼容无贴图纯色材质。
+        float diffuse_max = max(max(diffuse_color.r, diffuse_color.g), diffuse_color.b);
+        float3 safe_diffuse = diffuse_max > 0.001 ? max(diffuse_color, 0.0) : float3(1.0, 1.0, 1.0);
+        float3 resolved_base_color = max(base_texture_color, 0.0) * safe_diffuse;
+        base_color = resolved_base_color;
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                            float3(0.0, 0.0, 1.0));
+        float3 view_direction = SafeNormalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+                                              float3(0.0, 0.0, 1.0));
+
+        float3 key_direction;
+        float3 key_color;
+        float key_energy;
+        float valid_light;
+        FindKeyLight(light_data_tex, world_pos, key_direction, key_color, key_energy, valid_light);
+
+        float key_max = max(max(key_color.r, key_color.g), max(key_color.b, 0.001));
+        float3 key_hue = key_color / key_max;
+        float3 light_tint = lerp(float3(1.0, 1.0, 1.0), key_hue,
+                                 saturate(light_color_influence));
+
+        float n_dot_l = dot(world_normal, key_direction);
+        float softness = max(shadow_softness, 0.001);
+        float lit_mask = smoothstep(shadow_step - softness,
+                                    shadow_step + softness, n_dot_l);
+        float mid_mask = smoothstep(-0.62, shadow_step - softness * 1.5, n_dot_l);
+
+        float darken = saturate(shadow_strength);
+        float3 shadow_tone = base_color * (1.0 - darken * 0.78);
+        shadow_tone *= float3(0.98, 0.99, 1.03);
+        float3 mid_tone = base_color * (1.0 - darken * 0.34);
+        float3 lit_tone = base_color * light_tint * (0.96 + saturate(key_energy) * 0.08);
+
+        float3 shaded_color = lerp(shadow_tone, mid_tone, mid_mask);
+        shaded_color = lerp(shaded_color, lit_tone, lit_mask);
+
+        float hemi = world_normal.z * 0.5 + 0.5;
+        float ambient = max(ambient_strength, 0.0) * lerp(0.16, 0.34, hemi);
+        shaded_color += base_color * ambient;
+
+        float3 half_vector = SafeNormalize(key_direction + view_direction, view_direction);
+        float n_dot_h = saturate(dot(world_normal, half_vector));
+        float highlight_mask = smoothstep(saturate(highlight_step),
+                                          min(saturate(highlight_step) + 0.045, 1.0), n_dot_h);
+        float base_luma = Luminance(base_color);
+        float highlight_gate = lerp(0.30, 1.0, saturate(base_luma * 2.0));
+        shaded_color += lerp(light_tint, float3(1.0, 1.0, 1.0), 0.70) *
+                        highlight_mask * max(highlight_strength, 0.0) * highlight_gate * lit_mask;
+
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+        float rim_mask = pow(saturate(1.0 - n_dot_v), max(rim_power, 0.1));
+        rim_mask *= smoothstep(0.15, 0.75, 1.0 - n_dot_l * 0.5);
+        float3 rim_color = lerp(sqrt(max(base_color, 0.0)), float3(0.80, 0.90, 1.0), 0.45);
+        shaded_color += rim_color * rim_mask * max(rim_strength, 0.0);
+
+        return min(max(shaded_color, 0.0), 1.15);
+    }
+};
+
+TMMDUniversalAnimeToon universal_toon;
+return universal_toon.OutputColor(Parameters,
+                                  base_color,
+                                  light_data_tex,
+                                  shadow_step,
+                                  shadow_softness,
+                                  shadow_strength,
+                                  ambient_strength,
+                                  light_color_influence,
+                                  highlight_step,
+                                  highlight_strength,
+                                  rim_strength,
+                                  rim_power,
+                                  base_texture_color,
+                                  diffuse_color);

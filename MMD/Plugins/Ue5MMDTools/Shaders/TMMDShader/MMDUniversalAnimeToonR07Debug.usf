@@ -1,0 +1,35 @@
+// R07 诊断入口：直接显示 LightDataRT 中点光的距离衰减贡献。
+struct TMMDUniversalAnimeToonR07Debug
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler)
+    {
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 point_sum = 0.0;
+
+        [unroll]
+        for (int i = 0; i < 16; ++i)
+        {
+            float base_index = i * 4.0;
+            float4 P = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                                       float2((base_index + 0.5) / 64.0, 0.25));
+            float4 C = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                                       float2((base_index + 1.5) / 64.0, 0.25));
+            float4 D = Texture2DSample(light_data_tex, light_data_tex_sampler,
+                                       float2((base_index + 2.5) / 64.0, 0.25));
+            if (P.w >= 0.5 && P.w < 1.5)
+            {
+                float distance_to_light = length(P.xyz - world_pos);
+                float range_fade = 1.0 - saturate(distance_to_light / max(D.w, 0.001));
+                float attenuation = range_fade * range_fade;
+                float energy = 1.0 - exp(-max(C.w, 0.0));
+                point_sum += max(C.rgb, 0.0) * attenuation * energy;
+            }
+        }
+        return saturate(point_sum);
+    }
+};
+
+TMMDUniversalAnimeToonR07Debug universal_anime_toon_debug;
+return universal_anime_toon_debug.OutputColor(Parameters, light_data_tex, light_data_texSampler);

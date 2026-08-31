@@ -1,0 +1,118 @@
+// R47 珠光细边：使用真实局部灯方向生成窄青粉 Rim，不抬高角色大面。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR46.usf"
+
+struct TMMDUniversalAnimeToonR47
+{
+    float3 ComputeCrispLocalRim(TMMDUniversalAnimeToonR25 base_toon,
+                                Texture2D light_data_tex,
+                                SamplerState light_data_tex_sampler,
+                                float3 world_pos,
+                                float3 world_normal,
+                                float3 view_direction)
+    {
+        float silhouette = saturate(1.0 - dot(world_normal, view_direction));
+        float rim_mask = smoothstep(0.76, 0.95, silhouette);
+        float3 rim_sum = 0.0;
+
+        [unroll]
+        for (int i = 0; i < 16; ++i)
+        {
+            float4 P;
+            float4 C;
+            float4 D;
+            float4 T;
+            base_toon.SampleLight(light_data_tex, light_data_tex_sampler, i, P, C, D, T);
+            if (P.w >= 0.5 && !(P.w >= 2.5 && P.w < 3.5))
+            {
+                float3 L;
+                float attenuation;
+                base_toon.LightParams(P, D, T, world_pos, L, attenuation);
+                float color_max = max(max(C.r, C.g), max(C.b, 0.001));
+                float3 light_hue = max(C.rgb, 0.0) / color_max;
+                float energy = (1.0 - exp(-max(C.w, 0.0) * 0.20)) * attenuation;
+                float backlight_gate = smoothstep(-0.62, -0.08, dot(L, view_direction));
+                float surface_gate = smoothstep(-0.20, 0.34, dot(world_normal, L));
+                rim_sum += light_hue * energy * backlight_gate * surface_gate * rim_mask;
+            }
+        }
+
+        return 1.0 - exp(-rim_sum * 1.35);
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        TMMDUniversalAnimeToonR46 layered_toon;
+        float3 shaded_color = layered_toon.OutputColor(
+            Parameters,
+            base_color,
+            light_data_tex,
+            light_data_tex_sampler,
+            shadow_step,
+            shadow_softness,
+            shadow_strength,
+            ambient_strength,
+            light_color_influence,
+            highlight_step,
+            highlight_strength,
+            rim_strength,
+            rim_power,
+            local_light_strength,
+            local_specular_strength,
+            glamour_rim_strength,
+            directional_sheen_strength,
+            surface_profile,
+            base_texture_color,
+            diffuse_color
+        );
+
+        TMMDUniversalAnimeToonR25 base_toon;
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_hair = 1.0 - step(0.5, abs(surface_profile - 2.0));
+        float profile_white_cloth = 1.0 - step(0.5, abs(surface_profile - 3.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+        float profile_hair_shadow = 1.0 - step(0.5, abs(surface_profile - 6.0));
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = base_toon.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                      float3(0.0, 0.0, 1.0));
+        float3 view_direction = base_toon.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+            float3(0.0, 0.0, 1.0));
+        float3 crisp_rim = ComputeCrispLocalRim(
+            base_toon,
+            light_data_tex,
+            light_data_tex_sampler,
+            world_pos,
+            world_normal,
+            view_direction
+        );
+
+        float profile_gain = 1.0 + profile_hair * 0.24 +
+                             profile_black_satin * 0.18 -
+                             profile_white_cloth * 0.05 -
+                             profile_skin * 0.40 -
+                             profile_hair_shadow * 0.88;
+        shaded_color += crisp_rim * max(profile_gain, 0.0) * 0.15;
+
+        return min(max(shaded_color, 0.0), 3.50);
+    }
+};

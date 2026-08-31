@@ -1,0 +1,26 @@
+// R40 暗场匹配：大面亮度进一步收敛，彩色边光保持独立。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR39.usf"
+
+TMMDUniversalAnimeToonR32 universal_anime_toon;
+return universal_anime_toon.OutputColor(
+    Parameters,
+    base_color,
+    light_data_tex,
+    light_data_texSampler,
+    shadow_step,
+    shadow_softness,
+    shadow_strength,
+    ambient_strength,
+    light_color_influence,
+    highlight_step,
+    highlight_strength,
+    rim_strength,
+    rim_power,
+    local_light_strength,
+    local_specular_strength,
+    glamour_rim_strength,
+    directional_sheen_strength,
+    surface_profile,
+    base_texture_color,
+    diffuse_color
+);

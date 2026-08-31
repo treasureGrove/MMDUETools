@@ -1,0 +1,2 @@
+// R11 缓存隔离入口；正式实现位于 R09 文件，便于 UE 重新建立 include 依赖。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR09.usf"

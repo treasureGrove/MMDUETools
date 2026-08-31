@@ -32,8 +32,8 @@ namespace MMDAnimeLightType
 	constexpr float Rect = 4.0f;
 }
 
-// LightDataRT 保留 UE 灯光的真实强度：方向光为 lux，局部灯为 candela。
-// LookDev 使用固定 EV100=10，使 PBR 与 MMD 自算光照共用同一曝光标尺。
+// LightDataRT 直接传递灯光组件的艺术强度，不换算 lux/lumen/candela。
+// 曝光由 UE 默认流程管理，材质侧自行把强度映射到稳定的 toon 范围。
 
 namespace
 {
@@ -471,8 +471,8 @@ void UMMDAnimeLightDataSubsystem::WriteLightData_RenderThread(FRDGBuilder& Graph
 
 	FMMDAnimeWriteLightsCS::FParameters* Params =
 		GraphBuilder.AllocParameters<FMMDAnimeWriteLightsCS::FParameters>();
-	Params->light_data = LightSRV;
-	Params->output_texture = OutputUAV;
+	Params->LightData = LightSRV;
+	Params->OutputTexture = OutputUAV;
 
 	TShaderMapRef<FMMDAnimeWriteLightsCS> CS(GetGlobalShaderMap(GMaxRHIFeatureLevel));
 	if (!CS.GetShader())

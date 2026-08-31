@@ -1,0 +1,124 @@
+// R50 黑缎修正：黑色大面改由主光方向分段，不再依赖裙摆观察夹角。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonR49.usf"
+
+struct TMMDUniversalAnimeToonR50
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_tex_sampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float light_color_influence,
+                       float highlight_step,
+                       float highlight_strength,
+                       float rim_strength,
+                       float rim_power,
+                       float local_light_strength,
+                       float local_specular_strength,
+                       float glamour_rim_strength,
+                       float directional_sheen_strength,
+                       float surface_profile,
+                       float3 base_texture_color,
+                       float3 diffuse_color)
+    {
+        TMMDUniversalAnimeToonR49 layered_toon;
+        float3 shaded_color = layered_toon.OutputColor(
+            Parameters,
+            base_color,
+            light_data_tex,
+            light_data_tex_sampler,
+            shadow_step,
+            shadow_softness,
+            shadow_strength,
+            ambient_strength,
+            light_color_influence,
+            highlight_step,
+            highlight_strength,
+            rim_strength,
+            rim_power,
+            local_light_strength,
+            local_specular_strength,
+            glamour_rim_strength,
+            directional_sheen_strength,
+            surface_profile,
+            base_texture_color,
+            diffuse_color
+        );
+
+        TMMDUniversalAnimeToonR25 base_toon;
+        float profile_skin = 1.0 - step(0.5, abs(surface_profile - 1.0));
+        float profile_hair = 1.0 - step(0.5, abs(surface_profile - 2.0));
+        float profile_white_cloth = 1.0 - step(0.5, abs(surface_profile - 3.0));
+        float profile_black_satin = 1.0 - step(0.5, abs(surface_profile - 4.0));
+        float profile_hair_shadow = 1.0 - step(0.5, abs(surface_profile - 6.0));
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = base_toon.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                      float3(0.0, 0.0, 1.0));
+        float3 view_direction = base_toon.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos,
+            float3(0.0, 0.0, 1.0));
+        float n_dot_v = saturate(dot(world_normal, view_direction));
+        float scene_exposure = saturate(0.74 + max(ambient_strength, 0.0) * 0.80);
+
+        float3 key_direction;
+        float3 key_color;
+        float key_energy;
+        float3 scene_light_color;
+        float scene_light_energy;
+        base_toon.FindPrimaryLight(
+            light_data_tex,
+            light_data_tex_sampler,
+            world_pos,
+            key_direction,
+            key_color,
+            key_energy,
+            scene_light_color,
+            scene_light_energy
+        );
+        if (key_energy < 0.0)
+        {
+            key_direction = base_toon.SafeNormalize(
+                view_direction + float3(-0.62, 0.0, 0.38),
+                view_direction
+            );
+        }
+
+        float black_mid_band = smoothstep(-0.34, -0.02, dot(world_normal, key_direction));
+        float black_lit_band = smoothstep(0.18, 0.48, dot(world_normal, key_direction));
+        float black_level = lerp(0.060, 0.185, black_mid_band);
+        black_level = lerp(black_level, 0.355, black_lit_band) * scene_exposure;
+        float3 black_volume = float3(0.91, 0.94, 1.04) * black_level;
+        shaded_color = lerp(shaded_color,
+                            max(shaded_color, black_volume),
+                            profile_black_satin * 0.94);
+
+        float white_front = smoothstep(0.28, 0.84, n_dot_v);
+        float3 white_fill = max(base_texture_color, 0.0) *
+                            max(diffuse_color, 0.0) * scene_exposure * 0.84;
+        shaded_color = lerp(shaded_color,
+                            max(shaded_color, white_fill),
+                            profile_white_cloth * white_front * 0.18);
+
+        TMMDUniversalAnimeToonR49 rim_toon;
+        float3 hero_rim = rim_toon.ComputeHeroRim(
+            base_toon,
+            light_data_tex,
+            light_data_tex_sampler,
+            world_pos,
+            world_normal,
+            view_direction
+        );
+        float extra_rim_gain = 0.36 + profile_hair * 0.42 +
+                               profile_white_cloth * 0.30 +
+                               profile_black_satin * 0.38 -
+                               profile_skin * 0.28 -
+                               profile_hair_shadow * 0.36;
+        shaded_color += hero_rim * max(extra_rim_gain, 0.0) * 0.20;
+
+        return min(max(shaded_color, 0.0), 3.50);
+    }
+};

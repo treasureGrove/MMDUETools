@@ -1,0 +1,2 @@
+// R21 独立实现路径：头发与黑缎使用稳定的分段受光色。
+#include "/Plugin/Ue5MMDTools/TMMDShader/MMDUniversalAnimeToonImplementationR21.usf"

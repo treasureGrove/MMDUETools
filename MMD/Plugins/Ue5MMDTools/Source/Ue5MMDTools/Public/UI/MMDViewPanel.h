@@ -31,6 +31,7 @@ public:
 	int32 ApplyLightingEnvironment(EMMDLightingEnvironment Environment);
 	void ClearLightingEnvironment();
 	bool CreatePreviewActor(UClass* ActorClass);
+	AActor* GetPreviewActor() const { return PreviewActor; }
 	void BeginPhysicsBakePreview(class USkeletalMesh* SkeletalMesh);
 	void PreviewPhysicsBakeFrame(const FReferenceSkeleton& RefSkeleton, const TArray<FTransform>& ComponentTransforms);
 	void EndPhysicsBakePreview();
