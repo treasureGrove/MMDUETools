@@ -1,5 +1,4 @@
 #include "Editor/UMMDMaterialEnsure.h"
-
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionCustom.h"
 #include "Materials/MaterialExpressionConstant.h"

@@ -251,17 +251,15 @@ struct TMMDToonLight
     //   specular_light = Σ light_color.rgb * (light_color.w / PI) * pow(NdotH, specular_power) * Atten
     void ComputeLighting(FMaterialPixelParameters Parameters,
                          Texture2D light_data_map, SamplerState light_data_map_sampler,
-                         float specular_power, float3 world_normal, float3 view_dir,
-                         out float3 diffuse_light, out float3 dir_light, out float3 specular_light)
+                         float metallic,float roughness, float3 world_normal, float3 view_dir,
+                         float3 base_color, out float3 final_shading_color)
     {
         static const int max_lights = 16;
         static const float toon_pi = 3.14159265;
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        diffuse_light = float3(0, 0, 0);
-        dir_light = float3(0, 0, 0);
-        specular_light = float3(0, 0, 0);
+        final_shading_color = float3(0.0, 0.0, 0.0);
 
         for (int light_index = 0; light_index < max_lights; light_index++)
         {
@@ -270,13 +268,17 @@ struct TMMDToonLight
 
             if (light_pos.w >= 0.5)//TOD3: 排除无效灯，后续可能会使用去写入MaxLights的方式来避免无效灯的采样
             {
+                //取灯数据
                 float3 to_light_direction;
                 float atten;
                 LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
 
-                float n_dot_l = saturate(dot(world_normal, to_light_direction));
-                diffuse_light += light_color.rgb * (light_color.w / toon_pi) * n_dot_l * atten;
-                dir_light += light_color.rgb * n_dot_l * atten; // 不含光强：光强不改变 toon 阴影位置
+                NdotL = dot(world_normal, to_light_direction);
+                float half_lambert = NdotL * 0.5 + 0.5;
+                
+                
+
+               
 
                 // 软高光：颜色用灯光色，锐度由 specular_power 控制（toon 阴影门控后续叠加）
                 float3 H = normalize(to_light_direction + view_dir);
@@ -286,91 +288,9 @@ struct TMMDToonLight
             }
         }
     }
+
 //-----------------------Lighting------------------------------
-
-    //-----------------------Toon Shading-----------------------
-    // toon 亮部受光色（不含 NdotL）：Σ light_color.rgb*(light_color.w/π)*Atten。
-    // 亮部平涂——NdotL 渐变交给 Ramp 处理，避免 LitTone 在背光区为 0 把阴影范围锁死在 NoL=0。
-    float3 ComputeLightColor(FMaterialPixelParameters Parameters,
-                             Texture2D light_data_map, SamplerState light_data_map_sampler)
-    {
-        static const int max_lights = 16;
-        static const float toon_pi = 3.14159265;
-
-        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        float3 acc = float3(0, 0, 0);
-
-        for (int light_index = 0; light_index < max_lights; light_index++)
-        {
-            float4 light_pos, light_color, light_dir, light_extra;
-            SampleLight(light_data_map, light_data_map_sampler, light_index, light_pos, light_color, light_dir, light_extra);
-
-            if (light_pos.w >= 0.5)
-            {
-                float3 to_light_direction;
-                float atten;
-                LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
-                acc += light_color.rgb * (light_color.w / toon_pi) * atten;
-            }
-        }
-        return acc;
-    }
-
-    // toon 明暗分界：保留 NoL 原始值 [-1,1]（不 saturate）。
-    //   取所有灯中受光最强的一盏（max NoL·Atten）。NoL>0 受光、NoL<0 背光、NoL=-1 完全背光。
-    //   保留负值才能让阴影阈值区分"深度背光"，否则 saturate 把整个背光半球压成 0，阴影范围失控。
-    float NdotLAmount(FMaterialPixelParameters Parameters,
-                      Texture2D light_data_map, SamplerState light_data_map_sampler,
-                      float3 world_normal)
-    {
-        static const int max_lights = 16;
-
-        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        float max_no_l = -1.0; // 受光最强的一盏（NoL ∈ [-1,1]）
-
-        for (int light_index = 0; light_index < max_lights; light_index++)
-        {
-            float4 light_pos, light_color, light_dir, light_extra;
-            SampleLight(light_data_map, light_data_map_sampler, light_index, light_pos, light_color, light_dir, light_extra);
-
-            if (light_pos.w >= 0.5)
-            {
-                float3 to_light_direction;
-                float atten;
-                LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
-                max_no_l = max(max_no_l, dot(world_normal, to_light_direction) * atten);
-            }
-        }
-        return clamp(max_no_l, -1.0, 1.0); // 保留负值（背光），供阈值正确分界
-    }
-
-    // 基础 toon ramp：no_l ∈ [-1,1]，shadow_step 也是 [-1,1] 域的阴影分界。
-    //   no_l <  shadow_step            → 0（阴影）
-    //   no_l >  shadow_step + softness → 1（亮）
-    //   反向 smoothstep：no_l 越高越接近受光（1），越低越接近阴影（0）。
-    //   shadow_step=-1（完全背光）→ 无阴影；shadow_step=1（正对光）→ 全阴影。
-    float ToonRamp(float shadow_step, float no_l, float softness)
-    {
-        return 1.0 - smoothstep(shadow_step, shadow_step + softness, no_l);
-    }
-
-    // 核心阴影黑线：no_l ≈ shadow_step 处最深，向两侧高斯过渡。返回 [0,1]，1=最暗（黑线）。
-    float ToonCoreShadow(float shadow_step, float no_l, float core_width)
-    {
-        float dist = no_l - shadow_step;
-        return exp(-(dist * dist) / (2.0 * core_width * core_width));
-    }
-
-    // 饱和度调整：Saturation = 1 原样，>1 提升，<1 降低（保持亮度不变）。
-    // 提升后 clamp 负值：已饱和的颜色再提饱和会产生负通道，负值会反转色相，必须压掉。
-    float3 SaturationAdjust(float3 color, float saturation)
-    {
-        float luma = dot(color, float3(0.299, 0.587, 0.114));
-        float3 result = lerp(float3(luma, luma, luma), color, saturation);
-        return max(result, 0.0);
-    }
-
-    // 天空环境光（PBR SH，与 PBR 同公式）。过渡色色相需要把天空光也计入。
+//-----------------------SkyLight------------------------------
     float3 SkyAmbient(float3 world_normal)
     {
         float4 nrm_v = float4(world_normal, 1.0);
@@ -384,66 +304,7 @@ struct TMMDToonLight
         float vc = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
         return max(float3(0, 0, 0), i0 + i1 + View.SkyIrradianceEnvironmentMap[6].xyz * vc);
     }
-
-    // toon 明暗合成（自暗部往亮部的层次）：
-    //   暗部阴影色 → 高饱和过渡带（暗部一侧）→ 核心黑线（最黑、线条状）→ 亮部。
-    //   阴影色 = base_color 压暗派生（保留色相）；受光色 = base_color * lit_color（亮部平涂，不含 NdotL）。
-    //   过渡色：
-    //     - 色相以直射光为主导向、天空光兜底（直射光弱时切换）；
-    //     - 白色/中性直射光 → 色相不偏移、只提饱和 → 保留 base_color 自己的饱和色；
-    //     - 亮度对齐到"压黑线之前"的明暗，保证过渡带不被黑线压没。
-    //   核心黑线最后叠加（最上层、最黑、线条状）。
-    float3 ApplyToonShadow(float3 base_color, float3 lit_color, float3 direct_light, float3 sky_light, float n_dot_l,
-                           float shadow_step, float softness,
-                           float shadow_darken, float core_strength, float core_width,
-                           float terminator_saturation, float terminator_strength,
-                           float terminator_width, float terminator_offset, float terminator_hue_strength)
-    {
-        const float3 luma_w = float3(0.299, 0.587, 0.114);
-
-        float ramp = ToonRamp(shadow_step, n_dot_l, softness);
-        float core = ToonCoreShadow(shadow_step, n_dot_l, core_width); // 黑线贴在分界点 shadow_step（[-1,1] 域）
-
-        float3 shadow_tone = base_color * shadow_darken; // 阴影压暗，保留色相
-        float3 lit_tone = base_color * lit_color;        // 亮部平涂（不含 NdotL，明暗完全由 Ramp 控制）
-        float3 shaded = lerp(shadow_tone, lit_tone, ramp);
-
-        // ---- 直射光色相（主导向）+ 天空光色相（兜底）----
-        float direct_luma = dot(direct_light, luma_w);
-        float sky_luma = dot(sky_light, luma_w);
-        float3 direct_hue = direct_light / max(direct_luma, 0.001);
-        float3 sky_hue = sky_light / max(sky_luma, 0.001);
-
-        // 直射光越强越主导色相；直射光弱（背光/夜晚）时切到天空光色相兜底。
-        // 白色直射光 → direct_hue ≈ (1,1,1)，乘 base_color 不偏移色相 → 只提饱和。
-        float direct_weight = saturate(direct_luma);
-        float3 light_hue = lerp(sky_hue, direct_hue, direct_weight);
-
-        // 色相偏移量由总受光强度调制：光越弱越贴近贴图本色
-        float light_strength = direct_luma + sky_luma;
-        float hue_blend = saturate(light_strength) * terminator_hue_strength;
-
-        // 过渡色 = 贴图本色向受光色相偏移，再提饱和（白光 → 只提饱和）
-        float3 terminator_color = lerp(base_color, base_color * light_hue, hue_blend);
-        terminator_color = SaturationAdjust(terminator_color, terminator_saturation);
-
-        // 亮度对齐到压黑线之前的明暗，只换色相/饱和，避免过渡带被黑线压没
-        float shaded_luma = dot(shaded, luma_w);
-        float term_luma = dot(terminator_color, luma_w);
-        terminator_color *= shaded_luma / max(term_luma, 0.001);
-
-        // 先在交界线暗部一侧叠高饱和过渡带（贴在分界点暗侧，[-1,1] 域）
-        float term_dist = n_dot_l - (shadow_step - terminator_offset);
-        float terminator_mask = exp(-(term_dist * term_dist) / (2.0 * terminator_width * terminator_width));
-        float term_blend = terminator_strength * saturate(light_strength) * terminator_mask;
-        shaded = lerp(shaded, terminator_color, saturate(term_blend));
-
-        // 最后叠核心黑线（最黑、线条状，压在最上层）
-        shaded *= (1.0 - core_strength * core);
-        return shaded;
-    }
-    //-----------------------Toon Shading-----------------------
-
+//-----------------------SkyLight------------------------------
     // 着色主流程：光照贴图采样 → 计算光照 → toon 明暗 → 场景阴影 → 输出。
     // toon 参数先在此内置默认值（后续可逐个提升为 SurfaceData 输入）。
     float3 ShadeSurface(FMaterialPixelParameters Parameters, TMMDSurfaceData surface_data, TMMDLightContext light_context)
@@ -461,17 +322,16 @@ struct TMMDToonLight
         sky_irradiance /= toon_pi;
         float sky_shadow = lerp(0.3, 1.0, obstruction_shadow);  //TOD3: 0.3 是经验值，等后面入学手续寝室搬完做完之后再说
         float3 sky_light_color = surface_data.base_color * sky_irradiance * sky_shadow;
-        // LightColor
-
+        // LightShading
+        float3 final_shading_color = float3(0.0, 0.0, 0.0);
+        ComputeLighting(Parameters, light_context.light_data_map, light_context.light_data_map_sampler,
+                        surface_data.metallic, surface_data.roughness, surface_data.world_normal, view_dir,
+                        surface_data.base_color, final_shading_color);
+        
         return (surface_data.base_color) * obstruction_shadow + sky_light_color;
     }
 };
 
-// ============================================================================
-// 光照工具实例 + 光照上下文。
-// MMD 光照数据只来源于 light_data_map / mmd_shadow_map 这几张 RT——没有它们无从 shading，
-// 故在此统一构造；各材质 include 后直接复用 light / light_context，无需各自再声明。
-// ============================================================================
 TMMDToonLight light;
 
 TMMDLightContext light_context = light.MakeLightContext(light_data_tex, light_data_texSampler,
