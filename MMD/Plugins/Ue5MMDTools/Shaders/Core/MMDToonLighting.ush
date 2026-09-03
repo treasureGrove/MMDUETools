@@ -272,19 +272,52 @@ struct TMMDToonLight
                 float3 to_light_direction;
                 float atten;
                 LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
-
+                //Half-Lambert 漫反射：NdotL 取正半球，避免背面光照过亮。
                 NdotL = dot(world_normal, to_light_direction);
                 float half_lambert = NdotL * 0.5 + 0.5;
-                
-                
-
-               
-
-                // 软高光：颜色用灯光色，锐度由 specular_power 控制（toon 阴影门控后续叠加）
+                //Wrarpped 可以映射明暗交界线
+                float wrapped =0.5f;
+                float wrapped_diffuse = (NdotL + wrapped) / (1.0 + wrapped);
+                //phone高光
+                float3 reflect_dir = reflect(-to_light_direction, world_normal);
+                float RdotV = saturate(dot(reflect_dir, view_dir));
+                float phone_specular = pow(RdotV, max(specular_power, 1.0));
+                //blinn-phong高光
+                float shininess = max(specular_power, 1.0);
                 float3 H = normalize(to_light_direction + view_dir);
-                float n_dot_h = saturate(dot(world_normal, H));
-                float spec = pow(n_dot_h, max(specular_power, 1.0));
-                specular_light += light_color.rgb * (light_color.w / toon_pi) * spec * atten;
+                float NdotH = saturate(dot(world_normal, H));
+                float normalization_factor=(shininess+8)/(8*toon_pi);
+                float blinn_phong_specular = pow(NdotH, max(shininess, 1.0));
+                //Oren-Nayar 漫反射：粗糙度越大，漫反射越暗，越均匀。
+                float NdotV = saturate(dot(world_normal, view_dir));
+                float sigma = rougness;
+                float sigma2 = sigma * sigma;
+                float A=1.0 - (sigma2 / (2.0 * (sigma2 + 0.33)));
+                float B=0.45 * sigma2 / (sigma2 + 0.09);
+                float3 LPojected = to_light_direction - world_normal * NdotL;
+                float3 VProjected = view_dir - world_normal * NdotV;
+                float cos_phi = saturate(dot(normalize(LPojected), normalize(VProjected)));
+                float theta_l = acos(NdotL);
+                float theta_v = acos(NdotV);
+                float alpha = max(theta_l, theta_v);
+                float beta = min(theta_l, theta_v);
+                float oren_nayar_diffuse = A + B * cos_phi * sin(alpha) * tan(beta);
+                //Cook–Torrance Microfacet BRDF
+
+                //GGX / Trowbridge-Reitz
+                float 
+                //Fresnel Schlick
+
+                //Smith Geometry
+
+                //GGX Cook-Torrance
+
+                //Beckmann
+
+                //Disney / Burley Diffuse
+
+                //Ward Anisotropic
+                
             }
         }
     }
