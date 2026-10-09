@@ -1,0 +1,47 @@
+// MMDBaseToonFallback.usf
+// 仅需 base_color；用于灯光数据 RT 未接入时的通用几何着色。
+struct TMMDBaseToonFallback
+{
+    float ToonRamp(float shadow_step, float n_dot_l, float softness)
+    {
+        float safe_softness = max(softness, 0.0001);
+        return smoothstep(shadow_step - safe_softness, shadow_step + safe_softness, n_dot_l);
+    }
+
+    float3 SkyAmbient(float3 world_normal)
+    {
+        float4 nrm_v = float4(world_normal, 1.0);
+        float3 i0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[1], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[2], nrm_v));
+        float4 vb = nrm_v.xyzz * nrm_v.yzzx;
+        float3 i1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[4], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[5], vb));
+        float vc = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
+        return max(float3(0.0, 0.0, 0.0), i0 + i1 + View.SkyIrradianceEnvironmentMap[6].xyz * vc);
+    }
+
+    float3 ShadeSurface(FMaterialPixelParameters Parameters, float3 base_color)
+    {
+        static const float toon_pi = 3.14159265;
+        float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
+
+        // 固定世界方向只作为缺省主光，不依赖模型 UV 或配套贴图。
+        float3 fallback_light = normalize(float3(-0.35, 0.45, 0.82));
+        float n_dot_l = saturate(dot(world_normal, fallback_light));
+
+        float ramp = ToonRamp(0.48, n_dot_l, 0.08);
+        float3 shadow_color = base_color * 0.42;
+        float3 toon_color = lerp(shadow_color, base_color, ramp);
+
+        // 天空环境始终乘基础色；低强度半球光保证无 SkyLight 时也不会全黑。
+        float3 sky_light = base_color * SkyAmbient(world_normal) * View.SkyLightColor.rgb / toon_pi;
+        float upper_hemisphere = saturate(world_normal.z * 0.5 + 0.5);
+        float3 environment_floor = base_color * lerp(0.10, 0.18, upper_hemisphere);
+        return toon_color * 0.72 + max(sky_light, environment_floor);
+    }
+};
+
+TMMDBaseToonFallback shader;
+return shader.ShadeSurface(Parameters, base_color);

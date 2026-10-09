@@ -1,0 +1,169 @@
+// 通用舞台角色着色：只需要 base_color；灯光、球贴图和场景阴影都可回退。
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+
+struct TMMDStageToon
+{
+    float3 SafeNormalize(float3 direction, float3 fallback_direction)
+    {
+        float length_squared = dot(direction, direction);
+        return length_squared > 1e-6 ? direction * rsqrt(length_squared) : fallback_direction;
+    }
+
+    float Luminance(float3 color)
+    {
+        return dot(color, float3(0.2126, 0.7152, 0.0722));
+    }
+
+    float3 Saturation(float3 color, float amount)
+    {
+        float luminance = Luminance(color);
+        return max(lerp(luminance.xxx, color, clamp(amount, 0.0, 2.0)), 0.0);
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 base_color,
+                       Texture2D light_data_tex, SamplerState light_data_tex_sampler,
+                       Texture2D mmd_shadow_map, SamplerState mmd_shadow_map_sampler,
+                       Texture2D mat_cap, SamplerState mat_cap_sampler,
+                       float shadow_threshold, float shadow_softness, float3 shadow_tint,
+                       float ambient_strength, float light_scale, float specular_strength,
+                       float specular_power, float rim_strength, float rim_power,
+                       float toon_amount, float diffuse_wrap, float color_saturation,
+                       float shadow_saturation, float roughness, float3 specular_tint,
+                       float sphere_mode, float sphere_strength, float black_lift, float soft_specular_strength)
+    {
+        TMMDToonLight light;
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        // 引擎仅翻转 Parameters.WorldNormal；直接读取几何 TBN 时需要自己处理背面。
+        float3 world_normal = SafeNormalize((float3)Parameters.TangentToWorld[2] * Parameters.TwoSidedSign,
+                                           float3(0.0, 0.0, 1.0));
+        float3 view_dir = SafeNormalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos, world_normal);
+        // 纯黑贴图也保留少量反射率；有颜色的暗部按统一比例抬起，保留色相。
+        float3 palette = saturate(base_color);
+        float palette_luminance = Luminance(palette);
+        float dark_material_mask = 1.0 - smoothstep(0.025, 0.16, palette_luminance);
+        float minimum_reflectance = clamp(black_lift, 0.0, 0.08);
+        palette = palette_luminance > 1e-5
+                ? palette * max(palette_luminance, minimum_reflectance) / palette_luminance
+                : minimum_reflectance.xxx;
+        palette_luminance = Luminance(palette);
+        palette *= pow(max(palette_luminance, 1e-4), -0.08);
+        palette /= max(1.0, max(palette.r, max(palette.g, palette.b)));
+        palette = Saturation(palette, color_saturation);
+        float3 shadow_palette = Saturation(palette, shadow_saturation) * clamp(shadow_tint, 0.05, 1.0);
+        float safe_softness = max(shadow_softness, 0.015);
+        float safe_wrap = clamp(diffuse_wrap, 0.0, 0.8);
+        float safe_roughness = saturate(roughness);
+        float highlight_power = max(specular_power, 1.0) * lerp(1.7, 0.45, safe_roughness);
+        float scene_shadow = light.SampleMMDShadow(Parameters, light_data_tex, light_data_tex_sampler,
+                                                   mmd_shadow_map, mmd_shadow_map_sampler);
+
+        uint data_width;
+        uint data_height;
+        light_data_tex.GetDimensions(data_width, data_height);
+        int active_light_count;
+        float shadow_quality;
+        light.ReadLightMetadata(light_data_tex, active_light_count, shadow_quality);
+        active_light_count = min(active_light_count, min((int)data_width / 4, 16));
+
+        float3 direct_color = 0.0;
+        float3 incident_color = 0.0;
+        float3 highlight_color = 0.0;
+        float3 soft_highlight_color = 0.0;
+        float total_energy = 0.0;
+        [loop] for (int light_index = 0; light_index < active_light_count; ++light_index)
+        {
+            float4 light_pos;
+            float4 light_color;
+            float4 light_dir;
+            float4 light_extra;
+            light.SampleLight(light_data_tex, light_data_tex_sampler, light_index,
+                              light_pos, light_color, light_dir, light_extra);
+            if (light_pos.w < 0.5 || light_color.w <= 0.0)
+                continue;
+
+            float3 L;
+            float atten;
+            light.LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+            float n_dot_l = saturate((dot(world_normal, L) + safe_wrap) / (1.0 + safe_wrap));
+            float stepped_light = smoothstep(shadow_threshold - safe_softness,
+                                             shadow_threshold + safe_softness, n_dot_l);
+            // ramp 只使用几何角度；调灯光强度不会移动卡通阴影边界。
+            float shade = lerp(n_dot_l, stepped_light * lerp(0.88, 1.0, n_dot_l), saturate(toon_amount));
+            float obstruction = light_index == 0 && light_pos.w >= 2.5 && light_pos.w < 3.5 ? scene_shadow : 1.0;
+            shade *= lerp(0.18, 1.0, obstruction);
+            float energy = max(light_color.w, 0.0) * (1.0 / 3.14159265) * saturate(atten);
+            float3 radiance = max(light_color.rgb, 0.0) * energy;
+            direct_color += lerp(shadow_palette, palette, shade) * radiance;
+            incident_color += radiance;
+            total_energy += energy * max(Luminance(light_color.rgb), 0.0);
+            float3 H = SafeNormalize(L + view_dir, float3(0.0, 0.0, 0.0));
+            float n_dot_h = saturate(dot(world_normal, H));
+            float highlight = pow(n_dot_h, highlight_power) * n_dot_l * obstruction;
+            highlight_color += radiance * highlight;
+            // 宽软高光让无细节贴图的黑衣也能读出几何起伏，不给浅色皮肤叠大块白斑。
+            float soft_highlight = pow(n_dot_h, lerp(24.0, 5.0, safe_roughness));
+            soft_highlight_color += radiance * soft_highlight * (n_dot_l * 0.8 + 0.2) * obstruction;
+        }
+
+        // 无灯或未连接数据贴图时，用几何方向提供完整的通用 toon。
+        if (total_energy < 1e-4)
+        {
+            float3 L = SafeNormalize(float3(-0.35, -0.55, 0.75), float3(0.0, 0.0, 1.0));
+            float n_dot_l = saturate((dot(world_normal, L) + safe_wrap) / (1.0 + safe_wrap));
+            float shade = lerp(n_dot_l, smoothstep(shadow_threshold - safe_softness,
+                                                 shadow_threshold + safe_softness, n_dot_l) * lerp(0.88, 1.0, n_dot_l), saturate(toon_amount));
+            direct_color = lerp(shadow_palette, palette, shade) * 0.72;
+            incident_color = float3(0.72, 0.72, 0.72);
+            float3 H = SafeNormalize(L + view_dir, float3(0.0, 0.0, 0.0));
+            soft_highlight_color = pow(saturate(dot(world_normal, H)), lerp(24.0, 5.0, safe_roughness))
+                                 * (n_dot_l * 0.8 + 0.2) * incident_color;
+        }
+
+        // 多灯共享能量上限，彩灯叠加仍保留色相，不把白皮肤和浅色头发烧白。
+        float peak_energy = max(incident_color.r, max(incident_color.g, incident_color.b));
+        float energy_shoulder = peak_energy > 1.0
+                              ? (1.0 + 0.18 * (1.0 - exp2(1.0 - peak_energy))) / peak_energy
+                              : 1.0;
+        float exposure_scale = max(light_scale, 0.0) * energy_shoulder;
+        float upper_hemisphere = saturate(world_normal.z * 0.5 + 0.5);
+        float3 sky = light.SkyAmbient(world_normal) * max(View.SkyLightColor.rgb, 0.0) * (1.0 / 3.14159265);
+        float3 ambient = palette * (lerp(0.25, 0.55, upper_hemisphere) + min(sky, 0.65)) * max(ambient_strength, 0.0);
+        float3 color = direct_color * exposure_scale + ambient;
+        // 只给暗材质保留法线调制的结构底光，避免纯黑衣物经阴影相乘后丢失形状。
+        float3 dark_fill_hue = palette / max(Luminance(palette), 1e-4);
+        float3 dark_fill = dark_fill_hue * minimum_reflectance
+                        * lerp(0.52, 0.82, upper_hemisphere) * dark_material_mask;
+        color = max(color, dark_fill);
+
+        float highlight_mask = 1.0 - saturate(Luminance(palette)) * 0.8;
+        color += highlight_color * exposure_scale * max(specular_strength, 0.0) * highlight_mask * max(specular_tint, 0.0);
+        color += soft_highlight_color * exposure_scale * clamp(soft_specular_strength, 0.0, 1.0)
+               * highlight_mask * max(specular_tint, 0.0);
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+        float rim = pow(saturate(1.0 - n_dot_v), max(rim_power, 1.0));
+        float3 rim_color = lerp(palette, max(specular_tint, 0.0), 0.25);
+        color += rim_color * rim * max(rim_strength, 0.0) * saturate(peak_energy);
+
+        // PMX sphere 模式为可选弱贡献；缺失贴图或 mode=0 完全不影响着色。
+        if (sphere_mode > 0.5 && sphere_strength > 0.0)
+        {
+            float3 sphere_color = saturate(light.SampleMatcap(world_normal, mat_cap, mat_cap_sampler));
+            float sphere_weight = saturate(sphere_strength);
+            if (sphere_mode < 1.5)
+                color *= lerp(float3(1.0, 1.0, 1.0), sphere_color, sphere_weight);
+            else
+                color += sphere_color * sphere_weight * (1.0 - saturate(Luminance(color)));
+        }
+
+        float peak_color = max(color.r, max(color.g, color.b));
+        return max(color, 0.0) / (1.0 + max(peak_color - 0.85, 0.0) * 0.65);
+    }
+};
+
+TMMDStageToon shader;
+return shader.OutputColor(Parameters, base_color, light_data_tex, light_data_texSampler,
+                          mmd_shadow_map, mmd_shadow_mapSampler, mat_cap, mat_capSampler,
+                          shadow_threshold, shadow_softness, shadow_tint, ambient_strength,
+                          light_scale, specular_strength, specular_power, rim_strength, rim_power,
+                          toon_amount, diffuse_wrap, color_saturation, shadow_saturation,
+                          roughness, specular_tint, sphere_mode, sphere_strength, black_lift, soft_specular_strength);

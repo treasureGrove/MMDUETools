@@ -20,6 +20,7 @@
 #include "SceneInterface.h"
 #include "SceneView.h"
 #include "Math/RotationMatrix.h"
+#include "RenderingThread.h"
 
 #if WITH_EDITOR
 #include "AssetRegistry/IAssetRegistry.h"
@@ -36,6 +37,7 @@ namespace
 	// 把这个 Tag 挂到 actor（或组件）上，即可让该物体不参与阴影投射（不自投影、不投给别处）。
 	// 相当于给任意 mesh 一个"类似 AMMDActor"的属性，见 CollectHiddenMMDPrimitives。
 	const FName GMMDShadowExcludeTag(TEXT("MMDShadowExclude"));
+	const FName GMMDShadowIncludeTag(TEXT("MMDShadowInclude"));
 }
 
 UMMDShadowMapSubsystem* UMMDShadowMapSubsystem::Get()
@@ -52,24 +54,22 @@ void UMMDShadowMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMMDShadowMapSubsystem::Deinitialize()
 {
+	// 深度 pass 持有 RT 资源指针，释放子系统持有的纹理前等待渲染线程消费完。
+	FlushRenderingCommands();
 	Super::Deinitialize();
 }
 
-// 清理关卡里残留的旧版本 SceneCapture2D actor（之前用 SpawnActor 创建 + RF_Transactional 保存进关卡的）。
-// 这些 actor 每帧也会跑独立 SceneCapture 渲染，写入同名 RT 会覆盖我们 CustomRenderPass 的输出，
-// 还可能触发 RDG 校验崩溃。命名兼容历史版本：MMDShadowMapCapture / MMDShadowCapture。
-// 节流：每 2 秒扫一次，避免每帧遍历 actor 的开销。
+// 兼容旧版捕获器：仅停用仍指向插件阴影 RT 的对象，避免自动删除用户关卡 actor。
 void UMMDShadowMapSubsystem::CleanupStaleCaptureActors(UWorld* World)
 {
-	static double LastCleanupTime = 0.0;
 	const double Now = FPlatformTime::Seconds();
-	if (Now - LastCleanupTime < 2.0)
+	if (LastCleanupWorld.Get() == World && Now - LastCleanupTime < 2.0)
 	{
 		return;
 	}
+	LastCleanupWorld = World;
 	LastCleanupTime = Now;
 
-	TArray<AActor*> Stale;
 	for (TActorIterator<ASceneCapture2D> It(World); It; ++It)
 	{
 		ASceneCapture2D* SC = *It;
@@ -80,44 +80,23 @@ void UMMDShadowMapSubsystem::CleanupStaleCaptureActors(UWorld* World)
 		const FString Name = SC->GetName();
 		if (Name.StartsWith(TEXT("MMDShadowMapCapture")) || Name.StartsWith(TEXT("MMDShadowCapture")))
 		{
-			Stale.Add(SC);
-		}
-	}
-
-	for (AActor* A : Stale)
-	{
-		// 先断开 TextureTarget 指向 MMDShadowMapRT，
-		// 否则下一帧 SceneCapture 还会用同一张 RHI 纹理再注册一次（状态污染会导致 RDG 校验崩溃）。
-		if (ASceneCapture2D* SC = Cast<ASceneCapture2D>(A))
-		{
 			if (USceneCaptureComponent2D* Cap = SC->GetCaptureComponent2D())
 			{
-				Cap->TextureTarget = nullptr;
+				UTextureRenderTarget2D* Target = Cap->TextureTarget;
+				if (Target && (Target == ShadowMapRT || Target->GetPathName() == GMMDShadowMapRT_AssetPath))
+				{
+					Cap->bCaptureEveryFrame = false;
+					Cap->bCaptureOnMovement = false;
+					Cap->TextureTarget = nullptr;
+					UE_LOG(LogTemp, Warning, TEXT("[MMDShadowMap] 已停用旧版阴影捕获器：%s"), *SC->GetName());
+				}
 			}
 		}
-		UE_LOG(LogTemp, Warning, TEXT("[MMDShadowMap] Cleaning up stale capture actor: %s (this is a leftover from old versions)"), *A->GetName());
-		A->Destroy();
 	}
 }
 
 void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily, const FSceneView* InView)
 {
-	UWorld* World = GWorld;
-	if (!World || !InViewFamily || !InView)
-	{
-		return;
-	}
-
-	// 清理关卡里残留的旧版 SceneCapture2D actor（带节流）。
-	// 必须每帧检查机会：关卡可能比 EngineSubsystem 后加载，Initialize 那一次扫不到。
-	CleanupStaleCaptureActors(World);
-
-	if (!bAutoSetupDone)
-	{
-		bAutoSetupDone = true;
-		AutoSetupShadowMapRT();
-	}
-
 	UMMDAnimeLightDataSubsystem* LightSubsystem = UMMDAnimeLightDataSubsystem::Get();
 	if (!LightSubsystem)
 	{
@@ -126,15 +105,24 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 
 	FVector4f Invalid[18];
 	FMemory::Memzero(Invalid, sizeof(Invalid));
-
-	if (!bEnabled || !ShadowMapRT)
+	FSceneInterface* Scene = InViewFamily ? InViewFamily->Scene : nullptr;
+	UWorld* World = Scene ? Scene->GetWorld() : nullptr;
+	if (!World || !InView)
 	{
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
 	}
 
-	FSceneInterface* Scene = InViewFamily->Scene;
-	if (!Scene)
+	if (!bAutoSetupDone)
+	{
+		bAutoSetupDone = true;
+		AutoSetupShadowMapRT();
+	}
+
+	// 关卡可能晚于子系统加载，保留节流后的旧版捕获器检查。
+	CleanupStaleCaptureActors(World);
+
+	if (!bEnabled || !ShadowMapRT)
 	{
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
@@ -355,6 +343,12 @@ void UMMDShadowMapSubsystem::SetShadowMapRenderTarget(UTextureRenderTarget2D* In
 	ShadowMapRT = InRenderTarget;
 	if (ShadowMapRT)
 	{
+		if (ShadowMapRT->SizeX == ShadowMapResolution * 2 && ShadowMapRT->SizeY == ShadowMapResolution * 2 &&
+			ShadowMapRT->GetFormat() == PF_R32_FLOAT && ShadowMapRT->bCanCreateUAV &&
+			!ShadowMapRT->bAutoGenerateMips && ShadowMapRT->GetResource())
+		{
+			return;
+		}
 		ShadowMapRT->bCanCreateUAV = true;
 		ShadowMapRT->RenderTargetFormat = RTF_R32f;
 		ShadowMapRT->bAutoGenerateMips = false;
@@ -384,7 +378,12 @@ void UMMDShadowMapSubsystem::SetGlobalBias(float InBias)
 void UMMDShadowMapSubsystem::SetShadowMapResolution(int32 InResolution)
 {
 	// 这是单级分辨率；atlas 为 2x2，因此总边长不超过 8192。
-	ShadowMapResolution = FMath::Clamp(InResolution, 256, 4096);
+	const int32 NewResolution = FMath::Clamp(InResolution, 256, 4096);
+	if (ShadowMapResolution == NewResolution)
+	{
+		return;
+	}
+	ShadowMapResolution = NewResolution;
 	if (ShadowMapRT)
 	{
 		ShadowMapRT->InitAutoFormat(ShadowMapResolution * 2, ShadowMapResolution * 2);
@@ -414,6 +413,7 @@ void UMMDShadowMapSubsystem::SetHideMMDActors(bool bInHide)
 
 bool UMMDShadowMapSubsystem::GetMainLightDirection(UWorld* World, FVector& OutDir)
 {
+	float StrongestIntensity = 0.0f;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Actor = *It;
@@ -421,21 +421,22 @@ bool UMMDShadowMapSubsystem::GetMainLightDirection(UWorld* World, FVector& OutDi
 		{
 			continue;
 		}
-		if (UDirectionalLightComponent* DirComp = Actor->FindComponentByClass<UDirectionalLightComponent>())
+		TInlineComponentArray<UDirectionalLightComponent*> Comps(Actor);
+		for (UDirectionalLightComponent* DirComp : Comps)
 		{
-			if (DirComp->IsVisible())
+			if (DirComp && DirComp->IsRegistered() && DirComp->IsVisible() && DirComp->Intensity > StrongestIntensity)
 			{
-				OutDir = Actor->GetActorForwardVector();
-				return true;
+				OutDir = DirComp->GetForwardVector();
+				StrongestIntensity = DirComp->Intensity;
 			}
 		}
 	}
-	return false;
+	return StrongestIntensity > 0.0f;
 }
 
 void UMMDShadowMapSubsystem::SetShadowMapExcludedActors(const TArray<AActor*>& Actors)
 {
-	ExcludedActors.Reset();
+	ExcludedActors.Empty(Actors.Num());
 	for (AActor* Actor : Actors)
 	{
 		if (Actor)
@@ -450,10 +451,10 @@ void UMMDShadowMapSubsystem::CollectHiddenMMDPrimitives(UWorld* World, TSet<FPri
 	OutHidden.Reset();
 
 	// 单趟遍历所有 actor，命中任一条即从阴影 capture 剔除：
-	//   1) MMD 模型自身（bHideMMDActors，默认 true）
+	//   1) 未启用 MMDShadowInclude 的 MMD 组件（bHideMMDActors）
 	//   2) 显式排除的 actor（SetShadowMapExcludedActors）
 	//   3) 挂上 GMMDShadowExcludeTag 的 actor 或组件（给任意 mesh 一个"类似 AMMDActor"的属性）
-	// 避免自阴影与 toon ramp 叠加双重变暗。
+	// 显式排除始终优先于预设的组件自投影选择。
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Actor = *It;
@@ -462,26 +463,16 @@ void UMMDShadowMapSubsystem::CollectHiddenMMDPrimitives(UWorld* World, TSet<FPri
 			continue;
 		}
 
-		bool bExcludeActor = Actor->Tags.Contains(GMMDShadowExcludeTag)
-			|| (bHideMMDActors && Actor->IsA<AMMDActor>());
+		const bool bExcludeActor = Actor->Tags.Contains(GMMDShadowExcludeTag)
+			|| ExcludedActors.Contains(TWeakObjectPtr<AActor>(Actor));
+		const bool bHideActorByDefault = bHideMMDActors && Actor->IsA<AMMDActor>();
 
-		if (!bExcludeActor)
-		{
-			for (TWeakObjectPtr<AActor> Weak : ExcludedActors)
-			{
-				if (Weak.Get() == Actor)
-				{
-					bExcludeActor = true;
-					break;
-				}
-			}
-		}
-
-		TArray<UPrimitiveComponent*> Comps;
-		Actor->GetComponents<UPrimitiveComponent>(Comps);
+		TInlineComponentArray<UPrimitiveComponent*> Comps(Actor);
 		for (UPrimitiveComponent* Comp : Comps)
 		{
-			const bool bExcludeComp = bExcludeActor || Comp->ComponentTags.Contains(GMMDShadowExcludeTag);
+			// 预设只为自己的组件启用自投影；显式排除仍覆盖此选择。
+			const bool bExcludeComp = bExcludeActor || Comp->ComponentTags.Contains(GMMDShadowExcludeTag)
+				|| (bHideActorByDefault && !Comp->ComponentTags.Contains(GMMDShadowIncludeTag));
 			if (bExcludeComp && Comp->IsVisible() && Comp->SceneProxy)
 			{
 				OutHidden.Add(Comp->GetPrimitiveSceneId());

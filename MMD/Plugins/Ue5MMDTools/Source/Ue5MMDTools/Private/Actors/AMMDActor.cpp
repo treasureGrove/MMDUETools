@@ -1,42 +1,9 @@
-﻿#include "AMMDActor.h"
+#include "AMMDActor.h"
+#include "Animation/MMDPhysicsPlaybackAnimInstance.h"
+#include "Rendering/MMDOutlineLibrary.h"
+#include "EditorBridge/MMDActorImportService.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "TMMDMeshBuilder.h"
-#include "MMDImportSetting.h"
-#include "Kismet2/BlueprintEditorUtils.h"
-#include "Animation/AnimBlueprint.h"
-#include "AGN_MMDSkeletalControl.h"
-#include "Kismet2/KismetEditorUtilities.h"
-#include "TPMXParser.h"
-#include "EngineUtils.h"
-#include "HAL/IConsoleManager.h"
-
-// 控制台命令：重新导入关卡里所有 MMD 角色（验证 mesh 构建改动如 bCastShadow 时用）。
-// 用法：编辑器输出日志里输入 MMD.Reimport
-static FAutoConsoleCommand GMMDReimportCommand(
-	TEXT("MMD.Reimport"),
-	TEXT("Re-import all MMD actors in the current level from their source PMX files."),
-	FConsoleCommandDelegate::CreateLambda([]()
-	{
-		UWorld* World = GWorld;
-		if (!World)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[MMD.Reimport] No world available."));
-			return;
-		}
-		int32 Count = 0;
-		for (TActorIterator<AMMDActor> It(World); It; ++It)
-		{
-			AMMDActor* MMD = *It;
-			if (MMD && !MMD->SourcePMXFilePath.IsEmpty())
-			{
-				MMD->SetupComponents(MMD->SourcePMXFilePath);
-				Count++;
-			}
-		}
-		UE_LOG(LogTemp, Log, TEXT("[MMD.Reimport] Re-imported %d MMD actor(s)."), Count);
-	})
-);
 AMMDActor::AMMDActor()
 {
     PrimaryActorTick.bCanEverTick = true;
@@ -63,85 +30,47 @@ AMMDActor::AMMDActor()
 
 void AMMDActor::SetupComponents(const FString& FilePath)
 {
-    // 记住路径：保存为蓝图时会复制到 CDO，供蓝图实例 OnConstruction 使用
-    SourcePMXFilePath = FilePath;
-
-    FString PMXFileName = FPaths::GetBaseFilename(FilePath);
-    static TUniquePtr<TPMXParser> StaticParser = MakeUnique<TPMXParser>();
-    bool bSuccess = StaticParser->ParsePMXFile(FilePath);
-    if (!bSuccess)
-    {
-        MMDImportSetting::ShowGlobalImportProgress(TEXT("MMD文件解析不成功"), EMMDMessageType::Error);
-        return;
-    }
-
-    const PMXDatas& PMXData = StaticParser->PMXInfo;
-
-    MMDImportSetting::ShowGlobalImportProgress(
-        FString::Printf(TEXT("Successfully loaded PMX file: %s"), *FilePath),
-        EMMDMessageType::Success);
-
-    TMMDMeshBuilder MeshBuilder;
-    USkeletalMesh* BuiltMesh = MeshBuilder.BuildSkeletalMeshFromPMX(PMXData, TEXT("/Game/MMDModels"), PMXData.ModelNameEN, FilePath);
-    if (!BuiltMesh)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[AMMDActor] PMX 骨骼网格构建失败: %s"), *FilePath);
-        MMDImportSetting::ShowGlobalImportProgress(TEXT("MMD 骨骼网格构建失败"), EMMDMessageType::Error);
-        return;
-    }
-
-    if (!SkeletalMeshComponent)
-    {
-        SkeletalMeshComponent = NewObject<USkeletalMeshComponent>(this, TEXT("MMD_SkeletalMesh_RT"));
-        SkeletalMeshComponent->SetupAttachment(CapsuleComponent);
-        SkeletalMeshComponent->RegisterComponent();
-        SkeletalMeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -80.0f));
-        SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        SkeletalMeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-        SkeletalMeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-    }
-    SkeletalMeshComponent->SetSkeletalMesh(BuiltMesh);
-
-    UAnimBlueprint* MMDAnimBP = MeshBuilder.BuildAnimBlueprint(BuiltMesh, FilePath);
-    if (!MMDAnimBP)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[AMMDActor] 动画蓝图创建失败: %s"), *FilePath);
-        MMDImportSetting::ShowGlobalImportProgress(TEXT("MMD 动画蓝图创建失败"), EMMDMessageType::Error);
-        return;
-    }
-
-    FMMDAnimGraphHelper::AddMMDNodeToAnimBP(MMDAnimBP,PMXData,true);
-    FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(MMDAnimBP);
-    FKismetEditorUtilities::CompileBlueprint(MMDAnimBP);
-
-    SkeletalMeshComponent->SetAnimInstanceClass(MMDAnimBP->GeneratedClass);
-    if (!SkeletalMeshComponent->GetAnimInstance())
-    {
-        SkeletalMeshComponent->InitAnim(true);
-    }
-
-
-
-    //if (UMMDAnimInstance* MMDInst = Cast<UMMDAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
-    //{
-    //    MMDInst->ProvideMMDConfigAndInit(PMXData, SkeletalMeshComponent);
-    //    UE_LOG(LogTemp, Log, TEXT("[AMMDActor] SetupComponents: Simulator built for %s"), *GetName());
-    //}
-#if WITH_EDITOR
-    {
-        UIKRigDefinition* IKRig = MeshBuilder.BuildIKRigFromPMX(BuiltMesh, FilePath);
-        UIKRetargeter* IKRetargeter = MeshBuilder.BuildIKRetargeterFromPMX(IKRig, FilePath);
-        UE_LOG(LogTemp, Log, TEXT("[AMMDActor] IK assets built: IKRig=%s, Retargeter=%s"),
-            IKRig ? *IKRig->GetName() : TEXT("None"),
-            IKRetargeter ? *IKRetargeter->GetName() : TEXT("None"));
-    }
-#endif
+    if (IMMDActorImportService* Service = IMMDActorImportService::Get()) { Service->SetupComponents(this, FilePath); }
+    else { UE_LOG(LogTemp, Warning, TEXT("PMX 资产导入需要编辑器模块；运行游戏时请使用已导入的资产")); }
 }
 
+bool AMMDActor::PlayMMDAnimation(UAnimationAsset* Animation, bool bLoop, bool bEnablePhysics)
+{
+	return UMMDPhysicsPlaybackAnimInstance::PlayMMDAnimation(SkeletalMeshComponent, Animation, bLoop, bEnablePhysics) != nullptr;
+}
+
+void AMMDActor::SetMMDAnimationPlaying(bool bPlaying)
+{
+	if (UMMDPhysicsPlaybackAnimInstance* Playback = Cast<UMMDPhysicsPlaybackAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
+	{
+		Playback->SetPlaying(bPlaying);
+	}
+}
+
+void AMMDActor::SetMMDPhysicsEnabled(bool bEnabled)
+{
+	if (UMMDPhysicsPlaybackAnimInstance* Playback = Cast<UMMDPhysicsPlaybackAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
+	{
+		Playback->SetPhysicsEnabled(bEnabled);
+	}
+}
+
+void AMMDActor::ResetMMDPhysics()
+{
+	if (UMMDPhysicsPlaybackAnimInstance* Playback = Cast<UMMDPhysicsPlaybackAnimInstance>(SkeletalMeshComponent->GetAnimInstance()))
+	{
+		Playback->ResetPhysics();
+	}
+}
+void AMMDActor::FinishSetupComponents(const FString& FilePath, USkeletalMesh* BuiltMesh, const PMXDatas* PMXData)
+{
+    if (IMMDActorImportService* Service = IMMDActorImportService::Get()) { Service->FinishSetupComponents(this, FilePath, BuiltMesh, PMXData); }
+}
 #if WITH_EDITOR
 void AMMDActor::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
+    UMMDOutlineLibrary::ApplyMMDOutline(SkeletalMeshComponent);
 
     if (UWorld* W = GetWorld())
     {
@@ -172,6 +101,7 @@ void AMMDActor::InitSimulatorForPreviewIfNeeded()
 void AMMDActor::BeginPlay()
 {
     Super::BeginPlay();
+    UMMDOutlineLibrary::ApplyMMDOutline(SkeletalMeshComponent);
 }
 
 void AMMDActor::Tick(float DeltaSeconds)

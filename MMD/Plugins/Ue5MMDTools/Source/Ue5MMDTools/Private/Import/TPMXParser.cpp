@@ -13,11 +13,28 @@ bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo);
 bool ReadPMXRigid(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXJoint(FMemoryReader &Reader, PMXDatas &PMXInfo);
 bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo);
+
+namespace
+{
+    // 按剩余文件字节限制数量，避免损坏文件触发负长度或巨额数组分配。
+    bool ValidatePMXCount(FMemoryReader& Reader, int32 Count, int64 MinimumRecordSize, const TCHAR* Context)
+    {
+        const int64 Remaining = Reader.TotalSize() - Reader.Tell();
+        if (Reader.IsError() || Count < 0 || Count > Remaining / FMath::Max<int64>(MinimumRecordSize, 1))
+        {
+            Reader.SetError();
+            UE_LOG(LogTemp, Error, TEXT("PMX: invalid %s count %d at offset %lld"), Context, Count, Reader.Tell());
+            return false;
+        }
+        return true;
+    }
+}
+
 bool TPMXParser::ParsePMXFile(const FString &FilePath)
 {
-    // 简单重置 - 不使用复杂的赋值操作
-    PMXInfo.Version = 0.0f;
-    FMemory::Memzero(PMXInfo.Sig, 4);
+    // 同一个解析器重复使用时，不保留上次文件的数据。
+    PMXInfo = PMXDatas{};
+    PMXData.Reset();
     
     UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: 开始解析"));
     
@@ -41,6 +58,12 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     }
     UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully loaded file: %s, Size: %d bytes"), *FilePath, PMXData.Num());
 
+    if (PMXData.Num() < 17)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: truncated header"));
+        return false;
+    }
+
     FMemoryReader PMXReader(PMXData, true);
     // 创建一个4字节的数组来存储签名
     PMXReader.Serialize(PMXInfo.Sig, 4);
@@ -49,139 +72,167 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     // 读version
     PMXReader << PMXInfo.Version;
     UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: File Version: %f"), PMXInfo.Version);
+    if (FMemory::Memcmp(PMXInfo.Sig, "PMX ", 4) != 0 ||
+        (!FMath::IsNearlyEqual(PMXInfo.Version, 2.0f) && !FMath::IsNearlyEqual(PMXInfo.Version, 2.1f)))
+    {
+        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: invalid signature or unsupported version"));
+        return false;
+    }
 
-    if (ReadPMXGlobals(PMXReader, PMXInfo.PMXGlobals))
+
+    if (ReadPMXGlobals(PMXReader, PMXInfo.PMXGlobals) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX globals"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX globals"));
+        return false;
     }
 
-    if (ReadCharArray(PMXReader, PMXInfo.ModelNameJP, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelNameJP, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Name: %s"), *PMXInfo.ModelNameJP);
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Name"));
+        return false;
     }
 
-    if (ReadCharArray(PMXReader, PMXInfo.ModelNameEN, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelNameEN, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Name EN: %s"), *PMXInfo.ModelNameEN);
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Name EN"));
+        return false;
     }
 
-    if (ReadCharArray(PMXReader, PMXInfo.ModelCommentJP, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelCommentJP, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Comment: %s"), *PMXInfo.ModelCommentJP);
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Comment"));
+        return false;
     }
 
-    if (ReadCharArray(PMXReader, PMXInfo.ModelCommentEN, PMXInfo))
+    if (ReadCharArray(PMXReader, PMXInfo.ModelCommentEN, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Comment EN: %s"), *PMXInfo.ModelCommentEN);
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read Model Comment EN"));
+        return false;
     }
 
     PMXReader << PMXInfo.ModelVertexCount;
+    if (!ValidatePMXCount(PMXReader, PMXInfo.ModelVertexCount, 37 + PMXInfo.PMXGlobals.BoneIndexSize + 16 * PMXInfo.PMXGlobals.ExtraUV, TEXT("ModelVertexCount")))
+    {
+        return false;
+    }
     UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Model Vertex Count: %d"), PMXInfo.ModelVertexCount);
-    if (ReadPMXVertex(PMXReader, PMXInfo))
+    if (ReadPMXVertex(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX vertex"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX vertex"));
+        return false;
     }
-    UE_LOG(LogTemp, Warning, TEXT("ExtraUV count: %d"), PMXInfo.PMXGlobals.ExtraUV);
+    UE_LOG(LogTemp, Verbose, TEXT("ExtraUV count: %d"), PMXInfo.PMXGlobals.ExtraUV);
 
-    if (ReadPMXIndices(PMXReader, PMXInfo))
+    if (ReadPMXIndices(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX indices"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX indices"));
+        return false;
     }
-    if (ReadPMXTexturePath(PMXReader, PMXInfo))
+    if (ReadPMXTexturePath(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX texture paths"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX texture paths"));
-        // LogTemp: Texture[0]: tex/body00_Miku.png
+        return false;
     }
 
-    if (ReadPMXMaterial(PMXReader, PMXInfo))
+    if (ReadPMXMaterial(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX materials"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX materials"));
+        return false;
     }
-    if (ReadPMXBones(PMXReader, PMXInfo))
+    if (ReadPMXBones(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX bones"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX bones"));
+        return false;
     }
-    if (ReadPMXMorphs(PMXReader, PMXInfo))
+    if (ReadPMXMorphs(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX morphs"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX morphs"));
+        return false;
     }
-    if(ReadPMXFrames(PMXReader, PMXInfo))
+    if (ReadPMXFrames(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX frames"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX frames"));
+        return false;
     }
-    if(ReadPMXRigid(PMXReader, PMXInfo))
+    if (ReadPMXRigid(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX rigids"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX rigids"));
+        return false;
     }
-    if(ReadPMXJoint(PMXReader, PMXInfo))
+    if (ReadPMXJoint(PMXReader, PMXInfo) && !PMXReader.IsError())
     {
         UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX joints"));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX joints"));
+        return false;
     }
-    if (ReadPMXSoftBody(PMXReader, PMXInfo))
+    // PMX 2.0 没有 softbody 段，不能在 EOF 继续读计数。
+    if (PMXInfo.Version >= 2.05f)
     {
-        UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX soft bodies"));
+        if (ReadPMXSoftBody(PMXReader, PMXInfo) && !PMXReader.IsError())
+        {
+            UE_LOG(LogTemp, Log, TEXT("ParsePMXFile: Successfully read PMX soft bodies"));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX soft bodies"));
+            return false;
+        }
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("ParsePMXFile: Failed to read PMX soft bodies"));
-    }
-
 
     UE_LOG(LogTemp, Log, TEXT("=== PMX Parse Summary ==="));
     UE_LOG(LogTemp, Log, TEXT("Vertices: %d"), PMXInfo.ModelVertexCount);
@@ -194,42 +245,33 @@ bool TPMXParser::ParsePMXFile(const FString &FilePath)
     UE_LOG(LogTemp, Log, TEXT("Rigids: %d"), PMXInfo.ModelRigidCount);
     UE_LOG(LogTemp, Log, TEXT("Joints: %d"), PMXInfo.ModelJointCount);
     UE_LOG(LogTemp, Log, TEXT("Soft Bodies: %d"), PMXInfo.ModelSoftBodyCount);
-    return true;
+    return !PMXReader.IsError();
 }
 bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
 {
-    // 记录当前位置用于调试
-    int64 StartPos = Reader.Tell();
-
     int32 StringLength = 0;
     Reader << StringLength;
 
     const int64 Remaining = Reader.TotalSize() - Reader.Tell();
 
-    // 详细的边界检查和调试信息
-    UE_LOG(LogTemp, Warning, TEXT("ReadCharArray: pos=%lld, length=%d, remaining=%lld, encoding=%d"),
-           StartPos, StringLength, Remaining, PMXInfo.PMXGlobals.TextEncoding);
-
     // 严格的边界检查
     if (StringLength < 0)
     {
-        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: negative length %d at position %lld"), StringLength, StartPos);
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: negative length %d"), StringLength);
         OutString = TEXT("");
         return false;
     }
 
     if (StringLength > Remaining)
     {
-        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: length %d exceeds remaining %lld at position %lld"),
-               StringLength, Remaining, StartPos);
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: length %d exceeds remaining %lld"), StringLength, Remaining);
         OutString = TEXT("");
         return false;
     }
 
     if (StringLength > 32768) // 合理的最大字符串长度限制
     {
-        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: suspiciously large length %d at position %lld"),
-               StringLength, StartPos);
+        UE_LOG(LogTemp, Error, TEXT("ReadCharArray: suspiciously large length %d"), StringLength);
         OutString = TEXT("");
         return false;
     }
@@ -240,71 +282,47 @@ bool ReadCharArray(FMemoryReader &Reader, FString &OutString, PMXDatas &PMXInfo)
         return true;
     }
 
-    // 安全的数据读取
-    TArray<uint8> RawData;
-    RawData.SetNumZeroed(StringLength + 4); // 额外的安全边界
-    Reader.Serialize(RawData.GetData(), StringLength);
-
-    // 根据编码类型安全地转换字符串
     if (PMXInfo.PMXGlobals.TextEncoding == 0) // UTF-16LE
     {
         if (StringLength % 2 != 0)
         {
-            UE_LOG(LogTemp, Error, TEXT("ReadCharArray: UTF-16 odd length %d at position %lld"),
-                   StringLength, StartPos);
+            UE_LOG(LogTemp, Error, TEXT("ReadCharArray: UTF-16 odd length %d"), StringLength);
             OutString = TEXT("");
             return false;
         }
 
-        int32 CharCount = StringLength / 2;
+        const int32 CharCount = StringLength / 2;
         if (CharCount == 0)
         {
             OutString = TEXT("");
             return true;
         }
 
-        // 最安全的方法：逐字节构建字符串
-        FString Result;
-        Result.Reserve(CharCount);
+        TArray<uint8> RawData;
+        RawData.SetNumUninitialized(StringLength);
+        Reader.Serialize(RawData.GetData(), StringLength);
 
+        OutString.Reset(CharCount);
         for (int32 i = 0; i < CharCount; i++)
         {
-            // 安全地读取每个UTF-16字符
-            if (i * 2 + 1 < StringLength)
+            const TCHAR WideChar = (TCHAR)((uint16)RawData[i * 2] | ((uint16)RawData[i * 2 + 1] << 8));
+            if (WideChar == 0)
+                break; // 遇到null终止符就停止
+            // 过滤控制字符，保留可打印字符与基本空白符
+            if (WideChar >= 32 || WideChar == 9 || WideChar == 10 || WideChar == 13)
             {
-                uint16 Char16 = (uint16)RawData[i * 2] | ((uint16)RawData[i * 2 + 1] << 8);
-                if (Char16 == 0)
-                    break; // 遇到null终止符就停止
-
-                // 直接append单个字符，避免构造函数问题
-                TCHAR WideChar = (TCHAR)Char16;
-                if (WideChar >= 32 || WideChar == 9 || WideChar == 10 || WideChar == 13) // 可打印字符或基本空白符
-                {
-                    Result.AppendChar(WideChar);
-                }
+                OutString.AppendChar(WideChar);
             }
         }
-        OutString = Result;
     }
     else // UTF-8
     {
-        // UTF-8处理：使用UE的转换函数
-        TArray<char> UTF8Data;
-        UTF8Data.SetNumZeroed(StringLength + 1);
-
-        // 安全地复制数据
-        for (int32 i = 0; i < StringLength; i++)
-        {
-            UTF8Data[i] = (char)RawData[i];
-        }
-
-        // 使用UE5的安全转换
-        FString Result = FString(UTF8_TO_TCHAR(UTF8Data.GetData()));
-        OutString = Result;
+        TArray<uint8> RawData;
+        RawData.SetNumUninitialized(StringLength + 1);
+        RawData[StringLength] = 0; // 补 null 终止符供转换函数使用
+        Reader.Serialize(RawData.GetData(), StringLength);
+        OutString = FString(UTF8_TO_TCHAR(RawData.GetData()));
     }
-
-    UE_LOG(LogTemp, Warning, TEXT("ReadCharArray: successfully read '%s' (length: %d)"),
-           *OutString.Left(20), StringLength); // 只显示前20个字符
 
     return true;
 }
@@ -364,7 +382,7 @@ int32 ReadGlobalVertexIndex(FMemoryReader& Reader, uint8 IndexSize)
 
 bool ReadPMXGlobals(FMemoryReader &Reader, PMXGlobals &OutGlobals)
 {
-    uint8 GlobalsCount;
+    uint8 GlobalsCount = 0;
     Reader << GlobalsCount;
 
     UE_LOG(LogTemp, Log, TEXT("ReadPMXGlobals: Count: %d"), GlobalsCount);
@@ -383,14 +401,28 @@ bool ReadPMXGlobals(FMemoryReader &Reader, PMXGlobals &OutGlobals)
            << OutGlobals.BoneIndexSize
            << OutGlobals.MorphIndexSize
            << OutGlobals.RigidBodyIndexSize;
+    const auto ValidIndexSize = [](uint8 Size) { return Size == 1 || Size == 2 || Size == 4; };
+    if (Reader.IsError() || OutGlobals.TextEncoding > 1 || OutGlobals.ExtraUV > 4 ||
+        !ValidIndexSize(OutGlobals.VertexIndexSize) || !ValidIndexSize(OutGlobals.TextureIndexSize) ||
+        !ValidIndexSize(OutGlobals.MaterialIndexSize) || !ValidIndexSize(OutGlobals.BoneIndexSize) ||
+        !ValidIndexSize(OutGlobals.MorphIndexSize) || !ValidIndexSize(OutGlobals.RigidBodyIndexSize))
+    {
+        UE_LOG(LogTemp, Error, TEXT("ReadPMXGlobals: invalid encoding, extra UV or index size"));
+        return false;
+    }
     return true;
 }
 bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
+    if (PMXInfo.ModelVertexCount <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ReadPMXVertex: ModelVertexCount <= 0: %d"), PMXInfo.ModelVertexCount);
+        return false;
+    }
     if (PMXInfo.ModelVertexCount < 10)
     {
-        UE_LOG(LogTemp, Warning, TEXT("ReadPMXVertex: ModelVertexCount is suspiciously low: %d"), PMXInfo.ModelVertexCount);
-        return false;
+        // 小配件模型（蝴蝶结等）顶点数可以合法地很少，仅记录不再拒绝
+        UE_LOG(LogTemp, Verbose, TEXT("ReadPMXVertex: 低顶点数模型: %d"), PMXInfo.ModelVertexCount);
     }
     PMXInfo.ModelVertices.SetNum(PMXInfo.ModelVertexCount);
     for (int32 i = 0; i < PMXInfo.ModelVertexCount; i++)
@@ -463,8 +495,9 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
             }
             break;
         default:
-            UE_LOG(LogTemp, Warning, TEXT("Unknown PMX Vertex Type"));
-            break;
+            UE_LOG(LogTemp, Error, TEXT("ReadPMXVertex: unknown weight deform type %d"),
+                PMXInfo.ModelVertices[i].Weight.WeightDeformType);
+            return false;
         }
         Reader << PMXInfo.ModelVertices[i].Weight.EdgeScale;
         if (i < 5)
@@ -493,7 +526,7 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
             float EdgeScale = PMXInfo.ModelVertices[i].Weight.EdgeScale;
 
-            UE_LOG(LogTemp, Warning, TEXT("Vertex[%d]: Pos=(%.4f,%.4f,%.4f) Normal=(%.4f,%.4f,%.4f) UV=(%.4f,%.4f) %s WeightType=%d %s %s EdgeScale=%.4f"),
+            UE_LOG(LogTemp, Verbose, TEXT("Vertex[%d]: Pos=(%.4f,%.4f,%.4f) Normal=(%.4f,%.4f,%.4f) UV=(%.4f,%.4f) %s WeightType=%d %s %s EdgeScale=%.4f"),
                    i,
                    PMXInfo.ModelVertices[i].Position.X, PMXInfo.ModelVertices[i].Position.Y, PMXInfo.ModelVertices[i].Position.Z,
                    PMXInfo.ModelVertices[i].Normal.X, PMXInfo.ModelVertices[i].Normal.Y, PMXInfo.ModelVertices[i].Normal.Z,
@@ -511,15 +544,24 @@ bool ReadPMXVertex(FMemoryReader &Reader, PMXDatas &PMXInfo)
 bool ReadPMXIndices(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelIndicesCount;
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelIndicesCount, PMXInfo.PMXGlobals.VertexIndexSize, TEXT("ModelIndicesCount")))
+    {
+        return false;
+    }
     UE_LOG(LogTemp, Log, TEXT("ReadPMXIndices: Count: %d"), PMXInfo.ModelIndicesCount);
     PMXInfo.ModelIndices.Empty(PMXInfo.ModelIndicesCount);
     for (int32 i = 0; i < PMXInfo.ModelIndicesCount; i++)
     {
         int32 Index = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+        if (Reader.IsError() || !PMXInfo.ModelVertices.IsValidIndex(Index))
+        {
+            UE_LOG(LogTemp, Error, TEXT("ReadPMXIndices: invalid vertex index %d"), Index);
+            return false;
+        }
         PMXInfo.ModelIndices.Add(Index);
         if (i < 5)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Index[%d]: %d"), i, Index);
+            UE_LOG(LogTemp, Verbose, TEXT("Index[%d]: %d"), i, Index);
         }
     }
 
@@ -536,6 +578,10 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
     }
 
     Reader << PMXInfo.ModelTextureCount;
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelTextureCount, 4, TEXT("ModelTextureCount")))
+    {
+        return false;
+    }
     UE_LOG(LogTemp, Log, TEXT("Textures: count=%d at offset=%lld"), PMXInfo.ModelTextureCount, (int64)Reader.Tell());
     // 合理性校验：允许 0，过大直接判错（防止上游错位导致巨值）
     if (PMXInfo.ModelTextureCount < 0 || PMXInfo.ModelTextureCount > 10000)
@@ -560,7 +606,7 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
         if (i < 3)
         {
-            UE_LOG(LogTemp, Error, TEXT("路径是Texture[%d]: %s"), i, *PMXInfo.ModelTexturePaths[i]);
+            UE_LOG(LogTemp, Verbose, TEXT("路径是Texture[%d]: %s"), i, *PMXInfo.ModelTexturePaths[i]);
         }
     }
     return true;
@@ -568,7 +614,11 @@ bool ReadPMXTexturePath(FMemoryReader &Reader, PMXDatas &PMXInfo)
 bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelMaterialCount;
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXMaterial: MaterialCount=%d at position=%lld"),
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelMaterialCount, 16, TEXT("ModelMaterialCount")))
+    {
+        return false;
+    }
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXMaterial: MaterialCount=%d at position=%lld"),
            PMXInfo.ModelMaterialCount, Reader.Tell());
 
     PMXInfo.ModelMaterials.SetNum(PMXInfo.ModelMaterialCount);
@@ -579,8 +629,14 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
         UE_LOG(LogTemp, Verbose, TEXT("Reading material %d/%d at position %lld"),
                i + 1, PMXInfo.ModelMaterialCount, MaterialStartPos);
 
-        ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelMaterials[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
 
         float dr, dg, db, da;
         Reader << dr << dg << db << da;
@@ -607,19 +663,26 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
         Reader << PMXInfo.ModelMaterials[i].UseSharedToon;
 
-        // 修复：正确处理 Toon 数据类型
-        if (PMXInfo.ModelMaterials[i].UseSharedToon == 0)
+        // PMX 规范：UseSharedToon==1 → 共享 toon（后跟 uint8 编号 0-9，0 对应 toon01.bmp）；
+        //           UseSharedToon==0 → 自定义 toon（后跟 textureIndexSize 的贴图索引）。
+        // 读反会导致 textureIndexSize>1 的模型从这里开始整段错位（材质名/面数全乱）。
+        if (PMXInfo.ModelMaterials[i].UseSharedToon == 1)
         {
-            uint8 ToonNumber; // 应该是 uint8，不是 int32
+            uint8 ToonNumber;
             Reader << ToonNumber;
             PMXInfo.ModelMaterials[i].ToonNumber = ToonNumber;
+            PMXInfo.ModelMaterials[i].ToonTextureIndex = -1;
         }
         else
         {
             PMXInfo.ModelMaterials[i].ToonTextureIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.TextureIndexSize);
+            PMXInfo.ModelMaterials[i].ToonNumber = 0xFF; // 无效编号标记
         }
 
-        ReadCharArray(Reader, PMXInfo.ModelMaterials[i].Memo, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelMaterials[i].Memo, PMXInfo))
+        {
+            return false;
+        }
         Reader << PMXInfo.ModelMaterials[i].FaceIndexCount;
 
         // 添加位置检查
@@ -629,7 +692,7 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
         if (i < 5)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Material[%d]: Name=%s TexIdx=%d SphereIdx=%d SphereMode=%d SharedToon=%d ToonNum=%d FaceCount=%d"),
+            UE_LOG(LogTemp, Verbose, TEXT("Material[%d]: Name=%s TexIdx=%d SphereIdx=%d SphereMode=%d SharedToon=%d ToonNum=%d FaceCount=%d"),
                    i,
                    *PMXInfo.ModelMaterials[i].NameJP,
                    PMXInfo.ModelMaterials[i].TextureIndex,
@@ -641,18 +704,28 @@ bool ReadPMXMaterial(FMemoryReader &Reader, PMXDatas &PMXInfo)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXMaterial: Finished at position=%lld"), Reader.Tell());
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXMaterial: Finished at position=%lld"), Reader.Tell());
     return true;
 }
 bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelBoneCount;
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelBoneCount, 16, TEXT("ModelBoneCount")))
+    {
+        return false;
+    }
     PMXInfo.ModelBones.SetNum(PMXInfo.ModelBoneCount);
 
     for (int32 i = 0; i < PMXInfo.ModelBoneCount; i++)
     {
-        ReadCharArray(Reader, PMXInfo.ModelBones[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelBones[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelBones[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelBones[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
         float px, py, pz;
         Reader << px << py << pz;
         PMXInfo.ModelBones[i].Position = FVector(px, py, pz);
@@ -698,6 +771,10 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
             Reader << PMXInfo.ModelBones[i].IKLoopCount;
             Reader << PMXInfo.ModelBones[i].IKLimitAngle;
             Reader << PMXInfo.ModelBones[i].IKLinkCount;
+            if (!ValidatePMXCount(Reader, PMXInfo.ModelBones[i].IKLinkCount, PMXInfo.PMXGlobals.BoneIndexSize + 1, TEXT("ModelBones[i].IKLinkCount")))
+            {
+                return false;
+            }
 
             PMXInfo.ModelBones[i].IKLinks.SetNum(PMXInfo.ModelBones[i].IKLinkCount);
 
@@ -716,7 +793,7 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
         }
         if (i < 5)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Bone[%d]: Name=%s Pos=(%.4f,%.4f,%.4f) Parent=%d Layer=%d Flags=0x%04X"),
+            UE_LOG(LogTemp, Verbose, TEXT("Bone[%d]: Name=%s Pos=(%.4f,%.4f,%.4f) Parent=%d Layer=%d Flags=0x%04X"),
                    i,
                    *PMXInfo.ModelBones[i].NameJP,
                    PMXInfo.ModelBones[i].Position.X, PMXInfo.ModelBones[i].Position.Y, PMXInfo.ModelBones[i].Position.Z,
@@ -731,16 +808,30 @@ bool ReadPMXBones(FMemoryReader &Reader, PMXDatas &PMXInfo)
 bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
 {
     Reader << PMXInfo.ModelMorphCount;
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXMorphs: MorphCount=%d"),
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelMorphCount, 14, TEXT("ModelMorphCount")))
+    {
+        return false;
+    }
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXMorphs: MorphCount=%d"),
            PMXInfo.ModelMorphCount);
     PMXInfo.ModelMorphs.SetNum(PMXInfo.ModelMorphCount);
     for (int32 i = 0; i < PMXInfo.ModelMorphCount; i++)
     {
-        ReadCharArray(Reader, PMXInfo.ModelMorphs[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelMorphs[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelMorphs[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelMorphs[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
         Reader << PMXInfo.ModelMorphs[i].Panel;
         Reader << PMXInfo.ModelMorphs[i].MorphType;
         Reader << PMXInfo.ModelMorphs[i].ElementCount;
+        if (!ValidatePMXCount(Reader, PMXInfo.ModelMorphs[i].ElementCount, 1, TEXT("ModelMorphs[i].ElementCount")))
+        {
+            return false;
+        }
         if (PMXInfo.ModelMorphs[i].ElementCount < 0 || PMXInfo.ModelMorphs[i].ElementCount > 50000)
         {
             UE_LOG(LogTemp, Error, TEXT("ReadPMXMorphs: Invalid element count %d for morph %d"),
@@ -857,7 +948,7 @@ bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
         }
         if (i < 5)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Morph[%d]: Name=%s Type=%d ElementCount=%d"),
+            UE_LOG(LogTemp, Verbose, TEXT("Morph[%d]: Name=%s Type=%d ElementCount=%d"),
                    i,
                    *PMXInfo.ModelMorphs[i].NameJP,
                    PMXInfo.ModelMorphs[i].MorphType,
@@ -870,14 +961,28 @@ bool ReadPMXMorphs(FMemoryReader &Reader, PMXDatas &PMXInfo)
 
 bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<< PMXInfo.ModelFrameCount;
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXFrames: FrameCount=%d"),
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelFrameCount, 13, TEXT("ModelFrameCount")))
+    {
+        return false;
+    }
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXFrames: FrameCount=%d"),
            PMXInfo.ModelFrameCount);
     PMXInfo.ModelFrames.SetNum(PMXInfo.ModelFrameCount);
     for (int32 i = 0; i < PMXInfo.ModelFrameCount; i++){
-        ReadCharArray(Reader, PMXInfo.ModelFrames[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelFrames[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelFrames[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelFrames[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
         Reader<<PMXInfo.ModelFrames[i].IsSpecial;
         Reader << PMXInfo.ModelFrames[i].ElementCount;
+        if (!ValidatePMXCount(Reader, PMXInfo.ModelFrames[i].ElementCount, 2, TEXT("ModelFrames[i].ElementCount")))
+        {
+            return false;
+        }
         if (PMXInfo.ModelFrames[i].ElementCount < 0 || PMXInfo.ModelFrames[i].ElementCount > 9999999)
         {
             UE_LOG(LogTemp, Error, TEXT("ReadPMXFrames: Invalid element count %d for frame %d"),
@@ -897,7 +1002,7 @@ bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
         }
         if (i < 5)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Frame[%d]: Name=%s ElementCount=%d"),
+            UE_LOG(LogTemp, Verbose, TEXT("Frame[%d]: Name=%s ElementCount=%d"),
                    i,
                    *PMXInfo.ModelFrames[i].NameJP,
                    PMXInfo.ModelFrames[i].ElementCount);
@@ -907,12 +1012,22 @@ bool ReadPMXFrames(FMemoryReader& Reader, PMXDatas& PMXInfo){
 }
 bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelRigidCount;
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXRigid: RigidBodiesCount=%d"),
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelRigidCount, 16, TEXT("ModelRigidCount")))
+    {
+        return false;
+    }
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXRigid: RigidBodiesCount=%d"),
            PMXInfo.ModelRigidCount);
     PMXInfo.ModelRigids.SetNum(PMXInfo.ModelRigidCount);
     for (int32 i = 0; i < PMXInfo.ModelRigidCount; i++){
-        ReadCharArray(Reader, PMXInfo.ModelRigids[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelRigids[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelRigids[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelRigids[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
         PMXInfo.ModelRigids[i].RelatedBoneIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.BoneIndexSize);
         Reader<<PMXInfo.ModelRigids[i].Group;
         Reader<<PMXInfo.ModelRigids[i].CollisionMask;
@@ -935,7 +1050,7 @@ bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
 
         if (i < 5)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Rigid[%d]: Name=%s BoneIndex=%d ShapeType=%d Size=(%.4f,%.4f,%.4f) Pos=(%.4f,%.4f,%.4f) Rot=(%.4f,%.4f,%.4f) Mass=%.4f"),
+            UE_LOG(LogTemp, Verbose, TEXT("Rigid[%d]: Name=%s BoneIndex=%d ShapeType=%d Size=(%.4f,%.4f,%.4f) Pos=(%.4f,%.4f,%.4f) Rot=(%.4f,%.4f,%.4f) Mass=%.4f"),
                    i,
                    *PMXInfo.ModelRigids[i].NameJP,
                    PMXInfo.ModelRigids[i].RelatedBoneIndex,
@@ -956,13 +1071,23 @@ bool ReadPMXRigid(FMemoryReader& Reader, PMXDatas& PMXInfo){
 }
 bool ReadPMXJoint(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelJointCount;
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXJoint: JointsCount=%d"),
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelJointCount, 16, TEXT("ModelJointCount")))
+    {
+        return false;
+    }
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXJoint: JointsCount=%d"),
            PMXInfo.ModelJointCount);
     PMXInfo.ModelJoints.SetNum(PMXInfo.ModelJointCount);
 
     for (int32 i = 0; i < PMXInfo.ModelJointCount; i++){
-        ReadCharArray(Reader, PMXInfo.ModelJoints[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelJoints[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelJoints[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelJoints[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
         Reader<<PMXInfo.ModelJoints[i].JointType;
         PMXInfo.ModelJoints[i].RigidA = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
         PMXInfo.ModelJoints[i].RigidB = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
@@ -995,14 +1120,24 @@ bool ReadPMXJoint(FMemoryReader& Reader, PMXDatas& PMXInfo){
 }
 bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo){
     Reader<<PMXInfo.ModelSoftBodyCount;
-    UE_LOG(LogTemp, Warning, TEXT("ReadPMXSoftBody: SoftBodiesCount=%d"),
+    if (!ValidatePMXCount(Reader, PMXInfo.ModelSoftBodyCount, 141 + PMXInfo.PMXGlobals.MaterialIndexSize, TEXT("ModelSoftBodyCount")))
+    {
+        return false;
+    }
+    UE_LOG(LogTemp, Verbose, TEXT("ReadPMXSoftBody: SoftBodiesCount=%d"),
            PMXInfo.ModelSoftBodyCount);
     PMXInfo.ModelSoftBodies.SetNum(PMXInfo.ModelSoftBodyCount);
     for (int32 i = 0; i < PMXInfo.ModelSoftBodyCount; i++){
-        ReadCharArray(Reader, PMXInfo.ModelSoftBodies[i].NameJP, PMXInfo);
-        ReadCharArray(Reader, PMXInfo.ModelSoftBodies[i].NameEN, PMXInfo);
+        if (!ReadCharArray(Reader, PMXInfo.ModelSoftBodies[i].NameJP, PMXInfo))
+        {
+            return false;
+        }
+        if (!ReadCharArray(Reader, PMXInfo.ModelSoftBodies[i].NameEN, PMXInfo))
+        {
+            return false;
+        }
         Reader<<PMXInfo.ModelSoftBodies[i].ShapeType;
-        Reader<<PMXInfo.ModelSoftBodies[i].MaterialIndex;
+        PMXInfo.ModelSoftBodies[i].MaterialIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.MaterialIndexSize);
         Reader<<PMXInfo.ModelSoftBodies[i].Group;
         Reader<<PMXInfo.ModelSoftBodies[i].CollisionMask;
         Reader<<PMXInfo.ModelSoftBodies[i].Flags;
@@ -1035,16 +1170,28 @@ bool ReadPMXSoftBody(FMemoryReader& Reader, PMXDatas& PMXInfo){
         Reader<<PMXInfo.ModelSoftBodies[i].V_IT;
         Reader<<PMXInfo.ModelSoftBodies[i].P_IT;
         Reader<<PMXInfo.ModelSoftBodies[i].D_IT;
+        Reader<<PMXInfo.ModelSoftBodies[i].C_IT; // 簇迭代数，漏读会使后续 AnchorCount 错位
         Reader<<PMXInfo.ModelSoftBodies[i].LST;
         Reader<<PMXInfo.ModelSoftBodies[i].AST;
         Reader<<PMXInfo.ModelSoftBodies[i].VST;
 
         Reader<<PMXInfo.ModelSoftBodies[i].AnchorCount;
+        if (!ValidatePMXCount(Reader, PMXInfo.ModelSoftBodies[i].AnchorCount, PMXInfo.PMXGlobals.RigidBodyIndexSize + PMXInfo.PMXGlobals.VertexIndexSize + 1, TEXT("ModelSoftBodies[i].AnchorCount")))
+        {
+            return false;
+        }
         PMXInfo.ModelSoftBodies[i].Anchors.SetNum(PMXInfo.ModelSoftBodies[i].AnchorCount);
         for (int32 j = 0; j < PMXInfo.ModelSoftBodies[i].AnchorCount; j++){
+            // anchor 三元组：刚体索引 + 顶点索引 + near 模式字节，漏读会错位
             PMXInfo.ModelSoftBodies[i].Anchors[j].RigidIndex = ReadGlobalIndex(Reader, PMXInfo.PMXGlobals.RigidBodyIndexSize);
+            PMXInfo.ModelSoftBodies[i].Anchors[j].VertexIndex = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);
+            Reader<<PMXInfo.ModelSoftBodies[i].Anchors[j].NearMode;
         }
         Reader<<PMXInfo.ModelSoftBodies[i].PinVertexCount;
+        if (!ValidatePMXCount(Reader, PMXInfo.ModelSoftBodies[i].PinVertexCount, PMXInfo.PMXGlobals.VertexIndexSize, TEXT("ModelSoftBodies[i].PinVertexCount")))
+        {
+            return false;
+        }
         PMXInfo.ModelSoftBodies[i].PinVertices.SetNum(PMXInfo.ModelSoftBodies[i].PinVertexCount);
         for (int32 j = 0; j < PMXInfo.ModelSoftBodies[i].PinVertexCount; j++){
             PMXInfo.ModelSoftBodies[i].PinVertices[j] = ReadGlobalVertexIndex(Reader, PMXInfo.PMXGlobals.VertexIndexSize);

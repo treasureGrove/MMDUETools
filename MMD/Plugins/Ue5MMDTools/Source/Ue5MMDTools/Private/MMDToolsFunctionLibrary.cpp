@@ -13,6 +13,7 @@
 
 static UMaterial* GetHighlightMaterial()
 {
+#if WITH_EDITOR
 	static UMaterial* HighlightMat = nullptr;
 	if (!HighlightMat)
 	{
@@ -32,6 +33,9 @@ static UMaterial* GetHighlightMaterial()
 		HighlightMat->PostEditChange();
 	}
 	return HighlightMat;
+#else
+	return nullptr;
+#endif
 }
 
 static TMap<TWeakObjectPtr<UMeshComponent>, TMap<int32, TWeakObjectPtr<UMaterialInterface>>> GHighlightOriginals;
@@ -43,6 +47,7 @@ void UMMDToolsFunctionLibrary::HighlightMaterialSlot(UMeshComponent* Mesh, int32
 		return;
 	}
 
+	if (!GetHighlightMaterial()) { return; }
 	TMap<int32, TWeakObjectPtr<UMaterialInterface>>& SlotMap = GHighlightOriginals.FindOrAdd(Mesh);
 	if (!SlotMap.Contains(SlotIndex))
 	{

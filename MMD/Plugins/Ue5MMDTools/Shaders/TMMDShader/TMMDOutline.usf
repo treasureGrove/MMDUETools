@@ -1,0 +1,33 @@
+// 顶点 Custom：原始五输入 + screen_space、pixel_width、reference_height。
+// PMX EdgeScale 由顶点颜色 A 保存为 e/(1+e)，不依赖模型 UV 或配套贴图。
+struct TMMDOutline
+{
+    float3 OutputOffset(float3 vertex_normal, float edge_scale_encoded, float edge_size,
+        float outline_width, float max_offset, float screen_space, float pixel_width, float reference_height,
+        FMaterialVertexParameters Parameters)
+    {
+        float encoded_scale = saturate(edge_scale_encoded);
+        float edge_scale = encoded_scale / max(1.0 - encoded_scale, 1.0 / 255.0);
+        float offset_limit = clamp(max_offset, 0.0, 10.0);
+        float world_width = max(outline_width, 0.0);
+        if (screen_space > 0.5)
+        {
+            // 插件 CSM 是正交 DepthPass，细描边不向其中写入膨胀壳。
+            if (IsOrthoProjection(ResolvedView)) return float3(0.0, 0.0, 0.0);
+            // 参考分辨率下的像素宽度；透视距离/FOV 参与换算。
+            float projection_scale = max(abs(ResolvedView.ViewToClip[1][1]), 1.0e-4);
+            float depth = max(dot(LWCToFloat(GetWorldPosition(Parameters)) -
+                LWCToFloat(GetWorldCameraOrigin(Parameters)), ResolvedView.ViewForward), 1.0);
+            world_width = clamp(pixel_width, 0.0, 4.0) * 2.0 * depth /
+                (projection_scale * max(reference_height, 1.0));
+        }
+        float offset = min(max(edge_size, 0.0) * edge_scale * world_width, offset_limit);
+        float normal_length_sq = dot(vertex_normal, vertex_normal);
+        float3 normal = vertex_normal * rsqrt(max(normal_length_sq, 1.0e-8));
+        return normal * offset;
+    }
+};
+
+TMMDOutline outline;
+return outline.OutputOffset(vertex_normal, edge_scale_encoded, edge_size, outline_width, max_offset,
+    screen_space, pixel_width, reference_height, Parameters);

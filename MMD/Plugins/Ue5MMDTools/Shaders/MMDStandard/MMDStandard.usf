@@ -1,0 +1,145 @@
+// MMDStandard.usf
+// MMD 原生管线忠实还原版（struct TMMDStandard）：
+//   直接色 = base_tex × diffuse × toon_ramp(主光 Half-Lambert) × 场景阴影
+//   环境色 = base × ambient × 天空 SH
+//   sphere = 乘算(1)/加算(2)/副画面 matcap(3)，按 PMX 原生语义
+//   高光   = specular × pow(NdotH, power)（MMD 风格：不参与 toon 门控）
+// 全部输入可兜底：toon_use_texture<=0 走程序 ramp，sphere_mode<=0 跳过，无灯走固定光。
+// 输入约定：Texture2D 输入自动生成 <名>Sampler。
+#include "/Plugin/Ue5MMDTools/MMDStandard/MMDStandardCore.ush"
+
+struct TMMDStandard
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_texture_color,
+                       float3 diffuse_color,
+                       float3 ambient_color,
+                       float3 specular_color,
+                       float specular_power,
+                       Texture2D toon_tex,
+                       SamplerState toon_texSampler,
+                       float toon_use_texture,
+                       float toon_strength,
+                       Texture2D sphere_tex,
+                       SamplerState sphere_texSampler,
+                       float sphere_mode,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_texSampler,
+                       Texture2D mmd_shadow_map,
+                       SamplerState mmd_shadow_mapSampler,
+                       float shadow_strength,
+                       float ambient_strength,
+                       float other_lights_strength)
+    {
+        TMMDStandardLight light_tool;
+
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_normal = light_tool.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                             float3(0.0, 0.0, 1.0));
+        const float3 view_dir = light_tool.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos, float3(0.0, 0.0, 1.0));
+
+        // 主光（toon ramp 与高光都用主光）。
+        float3 main_light_direction;
+        float3 main_light_color;
+        int main_light_index;
+        light_tool.GetMainLight(light_data_tex, light_data_texSampler, world_pos,
+                                main_light_direction, main_light_color, main_light_index);
+
+        // 基础色 = 贴图 × 材质漫反射色。
+        float3 base_color = saturate(base_texture_color * diffuse_color);
+
+        // 主光 toon：ramp 输出按 toon_strength 混向 1（strength=0 退化为无 toon 漫反射）。
+        float n_dot_l = dot(world_normal, main_light_direction);
+        float3 toon_value = light_tool.SampleToonRamp(toon_tex, toon_texSampler, toon_use_texture, n_dot_l);
+        toon_value = lerp(float3(1.0, 1.0, 1.0), toon_value, saturate(toon_strength));
+
+        // 场景阴影（级联 PCF）；shadow_strength 控制阴影浓度。
+        float scene_shadow = light_tool.SampleMMDShadow(light_data_tex, light_data_texSampler,
+                                                        mmd_shadow_map, mmd_shadow_mapSampler,
+                                                        Parameters, 0.0);
+        float shadow_factor = lerp(1.0, scene_shadow, saturate(shadow_strength));
+
+        // 直接光照（主光）。
+        float3 direct_light = main_light_color * max(n_dot_l, 0.0) * shadow_factor;
+        float3 shaded_color = base_color * toon_value * direct_light;
+
+        // 其余灯：软漫反射叠加（MMD 单灯概念下的多灯自然扩展，权重默认低）。
+        if (other_lights_strength > 0.001)
+        {
+            static const int max_lights = 16;
+            float3 other_light_sum = float3(0.0, 0.0, 0.0);
+            [unroll] for (int light_index = 0; light_index < max_lights; ++light_index)
+            {
+                if (light_index == main_light_index)
+                    continue;
+                float4 light_pos, light_color, light_dir, light_extra;
+                light_tool.SampleLight(light_data_tex, light_data_texSampler, light_index,
+                                       light_pos, light_color, light_dir, light_extra);
+                if (light_pos.w < 0.5)
+                    continue;
+
+                float3 to_light_direction;
+                float atten;
+                light_tool.LightParams(light_pos, light_dir, light_extra, world_pos,
+                                       to_light_direction, atten);
+                float soft_n_dot_l = saturate(dot(world_normal, to_light_direction)) * 0.5 + 0.5;
+                other_light_sum += light_color.rgb * (light_color.w / 3.14159265)
+                                   * soft_n_dot_l * atten * shadow_factor;
+            }
+            shaded_color += base_color * other_light_sum * saturate(other_lights_strength);
+        }
+
+        // 环境：MMD ambient 语义 —— base × ambient_color × 天空 SH。
+        float3 sky_irradiance = light_tool.SkyAmbient(world_normal);
+        shaded_color += base_color * ambient_color * sky_irradiance * saturate(ambient_strength);
+
+        // sphere：乘算模式作用在最终明暗色上，加算/副画面叠在结果上。
+        float3 sphere_color = light_tool.SampleSphereColor(sphere_tex, sphere_texSampler,
+                                                           world_normal, view_dir, sphere_mode);
+        if (sphere_mode > 2.5) // 副画面（matcap）
+        {
+            shaded_color += sphere_color;
+        }
+        else if (sphere_mode > 1.5) // 加算
+        {
+            shaded_color += sphere_color * base_color;
+        }
+        else if (sphere_mode > 0.5) // 乘算
+        {
+            shaded_color *= sphere_color;
+        }
+
+        // MMD 风格高光：Blinn-Phong，不乘 toon ramp，受场景阴影与主光色影响。
+        float3 half_vector = normalize(main_light_direction + view_dir);
+        float n_dot_h = saturate(dot(world_normal, half_vector));
+        float specular_value = pow(n_dot_h, max(specular_power, 1.0));
+        shaded_color += specular_color * main_light_color * specular_value * shadow_factor;
+
+        return saturate(shaded_color);
+    }
+};
+
+// 自包含入口：文件末尾自行实例化 + return。
+TMMDStandard standard_shader;
+return standard_shader.OutputColor(
+    Parameters,
+    base_texture_color,
+    diffuse_color,
+    ambient_color,
+    specular_color,
+    specular_power,
+    toon_tex,
+    toon_texSampler,
+    toon_use_texture,
+    toon_strength,
+    sphere_tex,
+    sphere_texSampler,
+    sphere_mode,
+    light_data_tex,
+    light_data_texSampler,
+    mmd_shadow_map,
+    mmd_shadow_mapSampler,
+    shadow_strength,
+    ambient_strength,
+    other_lights_strength);

@@ -37,29 +37,35 @@ struct TMMDAnimeHair
                          float3 world_normal, float3 view_dir, float3 tangent,
                          float spec_power, float secondary_strength, float intensity)
     {
-        static const int   max_lights = 16;
-        static const float tex_width  = 64.0;
         static const float toon_pi    = 3.14159265;
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
         TMMDToonLight tl;
         float3 acc = float3(0, 0, 0);
+        int active_light_count;
+        float shadow_quality;
+        tl.ReadLightMetadata(light_data_tex, active_light_count, shadow_quality);
 
-        for (int i = 0; i < max_lights; i++)
+        for (int i = 0; i < active_light_count; i++)
         {
-            float4 P = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 0.5) / tex_width, 0.25));
-            float4 C = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 1.5) / tex_width, 0.25));
-            float4 D = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 2.5) / tex_width, 0.25));
-            float4 T = Texture2DSample(light_data_tex, light_data_texSampler, float2((i * 4.0 + 3.5) / tex_width, 0.25));
+            float4 P;
+            float4 C;
+            float4 D;
+            float4 T;
+            tl.SampleLight(light_data_tex, light_data_texSampler, i, P, C, D, T);
 
-            if (P.w >= 0.5)
+            if (P.w >= 0.5 && C.w > 0.0)
             {
                 float3 L;
                 float  atten;
                 tl.LightParams(P, D, T, world_pos, L, atten);
 
-                float3 H     = normalize(L + view_dir);
+                float3 half_vector = L + view_dir;
+                float half_length_sq = dot(half_vector, half_vector);
+                if (half_length_sq <= 1e-6)
+                    continue;
+                float3 H     = half_vector * rsqrt(half_length_sq);
                 float  t_dot_h = saturate(dot(tangent, H));
                 float  sin_th  = sqrt(max(0.0, 1.0 - t_dot_h * t_dot_h));
 

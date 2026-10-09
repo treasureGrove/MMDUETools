@@ -1,12 +1,9 @@
-﻿// AGN_MMDSkeletalControl.h
+// AGN_MMDSkeletalControl.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
-#if WITH_EDITORONLY_DATA
-#include "AnimGraphNode_SkeletalControlBase.h"
-#include "Animation/AnimBlueprint.h"
-#endif
+
 #include "TPMXParser.h"
 #include "btBulletDynamicsCommon.h"
 #include "AGN_MMDSkeletalControl.generated.h"
@@ -19,17 +16,17 @@ struct UE5MMDTOOLS_API FMMDPhysicsRigidBodyData
     GENERATED_BODY()
     UPROPERTY() FString Name;
     UPROPERTY() FString NameEN;
-    UPROPERTY() int32 RelatedBoneIndex;
-    UPROPERTY() int32 ShapeType; // Sphere/Box/Capsule
-    UPROPERTY() FVector ShapeSize;
-    UPROPERTY() FVector ShapePosition;
-    UPROPERTY() FVector ShapeRotation;
-    UPROPERTY() float Mass;
-    UPROPERTY() float Friction;
-    UPROPERTY() float Restitution;
-    UPROPERTY() int32 CollisionGroup;
-    UPROPERTY() int32 CollisionMask;
-    UPROPERTY() int32 PhysicsMode;
+    UPROPERTY() int32 RelatedBoneIndex = INDEX_NONE;
+    UPROPERTY() int32 ShapeType = 0; // Sphere/Box/Capsule
+    UPROPERTY() FVector ShapeSize = FVector::ZeroVector;
+    UPROPERTY() FVector ShapePosition = FVector::ZeroVector;
+    UPROPERTY() FVector ShapeRotation = FVector::ZeroVector;
+    UPROPERTY() float Mass = 0.0f;
+    UPROPERTY() float Friction = 0.0f;
+    UPROPERTY() float Restitution = 0.0f;
+    UPROPERTY() int32 CollisionGroup = 0;
+    UPROPERTY() int32 CollisionMask = 0xffff;
+    UPROPERTY() int32 PhysicsMode = 0;
 
     UPROPERTY()
     float LinearDamping = 0.0f;
@@ -42,17 +39,17 @@ struct UE5MMDTOOLS_API FMMDPhysicsJointData
     GENERATED_BODY()
     UPROPERTY() FString Name;
 	UPROPERTY() FString NameEN;
-    UPROPERTY() int32 JointType;
-    UPROPERTY() int32 RigidBodyIndexA;
-    UPROPERTY() int32 RigidBodyIndexB;
-    UPROPERTY() FVector Position;
-    UPROPERTY() FVector Rotation;
-    UPROPERTY() FVector LimitPositionMin;
-    UPROPERTY() FVector LimitPositionMax;
-    UPROPERTY() FVector LimitRotationMin;
-    UPROPERTY() FVector LimitRotationMax;
-    UPROPERTY() FVector SpringPosition;
-    UPROPERTY() FVector SpringRotation;
+    UPROPERTY() int32 JointType = 0;
+    UPROPERTY() int32 RigidBodyIndexA = INDEX_NONE;
+    UPROPERTY() int32 RigidBodyIndexB = INDEX_NONE;
+    UPROPERTY() FVector Position = FVector::ZeroVector;
+    UPROPERTY() FVector Rotation = FVector::ZeroVector;
+    UPROPERTY() FVector LimitPositionMin = FVector::ZeroVector;
+    UPROPERTY() FVector LimitPositionMax = FVector::ZeroVector;
+    UPROPERTY() FVector LimitRotationMin = FVector::ZeroVector;
+    UPROPERTY() FVector LimitRotationMax = FVector::ZeroVector;
+    UPROPERTY() FVector SpringPosition = FVector::ZeroVector;
+    UPROPERTY() FVector SpringRotation = FVector::ZeroVector;
 };
 
 USTRUCT(BlueprintInternalUseOnly)
@@ -98,42 +95,3 @@ private:
     static void BuildBoneWorldArray(FComponentSpacePoseContext& Output, TArray<FTransform>& OutWorld);
 
 };
-
-
-#if WITH_EDITORONLY_DATA
-
-UCLASS(MinimalAPI) 
-class UAnimGraphNode_MMDSkeletalControl : public UAnimGraphNode_SkeletalControlBase
-{
-    GENERATED_BODY()
-
-public:
-    UPROPERTY(EditAnywhere, Category = "Settings")
-    FAGN_MMDSkeletalControl Node;
-
-    virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
-    virtual FText GetTooltipText() const override;
-    virtual FString GetNodeCategory() const override;
-    virtual FLinearColor GetNodeTitleColor() const override;
-
-protected:
-    virtual const FAnimNode_SkeletalControlBase* GetNode() const override;
-};
-
-
-class FMMDAnimGraphHelper  
-{
-public:
-    static UAnimGraphNode_MMDSkeletalControl* AddMMDNodeToAnimBP(
-		UAnimBlueprint* AnimBP,const PMXDatas& PMXData,
-        bool bConnectToRoot = true
-    );
-
-    static UAnimGraphNode_MMDSkeletalControl* InsertMMDNodeBetween(
-        UAnimBlueprint* AnimBP,
-        UAnimGraphNode_Base* UpstreamNode,
-        UAnimGraphNode_Base* DownstreamNode
-    );
-};
-
-#endif // WITH_EDITORONLY_DATA

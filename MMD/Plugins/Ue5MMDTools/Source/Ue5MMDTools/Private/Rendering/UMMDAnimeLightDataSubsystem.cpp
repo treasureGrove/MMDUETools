@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/DirectionalLightComponent.h"
+#include "Components/LightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/RectLightComponent.h"
@@ -65,8 +66,18 @@ void UMMDAnimeLightDataSubsystem::SetLightDataRenderTarget(UTextureRenderTarget2
 	LightDataRT = InRenderTarget;
 	if (LightDataRT)
 	{
+		// 显式配置优先于首帧自动加载，避免自定义 RT 被默认资产覆盖。
+		bAutoSetupDone = true;
+		// 重复注册已配置的 RT 时保留现有资源，避免清空灯光数据并阻塞渲染线程。
+		if (LightDataRT->SizeX == MaxLights * 4 && LightDataRT->SizeY == 2 &&
+			LightDataRT->GetFormat() == PF_A32B32G32R32F && LightDataRT->bCanCreateUAV &&
+			!LightDataRT->bAutoGenerateMips && LightDataRT->GetResource())
+		{
+			return;
+		}
 		LightDataRT->bCanCreateUAV = true;
 		LightDataRT->RenderTargetFormat = RTF_RGBA32f;
+		LightDataRT->bAutoGenerateMips = false;
 		LightDataRT->InitAutoFormat(MaxLights * 4, 2);   // 第 2 行 = 阴影相机基
 		LightDataRT->UpdateResourceImmediate(true);
 		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA32f UAV)"),
@@ -158,7 +169,7 @@ void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
 		GMMDAnimeLightDataRT_AssetPath);
 }
 
-void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
+void UMMDAnimeLightDataSubsystem::CollectLightsForFrame(UWorld* InWorld, const FVector* InCameraPosition)
 {
 	if (!bAutoSetupDone)
 	{
@@ -180,19 +191,28 @@ void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
 	}
 	else
 	{
-		UWorld* World = GWorld;
+		// 多世界编辑器/PIE 以当前视图的场景为准；无视图的旧调用仍兼容 GWorld。
+		UWorld* World = InWorld ? InWorld : (InCameraPosition ? nullptr : GWorld);
 		if (World)
 		{
-			CollectLights(World, Data);
+			CollectLights(World, Data, InCameraPosition);
 		}
 	}
 
 	// 第 2 行：texel 0..15 为四级联基，texel 16/17 为主相机位置/前向。
-	Data.SetNum(MaxLights * 4 + 18);
+	Data.SetNumZeroed(MaxLights * 4 + 19);
 	for (int32 i = 0; i < 18; i++)
 	{
 		Data[MaxLights * 4 + i] = ShadowCameraData[i];
 	}
+
+	// 使用最后一个有效槽的末端，兼容预览数据中间存在空槽。
+	int32 LightSpan = 0;
+	for (int32 i = 0; i < MaxLights; ++i)
+	{
+		if (Data[i * 4].W >= 0.5f && Data[i * 4 + 1].W > 0.0f) { LightSpan = i + 1; }
+	}
+	Data[MaxLights * 4 + 18] = FVector4f(static_cast<float>(LightSpan), static_cast<float>(ShadowFilterQuality), 0.0f, 1.0f);
 
 	// SetupView 在场景渲染提交前推到渲染线程；PreRenderViewFamily 随后在同帧写 RT。
 	TArray<FVector4f> DataCopy = MoveTemp(Data);
@@ -203,21 +223,23 @@ void UMMDAnimeLightDataSubsystem::CollectLightsForFrame()
 		});
 }
 
-void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>& OutData)
+void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>& OutData, const FVector* InCameraPosition)
 {
-	OutData.SetNum(MaxLights * 4);
-	FMemory::Memzero(OutData.GetData(), OutData.Num() * sizeof(FVector4f));
+	OutData.SetNumZeroed(MaxLights * 4);
 
 	// ---- camera for distance culling ----
-	FVector CameraPos = FVector::ZeroVector;
-	bool bHasCamera = false;
+	FVector CameraPos = InCameraPosition ? *InCameraPosition : FVector::ZeroVector;
+	bool bHasCamera = InCameraPosition != nullptr;
 
-	if (APlayerController* PC = World->GetFirstPlayerController())
+	if (!bHasCamera)
 	{
-		if (PC->PlayerCameraManager)
+		if (APlayerController* PC = World->GetFirstPlayerController())
 		{
-			CameraPos = PC->PlayerCameraManager->GetCameraLocation();
-			bHasCamera = true;
+			if (PC->PlayerCameraManager)
+			{
+				CameraPos = PC->PlayerCameraManager->GetCameraLocation();
+				bHasCamera = true;
+			}
 		}
 	}
 #if WITH_EDITOR
@@ -227,7 +249,7 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 		// 不要对 GetClient() 强转 —— 那可能是非 editor 视口（缩略图/后台），会崩。
 		for (FLevelEditorViewportClient* EVC : GEditor->GetLevelViewportClients())
 		{
-			if (EVC)
+			if (EVC && EVC->GetWorld() == World)
 			{
 				CameraPos = EVC->GetViewLocation();
 				bHasCamera = true;
@@ -243,14 +265,12 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 	struct FPointCand { FVector Pos; FLinearColor Color; float Intensity; float Radius; float DistSq; };
 	struct FSpotCand  { FVector Pos; FVector Dir; FLinearColor Color; float Intensity; float Radius; float InnerCos; float OuterCos; float DistSq; };
 	struct FRectCand  { FVector Pos; FVector Dir; FLinearColor Color; float Intensity; float Radius; float SizeX; float SizeY; float DistSq; };
+	struct FDirectionalCand { FVector Dir; FLinearColor Color; float Intensity; };
 
 	TArray<FPointCand> Points;
 	TArray<FSpotCand> Spots;
 	TArray<FRectCand> Rects;
-	FVector DirLightDir = FVector::ZeroVector;
-	FLinearColor DirLightColor = FLinearColor::Black;
-	float DirLightIntensity = 0.0f;
-	bool bHasDir = false;
+	TArray<FDirectionalCand, TInlineAllocator<4>> Directionals;
 
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
@@ -260,102 +280,61 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 			continue;
 		}
 
-		// ---- directional light (first visible) ----
-		if (!bHasDir)
+		// 单次扫描灯光组件，常见 actor 的组件列表直接使用栈内存。
+		TInlineComponentArray<ULightComponent*> Comps(Actor);
+		for (ULightComponent* LightComp : Comps)
 		{
-			if (UDirectionalLightComponent* DirComp = Actor->FindComponentByClass<UDirectionalLightComponent>())
+			if (!LightComp || !LightComp->IsRegistered() || !LightComp->IsVisible() || LightComp->Intensity <= 0.0f)
 			{
-				if (DirComp->IsVisible())
-				{
-					DirLightDir = Actor->GetActorForwardVector();
-					DirLightColor = DirComp->GetLightColor();
-					DirLightIntensity = DirComp->Intensity;
-					bHasDir = true;
-				}
+				continue;
 			}
-		}
 
-		// ---- spot lights ----
-		{
-			TArray<USpotLightComponent*> Comps;
-			Actor->GetComponents<USpotLightComponent>(Comps);
-			for (USpotLightComponent* L : Comps)
+			if (UDirectionalLightComponent* DirComp = Cast<UDirectionalLightComponent>(LightComp))
 			{
-				if (!L || !L->IsVisible())
-				{
-					continue;
-				}
-				FVector Pos = L->GetComponentLocation();
-				float DistSq = FVector::DistSquared(Pos, CameraPos);
-				if (DistSq > MaxDistSq)
-				{
-					continue;
-				}
+				Directionals.Add({DirComp->GetForwardVector(), DirComp->GetLightColor(), DirComp->Intensity});
+				continue;
+			}
+
+			const FVector Pos = LightComp->GetComponentLocation();
+			const float DistSq = FVector::DistSquared(Pos, CameraPos);
+			if (DistSq > MaxDistSq)
+			{
+				continue;
+			}
+
+			// 聚光继承点光，必须先分类，避免同一盏灯打包两次。
+			if (USpotLightComponent* spot_light = Cast<USpotLightComponent>(LightComp))
+			{
 				FSpotCand& C = Spots.AddDefaulted_GetRef();
 				C.Pos = Pos;
-				C.Dir = L->GetForwardVector();
-				C.Color = L->GetLightColor();
-				C.Intensity = L->Intensity;
-				C.Radius = L->AttenuationRadius;
-				// InnerConeAngle / OuterConeAngle are already half-angles in degrees (the
-				// engine uses them directly: CosOuterCone = cos(OuterConeAngle_rad)).
-				float HalfInner = FMath::DegreesToRadians(L->InnerConeAngle);
-				float HalfOuter = FMath::DegreesToRadians(L->OuterConeAngle);
-				C.InnerCos = FMath::Cos(HalfInner);
-				C.OuterCos = FMath::Cos(HalfOuter);
+				C.Dir = spot_light->GetForwardVector();
+				C.Color = spot_light->GetLightColor();
+				C.Intensity = spot_light->Intensity;
+				C.Radius = spot_light->AttenuationRadius;
+				// UE 的锥角属性已经是半角。
+				C.InnerCos = FMath::Cos(FMath::DegreesToRadians(spot_light->InnerConeAngle));
+				C.OuterCos = FMath::Cos(FMath::DegreesToRadians(spot_light->OuterConeAngle));
 				C.DistSq = DistSq;
 			}
-		}
-
-		// ---- point lights (excluding spot lights, which derive from point) ----
-		{
-			TArray<UPointLightComponent*> Comps;
-			Actor->GetComponents<UPointLightComponent>(Comps);
-			for (UPointLightComponent* L : Comps)
+			else if (UPointLightComponent* point_light = Cast<UPointLightComponent>(LightComp))
 			{
-				if (!L || !L->IsVisible() || Cast<USpotLightComponent>(L))
-				{
-					continue;
-				}
-				FVector Pos = L->GetComponentLocation();
-				float DistSq = FVector::DistSquared(Pos, CameraPos);
-				if (DistSq > MaxDistSq)
-				{
-					continue;
-				}
 				FPointCand& C = Points.AddDefaulted_GetRef();
 				C.Pos = Pos;
-				C.Color = L->GetLightColor();
-				C.Intensity = L->Intensity;
-				C.Radius = L->AttenuationRadius;
+				C.Color = point_light->GetLightColor();
+				C.Intensity = point_light->Intensity;
+				C.Radius = point_light->AttenuationRadius;
 				C.DistSq = DistSq;
 			}
-		}
-
-		// ---- rect lights ----
-		{
-			TArray<URectLightComponent*> Comps;
-			Actor->GetComponents<URectLightComponent>(Comps);
-			for (URectLightComponent* L : Comps)
+			else if (URectLightComponent* rect_light = Cast<URectLightComponent>(LightComp))
 			{
-				if (!L || !L->IsVisible())
-				{
-					continue;
-				}
-				FVector Pos = L->GetComponentLocation();
-				float DistSq = FVector::DistSquared(Pos, CameraPos);
-				if (DistSq > MaxDistSq)
-				{
-					continue;
-				}
 				FRectCand& C = Rects.AddDefaulted_GetRef();
 				C.Pos = Pos;
-				C.Dir = -L->GetForwardVector(); // rect emission direction (rays travel along -forward)
-				C.Color = L->GetLightColor();
-				C.Intensity = L->Intensity;
-				C.Radius = L->AttenuationRadius;
-				C.SizeX = L->SourceWidth;
-				C.SizeY = L->SourceHeight;
+				C.Dir = -rect_light->GetForwardVector();
+				C.Color = rect_light->GetLightColor();
+				C.Intensity = rect_light->Intensity;
+				C.Radius = rect_light->AttenuationRadius;
+				C.SizeX = rect_light->SourceWidth;
+				C.SizeY = rect_light->SourceHeight;
 				C.DistSq = DistSq;
 			}
 		}
@@ -365,16 +344,19 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 	Points.Sort([](const FPointCand& A, const FPointCand& B) { return A.DistSq < B.DistSq; });
 	Spots.Sort([](const FSpotCand& A, const FSpotCand& B) { return A.DistSq < B.DistSq; });
 	Rects.Sort([](const FRectCand& A, const FRectCand& B) { return A.DistSq < B.DistSq; });
+	// 主光优先，舞台的补光与轮廓光也进入同一套材质光照。
+	Directionals.StableSort([](const FDirectionalCand& A, const FDirectionalCand& B) { return A.Intensity > B.Intensity; });
 
 	// ---- pack into unified light slots ----
 	int32 Slot = 0;
 
-	if (bHasDir && Slot < MaxLights)
+	for (const FDirectionalCand& C : Directionals)
 	{
+		if (Slot >= MaxLights) { break; }
 		const int32 B = Slot * 4;
 		OutData[B + 0] = FVector4f(0.0f, 0.0f, 0.0f, MMDAnimeLightType::Directional);
-		OutData[B + 1] = FVector4f(DirLightColor.R, DirLightColor.G, DirLightColor.B, DirLightIntensity);
-		OutData[B + 2] = FVector4f(DirLightDir.X, DirLightDir.Y, DirLightDir.Z, 0.0f);
+		OutData[B + 1] = FVector4f(C.Color.R, C.Color.G, C.Color.B, C.Intensity);
+		OutData[B + 2] = FVector4f(C.Dir.X, C.Dir.Y, C.Dir.Z, 0.0f);
 		OutData[B + 3] = FVector4f(0.0f, 0.0f, 0.0f, 0.0f);
 		Slot++;
 	}
@@ -423,12 +405,15 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 
 	// ---- debug log when the light configuration changes ----
 	static int32 LastLoggedKey = -1;
-	const int32 Key = (bHasDir ? 1 : 0) | (Points.Num() << 4) | (Spots.Num() << 8) | (Rects.Num() << 12);
+	const uint32 KeyBits = static_cast<uint32>(Directionals.Num())
+		| (static_cast<uint32>(Points.Num()) << 8) | (static_cast<uint32>(Spots.Num()) << 16)
+		| (static_cast<uint32>(Rects.Num()) << 24);
+	const int32 Key = static_cast<int32>(KeyBits);
 	if (Key != LastLoggedKey)
 	{
 		LastLoggedKey = Key;
 		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Collected -> Directional=%d Point=%d Spot=%d Rect=%d"),
-			bHasDir ? 1 : 0,
+			FMath::Min(Directionals.Num(), MaxLights),
 			FMath::Min(Points.Num(), MaxLights),
 			FMath::Min(Spots.Num(), MaxLights),
 			FMath::Min(Rects.Num(), MaxLights));
@@ -492,6 +477,6 @@ void UMMDAnimeLightDataSubsystem::WriteLightData_RenderThread(FRDGBuilder& Graph
 		RDG_EVENT_NAME("MMDAnimeWriteLights"),
 		CS,
 		Params,
-		FIntVector(FMath::DivideAndRoundUp(MaxLights * 4 + 18, 64), 1, 1));
+		FIntVector(FMath::DivideAndRoundUp(MaxLights * 4 + 19, 64), 1, 1));
 	GraphBuilder.UseExternalAccessMode(RT, ERHIAccess::SRVMask);
 }

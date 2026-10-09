@@ -1,8 +1,8 @@
 #include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
 
-// light / light_context 由 Core 库统一提供（引用 light_data_tex / mmd_shadow_map 必需输入）
+// 增强入口显式构造光照上下文，需要 light_data_tex 与 mmd_shadow_map 输入。
 //----------------------------------------------------------------------------------
-struct InputData
+struct TMMDInputData
 {
     // float
     float3 base_color;
@@ -15,7 +15,7 @@ struct InputData
     // SamplerState mat_cap_sampler;
 };
 //----------------------------------------------------------------------------------
-InputData input_data;
+TMMDInputData input_data;
 //float
 input_data.base_color = base_color;
 // input_data.emission = emission;
@@ -31,7 +31,7 @@ struct TMMDMaterialShader
 {
     // 只有一个函数：先写好各 pass 的颜色（base_color/emission + 法线/光泽），
     // 再调 TMMDToonLight::ShadeSurface 算光照，最后返回最终颜色。
-    TMMDSurfaceData  SurfaceData(FMaterialPixelParameters Parameters, InputData input_data)
+    TMMDSurfaceData SurfaceData(FMaterialPixelParameters Parameters, TMMDInputData input_data)
     {
         TMMDSurfaceData output;
 
@@ -49,5 +49,8 @@ struct TMMDMaterialShader
 
 TMMDMaterialShader shader;
 TMMDSurfaceData surface_data = shader.SurfaceData(Parameters, input_data);
+TMMDToonLight light;
+TMMDLightContext light_context = light.MakeLightContext(light_data_tex, light_data_texSampler,
+                                                        mmd_shadow_map, mmd_shadow_mapSampler);
 
 return light.ShadeSurface(Parameters, surface_data, light_context);

@@ -3,7 +3,10 @@
 #include "CoreMinimal.h"
 #include "Engine/AssetUserData.h"
 #include "Engine/DataAsset.h"
+#include "Animation/AGN_MMDSkeletalControl.h"
 #include "MMDModelDataAsset.generated.h"
+
+class UMaterialInterface;
 
 USTRUCT(BlueprintType)
 struct FMMDModelIKLinkData
@@ -97,6 +100,17 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
 	TArray<FMMDModelBoneData> Bones;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD|Physics")
+	TArray<FMMDPhysicsRigidBodyData> Rigids;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD|Physics")
+	TArray<FMMDPhysicsJointData> Joints;
+
+#if WITH_EDITORONLY_DATA
+	UPROPERTY(VisibleAnywhere, Category = "MMD|Import")
+	FString SourcePMXFilePath;
+#endif
 };
 
 UCLASS()
@@ -107,4 +121,8 @@ class UE5MMDTOOLS_API UMMDSkeletalMeshUserData : public UAssetUserData
 public:
 	UPROPERTY(VisibleAnywhere, Category = "MMD")
 	TObjectPtr<UMMDModelDataAsset> ModelDataAsset;
+
+	// 与 SkeletalMesh 材质槽一一对应；空槽表示 PMX 未启用描边，硬引用保证 Cook 包含材质。
+	UPROPERTY(VisibleAnywhere, Category = "MMD|Rendering")
+	TArray<TObjectPtr<UMaterialInterface>> OutlineMaterials;
 };

@@ -31,10 +31,33 @@ struct TMMDToonLight
         return context;
     }
 //-----------------------LightContext--------------------------
+    // row1 x18 = {active_light_count, shadow_quality, reserved, valid}。
+    // metadata 缺失或无效时回退 16 灯与高质量阴影，兼容旧 RT。
+    void ReadLightMetadata(Texture2D light_data_map, out int active_light_count, out float shadow_quality)
+    {
+        active_light_count = 16;
+        shadow_quality = 0.0;
+
+        uint data_width;
+        uint data_height;
+        light_data_map.GetDimensions(data_width, data_height);
+        if (data_width < 19 || data_height < 2)
+            return;
+
+        float4 metadata = light_data_map.Load(int3(18, 1, 0));
+        if (metadata.w < 0.5 || metadata.x < 0.0)
+            return;
+
+        active_light_count = clamp((int)metadata.x, 0, 16);
+        shadow_quality = abs(metadata.y - 1.0) < 0.25 ? 1.0 : 0.0;
+    }
+//-----------------------LightContext--------------------------
 //-----------------------Shadow Sampling-----------------------
     // 对四个比较结果做双线性插值，等价于硬件 comparison sampler 的线性 PCF。
     // 先比较再插值，避免普通 bilinear 深度采样在几何断层处生成不存在的中间深度。
-    float ShadowCompareBilinear(Texture2D shadow_map, int cascade_index, float2 local_uv, float pixel_depth, float bias)
+    float ShadowCompareBilinearReceiverPlane(Texture2D shadow_map, int cascade_index,
+                                             float2 local_uv, float2 receiver_uv,
+                                             float pixel_depth, float bias, float2 depth_gradient)
     {
         uint atlas_width;
         uint atlas_height;
@@ -46,23 +69,83 @@ struct TMMDToonLight
         float2 texel_position = local_uv * cascade_resolution - 0.5;
         int2 base_texel = int2(floor(texel_position));
         float2 blend = frac(texel_position);
-        int2 p00 = min(max(base_texel, int2(0, 0)), int2(cascade_resolution - 1, cascade_resolution - 1));
-        int2 p10 = min(p00 + int2(1, 0), int2(cascade_resolution - 1, cascade_resolution - 1));
-        int2 p01 = min(p00 + int2(0, 1), int2(cascade_resolution - 1, cascade_resolution - 1));
-        int2 p11 = min(p00 + int2(1, 1), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 max_texel = int2(cascade_resolution - 1, cascade_resolution - 1);
+        int2 p00 = min(max(base_texel, int2(0, 0)), max_texel);
+        int2 p10 = min(max(base_texel + int2(1, 0), int2(0, 0)), max_texel);
+        int2 p01 = min(max(base_texel + int2(0, 1), int2(0, 0)), max_texel);
+        int2 p11 = min(max(base_texel + int2(1, 1), int2(0, 0)), max_texel);
 
-        float c00 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p00, 0)).r + bias);
-        float c10 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p10, 0)).r + bias);
-        float c01 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p01, 0)).r + bias);
-        float c11 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p11, 0)).r + bias);
+        // 每个真实深度 texel 都按接收平面修正；不能只修正双线性 tap 的中心。
+        float inverse_resolution = 1.0 / cascade_resolution;
+        float depth_00 = pixel_depth + dot(((float2)p00 + 0.5) * inverse_resolution - receiver_uv, depth_gradient);
+        float depth_10 = pixel_depth + dot(((float2)p10 + 0.5) * inverse_resolution - receiver_uv, depth_gradient);
+        float depth_01 = pixel_depth + dot(((float2)p01 + 0.5) * inverse_resolution - receiver_uv, depth_gradient);
+        float depth_11 = pixel_depth + dot(((float2)p11 + 0.5) * inverse_resolution - receiver_uv, depth_gradient);
+        float c00 = step(depth_00, shadow_map.Load(int3(cascade_offset + p00, 0)).r + bias);
+        float c10 = step(depth_10, shadow_map.Load(int3(cascade_offset + p10, 0)).r + bias);
+        float c01 = step(depth_01, shadow_map.Load(int3(cascade_offset + p01, 0)).r + bias);
+        float c11 = step(depth_11, shadow_map.Load(int3(cascade_offset + p11, 0)).r + bias);
         return lerp(lerp(c00, c10, blend.x), lerp(c01, c11, blend.x), blend.y);
     }
 
+    float ShadowCompareBilinear(Texture2D shadow_map, int cascade_index, float2 local_uv, float pixel_depth, float bias)
+    {
+        return ShadowCompareBilinearReceiverPlane(shadow_map, cascade_index, local_uv, local_uv,
+                                                  pixel_depth, bias, float2(0.0, 0.0));
+    }
+
+    // 低成本连续 3x3 tent：每轴把三个双线性 tap 合并为两个，二维共四次双线性比较。
+    float ShadowCompareTent3x3LowReceiverPlane(Texture2D shadow_map, int cascade_index,
+                                              float2 local_uv, float pixel_depth, float bias, float2 depth_gradient)
+    {
+        uint atlas_width;
+        uint atlas_height;
+        shadow_map.GetDimensions(atlas_width, atlas_height);
+        float cascade_resolution = max((float)atlas_width * 0.5, 1.0);
+
+        float2 texel_position = local_uv * cascade_resolution - 0.5;
+        float2 base_texel = floor(texel_position);
+        float2 phase = frac(texel_position);
+
+        float2 negative_weight = 3.0 - 2.0 * phase;
+        float2 positive_weight = 1.0 + 2.0 * phase;
+        float2 negative_lerp = (2.0 - phase) / negative_weight;
+        float2 positive_lerp = phase / positive_weight;
+
+        float2 negative_uv = (base_texel - 1.0 + negative_lerp + 0.5) / cascade_resolution;
+        float2 positive_uv = (base_texel + 1.0 + positive_lerp + 0.5) / cascade_resolution;
+
+        float shadow_00 = ShadowCompareBilinearReceiverPlane(
+            shadow_map, cascade_index, float2(negative_uv.x, negative_uv.y), local_uv, pixel_depth, bias, depth_gradient);
+        float shadow_10 = ShadowCompareBilinearReceiverPlane(
+            shadow_map, cascade_index, float2(positive_uv.x, negative_uv.y), local_uv, pixel_depth, bias, depth_gradient);
+        float shadow_01 = ShadowCompareBilinearReceiverPlane(
+            shadow_map, cascade_index, float2(negative_uv.x, positive_uv.y), local_uv, pixel_depth, bias, depth_gradient);
+        float shadow_11 = ShadowCompareBilinearReceiverPlane(
+            shadow_map, cascade_index, float2(positive_uv.x, positive_uv.y), local_uv, pixel_depth, bias, depth_gradient);
+
+        float weighted_shadow =
+            shadow_00 * negative_weight.x * negative_weight.y +
+            shadow_10 * positive_weight.x * negative_weight.y +
+            shadow_01 * negative_weight.x * positive_weight.y +
+            shadow_11 * positive_weight.x * positive_weight.y;
+        return weighted_shadow * (1.0 / 16.0);
+    }
+
+    float ShadowCompareTent3x3Low(Texture2D shadow_map, int cascade_index,
+                                  float2 local_uv, float pixel_depth, float bias)
+    {
+        return ShadowCompareTent3x3LowReceiverPlane(shadow_map, cascade_index, local_uv,
+                                                   pixel_depth, bias, float2(0.0, 0.0));
+    }
+
     // 3x3 tent PCF。九次双线性比较形成近似 5x5 的平滑核，边缘不会出现方形灰阶台阶。
-    void SampleShadowCascade(Texture2D shadow_map, int cascade_index,
+    void SampleShadowCascadeReceiverPlane(Texture2D shadow_map, int cascade_index,
                              float3 world_pos, float3 world_normal,
                              float4 data_0, float4 data_1, float4 data_2, float4 data_3,
-                             float additional_bias, out float shadow, out float valid)
+                             float additional_bias, float shadow_quality,
+                             bool use_receiver_plane, float3 receiver_world_dx, float3 receiver_world_dy,
+                             out float shadow, out float valid)
     {
         shadow = 1.0;
         valid = 0.0;
@@ -75,7 +158,10 @@ struct TMMDToonLight
         float cascade_resolution = max((float)atlas_width * 0.5, 1.0);
 
         // Unity 风格 Normal Bias：按当前级联的世界 texel 尺寸沿表面法线推开接收点。
-        float3 light_direction = -normalize(data_3.xyz);
+        float direction_length_sq = dot(data_3.xyz, data_3.xyz);
+        if (direction_length_sq <= 1e-6)
+            return;
+        float3 light_direction = -data_3.xyz * rsqrt(direction_length_sq);
         float n_dot_l = saturate(dot(world_normal, light_direction));
         float3 biased_world_pos = world_pos + world_normal * data_2.w * (1.0 - n_dot_l);
         float3 to_pixel = biased_world_pos - data_0.xyz;
@@ -83,51 +169,120 @@ struct TMMDToonLight
                                  0.5 - dot(to_pixel, data_2.xyz));
         float pixel_depth = dot(to_pixel, data_3.xyz);
 
+        float2 depth_gradient = float2(0.0, 0.0);
+        float receiver_bias = data_1.w + additional_bias;
+        if (use_receiver_plane)
+        {
+            // 导数在选择级联前求取，避免级联分支和边界像素破坏 ddx/ddy。
+            float2 uv_dx = float2(dot(receiver_world_dx, data_1.xyz), -dot(receiver_world_dx, data_2.xyz));
+            float2 uv_dy = float2(dot(receiver_world_dy, data_1.xyz), -dot(receiver_world_dy, data_2.xyz));
+            float depth_dx = dot(receiver_world_dx, data_3.xyz);
+            float depth_dy = dot(receiver_world_dy, data_3.xyz);
+            float determinant = uv_dx.x * uv_dy.y - uv_dx.y * uv_dy.x;
+            float jacobian_scale = length(uv_dx) * length(uv_dy);
+            float world_texel_size = 1.0 / max(length(data_1.xyz) * cascade_resolution, 1e-6);
+            if (abs(determinant) > max(jacobian_scale * 0.015, 1e-12))
+            {
+                float2 solved_gradient = float2(depth_dx * uv_dy.y - depth_dy * uv_dx.y,
+                                                depth_dy * uv_dx.x - depth_dx * uv_dy.x) / determinant;
+                // 退化、非有限值或超过八倍世界 texel 坡度时回退零梯度。
+                float gradient_bound = world_texel_size * cascade_resolution * 8.0;
+                if (all(abs(solved_gradient) <= gradient_bound)) depth_gradient = solved_gradient;
+            }
+            // 小量单侧曲率余量；不使用大厘米偏移掩盖细接触阴影。
+            receiver_bias += min(world_texel_size * 0.5, 0.25);
+        }
+
         float border = 2.5 / cascade_resolution;
         if (local_uv.x < border || local_uv.x > 1.0 - border ||
             local_uv.y < border || local_uv.y > 1.0 - border ||
             pixel_depth < 0.0 || pixel_depth > data_0.w)
             return;
 
-        static const float2 tent_offsets[9] =
-            {
-                float2(-1, -1), float2(0, -1), float2(1, -1),
-                float2(-1, 0), float2(0, 0), float2(1, 0),
-                float2(-1, 1), float2(0, 1), float2(1, 1)};
-        static const float tent_weights[9] =
-            {
-                1, 2, 1,
-                2, 4, 2,
-                1, 2, 1};
-
-        const float filter_radius = 1.35;
-        float accumulated = 0.0;
-        [unroll] for (int tap_index = 0; tap_index < 9; ++tap_index)
+        if (shadow_quality >= 0.5)
         {
-            float2 tap_uv = local_uv + tent_offsets[tap_index] * (filter_radius / cascade_resolution);
-            accumulated += ShadowCompareBilinear(
-                               shadow_map, cascade_index, tap_uv, pixel_depth, data_1.w + additional_bias) *
-                           tent_weights[tap_index];
+            shadow = ShadowCompareTent3x3LowReceiverPlane(
+                shadow_map, cascade_index, local_uv, pixel_depth, receiver_bias, depth_gradient);
         }
-        shadow = accumulated * (1.0 / 16.0);
+        else
+        {
+            static const float2 tent_offsets[9] =
+                {
+                    float2(-1, -1), float2(0, -1), float2(1, -1),
+                    float2(-1, 0), float2(0, 0), float2(1, 0),
+                    float2(-1, 1), float2(0, 1), float2(1, 1)};
+            static const float tent_weights[9] =
+                {
+                    1, 2, 1,
+                    2, 4, 2,
+                    1, 2, 1};
+
+            const float filter_radius = 1.35;
+            float accumulated = 0.0;
+            [unroll] for (int tap_index = 0; tap_index < 9; ++tap_index)
+            {
+                float2 tap_uv = local_uv + tent_offsets[tap_index] * (filter_radius / cascade_resolution);
+                accumulated += ShadowCompareBilinearReceiverPlane(
+                                   shadow_map, cascade_index, tap_uv, local_uv, pixel_depth, receiver_bias, depth_gradient) *
+                               tent_weights[tap_index];
+            }
+            shadow = accumulated * (1.0 / 16.0);
+        }
         valid = 1.0;
     }
 
-    float SampleMMDShadowInternal(FMaterialPixelParameters Parameters,
+    void SampleShadowCascade(Texture2D shadow_map, int cascade_index,
+                             float3 world_pos, float3 world_normal,
+                             float4 data_0, float4 data_1, float4 data_2, float4 data_3,
+                             float additional_bias, float shadow_quality,
+                             out float shadow, out float valid)
+    {
+        SampleShadowCascadeReceiverPlane(shadow_map, cascade_index, world_pos, world_normal,
+                                         data_0, data_1, data_2, data_3, additional_bias, shadow_quality,
+                                         false, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), shadow, valid);
+    }
+
+    float SampleMMDShadowWithReceiverBias(FMaterialPixelParameters Parameters,
                                   Texture2D light_data_map,
                                   SamplerState light_data_map_sampler,
                                   Texture2D shadow_map,
                                   SamplerState shadow_map_sampler,
-                                  float additional_bias)
+                                   float additional_bias,
+                                   bool adjust_receiver_bias,
+                                   float receiver_bias_scale,
+                                   float normal_bias_scale)
     {
+        uint data_width;
+        uint data_height;
+        light_data_map.GetDimensions(data_width, data_height);
+        if (data_width < 18 || data_height < 2)
+            return 1.0;
+
+        uint shadow_width;
+        uint shadow_height;
+        shadow_map.GetDimensions(shadow_width, shadow_height);
+        // 漏连纹理时引擎默认黑图不能被解释为真实深度遮挡。
+        if (shadow_width < 4 || shadow_height < 4)
+            return 1.0;
+
         float4 camera_position = light_data_map.Load(int3(16, 1, 0));
         float4 camera_forward = light_data_map.Load(int3(17, 1, 0));
         if (camera_forward.w < 0.5)
             return 1.0;
+        int active_light_count;
+        float shadow_quality;
+        ReadLightMetadata(light_data_map, active_light_count, shadow_quality);
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
         const float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
         const float view_distance = max(dot(world_pos - camera_position.xyz, camera_forward.xyz), 0.0);
+        float3 receiver_world_dx = float3(0.0, 0.0, 0.0);
+        float3 receiver_world_dy = float3(0.0, 0.0, 0.0);
+        if (adjust_receiver_bias)
+        {
+            receiver_world_dx = ddx(world_pos);
+            receiver_world_dy = ddy(world_pos);
+        }
 
         [unroll] for (int cascade_index = 0; cascade_index < 4; ++cascade_index)
         {
@@ -136,13 +291,21 @@ struct TMMDToonLight
             float4 data_1 = light_data_map.Load(int3(base_index + 1, 1, 0));
             float4 data_2 = light_data_map.Load(int3(base_index + 2, 1, 0));
             float4 data_3 = light_data_map.Load(int3(base_index + 3, 1, 0));
+            if (adjust_receiver_bias)
+            {
+                // 角色接触投影保留厘米以下遮挡，环境接收仍使用原全局偏移。
+                data_1.w = max(data_1.w * saturate(receiver_bias_scale), 0.08);
+                data_2.w = max(data_2.w, 0.0) * saturate(normal_bias_scale);
+            }
             if (view_distance > data_3.w && cascade_index < 3)
                 continue;
 
             float current_shadow;
             float current_valid;
-            SampleShadowCascade(shadow_map, cascade_index, world_pos, world_normal,
+            SampleShadowCascadeReceiverPlane(shadow_map, cascade_index, world_pos, world_normal,
                                 data_0, data_1, data_2, data_3, additional_bias,
+                                shadow_quality,
+                                adjust_receiver_bias, receiver_world_dx, receiver_world_dy,
                                 current_shadow, current_valid);
             if (current_valid < 0.5)
                 continue;
@@ -161,10 +324,17 @@ struct TMMDToonLight
                     float4 next_1 = light_data_map.Load(int3(base_index + 5, 1, 0));
                     float4 next_2 = light_data_map.Load(int3(base_index + 6, 1, 0));
                     float4 next_3 = light_data_map.Load(int3(base_index + 7, 1, 0));
+                    if (adjust_receiver_bias)
+                    {
+                        next_1.w = max(next_1.w * saturate(receiver_bias_scale), 0.08);
+                        next_2.w = max(next_2.w, 0.0) * saturate(normal_bias_scale);
+                    }
                     float next_shadow;
                     float next_valid;
-                    SampleShadowCascade(shadow_map, cascade_index + 1, world_pos, world_normal,
+                    SampleShadowCascadeReceiverPlane(shadow_map, cascade_index + 1, world_pos, world_normal,
                                         next_0, next_1, next_2, next_3, additional_bias,
+                                        shadow_quality,
+                                        adjust_receiver_bias, receiver_world_dx, receiver_world_dy,
                                         next_shadow, next_valid);
                     if (next_valid >= 0.5)
                         current_shadow = lerp(current_shadow, next_shadow, cascade_blend);
@@ -173,6 +343,32 @@ struct TMMDToonLight
             return current_shadow;
         }
         return 1.0;
+    }
+
+    float SampleMMDShadowInternal(FMaterialPixelParameters Parameters,
+                                  Texture2D light_data_map,
+                                  SamplerState light_data_map_sampler,
+                                  Texture2D shadow_map,
+                                  SamplerState shadow_map_sampler,
+                                  float additional_bias)
+    {
+        return SampleMMDShadowWithReceiverBias(Parameters, light_data_map, light_data_map_sampler,
+                                              shadow_map, shadow_map_sampler, additional_bias,
+                                              false, 1.0, 1.0);
+    }
+
+    // 仅用于已启用真实自投影的角色；不改变环境材质和既有附加偏移语义。
+    float SampleMMDCharacterShadow(FMaterialPixelParameters Parameters,
+                                   Texture2D light_data_map,
+                                   SamplerState light_data_map_sampler,
+                                   Texture2D shadow_map,
+                                   SamplerState shadow_map_sampler,
+                                   float receiver_bias_scale,
+                                   float normal_bias_scale)
+    {
+        return SampleMMDShadowWithReceiverBias(Parameters, light_data_map, light_data_map_sampler,
+                                              shadow_map, shadow_map_sampler, 0.0,
+                                              true, receiver_bias_scale, normal_bias_scale);
     }
 
     float SampleMMDShadow(FMaterialPixelParameters Parameters,
@@ -199,17 +395,18 @@ struct TMMDToonLight
     void SampleLight(Texture2D light_data_map, SamplerState light_data_map_sampler, int light_index,
                      out float4 light_pos, out float4 light_color, out float4 light_dir, out float4 light_extra)
     {
-        static const float tex_width = 64.0; // MaxLights(16) * 4
-        light_pos = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 0.5) / tex_width, 0.25));
-        light_color = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 1.5) / tex_width, 0.25));
-        light_dir = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 2.5) / tex_width, 0.25));
-        light_extra = Texture2DSample(light_data_map, light_data_map_sampler, float2((light_index * 4.0 + 3.5) / tex_width, 0.25));
+        int base_index = light_index * 4;
+        // 数据 RT 必须按 texel 精确读取，避免过滤把相邻灯的类型、方向和强度混合。
+        light_pos = light_data_map.Load(int3(base_index + 0, 0, 0));
+        light_color = light_data_map.Load(int3(base_index + 1, 0, 0));
+        light_dir = light_data_map.Load(int3(base_index + 2, 0, 0));
+        light_extra = light_data_map.Load(int3(base_index + 3, 0, 0));
     }
 
     // 取一盏灯的方向 L（指向光源）与衰减 Atten（按灯光类型分派）。
     // light_pos=位置/类型(<1.5点光 <2.5聚光 <3.5平行光 否则面光)  light_dir=方向/半径  light_extra=聚光内外角/面光朝向。
     void LightParams(float4 light_pos, float4 light_dir, float4 light_extra, float3 world_pos,
-                     out float3 to_light_direction, out float atten)
+                     out float3 L, out float atten)
     {
         atten = 1.0;
 
@@ -218,108 +415,189 @@ struct TMMDToonLight
         {
             float3 to_light = light_pos.xyz - world_pos;
             float dist = length(to_light);
-            to_light_direction = to_light / max(dist, 0.0001);
+            L = to_light / max(dist, 0.0001);
             atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
         }
         else if (light_pos.w < 2.5) // 聚光
         {
             float3 to_light = light_pos.xyz - world_pos;
             float dist = length(to_light);
-            to_light_direction = to_light / max(dist, 0.0001);
+            L = to_light / max(dist, 0.0001);
             atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
-            atten *= smoothstep(light_extra.y, light_extra.x, dot(-to_light_direction, light_dir.xyz));
+            atten *= smoothstep(light_extra.y, light_extra.x, dot(-L, light_dir.xyz));
         }
         else if (light_pos.w < 3.5) // 平行光
         {
-            to_light_direction = -normalize(light_dir.xyz);
+            float direction_length_sq = dot(light_dir.xyz, light_dir.xyz);
+            L = direction_length_sq > 1e-6 ? -light_dir.xyz * rsqrt(direction_length_sq) : float3(0.0, 0.0, 1.0);
         }
         else // 矩形/面光
         {
             float3 to_light = light_pos.xyz - world_pos;
             float dist = length(to_light);
-            to_light_direction = to_light / max(dist, 0.0001);
+            L = to_light / max(dist, 0.0001);
             atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
-            atten *= smoothstep(0.0, 0.25, dot(-to_light_direction, light_dir.xyz));
+            atten *= smoothstep(0.0, 0.25, dot(-L, light_dir.xyz));
         }
     }
 //-----------------------Light Sampling-----------------------
 
 //-----------------------Lighting------------------------------
+    float ToonRamp(float shadow_step, float n_dot_l, float softness)
+    {
+        float safe_softness = max(softness, 0.0001);
+        return smoothstep(shadow_step - safe_softness, shadow_step + safe_softness, n_dot_l);
+    }
+
+    float3 ApplyToonShadow(float3 diffuse_light, float3 dir_light, float3 specular_light,
+                           float shadow_step, float3 shadow_color, float softness,
+                           out float3 shaded_specular)
+    {
+        float light_amount = saturate(dot(dir_light, float3(0.299, 0.587, 0.114)));
+        float ramp = ToonRamp(shadow_step, light_amount, softness);
+        shaded_specular = specular_light * ramp;
+        return lerp(shadow_color, float3(1.0, 1.0, 1.0), ramp) * diffuse_light;
+    }
+
+    float3 ApplyNormalMap(FMaterialPixelParameters Parameters,
+                          Texture2D normal_map, SamplerState normal_map_sampler,
+                          float normal_map_strength)
+    {
+        float3 geo_normal = normalize((float3)Parameters.TangentToWorld[2]);
+        if (normal_map_strength <= 0.01)
+            return geo_normal;
+
+        float2 uv = Parameters.TexCoords[0];
+        float2 n_xy = Texture2DSample(normal_map, normal_map_sampler, uv).xy * 2.0 - 1.0;
+        n_xy *= max(normal_map_strength, 0.0);
+        float3 tangent_normal = float3(n_xy, sqrt(saturate(1.0 - dot(n_xy, n_xy))));
+        return normalize(mul(tangent_normal, (float3x3)Parameters.TangentToWorld));
+    }
+
+    float3 SampleMatcap(float3 world_normal, Texture2D mat_cap, SamplerState mat_cap_sampler)
+    {
+        float3 view_normal = mul(world_normal, (float3x3)ResolvedView.TranslatedWorldToView);
+        float2 matcap_uv = view_normal.xy * 0.5 + 0.5;
+        return Texture2DSample(mat_cap, mat_cap_sampler, matcap_uv).rgb;
+    }
+
     // 计算直接光照：累加全部灯（不含 toon 阴影、不含天空环境光）。
     //   diffuse_light  = Σ light_color.rgb * (light_color.w / PI) * NdotL * Atten    （最终着色用，带光强）
     //   dir_light      = Σ light_color.rgb * NdotL * Atten                            （不含光强，供 toon 阴影 ramp 用）
     //   specular_light = Σ light_color.rgb * (light_color.w / PI) * pow(NdotH, specular_power) * Atten
     void ComputeLighting(FMaterialPixelParameters Parameters,
                          Texture2D light_data_map, SamplerState light_data_map_sampler,
-                         float metallic,float roughness, float3 world_normal, float3 view_dir,
-                         float3 base_color, out float3 final_shading_color)
+                         float specular_power, float3 world_normal, float3 view_dir,
+                         out float3 diffuse_light, out float3 dir_light, out float3 specular_light)
     {
-        static const int max_lights = 16;
         static const float toon_pi = 3.14159265;
 
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
 
-        final_shading_color = float3(0.0, 0.0, 0.0);
+        diffuse_light = float3(0.0, 0.0, 0.0);
+        dir_light = float3(0.0, 0.0, 0.0);
+        specular_light = float3(0.0, 0.0, 0.0);
 
-        for (int light_index = 0; light_index < max_lights; light_index++)
+        int active_light_count;
+        float shadow_quality;
+        ReadLightMetadata(light_data_map, active_light_count, shadow_quality);
+
+        for (int light_index = 0; light_index < active_light_count; light_index++)
         {
             float4 light_pos, light_color, light_dir, light_extra;
             SampleLight(light_data_map, light_data_map_sampler, light_index, light_pos, light_color, light_dir, light_extra);
 
-            if (light_pos.w >= 0.5)//TOD3: 排除无效灯，后续可能会使用去写入MaxLights的方式来避免无效灯的采样
+            if (light_pos.w >= 0.5)
             {
-                //取灯数据
-                float3 to_light_direction;
+                // 兼容旧版 RT：零或负强度灯不能推动 toon 明暗阈值。
+                if (light_color.w <= 0.0)
+                    continue;
+
+                float3 L;
                 float atten;
-                LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
-                //Half-Lambert 漫反射：NdotL 取正半球，避免背面光照过亮。
-                NdotL = dot(world_normal, to_light_direction);
-                float half_lambert = NdotL * 0.5 + 0.5;
-                //Wrarpped 可以映射明暗交界线
-                float wrapped =0.5f;
-                float wrapped_diffuse = (NdotL + wrapped) / (1.0 + wrapped);
-                //phone高光
-                float3 reflect_dir = reflect(-to_light_direction, world_normal);
-                float RdotV = saturate(dot(reflect_dir, view_dir));
-                float phone_specular = pow(RdotV, max(specular_power, 1.0));
-                //blinn-phong高光
-                float shininess = max(specular_power, 1.0);
-                float3 H = normalize(to_light_direction + view_dir);
-                float NdotH = saturate(dot(world_normal, H));
-                float normalization_factor=(shininess+8)/(8*toon_pi);
-                float blinn_phong_specular = pow(NdotH, max(shininess, 1.0));
-                //Oren-Nayar 漫反射：粗糙度越大，漫反射越暗，越均匀。
-                float NdotV = saturate(dot(world_normal, view_dir));
-                float sigma = rougness;
-                float sigma2 = sigma * sigma;
-                float A=1.0 - (sigma2 / (2.0 * (sigma2 + 0.33)));
-                float B=0.45 * sigma2 / (sigma2 + 0.09);
-                float3 LPojected = to_light_direction - world_normal * NdotL;
-                float3 VProjected = view_dir - world_normal * NdotV;
-                float cos_phi = saturate(dot(normalize(LPojected), normalize(VProjected)));
-                float theta_l = acos(NdotL);
-                float theta_v = acos(NdotV);
-                float alpha = max(theta_l, theta_v);
-                float beta = min(theta_l, theta_v);
-                float oren_nayar_diffuse = A + B * cos_phi * sin(alpha) * tan(beta);
-                //Cook–Torrance Microfacet BRDF
+                LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
 
-                //GGX / Trowbridge-Reitz
-                float 
-                //Fresnel Schlick
+                float n_dot_l = saturate(dot(world_normal, L));
+                float light_scale = max(light_color.w, 0.0) / toon_pi;
+                diffuse_light += light_color.rgb * light_scale * n_dot_l * atten;
+                dir_light += light_color.rgb * n_dot_l * atten;
 
-                //Smith Geometry
-
-                //GGX Cook-Torrance
-
-                //Beckmann
-
-                //Disney / Burley Diffuse
-
-                //Ward Anisotropic
-                
+                // L 与视线相反时高光置零，避免 normalize(0) 和法线回退造成伪高光。
+                float3 half_vector = L + view_dir;
+                float half_length_sq = dot(half_vector, half_vector);
+                float3 H = half_length_sq > 1e-6 ? half_vector * rsqrt(half_length_sq) : float3(0.0, 0.0, 0.0);
+                float n_dot_h = saturate(dot(world_normal, H));
+                float specular = pow(n_dot_h, max(specular_power, 1.0));
+                specular_light += light_color.rgb * light_scale * specular * atten;
             }
         }
+    }
+
+    float3 ToonSpecularLight(FMaterialPixelParameters Parameters,
+                             Texture2D light_data_map, SamplerState light_data_map_sampler,
+                             float3 world_normal, float3 view_dir,
+                             float spec_step, float spec_softness, float intensity)
+    {
+        static const float toon_pi = 3.14159265;
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 accumulated = float3(0.0, 0.0, 0.0);
+        float safe_softness = max(spec_softness, 0.0001);
+
+        int active_light_count;
+        float shadow_quality;
+        ReadLightMetadata(light_data_map, active_light_count, shadow_quality);
+
+        for (int light_index = 0; light_index < active_light_count; ++light_index)
+        {
+            float4 light_pos, light_color, light_dir, light_extra;
+            SampleLight(light_data_map, light_data_map_sampler, light_index,
+                        light_pos, light_color, light_dir, light_extra);
+            if (light_pos.w >= 0.5)
+            {
+                if (light_color.w <= 0.0)
+                    continue;
+
+                float3 L;
+                float atten;
+                LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+
+                float3 half_vector = L + view_dir;
+                float half_length_sq = dot(half_vector, half_vector);
+                float3 H = half_length_sq > 1e-6 ? half_vector * rsqrt(half_length_sq) : float3(0.0, 0.0, 0.0);
+                float n_dot_h = saturate(dot(world_normal, H));
+                float specular_step = smoothstep(spec_step, spec_step + safe_softness, n_dot_h);
+                accumulated += light_color.rgb * (max(light_color.w, 0.0) / toon_pi) *
+                               specular_step * atten * max(intensity, 0.0);
+            }
+        }
+        return accumulated;
+    }
+
+    float TotalLightIntensity(FMaterialPixelParameters Parameters,
+                              Texture2D light_data_map, SamplerState light_data_map_sampler)
+    {
+        static const float toon_pi = 3.14159265;
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float total = 0.0;
+
+        int active_light_count;
+        float shadow_quality;
+        ReadLightMetadata(light_data_map, active_light_count, shadow_quality);
+
+        for (int light_index = 0; light_index < active_light_count; ++light_index)
+        {
+            float4 light_pos, light_color, light_dir, light_extra;
+            SampleLight(light_data_map, light_data_map_sampler, light_index,
+                        light_pos, light_color, light_dir, light_extra);
+            if (light_pos.w >= 0.5)
+            {
+                float3 L;
+                float atten;
+                LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+                total += max(light_color.w, 0.0) * (1.0 / toon_pi) * atten;
+            }
+        }
+        return total;
     }
 
 //-----------------------Lighting------------------------------
@@ -342,30 +620,39 @@ struct TMMDToonLight
     // toon 参数先在此内置默认值（后续可逐个提升为 SurfaceData 输入）。
     float3 ShadeSurface(FMaterialPixelParameters Parameters, TMMDSurfaceData surface_data, TMMDLightContext light_context)
     {
+        static const float toon_pi = 3.14159265;
         const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
-        const float3 view_dir = normalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos);
+        float3 to_camera = LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos;
+        float view_distance_sq = dot(to_camera, to_camera);
+        const float3 view_dir = view_distance_sq > 1e-6
+                                    ? to_camera * rsqrt(view_distance_sq)
+                                    : surface_data.world_normal;
 
         // SceneShadow
         float obstruction_shadow = SampleMMDShadow(Parameters, light_context.light_data_map, light_context.light_data_map_sampler,
                                                    light_context.shadow_map, light_context.shadow_map_sampler);
 
-        // SkyLight
-        // float ao = GetScreenSpaceAmbientOcclusion(Parameters.ScreenPosition); // TOD2: 先不做 AO，等后续做效果的时候再考虑
-        float3 sky_irradiance = SkyAmbient(surface_data.world_normal) * View.SkyLightColor.rgb;
-        sky_irradiance /= toon_pi;
-        float sky_shadow = lerp(0.3, 1.0, obstruction_shadow);  //TOD3: 0.3 是经验值，等后面入学手续寝室搬完做完之后再说
-        float3 sky_light_color = surface_data.base_color * sky_irradiance * sky_shadow;
-        // LightShading
-        float3 final_shading_color = float3(0.0, 0.0, 0.0);
+        float3 diffuse_light, dir_light, specular_light;
         ComputeLighting(Parameters, light_context.light_data_map, light_context.light_data_map_sampler,
-                        surface_data.metallic, surface_data.roughness, surface_data.world_normal, view_dir,
-                        surface_data.base_color, final_shading_color);
-        
-        return (surface_data.base_color) * obstruction_shadow + sky_light_color;
+                        surface_data.specular_power, surface_data.world_normal, view_dir,
+                        diffuse_light, dir_light, specular_light);
+
+        float3 shaded_specular;
+        float3 shaded_diffuse = ApplyToonShadow(diffuse_light, dir_light, specular_light,
+                                                0.5, float3(0.35, 0.35, 0.35), 0.05,
+                                                shaded_specular);
+        shaded_diffuse *= obstruction_shadow;
+        shaded_specular *= obstruction_shadow;
+
+        // 环境光始终乘基础色，阴影只压暗环境贡献，不改变色相。
+        float3 sky_irradiance = SkyAmbient(surface_data.world_normal) * View.SkyLightColor.rgb / toon_pi;
+        float sky_shadow = lerp(0.3, 1.0, obstruction_shadow);
+        float3 sky_light_color = surface_data.base_color * sky_irradiance * sky_shadow;
+        // 无有效灯和 SkyLight 时仍保留低强度几何环境光，避免基础色退化为全黑。
+        float upper_hemisphere = saturate(surface_data.world_normal.z * 0.5 + 0.5);
+        float3 environment_floor = surface_data.base_color * lerp(0.08, 0.14, upper_hemisphere);
+        sky_light_color = max(sky_light_color, environment_floor);
+
+        return surface_data.base_color * shaded_diffuse + sky_light_color + shaded_specular + surface_data.emission;
     }
 };
-
-TMMDToonLight light;
-
-TMMDLightContext light_context = light.MakeLightContext(light_data_tex, light_data_texSampler,
-                                                        mmd_shadow_map, mmd_shadow_mapSampler);

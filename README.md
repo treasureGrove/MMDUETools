@@ -122,6 +122,21 @@ YourProject/
 - 基于 Bullet 初始化 MMD 风格物理模拟器。
 - 物理功能仍在实验阶段，适合继续调试和扩展。
 
+### 舞台与通用材质细节
+
+- `/Ue5MMDTools/Stages/Presets/DA_Render_SakuraTheater` 提供樱庭水镜舞台、冷暖灯光与角色材质响应；舞台资源位于插件 `Stages` 目录。
+- Reference 角色父材质按皮肤、头发、布料、金属与眼球分别响应真实场景灯光、天空漫反射及天空镜面。原模型只需 BaseColor，插件提供 V2 通用发丝法线、窄折脊与宽谷面布料法线及粗糙度数据，通过物体空间三向投影使用，不要求专用 UV 布局。
+- `HairDetailStrength` / `ClothDetailStrength` 默认 0.20 / 0.40；`HairDetailScale` / `ClothDetailScale` 默认每厘米 0.040 / 0.010。细节强度为 0 时跳过对应细节采样；头发还需将独立的 `HairShiftStrength` 设为 0，才完全退回几何法线与基础 BRDF。
+- V2 使用独立资产 `T_MMD_GenericHairNormalV2`、`T_MMD_GenericClothNormalV2`、`T_MMD_GenericClothDataV2`。生成时保留 V1 资产，只迁移父材质中旧默认贴图的精确链接，保留自选纹理和实例覆盖。
+- 宽褶皱经过低频过滤后塑造布料明暗，细织纹保留在镜面法线中；主着色与天空反射共享细节结果。头发与布料各最多 9 次细节采样，其他材质类别不采样这些贴图。
+- 发丝使用双瓣各向异性高光，布料使用辐射驱动的纤维柔光；眼球单独使用中性低粗糙度响应，睫毛、绘制高光和口腔保持通用类别。
+- 角色预设默认启用 `bCharacterSelfShadow`，让刘海、手臂和衣物进入插件主光阴影深度。关闭选项或恢复原材质会恢复组件原有阴影标签；用户显式排除仍优先。角色 PCF 按接收平面逐采样修正深度，减少倾斜皮肤上的自遮挡条纹。
+- 预设细描边按材质角色选择颜色和宽度，保留 PMX 边线开关、透明度、`EdgeSize` 与顶点 `EdgeScale`。`UMMDOutlineLibrary::ApplyMMDOutlinePreset` 应用、`RefreshMMDOutlinePreset` 更新、`RestoreMMDOutline` 恢复原始全局及分槽 overlay 与 bounds；应用角色预设时会自动设置描边。细描边仅在透视视图生效，正交视图关闭以避开自阴影采集；恢复后仍可通过 `ApplyMMDOutline` 使用原 PMX 世界空间描边。
+- 樱庭近中景包含双檐茶亭、水岸花丛和 13 盏实际场景灯，远景使用生成的素材 `Resources/Garden/sakura_night_backdrop_v3.png`；完整提示词与来源保存在同名 `generation.json`。舞台远景材质的 `BackdropTextureStrength=0` 恢复过程化远景。
+- 头骨位置与朝向可辅助过程化脸部法线，缺少头骨时使用通用皮肤着色。材质仍采用插件内自算光照，未新增引擎 ShadingModel；法线细节不会改变衣物轮廓或产生真实布料形变。
+
+完整用法见[舞台与角色渲染预设说明](MMD/Plugins/Ue5MMDTools/Docs/STAGE_RENDER_PRESETS.md)。后台生成及验证可运行 `MMD/Scripts/BuildStagePresetsBackground.ps1`；实际打包主视图和细节开关对照由 `MMD/Scripts/ValidateRuntimePackageBackground.ps1 -Stage All -IncludeStagePresets -CaptureVisuals -VisualStage SakuraTheater` 生成，均需指定 `-EngineRoot`。验证结果与画廊保存在 `MMD/Saved/BackgroundValidation`，无需开启编辑器前台。
+
 ## 当前限制
 
 - Material Morph 尚未完整驱动 UE 材质参数。

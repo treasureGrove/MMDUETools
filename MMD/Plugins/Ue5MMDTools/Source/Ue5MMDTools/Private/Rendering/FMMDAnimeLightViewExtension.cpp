@@ -4,6 +4,7 @@
 #include "Engine/Engine.h"
 #include "Engine/EngineTypes.h"
 #include "SceneView.h"
+#include "SceneInterface.h"
 
 void FMMDAnimeLightViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
 {
@@ -25,7 +26,8 @@ void FMMDAnimeLightViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSce
 	// 2. 收集场景灯光 + 阴影相机基，一起推到 render thread，本帧 BasePass 前写入 LightDataRT。
 	if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
 	{
-		Subsystem->CollectLightsForFrame();
+		UWorld* World = InViewFamily.Scene ? InViewFamily.Scene->GetWorld() : nullptr;
+		Subsystem->CollectLightsForFrame(World, &InView.ViewLocation);
 	}
 }
 

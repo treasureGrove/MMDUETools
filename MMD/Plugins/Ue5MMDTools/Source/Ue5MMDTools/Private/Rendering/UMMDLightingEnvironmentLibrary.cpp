@@ -1,6 +1,7 @@
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
 
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
 #include "Engine/SpotLight.h"
@@ -31,7 +32,6 @@
 #include "Camera/CameraActor.h"
 #include "Editor.h"
 #include "EditorViewportClient.h"
-#include "EngineUtils.h"
 #include "Factories/WorldFactory.h"
 #include "FileHelpers.h"
 #include "LevelEditorViewport.h"

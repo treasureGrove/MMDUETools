@@ -19,12 +19,25 @@
 			"Name": "Ue5MMDTools",
 			"Type": "Runtime",
 			"LoadingPhase": "PostConfigInit"
+		},
+		{
+			"Name": "Ue5MMDToolsEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
 		{
 			"Name": "LevelSequenceEditor",
-			"Enabled": true
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "ControlRig",
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
 		},
 		{
 			"Name": "IKRig",

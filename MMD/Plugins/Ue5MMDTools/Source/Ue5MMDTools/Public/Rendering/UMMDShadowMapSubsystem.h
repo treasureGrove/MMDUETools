@@ -6,6 +6,7 @@
 
 class AActor;
 class UTextureRenderTarget2D;
+class UWorld;
 class UMMDAnimeLightDataSubsystem;
 class FSceneInterface;
 class FSceneView;
@@ -29,7 +30,7 @@ class FSceneViewFamily;
  *   同时把 4 组阴影相机基以及主相机位置/前向交给 UMMDAnimeLightDataSubsystem 写进
  *   LightDataRT 第 2 行（y=1），材质侧 SampleMMDShadow 据此把世界点投到阴影空间。
  *
- * 默认排除所有 AMMDActor（MMD 模型不参与投射，避免自阴影与 toon 叠加双重变暗）；
+ * 默认排除 AMMDActor；组件的 MMDShadowInclude 标签可启用真实自投影。
  * 其它任意 mesh 只要给 actor / 组件挂上名为 "MMDShadowExclude" 的 Tag，也会被同样剔除。
  */
 UCLASS()
@@ -51,6 +52,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|ShadowMap")
 	void SetShadowMapRenderTarget(UTextureRenderTarget2D* InRenderTarget);
+
+	UTextureRenderTarget2D* GetShadowMapRenderTarget() const { return ShadowMapRT; }
+	int32 GetShadowMapResolution() const { return ShadowMapResolution; }
 
 	/** 主相机阴影距离（cm），四个级联只覆盖该距离内的可见视锥。 */
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|ShadowMap")
@@ -76,7 +80,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|ShadowMap")
 	void SetNormalBias(float InBiasInTexels);
 
-	/** 是否从阴影捕获里排除 MMD 模型自身（默认 true，不做自阴影）。 */
+	/** 是否默认排除 MMD 模型自身；MMDShadowInclude 组件可单独启用自投影。 */
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|ShadowMap")
 	void SetHideMMDActors(bool bInHide);
 
@@ -90,20 +94,22 @@ public:
 	void SetShadowMapExcludedActors(const TArray<AActor*>& Actors);
 
 private:
-	/** 找第一盏可见平行光，输出光传播方向（Actor forward）。 */
+	/** 找第一盏有效平行光，输出组件的光传播方向。 */
 	bool GetMainLightDirection(UWorld* World, FVector& OutDir);
 
-	/** 清理关卡里残留的旧版 SceneCapture2D actor（命名兼容 MMDShadowMapCapture / MMDShadowCapture）。带节流。 */
+	/** 停用仍写插件 RT 的旧版 SceneCapture2D，保留关卡 actor。带节流。 */
 	void CleanupStaleCaptureActors(UWorld* World);
 
 	/** 自动创建阴影深度 RT 资产 /Ue5MMDTools/Rendering/MMDShadowMapRT。 */
 	void AutoSetupShadowMapRT();
 
-	/** 把"要剔除的 primitive"收集到 HiddenPrimitives：MMD 模型(bHideMMDActors) / 显式排除(ExcludedActors) / 挂 GMMDShadowExcludeTag 的 actor/组件，避免自阴影。 */
+	/** 收集默认隐藏及显式排除的 primitive；MMDShadowInclude 只覆盖组件的默认隐藏。 */
 	void CollectHiddenMMDPrimitives(UWorld* World, TSet<FPrimitiveComponentId>& OutHidden);
 
 	bool bEnabled = true;
 	bool bAutoSetupDone = false;
+	TWeakObjectPtr<UWorld> LastCleanupWorld;
+	double LastCleanupTime = 0.0;
 
 	float ShadowDistance = 5000.0f;
 	float OrthoWidth = 4000.0f;
@@ -123,9 +129,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> ShadowMapScratchRT = nullptr;
 
-	/** 上一次提交 CustomRenderPass 时的 HiddenPrimitives 集合（避免每帧重算）。 */
+	/** 本帧的阴影剔除集合，由四个级联共用。 */
 	TSet<FPrimitiveComponentId> CachedHiddenPrimitives;
 
-	/** 用户显式排除的 actor（不参与投射，避免"自己给自己投 shadow"）。TWeakObjectPtr 防 actor 销毁后悬垂。 */
-	TArray<TWeakObjectPtr<AActor>> ExcludedActors;
+	/** 用户显式排除的 actor；弱引用避免悬垂，集合避免逐 actor 线性查找。 */
+	TSet<TWeakObjectPtr<AActor>> ExcludedActors;
 };

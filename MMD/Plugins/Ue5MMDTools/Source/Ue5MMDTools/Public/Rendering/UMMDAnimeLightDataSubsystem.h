@@ -4,6 +4,7 @@
 #include "UMMDAnimeLightDataSubsystem.generated.h"
 
 class UTextureRenderTarget2D;
+class UWorld;
 class FRDGBuilder;
 
 /**
@@ -21,7 +22,11 @@ class FRDGBuilder;
  *     +3 : float4(innerCos, outerCos, falloff, 0)   rect: (sizeX, sizeY, 0, 0)
  *   row 1, texels x = 0..17 : MMD 四级联阴影相机数据（见 UMMDShadowMapSubsystem，材质侧由
  *   MMDToonLighting.ush 的 SampleMMDShadow 读取）。
+ *   row 1, x=18 : (遍历灯数, 阴影质量, 预留, 有效=1)，旧布局回退16灯/High。
  */
+UENUM(BlueprintType)
+enum class EMMDShadowFilterQuality : uint8 { High, Low };
+
 UCLASS()
 class UE5MMDTOOLS_API UMMDAnimeLightDataSubsystem : public UEngineSubsystem
 {
@@ -38,7 +43,7 @@ public:
 
 	/** Collects lights and pushes them to the render thread for the current frame.
 	 *  Called from a view extension's SetupView on the game thread. */
-	void CollectLightsForFrame();
+	void CollectLightsForFrame(UWorld* InWorld = nullptr, const FVector* InCameraPosition = nullptr);
 
 	/** 渲染线程在场景渲染开始时写入 LightDataRT，保证阴影 atlas 与相机基来自同一帧。 */
 	void WriteLightData_RenderThread(FRDGBuilder& GraphBuilder);
@@ -52,6 +57,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|LightData")
 	void SetLightDataCollectionEnabled(bool bInEnabled) { bCollectionEnabled = bInEnabled; }
+
+	/** 高质量为默认值；低成本档使用较窄的连续 tent 核。 */
+	UFUNCTION(BlueprintCallable, Category = "MMD Anime|Shadow")
+	void SetShadowFilterQuality(EMMDShadowFilterQuality InQuality) { ShadowFilterQuality = InQuality; }
+
+	UFUNCTION(BlueprintPure, Category = "MMD Anime|Shadow")
+	EMMDShadowFilterQuality GetShadowFilterQuality() const { return ShadowFilterQuality; }
 
 	/** 设置本帧的阴影相机数据（18 个 float4 = 4 级联基 + 主相机位置/前向），
 	 *  会被写进 LightDataRT 第 2 行（y=1）。布局见 MMDToonLighting.ush 的 SampleMMDShadow 注释。
@@ -71,11 +83,12 @@ public:
 	bool HasPreviewLightOverride() const { return PreviewLightOverrideData.Num() == MaxLights * 4; }
 
 private:
-	void CollectLights(UWorld* World, TArray<FVector4f>& OutData);
+	void CollectLights(UWorld* World, TArray<FVector4f>& OutData, const FVector* InCameraPosition);
 
 	/** Auto-loads (or auto-creates in the editor) the light data RT asset and registers it. */
 	void AutoSetupLightDataRT();
 
+	EMMDShadowFilterQuality ShadowFilterQuality = EMMDShadowFilterQuality::High;
 	bool bCollectionEnabled = true;
 	bool bAutoSetupDone = false;
 

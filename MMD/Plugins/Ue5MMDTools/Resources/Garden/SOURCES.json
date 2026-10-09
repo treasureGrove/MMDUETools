@@ -1,0 +1,52 @@
+{
+  "license": "CC0 1.0",
+  "license_url": "https://polyhaven.com/license",
+  "retrieved": "2026-10-09",
+  "note": "assets 列表仅列 Poly Haven 官方 CC0 源资产，供庭院材质后台生成使用。角色着色不依赖这些贴图。樱庭远景 sakura_night_backdrop_v3.png 是另行生成的素材，其来源与完整提示词见同名 generation.json，不属于本清单的 CC0 声明。未使用 Epic Zen Garden 的素材。",
+  "assets": [
+    {
+      "id": "wood_floor_deck",
+      "title": "Wood Floor Deck",
+      "author": "Poly Haven",
+      "page": "https://polyhaven.com/a/wood_floor_deck",
+      "files": [
+        {
+          "name": "wood_floor_deck_diff_1k.png",
+          "sha256": "A96393B4B44DA28B63DAE80F8CE4CDC357A85E0127FC842B557C82CCFECA2F88"
+        },
+        {
+          "name": "wood_floor_deck_arm_1k.png",
+          "sha256": "64FEECAFAFE4CAD209B19FCBBE1439A750F868AD5817438A66E2F815C81FDC04"
+        }
+      ]
+    },
+    {
+      "id": "monastery_stone_floor",
+      "title": "Monastery Stone Floor",
+      "author": "Poly Haven",
+      "page": "https://polyhaven.com/a/monastery_stone_floor",
+      "files": [
+        {
+          "name": "monastery_stone_floor_diff_1k.png",
+          "sha256": "F59B587A4AE1599EAA198546FFF182DFECC6FB61E9FA00B9E5BEF87A780C6DCB"
+        },
+        {
+          "name": "monastery_stone_floor_arm_1k.png",
+          "sha256": "BA22D614FB27C5BF7B8073E57B6B98D30FA26618CD1781AC298700EC027CE13D"
+        }
+      ]
+    },
+    {
+      "id": "qwantani_night_puresky",
+      "title": "Qwantani Night Pure Sky",
+      "author": "Poly Haven",
+      "page": "https://polyhaven.com/a/qwantani_night_puresky",
+      "files": [
+        {
+          "name": "qwantani_night_puresky_2k.hdr",
+          "sha256": "D458FE7F20969D89EEDBB7AE12D346ABF68C86D844235696E7D70BAAD3E04CF0"
+        }
+      ]
+    }
+  ]
+}

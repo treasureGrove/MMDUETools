@@ -9,10 +9,13 @@
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
 			"AdditionalDependencies": [
-				"Blutility",
-				"UnrealEd",
 				"CoreUObject"
 			]
+		},
+		{
+			"Name": "MMDEditorTools",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [

@@ -52,7 +52,7 @@ struct BulletMMDRigidRuntime
     int CollisionMask = -1;
 };
 
-class FMMDPhysicsSimulator
+class UE5MMDTOOLS_API FMMDPhysicsSimulator
 {
 public:
     FMMDPhysicsSimulator() = default;

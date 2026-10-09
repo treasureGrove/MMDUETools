@@ -1,0 +1,77 @@
+// MMDLiteToon.usf
+// 极简通用 toon（struct TMMDLiteToon）：最少输入 = 一张 base_color 即可完整着色（AGENTS 铁律 1 的参照实现）。
+//   两段 ramp（亮/暗）+ 从 base 压暗派生的阴影色（保色相）+ rim + 场景阴影。
+// 不依赖 UV 布局 / 配套贴图；全部兜底：无灯固定光、shadow_strength=0 关场景阴影。
+#include "/Plugin/Ue5MMDTools/MMDStandard/MMDStandardCore.ush"
+
+struct TMMDLiteToon
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters,
+                       float3 base_color,
+                       Texture2D light_data_tex,
+                       SamplerState light_data_texSampler,
+                       float shadow_step,
+                       float shadow_softness,
+                       float shadow_strength,
+                       float rim_strength,
+                       Texture2D mmd_shadow_map,
+                       SamplerState mmd_shadow_mapSampler)
+    {
+        TMMDStandardLight light_tool;
+
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_normal = light_tool.SafeNormalize((float3)Parameters.TangentToWorld[2],
+                                                             float3(0.0, 0.0, 1.0));
+        const float3 view_dir = light_tool.SafeNormalize(
+            LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos, float3(0.0, 0.0, 1.0));
+
+        // 主光。
+        float3 main_light_direction;
+        float3 main_light_color;
+        int main_light_index;
+        light_tool.GetMainLight(light_data_tex, light_data_texSampler, world_pos,
+                                main_light_direction, main_light_color, main_light_index);
+
+        // 两段 toon ramp：亮度（不含光强）做阈值，光强不改变阴影位置。
+        float n_dot_l = dot(world_normal, main_light_direction);
+        float ramp_value = smoothstep(shadow_step - shadow_softness,
+                                      shadow_step + shadow_softness,
+                                      n_dot_l);
+
+        // 阴影色：base 压暗 45% 再向冷色轻混 15%，保留色相。
+        float3 shadow_color = base_color * 0.55;
+        shadow_color = lerp(shadow_color, shadow_color * float3(0.75, 0.8, 1.05), 0.15);
+        float3 toon_color = lerp(shadow_color, base_color, ramp_value);
+
+        // 场景阴影。
+        float scene_shadow = light_tool.SampleMMDShadow(light_data_tex, light_data_texSampler,
+                                                        mmd_shadow_map, mmd_shadow_mapSampler,
+                                                        Parameters, 0.0);
+        float shadow_factor = lerp(1.0, scene_shadow, saturate(shadow_strength));
+
+        // 天空环境（乘 base 保色相）。
+        float3 sky_irradiance = light_tool.SkyAmbient(world_normal) * 0.35;
+
+        // rim：背光边缘提亮。
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+        float rim_value = pow(1.0 - n_dot_v, 3.0) * saturate(rim_strength);
+
+        float3 shaded_color = toon_color * main_light_color * shadow_factor + base_color * sky_irradiance;
+        shaded_color += rim_value * base_color;
+        return saturate(shaded_color);
+    }
+};
+
+// 自包含入口：文件末尾自行实例化 + return。
+TMMDLiteToon lite_toon_shader;
+return lite_toon_shader.OutputColor(
+    Parameters,
+    base_color,
+    light_data_tex,
+    light_data_texSampler,
+    shadow_step,
+    shadow_softness,
+    shadow_strength,
+    rim_strength,
+    mmd_shadow_map,
+    mmd_shadow_mapSampler);

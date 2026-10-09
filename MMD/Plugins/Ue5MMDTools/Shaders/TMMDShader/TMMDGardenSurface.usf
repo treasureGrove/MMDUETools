@@ -1,0 +1,135 @@
+// 输入均由庭园父材质提供默认值。细节纹理为可选的世界三平面采样，不使用模型 UV。
+// 输出：BaseColor，surface_roughness，surface_normal（世界空间），surface_ao，surface_specular。
+struct TMMDGardenSurface
+{
+    float3 SafeAxis(float3 axis, float3 fallback)
+    {
+        return dot(axis, axis) > 1e-8 ? axis : fallback;
+    }
+
+    float3 SafeNormal(float3 world_normal)
+    {
+        return dot(world_normal, world_normal) > 1e-8
+            ? world_normal * rsqrt(dot(world_normal, world_normal)) : float3(0.0, 0.0, 1.0);
+    }
+
+    float4 SampleTriplanar(Texture2D detail_tex, SamplerState detail_sampler,
+                           float3 local_pos, float3 weights, float detail_scale)
+    {
+        float3 sample_pos = local_pos * detail_scale;
+        return Texture2DSample(detail_tex, detail_sampler, sample_pos.yz) * weights.x
+             + Texture2DSample(detail_tex, detail_sampler, sample_pos.xz) * weights.y
+             + Texture2DSample(detail_tex, detail_sampler, sample_pos.xy) * weights.z;
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 stage_color,
+                       float roughness, float surface_role, float use_detail_textures,
+                       Texture2D wood_base_tex, SamplerState wood_base_sampler,
+                       Texture2D wood_arm_tex, SamplerState wood_arm_sampler,
+                       Texture2D stone_base_tex, SamplerState stone_base_sampler,
+                       Texture2D stone_arm_tex, SamplerState stone_arm_sampler,
+                       float3 stage_origin, float3 stage_right, float3 stage_forward, float3 stage_up,
+                       float time_seconds, float stage_time, float use_stage_time,
+                       out float surface_roughness, out float3 surface_normal,
+                       out float surface_ao, out float surface_specular)
+    {
+        float3 right_axis = SafeAxis(stage_right, float3(1.0, 0.0, 0.0));
+        float3 forward_axis = SafeAxis(stage_forward, float3(0.0, 1.0, 0.0));
+        float3 up_axis = SafeAxis(stage_up, float3(0.0, 0.0, 1.0));
+        float3 stage_offset = LWCToFloat(Parameters.AbsoluteWorldPosition) - stage_origin;
+        float3 local_pos = float3(dot(stage_offset, right_axis), dot(stage_offset, forward_axis), dot(stage_offset, up_axis));
+        float3 world_normal = SafeNormal((float3)Parameters.TangentToWorld[2]);
+        float3 local_normal = SafeNormal(float3(dot(world_normal, SafeNormal(right_axis)),
+                                               dot(world_normal, SafeNormal(forward_axis)),
+                                               dot(world_normal, SafeNormal(up_axis))));
+        float3 weights = pow(abs(local_normal), 4.0);
+        weights /= max(weights.x + weights.y + weights.z, 1e-5);
+
+        float variation = sin(local_pos.x * 0.025 + local_pos.y * 0.013) * sin(local_pos.z * 0.023 + local_pos.y * 0.019);
+        float3 color_factor = 1.0;
+        float3 local_gradient = 0.0;
+        float role_roughness = 0.60;
+        float detail_roughness = 0.60;
+        float detail_amount = 0.0;
+        surface_ao = 1.0;
+        surface_specular = 0.32;
+
+        [branch]
+        if (surface_role >= 0.5 && surface_role < 1.5)
+        {
+            role_roughness = 0.46;
+            surface_specular = 0.25;
+            float grain_phase = local_pos.x * 0.10 + sin(local_pos.y * 0.009) * 2.5 + local_pos.z * 0.016;
+            float fine_fade = 1.0 - saturate(fwidth(grain_phase) * 0.6);
+            float grain = sin(grain_phase) * fine_fade;
+            color_factor = float3(1.0, 0.97, 0.92) * (1.0 + grain * 0.045 + variation * 0.06);
+            local_gradient = float3(cos(grain_phase) * 0.024 * fine_fade, variation * 0.009, 0.0);
+            [branch]
+            if (use_detail_textures > 0.01)
+            {
+                float3 detail_color = SampleTriplanar(wood_base_tex, wood_base_sampler, local_pos, weights, 0.006).rgb;
+                float3 detail_arm = SampleTriplanar(wood_arm_tex, wood_arm_sampler, local_pos, weights, 0.006).rgb;
+                detail_amount = saturate(use_detail_textures);
+                // 颜色以舞台色为基准，纹理只温和调制，避免深色木纹再乘一次深色变黑。
+                color_factor *= lerp(1.0, clamp(detail_color * 2.8, 0.32, 1.8), detail_amount * 0.72);
+                detail_roughness = clamp(detail_arm.g, 0.32, 0.70);
+                surface_ao = lerp(1.0, max(detail_arm.r, 0.65), detail_amount * 0.40);
+            }
+        }
+        else if (surface_role >= 1.5 && surface_role < 2.5)
+        {
+            role_roughness = 0.50;
+            surface_specular = 0.36;
+            float tile_phase = local_pos.x * 0.035 + local_pos.z * 0.042;
+            color_factor = 1.0 + variation * 0.06 + sin(tile_phase) * 0.035;
+            local_gradient = float3(cos(tile_phase) * 0.019, variation * 0.012, 0.0);
+        }
+        else if (surface_role >= 2.5 && surface_role < 3.5)
+        {
+            role_roughness = 0.70;
+            surface_specular = 0.28;
+            color_factor = float3(0.98, 1.0, 1.01) * (1.0 + variation * 0.085);
+            local_gradient = float3(sin(local_pos.y * 0.055) * 0.016, cos(local_pos.x * 0.048) * 0.016, variation * 0.008);
+            [branch]
+            if (use_detail_textures > 0.01)
+            {
+                float3 detail_color = SampleTriplanar(stone_base_tex, stone_base_sampler, local_pos, weights, 0.004).rgb;
+                float3 detail_arm = SampleTriplanar(stone_arm_tex, stone_arm_sampler, local_pos, weights, 0.004).rgb;
+                detail_amount = saturate(use_detail_textures);
+                color_factor *= lerp(1.0, clamp(detail_color * 2.6, 0.42, 1.6), detail_amount * 0.68);
+                detail_roughness = clamp(detail_arm.g, 0.48, 0.90);
+                surface_ao = lerp(1.0, max(detail_arm.r, 0.72), detail_amount * 0.35);
+            }
+        }
+        else if (surface_role >= 4.5 && surface_role < 5.5)
+        {
+            role_roughness = 0.65;
+            surface_specular = 0.18;
+            // 花瓣只保留柔和色差；高频噪声和塑料镜面会掩盖真实花瓣轮廓。
+            color_factor = float3(1.025, 0.985, 0.99) * (1.0 + variation * 0.025);
+            local_gradient = 0.0;
+        }
+        else
+        {
+            color_factor = 1.0 + variation * 0.035;
+            local_gradient = float3(variation * 0.009, -variation * 0.008, 0.0);
+        }
+
+        float3 world_gradient = local_gradient.x * SafeNormal(right_axis)
+                              + local_gradient.y * SafeNormal(forward_axis)
+                              + local_gradient.z * SafeNormal(up_axis);
+        world_gradient -= world_normal * dot(world_gradient, world_normal);
+        surface_normal = SafeNormal(world_normal - world_gradient);
+        surface_roughness = clamp(lerp(role_roughness, saturate(roughness), 0.30)
+                            + variation * 0.025, 0.25, 0.92);
+        surface_roughness = lerp(surface_roughness, detail_roughness, detail_amount * 0.24);
+        return max(stage_color, 0.0) * max(color_factor, 0.0);
+    }
+};
+
+TMMDGardenSurface shader;
+return shader.OutputColor(Parameters, stage_color, roughness, surface_role, use_detail_textures,
+                          wood_base_tex, wood_base_texSampler, wood_arm_tex, wood_arm_texSampler,
+                          stone_base_tex, stone_base_texSampler, stone_arm_tex, stone_arm_texSampler,
+                          stage_origin, stage_right, stage_forward, stage_up, time_seconds, stage_time, use_stage_time,
+                          surface_roughness, surface_normal, surface_ao, surface_specular);

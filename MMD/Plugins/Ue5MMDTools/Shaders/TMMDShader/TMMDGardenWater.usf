@@ -1,0 +1,45 @@
+// 不透明深水：低粗糙度接受引擎反射，波纹只改变几何法线，不添加白色发光纹。
+struct TMMDGardenWater
+{
+    float3 SafeNormal(float3 value, float3 fallback)
+    {
+        return dot(value, value) > 1e-8 ? value * rsqrt(dot(value, value)) : fallback;
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 stage_color, float roughness,
+                       float time_seconds, float stage_time, float use_stage_time,
+                       float3 stage_origin, float3 stage_right, float3 stage_forward, float3 stage_up,
+                       out float water_roughness, out float3 water_normal)
+    {
+        float3 right_axis = dot(stage_right, stage_right) > 1e-8 ? stage_right : float3(1.0, 0.0, 0.0);
+        float3 forward_axis = dot(stage_forward, stage_forward) > 1e-8 ? stage_forward : float3(0.0, 1.0, 0.0);
+        float3 up_axis = SafeNormal(stage_up, float3(0.0, 0.0, 1.0));
+        float3 stage_offset = LWCToFloat(Parameters.AbsoluteWorldPosition) - stage_origin;
+        float2 local_pos = float2(dot(stage_offset, right_axis), dot(stage_offset, forward_axis));
+        float animation_time = lerp(time_seconds, stage_time, saturate(use_stage_time));
+        float phase_a = dot(local_pos, float2(0.025, 0.015)) - animation_time * 0.48;
+        float phase_b = dot(local_pos, float2(-0.057, 0.041)) + animation_time * 0.75;
+        float phase_c = dot(local_pos, float2(0.12, 0.065)) - animation_time * 1.0;
+        // 屏幕小于一个像素的细波自然衰减，避免远景水面闪烁。
+        float fine_fade = 1.0 - saturate(max(fwidth(phase_c), fwidth(phase_b)) * 0.7);
+        float2 wave_gradient = float2(0.025, 0.015) * cos(phase_a) * 0.70
+                             + float2(-0.057, 0.041) * cos(phase_b) * 0.25 * fine_fade
+                             + float2(0.12, 0.065) * cos(phase_c) * 0.055 * fine_fade;
+        float3 geometric_normal = SafeNormal((float3)Parameters.TangentToWorld[2], up_axis);
+        float3 world_gradient = wave_gradient.x * SafeNormal(right_axis, float3(1.0, 0.0, 0.0))
+                              + wave_gradient.y * SafeNormal(forward_axis, float3(0.0, 1.0, 0.0));
+        world_gradient -= geometric_normal * dot(geometric_normal, world_gradient);
+        water_normal = SafeNormal(geometric_normal - world_gradient, geometric_normal);
+        water_roughness = clamp(roughness + (1.0 - fine_fade) * 0.025, 0.035, 0.22);
+        float3 view_vector = LWCToFloat(GetWorldCameraOrigin(Parameters)) - LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 view_dir = SafeNormal(view_vector, up_axis);
+        float grazing = pow(1.0 - saturate(abs(dot(water_normal, view_dir))), 4.0);
+        float3 deep_color = max(stage_color, 0.0) * float3(0.74, 0.92, 0.96);
+        float3 shallow_color = max(stage_color, 0.0) * 1.5 + float3(0.012, 0.021, 0.020);
+        return lerp(deep_color, shallow_color, grazing * 0.38);
+    }
+};
+
+TMMDGardenWater shader;
+return shader.OutputColor(Parameters, stage_color, roughness, time_seconds, stage_time, use_stage_time,
+                          stage_origin, stage_right, stage_forward, stage_up, water_roughness, water_normal);

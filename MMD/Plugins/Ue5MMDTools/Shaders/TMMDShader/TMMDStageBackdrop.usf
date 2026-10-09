@@ -1,0 +1,174 @@
+// 远景使用舞台局部坐标；樱庭可接专用远景图，缺图时保留过程化兜底。
+struct TMMDStageBackdrop
+{
+    float Hash(float2 position)
+    {
+        return frac(sin(dot(position, float2(127.1, 311.7))) * 43758.5453);
+    }
+
+    float SmoothNoise(float2 position)
+    {
+        float2 cell = floor(position);
+        float2 blend = frac(position);
+        blend = blend * blend * (3.0 - 2.0 * blend);
+        return lerp(lerp(Hash(cell), Hash(cell + float2(1.0, 0.0)), blend.x),
+                    lerp(Hash(cell + float2(0.0, 1.0)), Hash(cell + 1.0), blend.x), blend.y);
+    }
+
+    float MountainHeight(float horizontal_position, float layer)
+    {
+        float broad_peak = sin(horizontal_position * 0.0019 + layer * 1.73) * 62.0;
+        float secondary_peak = sin(horizontal_position * 0.0041 - layer * 2.37) * 29.0;
+        float slope = SmoothNoise(float2(horizontal_position * 0.002, layer * 3.1)) * 76.0;
+        return 112.0 + layer * 38.0 + broad_peak + secondary_peak + slope;
+    }
+
+    float3 Mountains(float3 sky_color, float3 stage_color, float3 horizon_color, float3 local_pos,
+                     float backdrop_theme)
+    {
+        // 远山轮廓随舞台旋转和缩放；三层大轮廓避免细密噪声抢走主体。
+        float3 result = sky_color;
+        for (int i = 2; i >= 0; --i)
+        {
+            float layer = (float)i;
+            float height = MountainHeight(local_pos.x + layer * 237.0, layer);
+            float edge_width = max(fwidth(local_pos.z), 3.0 + layer * 2.0);
+            float mountain_mask = 1.0 - smoothstep(height - edge_width, height + edge_width, local_pos.z);
+            float3 mountain_color = lerp(stage_color * 0.62, horizon_color * 0.72, layer * 0.30);
+            if (backdrop_theme >= 1.5)
+                mountain_color = lerp(float3(0.003, 0.008, 0.021), horizon_color * 0.55, layer * 0.33);
+            result = lerp(result, mountain_color, mountain_mask);
+        }
+        return result;
+    }
+
+    float3 City(float3 sky_color, float3 stage_color, float3 horizon_color, float3 local_pos)
+    {
+        float3 result = sky_color;
+        for (int i = 1; i >= 0; --i)
+        {
+            float layer = (float)i;
+            float cell_width = 190.0 + layer * 110.0;
+            float cell = floor((local_pos.x + layer * 251.0) / cell_width);
+            float within_cell = frac((local_pos.x + layer * 251.0) / cell_width);
+            float seed = Hash(float2(cell, layer + 3.0));
+            float roof_height = 72.0 + seed * 212.0 + layer * 40.0;
+            float building_width = 0.48 + Hash(float2(cell, layer + 17.0)) * 0.30;
+            float horizontal_edge = max(fwidth(within_cell), 0.005);
+            float building_mask = 1.0 - smoothstep(building_width * 0.5 - horizontal_edge,
+                building_width * 0.5 + horizontal_edge, abs(within_cell - 0.5));
+            float vertical_edge = max(fwidth(local_pos.z), 2.5);
+            building_mask *= 1.0 - smoothstep(roof_height - vertical_edge, roof_height + vertical_edge, local_pos.z);
+            float3 building_color = lerp(stage_color * 0.56, horizon_color * 0.48, layer * 0.35);
+            result = lerp(result, building_color, building_mask);
+
+            // 仅少数楼宇有宽窗光块，亮度低于舞台灯带。
+            float window_height = 48.0 + seed * 118.0;
+            float window_mask = 1.0 - smoothstep(0.032, 0.052, abs(within_cell - 0.43));
+            window_mask *= 1.0 - smoothstep(9.0, 14.0, abs(local_pos.z - window_height));
+            window_mask *= step(0.64, seed) * building_mask;
+            float3 window_color = lerp(float3(0.05, 0.13, 0.20), float3(0.14, 0.055, 0.18), seed);
+            result += window_color * window_mask * (0.48 - layer * 0.18);
+        }
+        return result;
+    }
+
+    float Stars(float3 local_pos, float stage_time)
+    {
+        float2 position = local_pos.xz / float2(245.0, 190.0);
+        float2 cell = floor(position);
+        float2 local_cell = frac(position);
+        float seed = Hash(cell + float2(23.0, 47.0));
+        float2 star_center = float2(Hash(cell + 9.0), Hash(cell + 31.0)) * 0.52 + 0.24;
+        float2 star_offset = local_cell - star_center;
+        float pixel_width = max(length(float2(fwidth(position.x), fwidth(position.y))), 0.006);
+        float star_radius = 0.010 + seed * 0.006;
+        float star = 1.0 - smoothstep(star_radius, star_radius + pixel_width, length(star_offset));
+        float visible_height = smoothstep(390.0, 560.0, local_pos.z);
+        float twinkle = 0.86 + sin(stage_time * 0.43 + seed * 6.2831853) * 0.14;
+        return star * step(0.78, seed) * visible_height * twinkle;
+    }
+
+    float3 Moon(float3 sky_color, float3 local_pos, float3 camera_pos)
+    {
+        // 用角半径投影月面，换机位仍是圆盘；树林等真实几何自然遮挡远景。
+        float3 moon_offset = float3(-460.0, 1135.0, 425.0) - camera_pos;
+        float3 moon_dir = normalize(moon_offset);
+        float3 ray = normalize(local_pos - camera_pos);
+        float3 moon_right = normalize(cross(moon_dir, float3(0.0, 0.0, 1.0)));
+        float3 moon_up = cross(moon_right, moon_dir);
+        float angular_radius = 82.0 / max(length(moon_offset), 1.0);
+        float2 disk_pos = float2(dot(ray, moon_right), dot(ray, moon_up)) / angular_radius;
+        float radius = length(disk_pos);
+        float edge = max(fwidth(radius), 0.002);
+        float disk_mask = (1.0 - smoothstep(1.0 - edge, 1.0 + edge, radius)) * step(0.0, dot(ray, moon_dir));
+        float3 moon_normal = float3(disk_pos, sqrt(saturate(1.0 - dot(disk_pos, disk_pos))));
+        float illumination = saturate(dot(moon_normal, normalize(float3(0.32, 0.14, 0.94))));
+        float mare = SmoothNoise(disk_pos * 3.2 + float2(7.0, 11.0));
+        float crater = SmoothNoise(disk_pos * 13.0 + float2(2.0, 17.0));
+        float lunar_surface = (0.22 + smoothstep(0.30, 0.67, mare) * 0.72) * (0.90 + crater * 0.10);
+        float3 moon_color = float3(1.0, 0.96, 0.90) * (0.80 + illumination * 0.20) * lunar_surface * 1.50;
+        float halo = exp(-max(radius - 1.0, 0.0) * 3.5) * (1.0 - disk_mask) * step(0.0, dot(ray, moon_dir));
+        return lerp(sky_color + float3(0.014, 0.022, 0.045) * halo, moon_color, disk_mask);
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 stage_color, float3 horizon_color,
+                       float backdrop_theme, float stage_time, float emissive_strength,
+                       float3 stage_origin, float3 stage_right, float3 stage_forward, float3 stage_up,
+                       Texture2D backdrop_tex, SamplerState backdrop_tex_sampler, float backdrop_texture_strength)
+    {
+        float3 stage_offset = LWCToFloat(Parameters.AbsoluteWorldPosition) - stage_origin;
+        float3 local_pos = float3(dot(stage_offset, stage_right), dot(stage_offset, stage_forward),
+                                 dot(stage_offset, stage_up));
+        float texture_mix = backdrop_theme >= 1.5 ? saturate(backdrop_texture_strength) : 0.0;
+        float3 texture_color = 0.0;
+        if (texture_mix > 0.0)
+        {
+            // 从世界位置投影，不依赖 Cube 的六面 UV；主视角朝 +Y，屏右对应局部 -X。
+            float2 backdrop_uv = float2(0.5 - local_pos.x / 4200.0, 1.0 - (local_pos.z + 130.0) / 1400.0);
+            texture_color = max(Texture2DSample(backdrop_tex, backdrop_tex_sampler, saturate(backdrop_uv)).rgb, 0.0) * 1.1;
+            if (texture_mix >= 0.999) return texture_color * clamp(emissive_strength, 0.0, 4.0);
+        }
+        float3 top_color = max(stage_color, 0.0);
+        float3 low_color = max(horizon_color, 0.0);
+        if (max(top_color.r, max(top_color.g, top_color.b)) < 1e-5)
+            top_color = float3(0.04, 0.08, 0.18);
+        if (max(low_color.r, max(low_color.g, low_color.b)) < 1e-5)
+            low_color = float3(0.13, 0.20, 0.28);
+
+        float sky_height = smoothstep(120.0, 1260.0, local_pos.z);
+        float3 sky_color = lerp(low_color, top_color, sky_height);
+        float horizon_haze = exp(-abs(local_pos.z - 215.0) * 0.005);
+        sky_color += low_color * horizon_haze * 0.12;
+        float cloud_layer = SmoothNoise(float2(local_pos.x * 0.0011 + stage_time * 0.002,
+                                               local_pos.z * 0.0029));
+        sky_color *= 0.94 + cloud_layer * 0.10;
+
+        float theme = clamp(backdrop_theme, 0.0, 2.0);
+        if (theme < 0.5)
+        {
+            float glow_distance = abs(local_pos.x + 600.0) * 0.00052 + abs(local_pos.z - 255.0) * 0.0045;
+            sky_color += float3(0.008, 0.016, 0.030) * exp(-glow_distance);
+            sky_color = City(sky_color, top_color, low_color, local_pos);
+        }
+        else
+        {
+            if (theme < 1.5)
+                sky_color += float3(0.31, 0.38, 0.46) * Stars(local_pos, stage_time);
+            else
+            {
+                float3 camera_offset = LWCToFloat(GetWorldCameraOrigin(Parameters)) - stage_origin;
+                float3 camera_pos = float3(dot(camera_offset, stage_right), dot(camera_offset, stage_forward),
+                                           dot(camera_offset, stage_up));
+                sky_color = Moon(sky_color, local_pos, camera_pos);
+            }
+            sky_color = Mountains(sky_color, top_color, low_color, local_pos, theme);
+        }
+        return lerp(max(sky_color, 0.0), texture_color, texture_mix) * clamp(emissive_strength, 0.0, 4.0);
+    }
+};
+
+TMMDStageBackdrop shader;
+return shader.OutputColor(Parameters, stage_color, horizon_color, backdrop_theme, stage_time,
+                          emissive_strength, stage_origin, stage_right, stage_forward, stage_up,
+                          backdrop_tex, backdrop_texSampler, backdrop_texture_strength);

@@ -174,12 +174,13 @@ namespace
 		if (Remaining == 0)
 		{
 			OutCount = 0;
-			return false;
+			// 旧文件允许在可选段边界结束，损坏的段头必须向上返回失败。
+			return true;
 		}
 
 		if (Remaining < static_cast<int64>(sizeof(uint32)))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("VMD: Trailing bytes too short for %s count. Remaining=%lld"), Context, Remaining);
+			UE_LOG(LogTemp, Error, TEXT("VMD: Trailing bytes too short for %s count. Remaining=%lld"), Context, Remaining);
 			OutCount = 0;
 			return false;
 		}
@@ -275,7 +276,11 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	}
 
 	uint32 CameraKeyframeCount = 0;
-	if (TryReadOptionalCount(Reader, CameraKeyframeCount, 61, TEXT("CameraKeyframes")))
+	if (!TryReadOptionalCount(Reader, CameraKeyframeCount, 61, TEXT("CameraKeyframes")))
+	{
+		return false;
+	}
+	if (CameraKeyframeCount > 0)
 	{
 		VMDInfo.CameraKeyframes.Reserve(CameraKeyframeCount);
 		for (uint32 Index = 0; Index < CameraKeyframeCount; ++Index)
@@ -299,7 +304,11 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	}
 
 	uint32 LightKeyframeCount = 0;
-	if (TryReadOptionalCount(Reader, LightKeyframeCount, 28, TEXT("LightKeyframes")))
+	if (!TryReadOptionalCount(Reader, LightKeyframeCount, 28, TEXT("LightKeyframes")))
+	{
+		return false;
+	}
+	if (LightKeyframeCount > 0)
 	{
 		VMDInfo.LightKeyframes.Reserve(LightKeyframeCount);
 		for (uint32 Index = 0; Index < LightKeyframeCount; ++Index)
@@ -317,7 +326,11 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	}
 
 	uint32 ShadowKeyframeCount = 0;
-	if (TryReadOptionalCount(Reader, ShadowKeyframeCount, 9, TEXT("ShadowKeyframes")))
+	if (!TryReadOptionalCount(Reader, ShadowKeyframeCount, 9, TEXT("ShadowKeyframes")))
+	{
+		return false;
+	}
+	if (ShadowKeyframeCount > 0)
 	{
 		VMDInfo.ShadowKeyframes.Reserve(ShadowKeyframeCount);
 		for (uint32 Index = 0; Index < ShadowKeyframeCount; ++Index)
@@ -335,7 +348,11 @@ bool TVMDParser::ParseVMDFile(const FString& FilePath)
 	}
 
 	uint32 IKGroupCount = 0;
-	if (TryReadOptionalCount(Reader, IKGroupCount, 9, TEXT("IKKeyframes")))
+	if (!TryReadOptionalCount(Reader, IKGroupCount, 9, TEXT("IKKeyframes")))
+	{
+		return false;
+	}
+	if (IKGroupCount > 0)
 	{
 		VMDInfo.IKKeyframes.Reserve(IKGroupCount);
 		for (uint32 GroupIndex = 0; GroupIndex < IKGroupCount; ++GroupIndex)

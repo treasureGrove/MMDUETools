@@ -1,0 +1,30 @@
+// 舞台光带由世界几何和时间生成，不需要 UV 或配套纹理。
+struct TMMDStageSurface
+{
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 stage_color,
+                       float emissive_strength, float pulse_speed, float pulse_amount,
+                       float pattern_scale, float time_seconds, float stage_time, float use_stage_time,
+                       float3 stage_origin, float3 stage_right, float3 stage_forward, float3 stage_up)
+    {
+        float3 stage_offset = LWCToFloat(Parameters.AbsoluteWorldPosition) - stage_origin;
+        // 所有 ISM 分组共享舞台逆变换，旋转、平移和缩放后光带仍贴着舞台。
+        float3 local_pos = float3(dot(stage_offset, stage_right), dot(stage_offset, stage_forward), dot(stage_offset, stage_up));
+        float animation_time = lerp(time_seconds, stage_time, saturate(use_stage_time));
+        float radial_distance = length(local_pos.xy);
+        float phase = radial_distance * max(pattern_scale, 0.0001)
+                    + local_pos.z * max(pattern_scale, 0.0001) * 0.7
+                    - animation_time * max(pulse_speed, 0.0) * 6.2831853;
+        float wave = pow(saturate(sin(phase) * 0.5 + 0.5), 8.0);
+        float grille = pow(saturate(sin(local_pos.x * max(pattern_scale, 0.0001) * 2.0
+                                       - animation_time * max(pulse_speed, 0.0) * 3.14159265) * 0.5 + 0.5), 12.0);
+        wave = lerp(wave, max(wave, grille), 0.3);
+        float pulse = sin(animation_time * max(pulse_speed, 0.0) * 2.0943951) * 0.12 + 0.88;
+        float pattern = lerp(1.0, (0.35 + wave * 0.65) * pulse, saturate(pulse_amount));
+        return max(stage_color, 0.0) * max(emissive_strength, 0.0) * pattern;
+    }
+};
+
+TMMDStageSurface shader;
+return shader.OutputColor(Parameters, stage_color, emissive_strength, pulse_speed,
+                          pulse_amount, pattern_scale, time_seconds, stage_time, use_stage_time,
+                          stage_origin, stage_right, stage_forward, stage_up);

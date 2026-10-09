@@ -1,0 +1,299 @@
+// MMDStandardCore.ush
+// MMDStandard 系列共享工具库（struct TMMDStandardLight）。
+// 自包含：不 include Core/TMMDShader 下任何文件，与用户维护的风格化 shader 完全解耦。
+// LightDataRT 布局与级联阴影逻辑对齐当前插件写入端（UMMDAnimeLightDataSubsystem / UMMDShadowMapSubsystem）：
+//   第 0 行 y=0：16 灯 × 4 texel（P=位置/类型、C=颜色/强度、D=方向/半径、T=附加）。
+//   第 1 行 y=1：级联 0..3 每级 4 texel（texel16=相机位/Valid、texel17=相机前向），texel(0..1,1)=阴影相机基。
+struct TMMDStandardLight
+{
+    //-----------------------通用数学-----------------------
+    float Luminance(float3 color)
+    {
+        return dot(color, float3(0.299, 0.587, 0.114));
+    }
+
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001 ? value * rsqrt(length_squared) : fallback;
+    }
+    //-----------------------通用数学-----------------------
+
+    //-----------------------灯光采样-----------------------
+    // 采样 LightDataRT 第 0 行的一盏灯（每灯 4 texel）。
+    void SampleLight(Texture2D light_data_tex, SamplerState light_data_tex_sampler, int light_index,
+                     out float4 light_pos, out float4 light_color, out float4 light_dir, out float4 light_extra)
+    {
+        static const float tex_width = 64.0; // MaxLights(16) * 4
+        light_pos = Texture2DSample(light_data_tex, light_data_tex_sampler, float2((light_index * 4.0 + 0.5) / tex_width, 0.25));
+        light_color = Texture2DSample(light_data_tex, light_data_tex_sampler, float2((light_index * 4.0 + 1.5) / tex_width, 0.25));
+        light_dir = Texture2DSample(light_data_tex, light_data_tex_sampler, float2((light_index * 4.0 + 2.5) / tex_width, 0.25));
+        light_extra = Texture2DSample(light_data_tex, light_data_tex_sampler, float2((light_index * 4.0 + 3.5) / tex_width, 0.25));
+    }
+
+    // 单灯方向 L（指向光源）+ 衰减 atten。类型：P.w <1.5 点光、<2.5 聚光、<3.5 平行光、否则面光。
+    void LightParams(float4 light_pos, float4 light_dir, float4 light_extra, float3 world_pos,
+                     out float3 to_light_direction, out float atten)
+    {
+        atten = 1.0;
+        to_light_direction = float3(0.0, 0.0, 1.0);
+
+        if (light_pos.w < 1.5) // 点光
+        {
+            float3 to_light = light_pos.xyz - world_pos;
+            float dist = length(to_light);
+            to_light_direction = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
+        }
+        else if (light_pos.w < 2.5) // 聚光
+        {
+            float3 to_light = light_pos.xyz - world_pos;
+            float dist = length(to_light);
+            to_light_direction = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
+            atten *= smoothstep(light_extra.y, light_extra.x, dot(-to_light_direction, light_dir.xyz));
+        }
+        else if (light_pos.w < 3.5) // 平行光
+        {
+            to_light_direction = -SafeNormalize(light_dir.xyz, float3(0.0, 0.0, -1.0));
+        }
+        else // 矩形/面光
+        {
+            float3 to_light = light_pos.xyz - world_pos;
+            float dist = length(to_light);
+            to_light_direction = to_light / max(dist, 0.0001);
+            atten = 1.0 - saturate(dist / max(light_dir.w, 0.001));
+            atten *= smoothstep(0.0, 0.25, dot(-to_light_direction, light_dir.xyz));
+        }
+    }
+
+    // 找主光：优先平行光里强度最高者，否则任意灯里强度最高者。
+    // 输出主光方向（指向光源）、颜色（含强度的 1/π 归一）、其余灯索引掩码由调用方自行跳过主光。
+    void GetMainLight(Texture2D light_data_tex, SamplerState light_data_tex_sampler, float3 world_pos,
+                      out float3 main_light_direction, out float3 main_light_color, out int main_light_index)
+    {
+        main_light_direction = normalize(float3(0.35, -0.45, 0.82)) * -1.0;
+        main_light_color = float3(1.0, 1.0, 1.0);
+        main_light_index = -1;
+
+        static const int max_lights = 16;
+        float best_score = -1.0;
+        [unroll] for (int light_index = 0; light_index < max_lights; ++light_index)
+        {
+            float4 light_pos, light_color, light_dir, light_extra;
+            SampleLight(light_data_tex, light_data_tex_sampler, light_index, light_pos, light_color, light_dir, light_extra);
+            if (light_pos.w < 0.5)
+                continue;
+
+            float3 to_light_direction;
+            float atten;
+            LightParams(light_pos, light_dir, light_extra, world_pos, to_light_direction, atten);
+            float score = light_color.w * atten * (light_pos.w >= 2.5 && light_pos.w < 3.5 ? 2.0 : 1.0);
+            if (score > best_score)
+            {
+                best_score = score;
+                main_light_direction = to_light_direction;
+                main_light_color = light_color.rgb * (light_color.w / 3.14159265);
+                main_light_index = light_index;
+            }
+        }
+        if (main_light_index < 0)
+        {
+            // 无灯兜底：固定头顶光，保证模型可见。
+            main_light_direction = normalize(float3(0.3, 0.4, 0.9));
+            main_light_color = float3(0.9, 0.9, 0.9);
+        }
+    }
+    //-----------------------灯光采样-----------------------
+
+    //-----------------------Toon Ramp-----------------------
+    // MMD toon ramp：toon_tex 为 256×1 灰度渐变，u = Half-Lambert。
+    // toon_use_texture <= 0 或需要兜底时用程序化 pow 曲线近似共享 toon01。
+    float3 SampleToonRamp(Texture2D toon_tex, SamplerState toon_tex_sampler, float toon_use_texture, float n_dot_l)
+    {
+        float half_lambert = saturate(n_dot_l * 0.5 + 0.5);
+        if (toon_use_texture > 0.5)
+        {
+            float3 ramp_color = Texture2DSample(toon_tex, toon_tex_sampler, float2(half_lambert, 0.5)).rgb;
+            return ramp_color;
+        }
+        return saturate(pow(half_lambert, 1.35)).xxx;
+    }
+    //-----------------------Toon Ramp-----------------------
+
+    //-----------------------Sphere / Matcap-----------------------
+    // MMD sphere 贴图：视图空间法线 xy → uv。
+    // sphere_mode：0=Off、1=乘算、2=加算、3=副画面(matcap)。PMX 原生语义。
+    float3 SampleSphereColor(Texture2D sphere_tex, SamplerState sphere_tex_sampler,
+                             float3 world_normal, float3 view_dir, float sphere_mode)
+    {
+        if (sphere_mode < 0.5)
+            return float3(1.0, 1.0, 1.0);
+
+        // 视图空间法线：以视线构建正交基（不依赖切线，全模型通用）。
+        float3 forward_axis = -view_dir;
+        float3 up_axis = abs(forward_axis.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+        float3 right_axis = SafeNormalize(cross(up_axis, forward_axis), float3(1.0, 0.0, 0.0));
+        up_axis = cross(forward_axis, right_axis);
+        float2 sphere_uv = float2(0.5 + dot(world_normal, right_axis) * 0.5,
+                                  0.5 - dot(world_normal, up_axis) * 0.5);
+        return Texture2DSample(sphere_tex, sphere_tex_sampler, sphere_uv).rgb;
+    }
+    //-----------------------Sphere / Matcap-----------------------
+
+    //-----------------------级联阴影-----------------------
+    // 对四个比较结果做双线性插值，等价于硬件 comparison sampler 的线性 PCF。
+    float ShadowCompareBilinear(Texture2D shadow_map, int cascade_index, float2 local_uv, float pixel_depth, float bias)
+    {
+        uint atlas_width;
+        uint atlas_height;
+        shadow_map.GetDimensions(atlas_width, atlas_height);
+        int cascade_resolution = max((int)atlas_width / 2, 1);
+        int2 cascade_offset = int2((cascade_index & 1) * cascade_resolution,
+                                   (cascade_index >> 1) * cascade_resolution);
+
+        float2 texel_position = local_uv * cascade_resolution - 0.5;
+        int2 base_texel = int2(floor(texel_position));
+        float2 blend = frac(texel_position);
+        int2 p00 = min(max(base_texel, int2(0, 0)), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 p10 = min(p00 + int2(1, 0), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 p01 = min(p00 + int2(0, 1), int2(cascade_resolution - 1, cascade_resolution - 1));
+        int2 p11 = min(p00 + int2(1, 1), int2(cascade_resolution - 1, cascade_resolution - 1));
+
+        float c00 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p00, 0)).r + bias);
+        float c10 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p10, 0)).r + bias);
+        float c01 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p01, 0)).r + bias);
+        float c11 = step(pixel_depth, shadow_map.Load(int3(cascade_offset + p11, 0)).r + bias);
+        return lerp(lerp(c00, c10, blend.x), lerp(c01, c11, blend.x), blend.y);
+    }
+
+    // 3x3 tent PCF。
+    void SampleShadowCascade(Texture2D shadow_map, int cascade_index,
+                             float3 world_pos, float3 world_normal,
+                             float4 data_0, float4 data_1, float4 data_2, float4 data_3,
+                             float additional_bias, out float shadow, out float valid)
+    {
+        shadow = 1.0;
+        valid = 0.0;
+        if (data_0.w <= 0.0)
+            return;
+
+        uint atlas_width;
+        uint atlas_height;
+        shadow_map.GetDimensions(atlas_width, atlas_height);
+        float cascade_resolution = max((float)atlas_width * 0.5, 1.0);
+
+        float3 light_direction = -normalize(data_3.xyz);
+        float n_dot_l = saturate(dot(world_normal, light_direction));
+        float3 biased_world_pos = world_pos + world_normal * data_2.w * (1.0 - n_dot_l);
+        float3 to_pixel = biased_world_pos - data_0.xyz;
+        float2 local_uv = float2(dot(to_pixel, data_1.xyz) + 0.5,
+                                 0.5 - dot(to_pixel, data_2.xyz));
+        float pixel_depth = dot(to_pixel, data_3.xyz);
+
+        float border = 2.5 / cascade_resolution;
+        if (local_uv.x < border || local_uv.x > 1.0 - border ||
+            local_uv.y < border || local_uv.y > 1.0 - border ||
+            pixel_depth < 0.0 || pixel_depth > data_0.w)
+            return;
+
+        static const float2 tent_offsets[9] =
+            {
+                float2(-1, -1), float2(0, -1), float2(1, -1),
+                float2(-1, 0), float2(0, 0), float2(1, 0),
+                float2(-1, 1), float2(0, 1), float2(1, 1)};
+        static const float tent_weights[9] =
+            {
+                1, 2, 1,
+                2, 4, 2,
+                1, 2, 1};
+
+        const float filter_radius = 1.35;
+        float accumulated = 0.0;
+        [unroll] for (int tap_index = 0; tap_index < 9; ++tap_index)
+        {
+            float2 tap_uv = local_uv + tent_offsets[tap_index] * (filter_radius / cascade_resolution);
+            accumulated += ShadowCompareBilinear(
+                               shadow_map, cascade_index, tap_uv, pixel_depth, data_1.w + additional_bias) *
+                           tent_weights[tap_index];
+        }
+        shadow = accumulated * (1.0 / 16.0);
+        valid = 1.0;
+    }
+
+    // 场景阴影入口：读 LightDataRT 第 1 行级联数据，四级级联 + 交叉淡化。
+    float SampleMMDShadow(Texture2D light_data_tex, SamplerState light_data_tex_sampler,
+                          Texture2D shadow_map, SamplerState shadow_map_sampler,
+                          FMaterialPixelParameters Parameters, float additional_bias)
+    {
+        float4 camera_position = light_data_tex.Load(int3(16, 1, 0));
+        float4 camera_forward = light_data_tex.Load(int3(17, 1, 0));
+        if (camera_forward.w < 0.5)
+            return 1.0;
+
+        const float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        const float3 world_normal = normalize((float3)Parameters.TangentToWorld[2]);
+        const float view_distance = max(dot(world_pos - camera_position.xyz, camera_forward.xyz), 0.0);
+
+        [unroll] for (int cascade_index = 0; cascade_index < 4; ++cascade_index)
+        {
+            int base_index = cascade_index * 4;
+            float4 data_0 = light_data_tex.Load(int3(base_index + 0, 1, 0));
+            float4 data_1 = light_data_tex.Load(int3(base_index + 1, 1, 0));
+            float4 data_2 = light_data_tex.Load(int3(base_index + 2, 1, 0));
+            float4 data_3 = light_data_tex.Load(int3(base_index + 3, 1, 0));
+            if (view_distance > data_3.w && cascade_index < 3)
+                continue;
+
+            float current_shadow;
+            float current_valid;
+            SampleShadowCascade(shadow_map, cascade_index, world_pos, world_normal,
+                                data_0, data_1, data_2, data_3, additional_bias,
+                                current_shadow, current_valid);
+            if (current_valid < 0.5)
+                continue;
+
+            if (cascade_index < 3)
+            {
+                float previous_split = cascade_index == 0
+                                           ? 0.0
+                                           : light_data_tex.Load(int3(base_index - 1, 1, 0)).w;
+                float fade_start = lerp(previous_split, data_3.w, 0.90);
+                float cascade_blend = saturate((view_distance - fade_start) / max(data_3.w - fade_start, 1.0));
+                if (cascade_blend > 0.0)
+                {
+                    float4 next_0 = light_data_tex.Load(int3(base_index + 4, 1, 0));
+                    float4 next_1 = light_data_tex.Load(int3(base_index + 5, 1, 0));
+                    float4 next_2 = light_data_tex.Load(int3(base_index + 6, 1, 0));
+                    float4 next_3 = light_data_tex.Load(int3(base_index + 7, 1, 0));
+                    float next_shadow;
+                    float next_valid;
+                    SampleShadowCascade(shadow_map, cascade_index + 1, world_pos, world_normal,
+                                        next_0, next_1, next_2, next_3, additional_bias,
+                                        next_shadow, next_valid);
+                    if (next_valid >= 0.5)
+                        current_shadow = lerp(current_shadow, next_shadow, cascade_blend);
+                }
+            }
+            return current_shadow;
+        }
+        return 1.0;
+    }
+    //-----------------------级联阴影-----------------------
+
+    //-----------------------天空环境-----------------------
+    float3 SkyAmbient(float3 world_normal)
+    {
+        float4 nrm_v = float4(world_normal, 1.0);
+        float3 i0 = float3(dot(View.SkyIrradianceEnvironmentMap[0], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[1], nrm_v),
+                           dot(View.SkyIrradianceEnvironmentMap[2], nrm_v));
+        float4 vb = nrm_v.xyzz * nrm_v.yzzx;
+        float3 i1 = float3(dot(View.SkyIrradianceEnvironmentMap[3], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[4], vb),
+                           dot(View.SkyIrradianceEnvironmentMap[5], vb));
+        float vc = nrm_v.x * nrm_v.x - nrm_v.y * nrm_v.y;
+        return max(float3(0, 0, 0), i0 + i1 + View.SkyIrradianceEnvironmentMap[6].xyz * vc);
+    }
+    //-----------------------天空环境-----------------------
+};

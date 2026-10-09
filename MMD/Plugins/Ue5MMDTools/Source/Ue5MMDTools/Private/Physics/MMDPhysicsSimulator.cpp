@@ -124,7 +124,21 @@ bool FMMDPhysicsSimulator::InitializeFromPMX(const TArray<FMMDPhysicsRigidBodyDa
 {
     if(!InSkelComp){ UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: SkeletalMeshComponent null")); return false; }
     Shutdown();
+    for (const FMMDPhysicsRigidBodyData& Rigid : SaveRigid)
+    {
+        if (Rigid.PhysicsMode < 0 || Rigid.PhysicsMode > 2)
+        {
+            UE_LOG(LogTemp, Error, TEXT("InitializeFromPMX failed: invalid PhysicsMode %d"), Rigid.PhysicsMode);
+            return false;
+        }
+    }
     OwnerSkelComp=InSkelComp;
+    // 无刚体是合法模型，不需要创建 Bullet 世界。
+    if (SaveRigid.IsEmpty())
+    {
+        bInitialized = true;
+        return true;
+    }
     InitializeBulletWorld();
     InitializeRigidBody(SaveRigid);
     InitializeJoints(SaveJoint);
@@ -161,8 +175,6 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBody
     if(!DynamicsWorld) return;
     if (SaveRigid.Num() <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
-		checkf(false, TEXT("PMXData.ModelRigids is empty!"));
         return;
     }
     if(BulletRigidsRuntime.Num()>0)
@@ -283,8 +295,10 @@ void FMMDPhysicsSimulator::InitializeRigidBody(const TArray<FMMDPhysicsRigidBody
             break;
 
         default:
-            UE_LOG(LogTemp, Error, TEXT("InitializeRigidBody: Unknown PhysicsMode %d, defaulting to Physics (1)"), Rigid.PhysicsMode);
-            break;
+            UE_LOG(LogTemp, Error, TEXT("InitializeRigidBody: invalid PhysicsMode %d"), Rigid.PhysicsMode);
+            delete NewRigidBody.MotionState;
+            delete NewRigidBody.Shape;
+            return;
         }
         // 碰撞组与掩码
         const int BulletGroup = 1 << Rigid.CollisionGroup;
@@ -304,8 +318,6 @@ void FMMDPhysicsSimulator::InitializeJoints(const TArray<FMMDPhysicsJointData>& 
 {
     if (SaveJoint.Num() <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("InitializeRigidBody: No rigid bodies in PMX data, skipping initialization"));
-		checkf(false, TEXT("PMXData.ModelJoints is empty!"));
         return;
     }
     for (const FMMDPhysicsJointData& Joint : SaveJoint) {

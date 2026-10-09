@@ -52,11 +52,11 @@ struct FPMXVertex
 // - textureIndex (textureIndexSize) // main texture, -1 if none
 // - sphereTextureIndex (textureIndexSize) // -1 if none
 // - uint8 sphereMode // 0=Off, 1=Mul, 2=Add, 3=SubTex
-// - uint8 useSharedToon // 0=use common toonXX, 1=use texture index
-// if useSharedToon==0:
-// - uint8 toonNumber // 0..9 -> toon01..toon10 (engine-side mapping)
-// else:
-// - toonTextureIndex (textureIndexSize)
+    // - uint8 useSharedToon // 1=use common toonXX (byte 0..9 -> toon01..toon10), 0=use texture index
+    // if useSharedToon==1:
+    // - uint8 toonNumber // 0..9 -> toon01..toon10 (engine-side mapping)
+    // else:
+    // - toonTextureIndex (textureIndexSize)
 // - string memo // material note
 // - int32 faceIndexCount // number of indices this material covers (submesh size)
 struct FPMXMaterial
@@ -372,11 +372,12 @@ struct FPMXJoint
 // - nameJP (string)
 // - nameEN (string)
 // - uint8 shapeType // 0=TriMesh, 1=Rope, etc.
-// - int32 materialIndex // target material
+// - materialIndex (materialIndexSize) // target material
 // - uint8 group
 // - uint16 collisionMask
 // - uint8 flags // soft body flags
-// - int32 bLinkDistance, clusterCount, totalMass, margin, aeroModel, etc. // 多个 sim 参数（按规范顺序读取）
+// - int32 bLinkDistance, clusterCount; float totalMass, margin; int32 aeroModel
+// - float config[12], cluster[6]; int32 iterations[4]; float stiffness[3]
 // - int32 anchorCount
 // - repeat anchorCount:
 // - rigidIndex (rigidIndexSize)
@@ -402,30 +403,30 @@ struct FPMXSoftBody
     uint8 Flags = 0;
     // 多个 sim 参数（按规范顺序读取）
     int32 BLinkDistance = 0;
-    int32 ClusterCount;
-    int32 TotalMass=0;
-    int32 Margin=0;
+    int32 ClusterCount = 0;
+    float TotalMass=0.0f;
+    float Margin=0.0f;
     int32 AeroModel=0;
 
-    int32 VCF=0;//Velocities Correction Factor - 速度修正因子
-    int32 DP=0;//Damping Parameter - 阻尼参数
-    int32 DG=0;//Drag Coefficient - 拖曳系数
-    int32 LF=0;//Lift Force - 升力
-    int32 PR=0;//Pressure - 压力
-    int32 VC=0;//Volume Conservation - 体积守恒
-    int32 DF=0;//Dynamic Friction - 动态摩擦
-    int32 MT=0;//Pose Matching - 姿态匹配
-    int32 CHR=0;//Rigid Contact Hardness - 与刚体碰撞硬度
-    int32 KHR=0;//Kinetic Contact Hardness - 动态碰撞硬度
-    int32 SHR=0;//Soft Contact Hardness - 与柔性体碰撞硬度
-    int32 AHR=0;//Anchor Hardness - 与锚点碰撞硬度
+    float VCF=0.0f;//Velocities Correction Factor - 速度修正因子
+    float DP=0.0f;//Damping Parameter - 阻尼参数
+    float DG=0.0f;//Drag Coefficient - 拖曳系数
+    float LF=0.0f;//Lift Force - 升力
+    float PR=0.0f;//Pressure - 压力
+    float VC=0.0f;//Volume Conservation - 体积守恒
+    float DF=0.0f;//Dynamic Friction - 动态摩擦
+    float MT=0.0f;//Pose Matching - 姿态匹配
+    float CHR=0.0f;//Rigid Contact Hardness - 与刚体碰撞硬度
+    float KHR=0.0f;//Kinetic Contact Hardness - 动态碰撞硬度
+    float SHR=0.0f;//Soft Contact Hardness - 与柔性体碰撞硬度
+    float AHR=0.0f;//Anchor Hardness - 与锚点碰撞硬度
 
-    int32 SRHR_CL=0;//Soft vs Rigid Hardness (Cluster) - 柔性体与刚体碰撞硬度（Cluster）
-    int32 SKHR_CL=0;//Soft vs Kinetic Hardness (Cluster) - 柔性体与动态碰撞硬度（Cluster）
-    int32 SSHR_CL=0;//Soft vs Soft Hardness (Cluster) - 柔性体与柔性体碰撞硬度（Cluster）
-    int32 SR_SPLT_CL=0;//Soft vs Rigid Impulse Splitting (Cluster) - 柔性体与刚体冲量分割（Cluster）
-    int32 SK_SPLT_CL=0;//Soft vs Kinetic Impulse Splitting (Cluster) - 柔性体与动态冲量分割（Cluster）
-    int32 SS_SPLT_CL=0;//Soft vs Soft Impulse Splitting (Cluster) - 柔性体与柔性体冲量分割（Cluster）
+    float SRHR_CL=0.0f;//Soft vs Rigid Hardness (Cluster) - 柔性体与刚体碰撞硬度（Cluster）
+    float SKHR_CL=0.0f;//Soft vs Kinetic Hardness (Cluster) - 柔性体与动态碰撞硬度（Cluster）
+    float SSHR_CL=0.0f;//Soft vs Soft Hardness (Cluster) - 柔性体与柔性体碰撞硬度（Cluster）
+    float SR_SPLT_CL=0.0f;//Soft vs Rigid Impulse Splitting (Cluster) - 柔性体与刚体冲量分割（Cluster）
+    float SK_SPLT_CL=0.0f;//Soft vs Kinetic Impulse Splitting (Cluster) - 柔性体与动态冲量分割（Cluster）
+    float SS_SPLT_CL=0.0f;//Soft vs Soft Impulse Splitting (Cluster) - 柔性体与柔性体冲量分割（Cluster）
 
     int32 V_IT=0;//Velocities Iterations - 速度迭代
     int32 P_IT=0;//Positions Iterations - 位置迭代
