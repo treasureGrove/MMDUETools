@@ -53,3 +53,10 @@ This repository uses the following routing rules for any future AI/LLM task sele
 
 - Do not use Claude Fable 5, GPT-5.6 Sol, or Claude Opus for simple fixes, formatting, comments, or small functions.
 - Prefer DeepSeek V4 Pro unless the task clearly needs higher reasoning depth, architecture judgment, or risk review.
+
+## 修改记录与截图归档
+
+- 每批功能、修复、资源或配置修改完成时，同步更新 `Plugins/Ue5MMDTools/Docs/CHANGELOG.md`，记录日期、具体变化、验证结果和必要限制。
+- 渲染修改归档少量代表性的实际引擎截图到 `Plugins/Ue5MMDTools/Docs/Screenshots/<日期>-<批次>/`，通过 Markdown 相对链接展示，记录捕获日期与来源。
+- 引用以前的验证或截图时注明真实日期，不能写成刚重新测试；生成式目标效果图与引擎实拍分别标注。
+- 只提交必要的截图和来源摘要，不提交整个 Saved、构建产物或测试角色资产。

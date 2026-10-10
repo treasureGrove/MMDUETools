@@ -1,0 +1,77 @@
+{
+  "archived_on": "2026-10-10",
+  "baseline_commit": "add91e1d49097d2b03b394a4d04971a78a84e6ef",
+  "note": "原始引擎 PNG；未改图，未在归档日重新执行渲染。source 相对 MMD 项目目录。",
+  "screenshots": [
+    {
+      "file": "sakura_stage.png",
+      "source": "Saved/BackgroundValidation/SakuraDetailV5/screenshots/sakura_theater_hero.png",
+      "render_path": "Editor SceneCapture",
+      "captured_on": "2026-10-09",
+      "bytes": 1540127,
+      "width": 1280,
+      "height": 720,
+      "sha256": "aeca76a5d953d26ad65edbd7699ebcbb7784691a362a11ddb9da043f98e1c833"
+    },
+    {
+      "file": "character_body.png",
+      "source": "Saved/BackgroundValidation/RuntimePackageSakura/screenshots/runtime_reference_genshin_body.png",
+      "render_path": "Packaged GameViewport",
+      "captured_on": "2026-10-09",
+      "bytes": 1515076,
+      "width": 1280,
+      "height": 720,
+      "sha256": "f985e9de246427c286bb4502088d7c24cb6f4acb7b5487e2da8fd6e84affe815"
+    },
+    {
+      "file": "face_before.png",
+      "source": "Saved/BackgroundValidation/SakuraDetailV5/before/face.png",
+      "render_path": "Packaged GameViewport (before V2 detail/outline)",
+      "captured_on": "2026-10-09",
+      "bytes": 1088077,
+      "width": 1280,
+      "height": 720,
+      "sha256": "697cd0ff27424fe81538050c1a44599d7621b284af7018ca1f2b181d84781d76"
+    },
+    {
+      "file": "face_after.png",
+      "source": "Saved/BackgroundValidation/RuntimePackageSakura/screenshots/runtime_reference_genshin_face.png",
+      "render_path": "Packaged GameViewport",
+      "captured_on": "2026-10-09",
+      "bytes": 1075864,
+      "width": 1280,
+      "height": 720,
+      "sha256": "9f30ce36a67b9d7e57ed61c24fb9655265a933eb1bf2aa2c111ee6a6ef5f4868"
+    },
+    {
+      "file": "cloth_before.png",
+      "source": "Saved/BackgroundValidation/SakuraDetailV5/before/cloth.png",
+      "render_path": "Packaged GameViewport (before V2 detail/outline)",
+      "captured_on": "2026-10-09",
+      "bytes": 1115817,
+      "width": 1280,
+      "height": 720,
+      "sha256": "ab2231adadf7a63f004cec91ba8db51457c94427fe6229d1769ce330dcad104c"
+    },
+    {
+      "file": "cloth_after.png",
+      "source": "Saved/BackgroundValidation/RuntimePackageSakura/screenshots/runtime_reference_genshin_cloth.png",
+      "render_path": "Packaged GameViewport",
+      "captured_on": "2026-10-09",
+      "bytes": 1098851,
+      "width": 1280,
+      "height": 720,
+      "sha256": "b8e94619b5c03b2be79ee9d355055e6462084f8582ec8c965a1bbbab11aaa18f"
+    },
+    {
+      "file": "face_outline_off.png",
+      "source": "Saved/BackgroundValidation/RuntimePackageSakura/screenshots/runtime_character_face_outline_off.png",
+      "render_path": "Packaged GameViewport",
+      "captured_on": "2026-10-09",
+      "bytes": 1080843,
+      "width": 1280,
+      "height": 720,
+      "sha256": "886bd32ad823f0e28582e244cae14f8cfb3d83af52ec111fb52fb7dd1c79e157"
+    }
+  ]
+}

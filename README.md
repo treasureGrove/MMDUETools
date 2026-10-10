@@ -137,6 +137,8 @@ YourProject/
 
 完整用法见[舞台与角色渲染预设说明](MMD/Plugins/Ue5MMDTools/Docs/STAGE_RENDER_PRESETS.md)。后台生成及验证可运行 `MMD/Scripts/BuildStagePresetsBackground.ps1`；实际打包主视图和细节开关对照由 `MMD/Scripts/ValidateRuntimePackageBackground.ps1 -Stage All -IncludeStagePresets -CaptureVisuals -VisualStage SakuraTheater` 生成，均需指定 `-EngineRoot`。验证结果与画廊保存在 `MMD/Saved/BackgroundValidation`，无需开启编辑器前台。
 
+每批改动记录在[修改记录](MMD/Plugins/Ue5MMDTools/Docs/CHANGELOG.md)，一期画面与法线/描边对照见[实际引擎截图](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-09-phase-one/README.md)。
+
 ## 当前限制
 
 - Material Morph 尚未完整驱动 UE 材质参数。
