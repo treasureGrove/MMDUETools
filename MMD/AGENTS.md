@@ -1,21 +1,58 @@
-# Codex / ChatGPT 执行约定
+# AI Model Routing
 
-## 模型与任务自主执行
+This repository uses the following routing rules for any future AI/LLM task selection.
 
-- 使用当前会话已配置的模型完成设计、实现、验证与审查，不再按任务等级或专业领域强制切换模型。
-- 不要求把编码交给其他模型，也不以成本优先表限制当前模型的工作。用户明确指定模型时遵循用户要求。
-- 已获得任务授权后，连续完成必要的读取、修改、构建、验证和交付；不要对范围内的普通操作反复请求确认。
-- 本节替代此前固定模型路由和普通推送二次确认的流程；上级 `AGENTS.md` 的 shader、通用性及项目技术约定继续适用。
+## Selection flow
 
-## Git 与远端分支
+1. Identify the task type and risk.
+2. Check special-domain rules first.
+3. Use the level table for normal coding work.
+4. If multiple models fit, choose the cheapest one that is still safe.
 
-- 在用户任务授权范围内，可自主创建或切换分支、提交、fetch、普通 pull 和 push，以及创建或更新远端分支。
-- 用户要求提交或上传当前工作时，默认使用用户原来的当前分支；仅在任务需要隔离或用户要求时另建分支。
-- 普通提交和非强制 push 无需额外等待用户确认；执行前核对分支、远端、提交范围与工作区，完成后核对远端 SHA 并报告。
-- 推送 refspec 必须字面写死、source 非空，一次只推一个 ref，禁止变量拼接。例：`git push origin refs/heads/feature/ue5.8-mainline:refs/heads/feature/ue5.8-mainline`。
-- 推共享分支前仍先备份当前 tip 到新的 `refs/backup/`，再执行 `git push --dry-run`；仅在目标和范围符合用户任务时真实推送。非快进或远端意外变化时停止，不用强制推送解决。
-- 仍禁止任何形式的本地或远端分支删除，包括空 source refspec、`push --delete`、`branch -d/-D`、`update-ref -d`、`symbolic-ref --delete`，以及 `push --mirror/--prune`。
-- 仍禁止 `--force` 和 `--force-with-lease`；不得覆盖其他人的修改、清理或删除用户 stash、擅自将无关工作纳入提交。
+## Level routing table
+
+| Level | Task characteristics | Model |
+|---|---|---|
+| Level 0 | Single-file, low-risk, no architecture impact | DeepSeek V4 Pro |
+| Level 1 | Bug fix, formatting, comments, small functions, clear scope | DeepSeek V4 Pro |
+| Level 2 | New feature, multi-file change, medium complexity | GLM-5.3 |
+| Level 3 | Complex engineering, multi-module, architecture impact, high risk | Claude Opus → Claude Fable 5 → GLM-5.3 → DeepSeek V4 Pro |
+| Level 4 | Critical architecture, hard to reverse, new technical direction | Claude Fable 5 → GPT-5.6 Sol → Claude Opus → GLM-5.3 → DeepSeek V4 Pro |
+
+## Special routing
+
+| Domain / task | Design / analysis | Implementation | Review |
+|---|---|---|---|
+| Rendering / Shader / HLSL / BRDF / Lighting / GPU / GBuffer / Deferred | GPT-5.6 Sol | DeepSeek V4 Pro | Claude Opus |
+| Unreal Engine architecture | Claude Fable 5 | GLM-5.3 | Claude Opus |
+| Unreal Engine bug fixing | Claude Opus | DeepSeek V4 Pro | Claude Opus |
+| Unity new systems | GLM-5.3 | GLM-5.3 | Claude Opus |
+| Unity bug fixing | DeepSeek V4 Pro | DeepSeek V4 Pro | Claude Opus |
+| Optimization / performance analysis | GPT-5.6 Sol | DeepSeek V4 Pro | Claude Opus |
+| Large document / paper analysis | Kimi K3 | Kimi K3 | Claude Opus |
+
+## Default priority order
+
+### Normal coding
+1. DeepSeek V4 Pro
+2. GLM-5.3
+3. Claude Opus
+4. Claude Fable 5
+
+### Architecture
+1. Claude Fable 5
+2. GPT-5.6 Sol
+3. Claude Opus
+
+### Debugging
+1. DeepSeek V4 Pro
+2. Claude Opus
+3. GPT-5.6 Sol
+
+## Cost control rules
+
+- Do not use Claude Fable 5, GPT-5.6 Sol, or Claude Opus for simple fixes, formatting, comments, or small functions.
+- Prefer DeepSeek V4 Pro unless the task clearly needs higher reasoning depth, architecture judgment, or risk review.
 
 ## 修改记录与截图归档
 
