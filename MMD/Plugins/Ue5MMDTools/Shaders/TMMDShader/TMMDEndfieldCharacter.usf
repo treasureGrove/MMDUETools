@@ -1,0 +1,484 @@
+// 终末地角色着色入口；按角色分路（皮肤/脸部/头发/布料/金属/眼球）复刻真实终末地光照结构。
+// 依据 Docs/ENDFIELD_RENDERING.md；参数命名对齐真实 HGRP/CharacterNPR 属性表。
+//
+// 通用性：只连 base_color 也能完整着色。SDF / DiffuseRamp / Stroke / CharacterMask /
+// SceneDepth 全部可选，由 UseSdfMap / UseRampMap / UseSceneDepthRim 显式开关；
+// 关闭或未连接时自动回退到几何程序化路径（半兰伯特 + 解析 toon 曲线 + 菲涅耳轮廓）。
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldLighting.ush"
+
+struct TMMDEndfieldRoleProfile
+{
+    float lambert_center;
+    float lambert_sharpness;
+    float ramp_second_band;
+    float direct_intensity;
+    float gi_intensity;
+    float rim_intensity;
+    float specular_power;
+    float specular_strength;
+    float aniso_power;
+    float aniso_threshold;
+    float aniso_intensity;
+    float3 aniso_color;
+    float sss_value;
+};
+
+struct TMMDEndfieldCharacter
+{
+    float3 SafeNormalize(float3 direction, float3 fallback_direction)
+    {
+        TMMDEndfieldLighting endfield;
+        return endfield.SafeNormalize(direction, fallback_direction);
+    }
+
+    float Luminance(float3 color)
+    {
+        TMMDEndfieldLighting endfield;
+        return endfield.Luminance(color);
+    }
+
+    float3 Saturation(float3 color, float amount)
+    {
+        return max(lerp(Luminance(color).xxx, color, clamp(amount, 0.0, 2.0)), 0.0);
+    }
+
+    // BlackLift 只抬升反射率；场景无辐射时不会变成自发光。
+    float3 ApplyBlackLift(float3 color, float black_lift)
+    {
+        float minimum_reflectance = clamp(black_lift, 0.0, 0.035);
+        float luminance = Luminance(color);
+        return luminance > 1e-5
+             ? color * max(luminance, minimum_reflectance) / luminance
+             : minimum_reflectance.xxx;
+    }
+
+    // role 同 EMMDMaterialRole：0 通用 / 1 皮肤与脸部 / 2 头发 / 3 布料 / 4 金属 / 5 眼球。
+    TMMDEndfieldRoleProfile GetRoleProfile(int role, float style_family)
+    {
+        TMMDEndfieldRoleProfile profile;
+        // 通用基线对齐真实参数默认值：_SceneShadowSharpness 0.1、
+        // _HalfLambertShadowCenter 0.5、_HalfLambertShadowSharpness 0.1。
+        profile.lambert_center = 0.5;
+        profile.lambert_sharpness = 0.10;
+        profile.ramp_second_band = 0.0;
+        profile.direct_intensity = 1.0;
+        profile.gi_intensity = 1.0;
+        profile.rim_intensity = 1.0;
+        profile.specular_power = 64.0;
+        profile.specular_strength = 0.0;
+        profile.aniso_power = 5.0;
+        profile.aniso_threshold = 0.995;
+        profile.aniso_intensity = 0.0;
+        profile.aniso_color = float3(1.0, 1.0, 1.0);
+        profile.sss_value = 0.0;
+
+        if (role == 1)
+        {
+            // 皮肤与脸部：真实 _Specular 1.0 / _Smoothness 0.5；SSS 默认关闭。
+            profile.specular_power = 48.0;
+            profile.specular_strength = 0.32;
+        }
+        else if (role == 2)
+        {
+            // 头发：真实 _AnisotropyValue 0.35 / _AnisotropyIntensity 1.0 / 第二层 0.4。
+            profile.aniso_intensity = 1.0;
+            profile.specular_power = 96.0;
+            profile.specular_strength = 0.28;
+        }
+        else if (role == 3)
+        {
+            // 布料：真实 _Specular 1.0，走通用 PBR；褶皱层次靠略软转折保留。
+            profile.lambert_center = 0.46;
+            profile.lambert_sharpness = 0.075;
+            profile.ramp_second_band = 0.04;
+            profile.specular_power = 32.0;
+            profile.specular_strength = 0.16;
+        }
+        else if (role == 4)
+        {
+            profile.specular_power = 160.0;
+            profile.specular_strength = 0.85;
+        }
+        else if (role == 5)
+        {
+            // 眼球：真实 _Specular 0 / _Smoothness 0.5，湿润反射为主。
+            profile.specular_power = 220.0;
+            profile.specular_strength = 0.55;
+            profile.rim_intensity = 0.5;
+        }
+
+        // 终末地风格族：压低 GI、保留硬转折，维持"与场景光分离"的外观。
+        TMMDEndfieldLighting endfield;
+        if (endfield.IsEndfieldFamily(style_family))
+        {
+            profile.gi_intensity *= 0.85;
+            profile.lambert_sharpness = max(profile.lambert_sharpness, 0.09);
+        }
+        return profile;
+    }
+
+    // 取主灯（平行光优先，其次最亮灯）。返回 false 表示无可用灯。
+    bool ResolveKeyLight(Texture2D light_data_tex, SamplerState light_data_texSampler, float3 world_pos,
+                         out float3 key_direction, out float3 key_radiance,
+                         out int key_index, out int active_light_count, out bool key_is_directional)
+    {
+        TMMDToonLight light;
+        key_direction = SafeNormalize(float3(-0.35, -0.55, 0.75), float3(0.0, 0.0, 1.0));
+        key_radiance = 0.0;
+        key_index = -1;
+        key_is_directional = false;
+
+        float shadow_quality;
+        light.ReadLightMetadata(light_data_tex, active_light_count, shadow_quality);
+        uint data_width;
+        uint data_height;
+        light_data_tex.GetDimensions(data_width, data_height);
+        active_light_count = min(active_light_count, min((int)data_width / 4, 16));
+
+        float key_power = 0.0;
+        [loop] for (int light_index = 0; light_index < active_light_count; ++light_index)
+        {
+            float4 light_pos;
+            float4 light_color;
+            float4 light_dir;
+            float4 light_extra;
+            light.SampleLight(light_data_tex, light_data_texSampler, light_index, light_pos, light_color, light_dir, light_extra);
+            if (light_pos.w < 0.5 || light_color.w <= 0.0) continue;
+            float3 L;
+            float atten;
+            light.LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+            float3 radiance = max(light_color.rgb, 0.0) * max(light_color.w, 0.0) * saturate(atten);
+            bool is_directional = light_pos.w >= 2.5 && light_pos.w < 3.5;
+            float candidate_power = is_directional ? light_color.w : Luminance(radiance);
+            if (Luminance(radiance) > 1e-5 && ((is_directional && !key_is_directional)
+                || (is_directional == key_is_directional && candidate_power > key_power)))
+            {
+                key_direction = SafeNormalize(L, key_direction);
+                key_radiance = radiance;
+                key_power = candidate_power;
+                key_index = light_index;
+                key_is_directional = is_directional;
+            }
+        }
+        return key_index >= 0;
+    }
+
+    // 从头部基自动推导脸部区域遮罩：正面 + 下颌以上 + 头部半径内。
+    // 替代原版手绘 _CustomMask 的 R 通道，无需配套贴图即可工作。
+    float ComputeFaceMask(float3 world_pos, float3 world_normal, float3 head_center, float head_radius,
+                          float3 head_forward, float3 head_right, float3 head_up)
+    {
+        if (head_radius <= 1e-3)
+            return 0.0;
+        TMMDEndfieldLighting endfield;
+        float3 offset = (world_pos - head_center) / head_radius;
+        float3 head_pos = float3(dot(offset, head_right), dot(offset, head_forward), dot(offset, head_up));
+        float front_mask = smoothstep(-0.08, 0.25, head_pos.y);
+        float chin_mask = smoothstep(-0.95, -0.62, head_pos.z);
+        float crown_mask = 1.0 - smoothstep(1.0, 1.3, head_pos.z);
+        float distance_mask = 1.0 - smoothstep(1.05, 1.55, length(head_pos));
+        float normal_mask = lerp(0.65, 1.0, smoothstep(-0.65, 0.25, dot(world_normal, head_forward)));
+        return front_mask * chin_mask * crown_mask * distance_mask * normal_mask;
+    }
+
+    // 脸部球面法线：消除鼻翼/眼窝的几何法线撕裂，让高光与受光更集中。
+    float3 ResolveFaceNormal(float3 world_pos, float3 world_normal, float3 head_center, float face_mask)
+    {
+        if (face_mask <= 1e-3)
+            return world_normal;
+        TMMDEndfieldLighting endfield;
+        float3 sphere_normal = endfield.SafeNormalize(world_pos - head_center, world_normal);
+        return endfield.SafeNormalize(lerp(world_normal, sphere_normal, face_mask * 0.75), world_normal);
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 base_color,
+                       Texture2D light_data_tex, SamplerState light_data_texSampler,
+                       Texture2D mmd_shadow_map, SamplerState mmd_shadow_mapSampler,
+                       Texture2D mat_cap, SamplerState mat_capSampler,
+                       float shadow_threshold, float shadow_softness, float3 shadow_tint,
+                       float ambient_strength, float light_scale, float specular_strength,
+                       float specular_power, float rim_strength, float rim_power,
+                       float toon_amount, float diffuse_wrap, float color_saturation,
+                       float shadow_saturation, float roughness, float3 specular_tint,
+                       float sphere_mode, float sphere_strength, float black_lift,
+                       float style_family, float material_role,
+                       float3 environment_reflection, float environment_specular_strength,
+                       float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+                       float scene_shadow_sharpness, float half_lambert_shadow_sharpness,
+                       float direct_lighting_intensity, float gi_intensity,
+                       float rim_intensity, float rim_width, float3 rim_color,
+                       float flip_sdf_threshold, float sdf_shadow_center, float sdf_sharpness,
+                       float anisotropy_value, float anisotropy_intensity, float anisotropy_direction,
+                       float anisotropic_hl_power, float anisotropic_hl_threshold,
+                       float anisotropic_hl_intensity, float3 anisotropic_hl_color,
+                       float sss_radius, float sss_value, float3 sss_color,
+                       float use_sdf_map, float use_ramp_map, float use_scene_depth_rim,
+                       float character_rim_mask, float face_occlusion,
+                       Texture2D diffuse_ramp_map, SamplerState diffuse_ramp_mapSampler,
+                       Texture2D sdf_map, SamplerState sdf_mapSampler,
+                       Texture2D scene_depth_tex, SamplerState scene_depth_texSampler)
+    {
+        TMMDToonLight light;
+        TMMDEndfieldLighting endfield;
+        const float endfield_pi = 3.14159265;
+
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = SafeNormalize((float3)Parameters.TangentToWorld[2] * Parameters.TwoSidedSign,
+                                           float3(0.0, 0.0, 1.0));
+        float3 view_dir = SafeNormalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos, world_normal);
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+
+        int role = endfield.ResolveRole(material_role);
+        TMMDEndfieldRoleProfile profile = GetRoleProfile(role, style_family);
+
+        float3 palette = Saturation(saturate(base_color), color_saturation);
+        palette = ApplyBlackLift(palette, black_lift);
+
+        // 头部几何基：缺失时依赖头部的效果全部自动退化，不影响其他分路。
+        float3 head_forward;
+        float3 head_right;
+        float3 head_up;
+        bool head_valid = endfield.PrepareHeadFrame(head_forward_ws, head_right_ws, head_position_radius,
+                                                   head_forward, head_right, head_up);
+        float face_mask = head_valid
+                        ? ComputeFaceMask(world_pos, world_normal, head_position_radius.xyz,
+                                          head_position_radius.w, head_forward, head_right, head_up)
+                        : 0.0;
+
+        float metallic = role == 4 ? 1.0 : 0.0;
+        float3 f0;
+        if (role == 5)
+            f0 = float3(0.025, 0.025, 0.025);
+        else if (role == 4)
+            f0 = clamp(palette * clamp(specular_tint, 0.0, 1.25), 0.04, 0.92);
+        else
+        {
+            float dielectric_f0 = role == 1 ? 0.028 : (role == 2 ? 0.046 : (role == 3 ? 0.025 : 0.04));
+            f0 = clamp(dielectric_f0 * clamp(specular_tint, 0.0, 1.25), 0.0, 0.08);
+        }
+
+        float3 key_direction;
+        float3 key_radiance;
+        int key_index;
+        int active_light_count;
+        bool key_is_directional;
+        bool has_key = ResolveKeyLight(light_data_tex, light_data_texSampler, world_pos,
+                                       key_direction, key_radiance, key_index,
+                                       active_light_count, key_is_directional);
+
+        uint metadata_width;
+        uint metadata_height;
+        light_data_tex.GetDimensions(metadata_width, metadata_height);
+        bool metadata_valid = false;
+        if (metadata_width >= 19 && metadata_height >= 2)
+        {
+            float4 metadata = light_data_tex.Load(int3(18, 1, 0));
+            metadata_valid = metadata.w >= 0.5 && metadata.x >= 0.0 && metadata.x <= 16.0;
+        }
+
+        float3 sky = max(light.SkyAmbient(world_normal) * max(View.SkyLightColor.rgb, 0.0), 0.0);
+        bool use_fallback = !has_key && !metadata_valid
+                         && Luminance(sky) < 1e-5 && Luminance(max(environment_reflection, 0.0)) < 1e-5;
+        if (use_fallback)
+        {
+            key_direction = SafeNormalize(float3(-0.35, -0.55, 0.75), float3(0.0, 0.0, 1.0));
+            key_radiance = float3(0.85, 0.85, 0.85) * endfield_pi * 0.25;
+        }
+
+        // 场景自投影仅主灯为平行光时可用（插件阴影基于平行光 CSM）。
+        float scene_shadow = (key_index == 0 && key_is_directional)
+                           ? light.SampleMMDCharacterShadow(Parameters, light_data_tex, light_data_texSampler,
+                                                           mmd_shadow_map, mmd_shadow_mapSampler, 0.20, 0.35)
+                           : 1.0;
+
+        // 皮肤与脸部使用球面法线参与受光，消除鼻翼灰块。
+        float3 shaded_normal = (role == 1 && face_mask > 1e-3)
+                             ? ResolveFaceNormal(world_pos, world_normal, head_position_radius.xyz, face_mask)
+                             : world_normal;
+        float shaded_n_dot_l = saturate(dot(shaded_normal, key_direction));
+        float n_dot_l = saturate(dot(world_normal, key_direction));
+
+        // --- 阴影合成：场景遮挡 / 半兰伯特 / 脸部 SDF 三段取 min ---
+        float lambert_center;
+        float lambert_sharpness;
+        endfield.GetShadowSharpness(role, shadow_threshold, shadow_softness,
+                                    half_lambert_shadow_sharpness, lambert_center, lambert_sharpness);
+        float lambert_shadow = endfield.ComposeLambertShadow(shaded_n_dot_l, lambert_center, lambert_sharpness);
+        float scene_shadow_hardened = endfield.SigmoidSharp(scene_shadow, 0.0, max(scene_shadow_sharpness, 0.01));
+        float shadow = saturate(min(scene_shadow_hardened, lambert_shadow));
+
+        // 脸部 SDF：需要头部基 + SDF 图 + 显式开关三者齐备，否则回退半兰伯特。
+        bool sdf_active = role == 1 && head_valid && use_sdf_map > 0.5;
+        if (sdf_active)
+        {
+            float sdf_shadow = endfield.FaceSdfShadow(key_direction, head_forward, head_right,
+                                                     Parameters.TexCoords[0], sdf_map, sdf_mapSampler,
+                                                     true, flip_sdf_threshold, sdf_shadow_center, sdf_sharpness);
+            if (sdf_shadow >= 0.0)
+                shadow = min(shadow, sdf_shadow);
+            else
+                sdf_active = false;
+        }
+
+        bool ramp_active = use_ramp_map > 0.5;
+        float3 ramp_color = endfield.SampleDiffuseRamp(diffuse_ramp_map, diffuse_ramp_mapSampler, shadow,
+                                                      ramp_active, profile.ramp_second_band);
+        float ramp_area = endfield.SampleRampArea(diffuse_ramp_map, diffuse_ramp_mapSampler, shadow, ramp_active);
+        // toon_amount 在完全通用与完整终末地表现之间插值。
+        ramp_color = lerp(1.0, ramp_color, saturate(toon_amount));
+        float toon_diffuse_scale = n_dot_l > 1e-5 ? min(shaded_n_dot_l / n_dot_l, 1.8) : 0.0;
+
+        // --- 直射高光 ---
+        float3 half_vector = SafeNormalize(key_direction + view_dir, view_dir);
+        float base_specular_power = clamp(specular_power, 1.0, 512.0);
+        float role_specular_power = max(base_specular_power * profile.specular_power / 64.0, 1.0);
+        float3 direct_specular = f0 * pow(saturate(dot(shaded_normal, half_vector)), role_specular_power);
+        if (role == 1 && face_mask > 1e-3)
+        {
+            // 脸部改用球面法线高光，形成鼻梁/嘴唇的集中亮点。
+            float3 face_specular = endfield.SphereSpecular(head_position_radius.xyz, world_pos, world_normal,
+                                                          view_dir, key_direction, f0, 0.85, 12.0, 0.20);
+            direct_specular = lerp(direct_specular, face_specular, face_mask);
+        }
+
+        // --- 各向异性高光：终末地头发的主导特征 ---
+        float3 anisotropic_color = 0.0;
+        if (role == 2)
+        {
+            float aniso_power = anisotropic_hl_power > 0.0 ? anisotropic_hl_power : profile.aniso_power;
+            float aniso_threshold = anisotropic_hl_threshold > 0.0 ? anisotropic_hl_threshold : profile.aniso_threshold;
+            float aniso_intensity = max(profile.aniso_intensity, anisotropic_hl_intensity);
+            float aniso = endfield.AnisotropicHighlight(world_normal, view_dir, key_direction,
+                                                       aniso_power, aniso_threshold, 0.06,
+                                                       1.0, endfield.AnisotropicViewFalloff(n_dot_v));
+            anisotropic_color = aniso * aniso_intensity * clamp(anisotropic_hl_color, 0.0, 4.0);
+            // 叠加 GDDR 双瓣：宽瓣提供整片光泽，窄瓣补发丝线。
+            anisotropic_color += endfield.AnisotropicGrazing(world_normal, view_dir, key_direction, f0,
+                                                            max(roughness, 0.30), anisotropy_direction,
+                                                            anisotropy_value, anisotropy_intensity);
+        }
+
+        // --- 皮肤透散：sss_value 为 0 时严格归零（与真实默认一致） ---
+        float3 scatter_color = 0.0;
+        if (role == 1 && sss_value > 1e-4)
+        {
+            scatter_color = endfield.SkinScatter(palette, key_radiance, shaded_n_dot_l,
+                                                clamp(sss_color, 0.0, 1.0), sss_radius, sss_value);
+        }
+
+        float3 direct = endfield.ComposeRoleDirect(role, key_radiance, scene_shadow,
+                                                   palette, ramp_color, ramp_area,
+                                                   direct_specular, profile.specular_strength,
+                                                   anisotropic_color, scatter_color, direct_lighting_intensity);
+
+        // 非主灯保留能量贡献，但不重复走 SDF 与球面法线。
+        if (direct_lighting_intensity > 1e-4)
+        {
+            [loop] for (int light_index = 0; light_index < active_light_count; ++light_index)
+            {
+                if (light_index == key_index) continue;
+                float4 light_pos;
+                float4 light_color;
+                float4 light_dir;
+                float4 light_extra;
+                light.SampleLight(light_data_tex, light_data_texSampler, light_index, light_pos, light_color, light_dir, light_extra);
+                if (light_pos.w < 0.5 || light_color.w <= 0.0) continue;
+                float3 L;
+                float atten;
+                light.LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+                float3 radiance = max(light_color.rgb, 0.0) * max(light_color.w, 0.0) * saturate(atten);
+                if (Luminance(radiance) <= 1e-6) continue;
+                float aux_shadow = endfield.ComposeLambertShadow(saturate(dot(world_normal, L)),
+                                                                lambert_center, lambert_sharpness);
+                float3 aux_ramp = lerp(1.0, endfield.SampleDiffuseRamp(diffuse_ramp_map, diffuse_ramp_mapSampler,
+                                                                      aux_shadow, ramp_active, profile.ramp_second_band),
+                                       saturate(toon_amount));
+                float3 aux_half = SafeNormalize(L + view_dir, view_dir);
+                float3 aux_specular = f0 * pow(saturate(dot(shaded_normal, aux_half)), role_specular_power);
+                direct += radiance * (palette * aux_ramp * (1.0 / endfield_pi)
+                        + aux_specular * profile.specular_strength * aux_shadow) * direct_lighting_intensity;
+            }
+        }
+
+        float3 color = direct;
+
+        // --- 环境：终末地特征是与场景光分离，GI 较低且乘 base_color ---
+        float3 gi_palette = metallic > 0.5 ? 0.0 : palette;
+        color += gi_palette * sky * clamp(ambient_strength, 0.0, 2.0) * profile.gi_intensity * gi_intensity;
+        color += max(environment_reflection, 0.0) * f0 * clamp(environment_specular_strength, 0.0, 2.0)
+               * clamp(specular_strength, 0.0, 1.25);
+
+        // --- 轮廓光：优先屏幕空间深度壳，退化时用几何菲涅耳 ---
+        float rim;
+        if (use_scene_depth_rim > 0.5)
+        {
+            rim = endfield.DepthRim(Parameters, world_normal, rim_width,
+                                    scene_depth_tex, scene_depth_texSampler, true);
+            // 深度壳在轮廓内侧为 0 属正常；用几何项补足描边外的柔光。
+            rim = max(rim, endfield.GeometricRim(world_normal, view_dir, rim_power) * 0.35);
+        }
+        else
+        {
+            rim = endfield.GeometricRim(world_normal, view_dir, rim_power);
+        }
+        // 脸部轮廓光由 SDF 阈值门控，只在逆光且面部朝前时出现。
+        if (role == 1 && head_valid && sdf_active)
+        {
+            float face_rim = endfield.FaceRim(view_dir, head_forward, character_rim_mask,
+                                             key_direction, head_right, sdf_shadow_center);
+            rim = lerp(rim, max(rim, face_rim), face_mask);
+        }
+        color += rim * clamp(rim_strength, 0.0, 0.5) * rim_intensity
+               * clamp(character_rim_mask, 0.0, 1.0)
+               * lerp(palette, f0, 0.35) * clamp(rim_color, 0.0, 4.0) * key_radiance * (1.0 / endfield_pi);
+
+        // 头发在脸上的自遮挡只压暗并去色，不改变其他分路。
+        if (role == 1 && face_occlusion > 1e-4)
+        {
+            float occlusion = saturate(face_occlusion);
+            color = lerp(color, color * 0.55, occlusion * 0.45);
+            color = lerp(color, max(color, 0.0) * 0.9, occlusion * 0.15);
+        }
+
+        // --- 可选 matcap ---
+        if (sphere_mode > 0.5 && sphere_strength > 0.0)
+        {
+            float3 sphere_color = saturate(light.SampleMatcap(world_normal, mat_cap, mat_capSampler));
+            float sphere_weight = clamp(sphere_strength, 0.0, role == 3 ? 0.06 : 0.20);
+            if (sphere_mode < 1.5)
+                color *= lerp(1.0, sphere_color, sphere_weight);
+            else
+                color += sphere_color * sphere_weight * palette
+                       * (sky + key_radiance * n_dot_l * scene_shadow / endfield_pi);
+        }
+
+        // 暗部保留色相，避免灰脸。
+        color = lerp(color, Saturation(color, shadow_saturation), saturate(1.0 - ramp_area) * 0.25);
+        return max(color, 0.0);
+    }
+};
+
+TMMDEndfieldCharacter shader;
+return shader.OutputColor(Parameters, base_color, light_data_tex, light_data_texSampler,
+                          mmd_shadow_map, mmd_shadow_mapSampler, mat_cap, mat_capSampler,
+                          shadow_threshold, shadow_softness, shadow_tint, ambient_strength,
+                          light_scale, specular_strength, specular_power, rim_strength, rim_power,
+                          toon_amount, diffuse_wrap, color_saturation, shadow_saturation,
+                          roughness, specular_tint, sphere_mode, sphere_strength, black_lift,
+                          style_family, material_role,
+                          environment_reflection, environment_specular_strength,
+                          head_forward_ws, head_right_ws, head_position_radius,
+                          scene_shadow_sharpness, half_lambert_shadow_sharpness,
+                          direct_lighting_intensity, gi_intensity,
+                          rim_intensity, rim_width, rim_color,
+                          flip_sdf_threshold, sdf_shadow_center, sdf_sharpness,
+                          anisotropy_value, anisotropy_intensity, anisotropy_direction,
+                          anisotropic_hl_power, anisotropic_hl_threshold,
+                          anisotropic_hl_intensity, anisotropic_hl_color,
+                          sss_radius, sss_value, sss_color,
+                          use_sdf_map, use_ramp_map, use_scene_depth_rim,
+                          character_rim_mask, face_occlusion,
+                          diffuse_ramp_map, diffuse_ramp_mapSampler,
+                          sdf_map, sdf_mapSampler,
+                          scene_depth_tex, scene_depth_texSampler);

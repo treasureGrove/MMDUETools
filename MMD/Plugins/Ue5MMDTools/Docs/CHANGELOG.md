@@ -2,6 +2,18 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-12 — 终末地渲染重写与正式预设入库（未编译、未验收）
+
+- 按用户要求复刻终末地人物渲染，**依据改用本机真实逆向数据**而非网上逐步复刻教程：`Saved/Phase2Reference/StaticProbe/CharacterShaderMetadata/` 的真实属性表（`HGRP/CharacterNPR` 256 项、`_Skin` 131、`_Hair` 115、`_Eye` 78）、`StaticProbe/EndfieldBytecodeSamples/` 反编译 HLSL，以及 `Tooling/EndfieldCharacterRendering-public-code/`（完整 URP 光照库 980 行）与 `Tooling/Endfield-MME-public-code/`。反编译 HLSL 的 DXC 重编译未通过，仅作结构参考，不称原版等价复刻。
+- 新增 `Shaders/Core/TMMDEndfieldLighting.ush`（21 个成员函数）与 `Shaders/TMMDShader/TMMDEndfieldCharacter.usf`（64 个输出形参 / 57 个材质输入）。按真实做法实现：`sigmoidSharp` 硬阈值三段阴影取 min、脸部 SDF 方位角阈值（按光照侧镜像 U）、`GetEquirectTangent` 等距柱面切线各向异性、屏幕空间深度壳轮廓光、脸部球面法线高光、JGT 透散（默认关，与原版一致）。
+- 两处有意不照抄参考工程：其 `DepthRim` 写作 `clamp(0.0, 5.0, x)`，HLSL 语义为 `clamp(x,min,max)`，该写法结果恒为 0，已按正确语义修正；场景深度改为材质侧显式 Texture 输入——引擎 `SceneTexturesStruct` 只在 translucent 基 pass 被 `#define` 重定向，opaque/masked 下直接调 `CalcSceneDepth` 无法编译。
+- 新增脸部 SDF 自动烘焙（`Public/Editor/MMDEndfieldFaceSdfBaker.h`、对应 cpp、`-run=MMDEndfieldBakeSdf`）。从 LOD0 顶点法线/UV + 头部基烘出逐 texel 角度阈值，头部基优先取 `Head` 骨参考姿势、无骨骼退包围盒并在报告标注 `head_frame_source`，识别不到脸部 texel 时拒绝写空白图。用户确认"能自动化生成就没问题"，因此 SDF 成为可再生派生资产而非手绘配套贴图。
+- 新增 `-run=MMDEndfieldPresets` 生成器（`MMDEndfieldPresetsCommandlet.cpp/.h`），从零构建 57 输入材质图，把三套父材质与预设**正式写入插件 Content**：`/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_{Opaque|Masked|Translucent}` 与 `/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield`。与旧 `MMDEndfieldPhase2` 的区别是资产随插件分发、打开即可用，而非只留在 Saved 私有目录。写入范围严格限定四个白名单包。
+- 通用性铁律保持：SDF/Ramp/场景深度均为可选输入并有开关（`UseSdfMap`/`UseRampMap`/`UseSceneDepthRim` 默认 0），未连接时分别回退半兰伯特硬化阴影、解析式两段 toon 曲线、几何菲涅耳轮廓，只连一张 base_color 仍可完整着色。`MMDToonLighting.ush`、`TMMDAnimeFace.usf`、`TMMDReferenceBRDF.ush` 等文件 SHA256 与冻结值一致，未修改；旧 Phase2 文件保留未删。
+- 新增两个静态检查器（`Scripts/validate_endfield_shaders.py`、`Scripts/validate_endfield_sources.py`）与端到端脚本（`Scripts/Invoke-EndfieldPresets.ps1`）。检查器已捕获两个真实编译级错误：UE 自动采样器名为「输入名 + `Sampler`」（`light_data_texSampler`，写成 `_sampler` 会失败）；`UMaterialExpressionTextureObjectParameter::Texture` 是 `UTexture*` 而非 `UTexture2D*`。另做输入名/顺序逐一对照、白名单一致性、签名覆盖完整性检查。
+- **限制（重要）**：沙箱为 Linux，UE 二进制为 Windows `.exe`（`Exec format error`，无 wine），**本批未编译、未运行、无截图**，全部结论仅来自静态检查——静态检查不证明可编译，更不证明画面达标。眼球分层（真实 `_EyeHighLight`/`_EyeScatteringColor`/视差）与 `EyeThrough`/`BrowOverlay`/`HairShadow`/描边未实现；参数取真实默认值，未针对插件 Miku 夹具调优。详细实现依据、取舍与未完成项见[终末地渲染记录](ENDFIELD_RENDERING.md)。
+- 本批未修改引擎文件、未发布主 Content 资产、未运行旧全量 `MMDStagePresets -Generate`。仅提交源码、脚本与文档；不提交 Saved、构建产物与测试角色资产。另一个任务的 `MOBILE_MMD_EDITOR_ARCHITECTURE_TASKS.md` 不纳入本批提交。
+
 ## 2026-10-12 — 二期收尾与用户接手
 
 - 更正规则修改范围：用户指的是本机 Codex 全局 `C:/Users/admin/.codex/AGENTS.md`，已撤销此前误改的 `MMD/AGENTS.md`，恢复项目原模型路由及截图归档约定。全局规则改为授权范围内自主完成普通远端操作，无额外 push 确认或强制个人分支；全局文件已本地备份，不纳入项目仓库。本次仅修改规则与记录，未改 shader 或运行 UE。

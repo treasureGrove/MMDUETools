@@ -1,0 +1,315 @@
+// 终末地角色光照核心库（struct TMMDEndfieldLighting）。
+// 依据：本机 StaticProbe 真实 shader 属性表（HGRP/CharacterNPR 系列 256/131/115/78 项）
+// 及 EndfieldBytecodeSamples 反编译 HLSL 的数学结构重建；不依赖模型 UV 布局，
+// 所有可选贴图（SDF/Ramp/Stroke/Mask）缺失时自动回退到几何程序化路径。
+//
+// 与原版的关键差异（有意为之，见 Docs/ENDFIELD_RENDERING.md）：
+// 1. 原版 _DiffRampMap 是配套 LUT；此处支持连接，未连接时用解析式 toon 曲线等价拟合。
+// 2. 原版脸部 SDF 是手绘/工具烘焙的配套图；此处支持由插件自动烘焙的 SDF（UV 无关通道）。
+// 3. 原版 _SDFMask 的 R/G/B 语义为 RimMask/SDFMask/FlatSHMask，此处同义但全部可选。
+struct TMMDEndfieldLighting
+{
+    // 原版 sigmoidSharp：以 sigmoid 实现接近硬边的阴影阈值，是终末地阴影"无明显半影"的来源。
+    float SigmoidSharp(float value, float center, float sharpness)
+    {
+        return rcp(pow(100000.0, (value - center) * (-3.0 * sharpness)) + 1.0);
+    }
+
+    float3 SafeNormalize(float3 direction, float3 fallback_direction)
+    {
+        float length_squared = dot(direction, direction);
+        return length_squared > 1e-6 ? direction * rsqrt(length_squared) : fallback_direction;
+    }
+
+    float Luminance(float3 color)
+    {
+        return dot(color, float3(0.2126, 0.7152, 0.0722));
+    }
+
+    // 原版 GetEquirectTangent：复刻 Blender 的等距柱面切线节点，形成沿发片横向的环状切线场。
+    // 这是终末地发丝高光形状的真正来源，比几何切线稳定。
+    float3 EquirectTangent(float3 world_normal)
+    {
+        float3 axis = float3(0.0, 1.0, 0.0);
+        float3 bitangent = SafeNormalize(cross(world_normal, axis), float3(1.0, 0.0, 0.0));
+        return SafeNormalize(cross(world_normal, bitangent), world_normal);
+    }
+
+    // ---------------- 头部朝向基（脸部 SDF 与轮廓光需要） ----------------
+    // 半径 <= 0 或缺朝向时返回 false，调用方必须回退纯几何路径。
+    bool PrepareHeadFrame(float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+                          out float3 head_forward, out float3 head_right, out float3 head_up)
+    {
+        head_forward = float3(0.0, 1.0, 0.0);
+        head_right = float3(1.0, 0.0, 0.0);
+        head_up = float3(0.0, 0.0, 1.0);
+        if (head_position_radius.w <= 1e-3
+            || dot(head_forward_ws.xyz, head_forward_ws.xyz) < 1e-4
+            || dot(head_right_ws.xyz, head_right_ws.xyz) < 1e-4)
+            return false;
+        head_forward = SafeNormalize(head_forward_ws.xyz, head_forward);
+        float3 orthogonal_right = head_right_ws.xyz - head_forward * dot(head_right_ws.xyz, head_forward);
+        if (dot(orthogonal_right, orthogonal_right) < 1e-4)
+            return false;
+        head_right = SafeNormalize(orthogonal_right, head_right);
+        head_up = SafeNormalize(cross(head_right, head_forward), head_up);
+        return true;
+    }
+
+    // ---------------- 阴影合成 ----------------
+    // 终末地三段阴影：场景遮挡 / 半兰伯特 / 脸部 SDF，全部经 SigmoidSharp 硬化后取 min。
+    float ComposeLambertShadow(float n_dot_l, float center, float sharpness)
+    {
+        float half_lambert = n_dot_l * 0.5 + 0.5;
+        return SigmoidSharp(half_lambert, center, sharpness);
+    }
+
+    // ---------------- Diffuse Ramp ----------------
+    // 连了 LUT 就用真 LUT；未连接时用解析式三段曲线拟合原版 ramp 的"明/暗/暗中暗"。
+    float3 SampleDiffuseRamp(Texture2D ramp_map, SamplerState ramp_sampler, float shadow_value,
+                             bool use_ramp_map, float ramp_second_band)
+    {
+        if (use_ramp_map)
+            return Texture2DSample(ramp_map, ramp_sampler, float2(saturate(shadow_value), 0.5)).rgb;
+        // 解析兜底：主转折 + 第二条更暗的带，模拟原版 LUT 的两段式压暗。
+        float main_band = smoothstep(0.18, 0.62, shadow_value);
+        float darker_band = smoothstep(0.02, 0.30, shadow_value);
+        float ramp = lerp(0.30 + darker_band * 0.28, 1.0, main_band);
+        return ramp.xxx * lerp(1.0, 1.0 + ramp_second_band, saturate(1.0 - shadow_value));
+    }
+
+    // 原版 ramp 的 alpha 通道是"是否为受光面"的遮罩，用于整体门控直射贡献。
+    float SampleRampArea(Texture2D ramp_map, SamplerState ramp_sampler, float shadow_value, bool use_ramp_map)
+    {
+        if (use_ramp_map)
+            return smoothstep(-0.1, 1.0, Texture2DSample(ramp_map, ramp_sampler, float2(saturate(shadow_value), 0.5)).a);
+        return smoothstep(-0.1, 1.0, shadow_value);
+    }
+
+    // ---------------- 各向异性高光（发丝） ----------------
+    // 原版：T = EquirectTangent(N)，anisoHL = saturate(pow(sin(T·H), 5))，再硬阈值化。
+    // 原版注释承认 "this is quite hard to control"，此处用屏幕导数自适应软化阈值，
+    // 避免远距离/斜视角下出现整片爆闪或整片消失。
+    float AnisotropicHighlight(float3 world_normal, float3 view_dir, float3 light_dir,
+                               float power, float hard_threshold, float softness,
+                               float mask, float view_falloff)
+    {
+        float3 H = SafeNormalize(light_dir + view_dir, world_normal);
+        float3 T = EquirectTangent(world_normal);
+        float t_dot_h = dot(T, H);
+        float sin_th = sqrt(saturate(1.0 - t_dot_h * t_dot_h));
+        float highlight = saturate(pow(max(sin_th, 0.0), max(power, 1.0)));
+        // 屏幕导数把阈值展宽到至少一个像素，否则细亮线会随镜头闪烁。
+        float threshold_width = max(softness, fwidth(highlight) * 0.75);
+        highlight = smoothstep(max(hard_threshold - threshold_width, 0.0),
+                               min(hard_threshold + threshold_width, 1.0), highlight);
+        return saturate(highlight * mask * view_falloff);
+    }
+
+    // 原版 viewDirFallOff：sigmoidSharp(pow(NoV,5), 0.5, 0.1)，让高光只在接近正视时出现。
+    float AnisotropicViewFalloff(float n_dot_v)
+    {
+        return SigmoidSharp(pow(saturate(n_dot_v), 5.0), 0.5, 0.1);
+    }
+
+    // ---------------- GDDR 各向异性（衣物/皮革/金属，来自真实 _Anisotropy* 参数组） ----------------
+    // 原版 _AnisotropyDirX 默认 0、_AnisotropyValue 默认 0.35、第二层 _AnisotropyValue2 0.4。
+    // 主层 + 第二层双瓣，第二层可由 _AnisotropyRange2/_AnisotropyColor2 独立偏色。
+    float3 AnisotropicGrazing(float3 world_normal, float3 view_dir, float3 light_dir,
+                               float3 f0, float roughness, float tangent_direction,
+                               float anisotropy_value, float anisotropy_intensity)
+    {
+        float3 reference_axis = abs(world_normal.z) < 0.90 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+        float3 tangent = SafeNormalize(reference_axis - world_normal * dot(reference_axis, world_normal), world_normal);
+        float3 bitangent = SafeNormalize(cross(world_normal, tangent), world_normal);
+        tangent = SafeNormalize(tangent * cos(tangent_direction) + bitangent * sin(tangent_direction), tangent);
+        bitangent = cross(world_normal, tangent);
+        float3 H = SafeNormalize(light_dir + view_dir, world_normal);
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+        float n_dot_l = saturate(dot(world_normal, light_dir));
+        if (n_dot_v <= 1e-5 || n_dot_l <= 1e-5)
+            return 0.0;
+        float alpha = max(roughness * roughness, 1e-4);
+        // 各向异性：沿切线方向压缩、沿副切线方向拉伸分布。
+        float aspect = saturate(1.0 - anisotropy_value);
+        float alpha_tangent = clamp(alpha * lerp(0.25, 1.0, aspect), 0.002, 1.0);
+        float alpha_bitangent = clamp(alpha * lerp(1.0, 2.2, aspect), 0.002, 1.0);
+        float t_dot_h = dot(tangent, H);
+        float b_dot_h = dot(bitangent, H);
+        float n_dot_h = saturate(dot(world_normal, H));
+        float denominator = t_dot_h * t_dot_h / (alpha_tangent * alpha_tangent)
+                          + b_dot_h * b_dot_h / (alpha_bitangent * alpha_bitangent)
+                          + n_dot_h * n_dot_h;
+        float distribution = 1.0 / max(3.14159265 * alpha_tangent * alpha_bitangent * denominator * denominator, 1e-6);
+        float3 projected_view = float3(alpha_tangent * dot(tangent, view_dir),
+                                      alpha_bitangent * dot(bitangent, view_dir), n_dot_v);
+        float3 projected_light = float3(alpha_tangent * dot(tangent, light_dir),
+                                       alpha_bitangent * dot(bitangent, light_dir), n_dot_l);
+        float visibility = 0.5 / max(n_dot_l * length(projected_view) + n_dot_v * length(projected_light), 1e-5);
+        float grazing = pow(1.0 - saturate(dot(view_dir, H)), 5.0);
+        float3 fresnel = f0 + (1.0 - f0) * grazing;
+        return min(fresnel * distribution * visibility * n_dot_l * max(anisotropy_intensity, 0.0),
+                   float3(4.0, 4.0, 4.0));
+    }
+
+    // ---------------- 皮肤 SSS（原版 JGT 包裹 + 背光散射） ----------------
+    // 原版 LightningSkin 里 sss_part 被注释掉了，此处接入但由 strength 默认归零，
+    // 需要时可在材质里打开，不改变默认画面。
+    float3 SkinScatter(float3 base_color, float3 light_color, float n_dot_l,
+                       float3 sss_color, float sss_radius, float sss_value)
+    {
+        float alpha = max(sss_radius, 0.0);
+        float theta = max(0.0, n_dot_l + alpha) - alpha;
+        float normalization_jgt = (2.0 + alpha) / (2.0 * (1.0 + alpha));
+        float wrapped_jgt = pow(saturate((theta + alpha) / (1.0 + alpha)), 1.0 + alpha) * normalization_jgt;
+        float3 subsurface_radiance = sss_color * wrapped_jgt * pow(saturate(1.0 - n_dot_l), 3.0);
+        return light_color * subsurface_radiance * (sss_value * sss_value) * base_color;
+    }
+
+    // ---------------- 脸部 SDF ----------------
+    // SDF 图在脸部 UV 空间存"该 texel 从受光转为阴影的光照方位角阈值"（归一化到 [0,1]，乘 π 得弧度）。
+    // 阈值按"光从前方向 +head_right 侧旋转"单一方向烘焙；光照落在另一侧时镜像 U，
+    // 与真实实现一致（对应 _FlipSDFThreshold 的 sdfUV.x = 1 - sdfUV.x）。
+    // flip_mode: 0 = 按光照侧自动镜像（默认）；<0 强制镜像；>0 从不镜像。
+    float FaceSdfAngle(float3 light_direction, float3 head_right, float3 head_forward)
+    {
+        // 水平投影上的方位角：0 = 正前方，π/2 = 正侧方，π = 正后方。
+        float light_right = dot(light_direction, head_right);
+        float light_forward = dot(light_direction, head_forward);
+        return abs(atan2(light_right, light_forward));
+    }
+
+    bool FaceSdfNeedsFlip(float3 light_direction, float3 head_right, float flip_mode)
+    {
+        if (flip_mode > 0.0) return false;
+        if (flip_mode < 0.0) return true;
+        return dot(light_direction, head_right) < 0.0;
+    }
+
+    // 未连接 SDF 图时返回 -1 表示不可用，调用方回退半兰伯特。
+    float FaceSdfShadow(float3 light_direction, float3 head_forward, float3 head_right,
+                        float2 face_uv, Texture2D sdf_map, SamplerState sdf_sampler,
+                        bool use_sdf_map, float flip_mode,
+                        float sdf_center, float sdf_sharpness)
+    {
+        if (!use_sdf_map)
+            return -1.0;
+        float2 sdf_uv = face_uv;
+        if (FaceSdfNeedsFlip(light_direction, head_right, flip_mode))
+            sdf_uv.x = 1.0 - sdf_uv.x;
+        float4 sdf = Texture2DSample(sdf_map, sdf_sampler, sdf_uv);
+        // R/G 存同一阈值（工具输出），取平均对未镜像的自定义图也稳定。
+        float sdf_threshold = (sdf.r + sdf.g) * 0.5 * 3.14159265;
+        float light_angle = FaceSdfAngle(light_direction, head_right, head_forward);
+        return SigmoidSharp(sdf_threshold - light_angle, sdf_center, sdf_sharpness);
+    }
+
+    // 原版脸部轮廓光：只在脸部朝前且被逆光时出现，由 SDF 阈值门控。
+    float FaceRim(float3 view_dir, float3 head_forward, float rim_mask,
+                  float3 light_direction, float3 head_right, float back_light_cutoff)
+    {
+        float light_angle = FaceSdfAngle(light_direction, head_right, head_forward);
+        // 逆光判据：水平方位角超过 90° 即光源位于脸后方。
+        float contrast = smoothstep(1.5707963, 3.14159265, light_angle) * rim_mask;
+        contrast -= back_light_cutoff;
+        contrast *= smoothstep(0.0, 0.2, back_light_cutoff);
+        float view_dir_falloff = smoothstep(0.8, 1.0, dot(view_dir, head_forward));
+        return saturate(contrast * view_dir_falloff);
+    }
+
+    // 鼻梁/嘴唇的湿润高光：原版用球面法线替代网格法线，避免鼻翼法线撕裂高光。
+    float3 SphereSpecular(float3 head_center, float3 world_pos, float3 world_normal,
+                          float3 view_dir, float3 light_dir, float3 f0,
+                          float blend_amount, float power, float smooth_amount)
+    {
+        float3 sphere_normal = SafeNormalize(world_pos - head_center, world_normal);
+        float3 blended_normal = SafeNormalize(lerp(world_normal, sphere_normal, saturate(blend_amount)), world_normal);
+        float3 H = SafeNormalize(light_dir + view_dir, blended_normal);
+        float n_dot_h = saturate(dot(blended_normal, H));
+        float specular = pow(n_dot_h, max(power, 1.0));
+        return f0 * smoothstep(0.0, max(smooth_amount, 1e-4), specular);
+    }
+
+    // ---------------- 屏幕空间深度轮廓光 ----------------
+    // 原版 DepthRim 采样邻域深度做"外扩壳"，得到贴合剪影的宽度稳定轮廓。
+    // 场景深度必须由材质侧显式传入：SceneTexturesStruct 只在 translucent 基pass 被 #define 重定向，
+    // opaque/masked 下直接调 CalcSceneDepth 无法编译。
+    // 注意：参考工程写的 clamp(0.0, 5.0, x) 参数顺序是错的（HLSL 为 clamp(x,min,max)），
+    // 会让结果恒为 0；此处按正确语义实现。
+    float DepthRim(FMaterialPixelParameters Parameters, float3 world_normal, float rim_width,
+                   Texture2D scene_depth_tex, SamplerState scene_depth_texSampler, bool use_scene_depth)
+    {
+        if (!use_scene_depth)
+            return 0.0;
+        float2 screen_uv = GetSceneTextureUV(Parameters);
+        float scene_depth = ConvertFromDeviceZ(Texture2DSampleLevel(scene_depth_tex, scene_depth_texSampler, screen_uv, 0).r);
+        float eye_depth = ConvertFromDeviceZ(Parameters.SvPosition.z);
+        // 法线在视图空间偏移，沿剪影法线方向探一个像素级别的外壳。
+        float3 view_normal = SafeNormalize(mul(float4(world_normal, 0.0), ResolvedView.TranslatedWorldToView).xyz, float3(0.0, 0.0, 1.0));
+        float2 offset_uv = view_normal.xy * 0.0025 * max(rim_width, 0.0);
+        float neighbor_depth = ConvertFromDeviceZ(Texture2DSampleLevel(scene_depth_tex, scene_depth_texSampler, screen_uv + offset_uv, 0).r);
+        // 邻域比本像素更远 => 处于剪影内侧边缘，形成描边式轮廓光。
+        return saturate((neighbor_depth - eye_depth) * 0.25);
+    }
+
+    // 无场景深度可用时的几何兜底：用 N·V 做常规菲涅耳轮廓光。
+    float GeometricRim(float3 world_normal, float3 view_dir, float rim_power)
+    {
+        return pow(saturate(1.0 - saturate(dot(world_normal, view_dir))), max(rim_power, 0.1));
+    }
+
+    // ---------------- 角色材质分路参数 ----------------
+    // role 约定同 EMMDMaterialRole：0 通用 / 1 皮肤与脸部 / 2 头发 / 3 布料 / 4 金属 / 5 眼球。
+    // style_family = 2（Endfield / 工业动画）时启用终末地分路；其他值保持通用 toon。
+    bool IsEndfieldFamily(float style_family)
+    {
+        return style_family >= 1.5 && style_family < 2.5;
+    }
+
+    int ResolveRole(float material_role)
+    {
+        return (int)clamp(floor(material_role + 0.5), 0.0, 5.0);
+    }
+
+    // 每个角色分路的阴影硬化参数。
+    // 参数来源映射：预设 ShadowThreshold/ShadowSoftness 作为通用基线，
+    // half_lambert_shadow_sharpness > 0 时作为终末地专属覆盖（对应真实
+    // _HalfLambertShadowSharpness，默认 0.1；_SceneShadowSharpness 默认 0.1）。
+    // 注意 SigmoidSharp 的 sharpness 越小衰减越慢：0.01 会让受光面也压到 0.585，
+    // 因此下限钳到 0.05，保证 shadow=1 时结果接近 1。
+    void GetShadowSharpness(int role, float shadow_threshold, float shadow_softness,
+                           float half_lambert_shadow_sharpness,
+                           out float lambert_center, out float lambert_sharpness)
+    {
+        // 通用基线沿用预设的阈值与软度，保证不连任何终末地参数时行为可预期。
+        lambert_center = clamp(shadow_threshold > 0.0 ? shadow_threshold : 0.45, 0.05, 0.95);
+        lambert_sharpness = clamp((shadow_softness > 0.0 ? shadow_softness : 0.12) * 0.85, 0.05, 0.5);
+
+        if (role == 3)
+        {
+            // 布料：转折略软，保留褶皱层次。
+            lambert_center = clamp(lambert_center - 0.04, 0.05, 0.95);
+            lambert_sharpness = clamp(lambert_sharpness * 0.75, 0.05, 0.5);
+        }
+
+        // 终末地专属覆盖：显式给了 _HalfLambertShadowSharpness 就以它为准。
+        if (half_lambert_shadow_sharpness > 0.0)
+            lambert_sharpness = clamp(half_lambert_shadow_sharpness, 0.05, 1.0);
+    }
+
+    // ---------------- 直射贡献合成 ----------------
+    // 把主灯的直射贡献按分路合成。所有项都乘真实辐射 radiance 与可见度 visibility，关灯时严格归零。
+    // 高光按 ramp 的受光面遮罩 ramp_area 门控：暗部不出现高光，这是卡通渲染的关键约束。
+    float3 ComposeRoleDirect(int role, float3 radiance, float visibility,
+                             float3 base_color, float3 ramp_color, float ramp_area,
+                             float3 specular_color, float specular_strength,
+                             float3 anisotropic_color, float3 scatter_color, float direct_scale)
+    {
+        float3 diffuse = base_color * ramp_color * (1.0 / 3.14159265);
+        float3 result = diffuse * direct_scale;
+        result += specular_color * specular_strength * ramp_area;
+        result += anisotropic_color * ramp_area;
+        result += scatter_color;
+        return result * radiance * visibility;
+    }
+};
