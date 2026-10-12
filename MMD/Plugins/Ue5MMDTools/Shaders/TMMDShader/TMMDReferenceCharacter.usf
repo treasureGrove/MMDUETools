@@ -159,8 +159,16 @@ struct TMMDReferenceCharacter
             : brdf.GetRoleRoughness(roughness, material_role, style_family, specular_power);
         float3 f0 = brdf.GetF0(palette, specular_tint, material_role);
         float3 hair_normal = specular_normal;
-        float3 hair_tangent = SafeNormalize(surface_hair_tangent_strand.xyz, float3(0,0,1));
-        float strand_mask = clamp(surface_hair_tangent_strand.w, 0.50, 1.50);
+        float3 hair_tangent = surface_hair_tangent_strand.xyz;
+        if (is_hair)
+        {
+            if (dot(hair_tangent, hair_tangent) <= 1e-6)
+                hair_tangent = brdf.PrepareHairFlow(Parameters, hair_normal, head_forward_ws, head_right_ws, head_position_radius);
+            hair_tangent = brdf.OrthogonalizeHairTangent(hair_normal, hair_tangent);
+        }
+        // 手工节点遗漏共享输出时，发丝遮罩回到无细节的 1，而非意外砍半高光。
+        float strand_mask = surface_hair_tangent_strand.w > 1e-4
+                          ? clamp(surface_hair_tangent_strand.w, 0.50, 1.50) : 1.0;
         float hair_effect_strength = max(saturate(hair_shift_strength), saturate(hair_detail_strength));
         float3 shadow_palette = Saturation(palette, is_skin ? min(shadow_saturation, 0.92) : shadow_saturation)
                               * clamp(shadow_tint, 0.04, 1.0);
@@ -246,15 +254,21 @@ struct TMMDReferenceCharacter
         float3 auxiliary_color = 0.0;
         float3 rim_illumination = 0.0;
         float specular_scale = clamp(specular_strength + soft_specular_strength * 0.15, 0.0, 1.25);
-        float direct_specular_scale = specular_scale * (is_skin ? 0.60 : (is_cloth ? cloth_weave * 0.85 : 1.0));
+        float cloth_specular_scale = style_family >= 1.5 && style_family < 2.5 ? 0.55 : 0.85;
+        float direct_specular_scale = specular_scale * (is_skin ? 0.60 : (is_cloth ? cloth_weave * cloth_specular_scale : 1.0));
         float specular_n_dot_v = saturate(dot(specular_normal, view_dir));
         float cloth_sheen_grazing = is_cloth ? pow(1.0 - saturate(dot(diffuse_normal, view_dir)), 4.0) : 0.0;
         float safe_light_scale = clamp(light_scale, 0.0, 4.0);
+        // 导数在任何按灯衰减/半球的分歧之前计算；循环内只传播已知屏幕足迹。
+        float hair_frame_footprint = length(fwidth(hair_normal)) + length(fwidth(hair_tangent));
+        float hair_view_footprint = length(fwidth(view_dir));
+        float hair_position_footprint = length(fwidth(world_pos));
         int evaluation_count = use_fallback ? 1 : active_light_count;
         [loop] for (int light_index = 0; light_index < evaluation_count; ++light_index)
         {
             float3 L = key_direction;
             float3 radiance = key_radiance;
+            float light_direction_footprint = 0.0;
             bool is_key = use_fallback || light_index == key_index;
             if (!use_fallback)
             {
@@ -269,6 +283,9 @@ struct TMMDReferenceCharacter
                 L = SafeNormalize(L, world_normal);
                 radiance = max(light_color.rgb, 0.0) * max(light_color.w, 0.0) * saturate(atten);
                 if (Luminance(radiance) <= 1e-6) continue;
+                if (light_pos.w < 2.5 || light_pos.w >= 3.5)
+                    light_direction_footprint = min(hair_position_footprint
+                        / max(length(light_pos.xyz - world_pos), 0.001), 2.0);
             }
             float diffuse_n_dot_l = saturate(dot(diffuse_normal, L));
             float specular_n_dot_l = saturate(dot(specular_normal, L));
@@ -281,10 +298,18 @@ struct TMMDReferenceCharacter
                                 diffuse_n_dot_l, specular_n_dot_v, specular_n_dot_l, n_dot_h, v_dot_h,
                                 diffuse_brdf, specular_brdf);
             [branch]
-            if (is_hair && hair_effect_strength > 1e-4)
+            if (is_hair)
             {
-                float3 strand_specular = brdf.EvaluateHairSpecular(hair_normal, hair_tangent, view_dir, L, f0, material_roughness);
-                specular_brdf = lerp(specular_brdf, strand_specular, smoothstep(0.0, 0.20, hair_effect_strength)) * strand_mask;
+                float half_vector_length = max(length(view_dir + L), 0.001);
+                float angular_footprint = min(hair_frame_footprint
+                    + (hair_view_footprint + light_direction_footprint) / half_vector_length, 2.0);
+                specular_brdf = brdf.EvaluateHairSpecular(hair_normal, hair_tangent, view_dir, L, f0, material_roughness,
+                                                       style_family, specular_power, angular_footprint) * strand_mask;
+            }
+            else if (is_cloth && soft_specular_strength > 0.0)
+            {
+                float3 broad_specular = brdf.EvaluateClothBroadSpecular(diffuse_normal, view_dir, L, material_roughness);
+                specular_brdf = lerp(specular_brdf, broad_specular, saturate(soft_specular_strength) * 0.30);
             }
             float visibility = is_key ? scene_shadow : 1.0;
             float3 wrapped_scatter = 0.0;
@@ -325,8 +350,8 @@ struct TMMDReferenceCharacter
             color += palette * cloth_weave * sky * (cloth_sheen_grazing * 0.05) * clamp(ambient_strength, 0.0, 2.0);
         // 引擎 EnvMapSample 已经包含天空强度/颜色及粗糙度预过滤，不再重复乘 SkyLightColor。
         float environment_role_scale = is_skin ? lerp(0.45, 0.22, face_mask)
-                                     : (is_hair && hair_effect_strength > 1e-4 ? 0.55 : (is_cloth ? cloth_weave * 0.45 : 1.0));
-        float environment_strand_mask = is_hair && hair_effect_strength > 1e-4 ? strand_mask : 1.0;
+                                     : (is_hair ? 0.55 : (is_cloth ? cloth_weave * 0.45 : 1.0));
+        float environment_strand_mask = is_hair ? strand_mask : 1.0;
         color += max(environment_reflection, 0.0) * environment_response
                * clamp(environment_specular_strength, 0.0, 2.0) * specular_scale
                * environment_role_scale * environment_strand_mask;

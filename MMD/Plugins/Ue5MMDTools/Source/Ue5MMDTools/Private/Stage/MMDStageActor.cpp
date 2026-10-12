@@ -713,7 +713,7 @@ void AMMDStageActor::BuildSakuraTheater(const FLinearColor& Base, const FLinearC
 		}
 	}
 
-	// 木平台顶面保持 z=0；细分真实板缝，水面低于台面，不遮住角色脚。
+	// 前庭顶面保持 z=0；水面低于台面，不遮住角色脚。
 	UInstancedStaticMeshComponent* Deck = MakeGroup(TEXT("SakuraDeckPlanks"), CubeMesh, Wood, false);
 	UInstancedStaticMeshComponent* DeckAlternate = MakeGroup(TEXT("SakuraDeckPlanksAlternate"), CubeMesh, Wood * 0.83f, false);
 	UInstancedStaticMeshComponent* Timber = MakeGroup(TEXT("SakuraPavilionTimber"), CubeMesh, DarkWood, false, 1, true);
@@ -737,9 +737,37 @@ void AMMDStageActor::BuildSakuraTheater(const FLinearColor& Base, const FLinearC
 		for (int32 Step = 0; Step < 4; ++Step)
 			AddInstance(WetStone, FVector(Side * (237 + Step * 26), -248 + Step * 25, -17),
 				FVector(0.62f, 0.44f, 0.20f), FRotator(0, Side * (20 + Step * 11), 0));
-	for (int32 Board = 0; Board < 23; ++Board)
-		AddInstance(Board % 4 ? Deck : DeckAlternate, FVector((Board - 11) * 18.4f, -40, -6),
-			FVector(0.178f, 4.72f, 0.12f));
+	UInstancedStaticMeshComponent* CourtyardStone = MakeGroup(TEXT("SakuraCourtyardWetStone"), CubeMesh, Stone, false);
+	UInstancedStaticMeshComponent* CourtyardStoneAlternate = MakeGroup(TEXT("SakuraCourtyardWetStoneAlternate"),
+		CubeMesh, Stone * 0.94f, false);
+	Surface(CourtyardStone, 0.18f, 0.0f, 3.0f);
+	Surface(CourtyardStoneAlternate, 0.24f, 0.0f, 3.0f);
+	// 现有石图含整片不规则铺地缝，不与实体规则砖缝叠加。
+	for (UInstancedStaticMeshComponent* Group : { CourtyardStone, CourtyardStoneAlternate })
+		if (Group)
+			if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Group->GetMaterial(0)))
+				Material->SetScalarParameterValue(TEXT("UseDetailTextures"), 0.0f);
+	// 仅替换前庭木板：51 块错缝石砖，顶面仍为 z=0，底座、桥和亭阁木不改。
+	const float CourtyardWidth = 420.0f;
+	const float CourtyardDepth = 472.0f;
+	const float TilePitchX = CourtyardWidth / 8.0f;
+	const float TilePitchY = CourtyardDepth / 6.0f;
+	const float TileGap = 0.25f;
+	for (int32 Row = 0; Row < 6; ++Row)
+	{
+		const bool bStaggered = Row % 2 != 0;
+		const int32 Columns = bStaggered ? 9 : 8;
+		for (int32 Column = 0; Column < Columns; ++Column)
+		{
+			const float Offset = bStaggered ? 0.5f : 0.0f;
+			const float Left = FMath::Max(0.0f, (Column - Offset) * TilePitchX);
+			const float Right = FMath::Min(CourtyardWidth, (Column + 1.0f - Offset) * TilePitchX);
+			AddInstance((Row + Column) % 5 == 0 ? CourtyardStoneAlternate : CourtyardStone,
+				FVector((Left + Right - CourtyardWidth) * 0.5f,
+					-40.0f + (Row + 0.5f) * TilePitchY - CourtyardDepth * 0.5f, -6.0f),
+				FVector((Right - Left - TileGap) / 100.0f, (TilePitchY - TileGap) / 100.0f, 0.12f));
+		}
+	}
 	for (float X : { -198.0f, 0.0f, 198.0f })
 		AddInstance(Timber, FVector(X, -40, -22), FVector(0.16f, 4.90f, 0.32f));
 	for (float X : { -193.0f, 193.0f })
@@ -895,7 +923,8 @@ void AMMDStageActor::BuildSakuraTheater(const FLinearColor& Base, const FLinearC
 		PavilionPart(Timber, FVector(180 + Rafter * 22, 34, 289), FVector(0.065f, 2.11f, 0.075f));
 	UInstancedStaticMeshComponent* Shoji = MakeGroup(TEXT("SakuraTeaHouseWarmShoji"), CubeMesh,
 		FLinearColor(1.0f, 0.67f, 0.34f), true, 0.24f);
-	for (int32 Panel = 0; Panel < 4; ++Panel)
+	// 中间两扇只保留原细木格，透出水庭；外侧纸面、梁柱与灯笼保留。
+	for (int32 Panel : { 0, 3 })
 		PavilionPart(Shoji, FVector(-125 + Panel * 83, 125, 149), FVector(0.79f, 0.025f, 2.07f));
 	for (int32 Panel = 0; Panel < 3; ++Panel)
 	{
@@ -1031,8 +1060,11 @@ void AMMDStageActor::BuildSakuraTheater(const FLinearColor& Base, const FLinearC
 				: Cluster % 5 < 2 ? FlowersIvory : FlowersPink;
 			const FRotator FlowerRotation(Random.FRandRange(-42, 42), Random.FRandRange(0, 360),
 				Random.FRandRange(-36, 36));
+			const float FlowerAspect = Random.FRandRange(0.88f, 1.07f);
+			// 先消费原有六次随机采样，再稀疏近景花簇，保留后续岸石与灌木布局。
+			if (Tree < 2 && Cluster % 7 >= 4) continue;
 			AddInstance(FlowerGroup, TreeTransform.TransformPosition(LocalPosition),
-				FVector(FlowerScale, FlowerScale * Random.FRandRange(0.88f, 1.07f), FlowerScale),
+				FVector(FlowerScale, FlowerScale * FlowerAspect, FlowerScale),
 				(FRotator(0, Layout.Yaw, 0).Quaternion() * FlowerRotation.Quaternion()).Rotator());
 		}
 		for (int32 StoneIndex = 0; StoneIndex < 7; ++StoneIndex)

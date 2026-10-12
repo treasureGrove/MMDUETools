@@ -1,0 +1,678 @@
+{
+  "CheckedAt": "2026-10-12T10:47:01.832896+08:00",
+  "BaselineHEAD": "009d90a11f3dbe98d40fb46fac564238099111a2",
+  "TrackedShaderCount": 88,
+  "ChangedTrackedShaders": [
+    "Shaders/Core/TMMDReferenceBRDF.ush",
+    "Shaders/TMMDShader/TMMDGardenSurface.usf",
+    "Shaders/TMMDShader/TMMDReferenceCharacter.usf",
+    "Shaders/TMMDShader/TMMDStageBackdrop.usf"
+  ],
+  "TrackedUSH": [
+    {
+      "Path": "Shaders/Core/MMDToonLighting.ush",
+      "HEADBlob": "540a12be3f419d2d78821952d0d96dde363e6318",
+      "WorkingBlob": "540a12be3f419d2d78821952d0d96dde363e6318",
+      "MatchesHEAD": true,
+      "SHA256": "8893D13D3ECD3F51F666C517811450C7838A6E05857B267567ABA6A0B243203F"
+    },
+    {
+      "Path": "Shaders/Core/MMDToonLighting_Archived.ush",
+      "HEADBlob": "6e9a23617b75af60ddc34a63757a7cd4dd443c22",
+      "WorkingBlob": "6e9a23617b75af60ddc34a63757a7cd4dd443c22",
+      "MatchesHEAD": true,
+      "SHA256": "BCBC1ED855B4F2E52681090D7214EA49E17EECD5377CEB1209FB153E99D8FA82"
+    },
+    {
+      "Path": "Shaders/Core/TMMDReferenceBRDF.ush",
+      "HEADBlob": "c56d64cd288b767ff2784c65a3f8e1714e20c641",
+      "WorkingBlob": "ebc76b2fdd593f7b3f4397cb1017fe2d1a084539",
+      "MatchesHEAD": false,
+      "SHA256": "E5854A03C79E2FABD4C9D906A8E90E7086A78B1734ECEE96AA28FF2DE8ECBF79"
+    },
+    {
+      "Path": "Shaders/Experimental/MMDReferenceToonGlamorousLighting.ush",
+      "HEADBlob": "7b3e83edb688c1b580452194e077f20193f1d2f3",
+      "WorkingBlob": "7b3e83edb688c1b580452194e077f20193f1d2f3",
+      "MatchesHEAD": true,
+      "SHA256": "E4AC74D369332A6AF0E325CAD496A44D054D6178B6F5B08BFEC9BD77468B0F32"
+    },
+    {
+      "Path": "Shaders/MMDStandard/MMDStandardCore.ush",
+      "HEADBlob": "32a8d3d0fc50d5315aaaa3c9dcdca7c06cb500d1",
+      "WorkingBlob": "32a8d3d0fc50d5315aaaa3c9dcdca7c06cb500d1",
+      "MatchesHEAD": true,
+      "SHA256": "565EFC2558C3C62E9E2EAF5085025CA0A9BA595E47D5528F582FEDD30FACAF23"
+    }
+  ],
+  "NewShaders": [
+    {
+      "Path": "Shaders/Core/TMMDEndfieldPhase2BRDF.ush",
+      "SHA256": "BE80E5EB38A019FAEF6969FDCC581447873FD0F1C6032DAD6E3038CC4427185D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDEndfieldPhase2Character.usf",
+      "SHA256": "626C4A6308C757C473BCCC72171C982225152E021FBB5641072635EEAB2280BC"
+    }
+  ],
+  "FrozenOldMain691AndNew4Match": true,
+  "TrackedShaders": [
+    {
+      "Path": "Shaders/Core/MMDToonLighting.ush",
+      "HEADBlob": "540a12be3f419d2d78821952d0d96dde363e6318",
+      "WorkingBlob": "540a12be3f419d2d78821952d0d96dde363e6318",
+      "MatchesHEAD": true,
+      "SHA256": "8893D13D3ECD3F51F666C517811450C7838A6E05857B267567ABA6A0B243203F"
+    },
+    {
+      "Path": "Shaders/Core/MMDToonLighting_Archived.ush",
+      "HEADBlob": "6e9a23617b75af60ddc34a63757a7cd4dd443c22",
+      "WorkingBlob": "6e9a23617b75af60ddc34a63757a7cd4dd443c22",
+      "MatchesHEAD": true,
+      "SHA256": "BCBC1ED855B4F2E52681090D7214EA49E17EECD5377CEB1209FB153E99D8FA82"
+    },
+    {
+      "Path": "Shaders/Core/TMMDReferenceBRDF.ush",
+      "HEADBlob": "c56d64cd288b767ff2784c65a3f8e1714e20c641",
+      "WorkingBlob": "ebc76b2fdd593f7b3f4397cb1017fe2d1a084539",
+      "MatchesHEAD": false,
+      "SHA256": "E5854A03C79E2FABD4C9D906A8E90E7086A78B1734ECEE96AA28FF2DE8ECBF79"
+    },
+    {
+      "Path": "Shaders/Experimental/MMDReferenceToonGlamorousLighting.ush",
+      "HEADBlob": "7b3e83edb688c1b580452194e077f20193f1d2f3",
+      "WorkingBlob": "7b3e83edb688c1b580452194e077f20193f1d2f3",
+      "MatchesHEAD": true,
+      "SHA256": "E4AC74D369332A6AF0E325CAD496A44D054D6178B6F5B08BFEC9BD77468B0F32"
+    },
+    {
+      "Path": "Shaders/MMDStandard/MMDLiteToon.usf",
+      "HEADBlob": "21bda6bf800a5fafa6153efdc6b93fefca6862d9",
+      "WorkingBlob": "21bda6bf800a5fafa6153efdc6b93fefca6862d9",
+      "MatchesHEAD": true,
+      "SHA256": "58BB883F7255050C6F48F79762F00BB62680CDF06C434FDDF83B14CA32EA715A"
+    },
+    {
+      "Path": "Shaders/MMDStandard/MMDStandard.usf",
+      "HEADBlob": "ff2ba102c4098b53ce1f8a6c6ae57e4540cf5bf3",
+      "WorkingBlob": "ff2ba102c4098b53ce1f8a6c6ae57e4540cf5bf3",
+      "MatchesHEAD": true,
+      "SHA256": "107407EB99424EE11397162D424E77AC0B16846BC736B20683909ACCA80BC60F"
+    },
+    {
+      "Path": "Shaders/MMDStandard/MMDStandardCore.ush",
+      "HEADBlob": "32a8d3d0fc50d5315aaaa3c9dcdca7c06cb500d1",
+      "WorkingBlob": "32a8d3d0fc50d5315aaaa3c9dcdca7c06cb500d1",
+      "MatchesHEAD": true,
+      "SHA256": "565EFC2558C3C62E9E2EAF5085025CA0A9BA595E47D5528F582FEDD30FACAF23"
+    },
+    {
+      "Path": "Shaders/PostProcess/MMDAnimeWriteLights.usf",
+      "HEADBlob": "0b4dcd40bdd5a751b50c0693123dd78577d28c88",
+      "WorkingBlob": "0b4dcd40bdd5a751b50c0693123dd78577d28c88",
+      "MatchesHEAD": true,
+      "SHA256": "4601673CF8A2FD4F4108BC40B2835ECDE632B307CCBAF3FCB448091F72673D4D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDAnimeEye.usf",
+      "HEADBlob": "4be7974ae1957c5c02f48a1df18c73de7aecd46d",
+      "WorkingBlob": "4be7974ae1957c5c02f48a1df18c73de7aecd46d",
+      "MatchesHEAD": true,
+      "SHA256": "BF8395BD816C2DF234AA23E4FE0133D66B72B08E8EE1D912A57D4057C773CFCF"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDAnimeToonLighting.usf",
+      "HEADBlob": "97ba90df910ad9778185b4450c306729e1df7125",
+      "WorkingBlob": "97ba90df910ad9778185b4450c306729e1df7125",
+      "MatchesHEAD": true,
+      "SHA256": "B3B62C869FE2D789B1065713C896E3CD28D97F829CB9D1F8B8FCB3675F4255F8"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDBaseToon.usf",
+      "HEADBlob": "716c9589f8b6b9dd550952a75e8635206a5d023d",
+      "WorkingBlob": "716c9589f8b6b9dd550952a75e8635206a5d023d",
+      "MatchesHEAD": true,
+      "SHA256": "47E094C6956329185638C5025FC10FAC3EC0CA88789912F4EC29371779BEFB4E"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDBaseToonFallback.usf",
+      "HEADBlob": "4d4548937e4ac998e88d4ecb37ae65e801f0c44f",
+      "WorkingBlob": "4d4548937e4ac998e88d4ecb37ae65e801f0c44f",
+      "MatchesHEAD": true,
+      "SHA256": "7B6A27E7EC0B2A95409F8D9F22AC476A1A9129F7E8C5E043D22F51D123294AA3"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDReferenceToonGlamorous.usf",
+      "HEADBlob": "a951b8dca0c31cd16a1b1be9dd693eb46497b2ea",
+      "WorkingBlob": "a951b8dca0c31cd16a1b1be9dd693eb46497b2ea",
+      "MatchesHEAD": true,
+      "SHA256": "25C7E0031CA3356DE949B5B8328F8C5AD4B143E972836FCD9D11B531DDE04592"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToon.usf",
+      "HEADBlob": "f915f50d888727024a5b7f8ed2c9b819cc48c70f",
+      "WorkingBlob": "f915f50d888727024a5b7f8ed2c9b819cc48c70f",
+      "MatchesHEAD": true,
+      "SHA256": "01A040A169C1111C5B8BC31B7D279EF9472F1777FC0DE7EBE950A5951B37FB9F"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR19.usf",
+      "HEADBlob": "55a584fe3ef10047f35571c1584305f4abdd915d",
+      "WorkingBlob": "55a584fe3ef10047f35571c1584305f4abdd915d",
+      "MatchesHEAD": true,
+      "SHA256": "4745E56F140E786A353BAF8D174C0D39BAEDB4ABD37BBEE547AF61B25EBA0FBE"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR20.usf",
+      "HEADBlob": "aaea116b8b98f89f59c3d6a19c01374059599a01",
+      "WorkingBlob": "aaea116b8b98f89f59c3d6a19c01374059599a01",
+      "MatchesHEAD": true,
+      "SHA256": "16256A92323CFFBFD5A5289ECD637F947B10A6CD14B44A0287683BFC011D7698"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR21.usf",
+      "HEADBlob": "9429513d4fa45aa13e1c294451ab8d230ab9b7ab",
+      "WorkingBlob": "9429513d4fa45aa13e1c294451ab8d230ab9b7ab",
+      "MatchesHEAD": true,
+      "SHA256": "28A5E5FB2D245C6A4282C560F0D41062F1E2AE57A148E677C859B07C26E42B6A"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR22.usf",
+      "HEADBlob": "8b6b4f7b642a58eac0f53ad8db38ee8b33604f5c",
+      "WorkingBlob": "8b6b4f7b642a58eac0f53ad8db38ee8b33604f5c",
+      "MatchesHEAD": true,
+      "SHA256": "7597A1C6BB3C412709EAEB6556DA8B80C837550C818A3512C47EFB5244836599"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR23.usf",
+      "HEADBlob": "d31fe2f5a61d755178ae3858210cb1e654294ac9",
+      "WorkingBlob": "d31fe2f5a61d755178ae3858210cb1e654294ac9",
+      "MatchesHEAD": true,
+      "SHA256": "A6F8E381A2815FC8024E0CA0D413BFDC99EA588D72D2B2708E800CFDAF9D1B22"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR24.usf",
+      "HEADBlob": "e23d4cc273fc83d4119805b534ea7b71a965367c",
+      "WorkingBlob": "e23d4cc273fc83d4119805b534ea7b71a965367c",
+      "MatchesHEAD": true,
+      "SHA256": "678EB234957870FD45472E4CEB1C3A0588A807C0E26A949B3A6C06D0CAF187D4"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonImplementationR25.usf",
+      "HEADBlob": "267072fc543416e5a6f23bdb1de34e0daa7fe06f",
+      "WorkingBlob": "267072fc543416e5a6f23bdb1de34e0daa7fe06f",
+      "MatchesHEAD": true,
+      "SHA256": "0B3ED512A41427D4D6C7A38573FF0E0D48A11161F798A625EFD63FAF97BB15FE"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR03.usf",
+      "HEADBlob": "9cf393fe81538b0b518f39f7b543e2bcf4a5ca22",
+      "WorkingBlob": "9cf393fe81538b0b518f39f7b543e2bcf4a5ca22",
+      "MatchesHEAD": true,
+      "SHA256": "9CBC6B81910614DDA5BC6200232CA892872D7E9D76181B4BC720B4BFA935D5B4"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR04.usf",
+      "HEADBlob": "444053f08a474df08dfc13359875252ab089410f",
+      "WorkingBlob": "444053f08a474df08dfc13359875252ab089410f",
+      "MatchesHEAD": true,
+      "SHA256": "C67B01368917D2D6366AAA2CDF165B95E8251C5629BE02B51949B9C36C26FA6B"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR05.usf",
+      "HEADBlob": "a33f1bfe24412bf5523ba8f94d79a3a5c5e2be57",
+      "WorkingBlob": "a33f1bfe24412bf5523ba8f94d79a3a5c5e2be57",
+      "MatchesHEAD": true,
+      "SHA256": "CF85C393FE80379CF3A877107A323C6A8ED62A05104EF5061BB0F97CD871CEB8"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR06.usf",
+      "HEADBlob": "96763a9316e4e73a5ac7d2a4821963dfd0ada3a9",
+      "WorkingBlob": "96763a9316e4e73a5ac7d2a4821963dfd0ada3a9",
+      "MatchesHEAD": true,
+      "SHA256": "13AF2D247A76D276A9601D7E55A33957ED2C73AA65655F6E79938C9F14A5541D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR07Debug.usf",
+      "HEADBlob": "3ebbee511bbf7e84e78ce3e4f63e16c07c818a4b",
+      "WorkingBlob": "3ebbee511bbf7e84e78ce3e4f63e16c07c818a4b",
+      "MatchesHEAD": true,
+      "SHA256": "A6DA1AE03C175DA201756B3D62673A2525DDB41E9E2509D6BE4EDCAB98B3B88D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR08.usf",
+      "HEADBlob": "8012a709241964fbe46b28bf7fd77cc85005be3c",
+      "WorkingBlob": "8012a709241964fbe46b28bf7fd77cc85005be3c",
+      "MatchesHEAD": true,
+      "SHA256": "8EB246AF3EB42B6A469600410FD27FA5E3F6E09C1EEAF65AD016A9777D1081BD"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR09.usf",
+      "HEADBlob": "3aa88590e856b381b1c9d9866ad82f0a9340bfac",
+      "WorkingBlob": "3aa88590e856b381b1c9d9866ad82f0a9340bfac",
+      "MatchesHEAD": true,
+      "SHA256": "324D56A80D8AB4F785D0246F2FF69562B438D42B937B9AFC5E6ECCF2B55260FA"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR10Debug.usf",
+      "HEADBlob": "3ebbee511bbf7e84e78ce3e4f63e16c07c818a4b",
+      "WorkingBlob": "3ebbee511bbf7e84e78ce3e4f63e16c07c818a4b",
+      "MatchesHEAD": true,
+      "SHA256": "A6DA1AE03C175DA201756B3D62673A2525DDB41E9E2509D6BE4EDCAB98B3B88D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR11.usf",
+      "HEADBlob": "1ff3d87c16fd022170ac4b11eeca8a40fb8f779b",
+      "WorkingBlob": "1ff3d87c16fd022170ac4b11eeca8a40fb8f779b",
+      "MatchesHEAD": true,
+      "SHA256": "2C65E431A9F97634506C8A1E0D6D7BC87B1D594C248223289093FA8E124F696D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR12.usf",
+      "HEADBlob": "a7ec5e5c6c2ba3933b4312ac66c960dba0952c7e",
+      "WorkingBlob": "a7ec5e5c6c2ba3933b4312ac66c960dba0952c7e",
+      "MatchesHEAD": true,
+      "SHA256": "F45B198E109ECA995147CD44ED952D21899D53156B1E232FE680F9FA4D66A9A4"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR13.usf",
+      "HEADBlob": "189ee084389603b51033ae76058c4431d3af01b3",
+      "WorkingBlob": "189ee084389603b51033ae76058c4431d3af01b3",
+      "MatchesHEAD": true,
+      "SHA256": "ED342EA25713FED41D374EAE5AA54C2697337072B8BE0617319D559A0D2B44AE"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR14.usf",
+      "HEADBlob": "980137445b9ec0dca90baf0e2453f06b0b753015",
+      "WorkingBlob": "980137445b9ec0dca90baf0e2453f06b0b753015",
+      "MatchesHEAD": true,
+      "SHA256": "745675D7D54D39B0EC45EE4A4F06DE3A60F449FBDE7C97F1B1D3529F4CE8E9F7"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR15.usf",
+      "HEADBlob": "31cdcc7e16c473b16b84fe777b7774451bcdf446",
+      "WorkingBlob": "31cdcc7e16c473b16b84fe777b7774451bcdf446",
+      "MatchesHEAD": true,
+      "SHA256": "F26C4C7ECCF910BB100C79B18C2BB45B800F8E46E3F0C9F54F6F3C50B5665D27"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR16.usf",
+      "HEADBlob": "0bc239c918c02922cd52a156499eb7c9c6952a6c",
+      "WorkingBlob": "0bc239c918c02922cd52a156499eb7c9c6952a6c",
+      "MatchesHEAD": true,
+      "SHA256": "733D34B1EA6AAF897385AD4EC0192DE60FCF5BAF90F429E9A4FE01779A9C9561"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR17.usf",
+      "HEADBlob": "0fa128075ab8636cbb744be789714d475514176b",
+      "WorkingBlob": "0fa128075ab8636cbb744be789714d475514176b",
+      "MatchesHEAD": true,
+      "SHA256": "3A8B911AB4E2980ED45A127A518A728A7F15E6B1C0965E5AA6C36BA49906CA20"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR18.usf",
+      "HEADBlob": "97bc5650dae5117456dbe8511207f2874501559a",
+      "WorkingBlob": "97bc5650dae5117456dbe8511207f2874501559a",
+      "MatchesHEAD": true,
+      "SHA256": "786488352A552F92CFF572A46C39339D1AB9F0B722AECB75655E89793B130614"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR19.usf",
+      "HEADBlob": "b6b3d44fc24b0bad72e597347593efdfdc23cb98",
+      "WorkingBlob": "b6b3d44fc24b0bad72e597347593efdfdc23cb98",
+      "MatchesHEAD": true,
+      "SHA256": "0833BB3229000F1AB732C0AC4C7B8FD9B413B271649BE80B5089EF8BC4892405"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR20.usf",
+      "HEADBlob": "ff245c1c247b5c31fc0227541f5894cee55b00b2",
+      "WorkingBlob": "ff245c1c247b5c31fc0227541f5894cee55b00b2",
+      "MatchesHEAD": true,
+      "SHA256": "BB8F51708C2774BAFED7BE0DA26789CEFCAD4856CA3542CFD79526E5162C7DB1"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR21.usf",
+      "HEADBlob": "1e21db81ae8603613fcbf52a8682877a5c52eb38",
+      "WorkingBlob": "1e21db81ae8603613fcbf52a8682877a5c52eb38",
+      "MatchesHEAD": true,
+      "SHA256": "6D9568350FDA70D7E28651EA17F6649094AC31E93DFB543A83606C65FAA38A3F"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR22.usf",
+      "HEADBlob": "0b46c9f8b8fe2904db51719ec51baa534733d8e1",
+      "WorkingBlob": "0b46c9f8b8fe2904db51719ec51baa534733d8e1",
+      "MatchesHEAD": true,
+      "SHA256": "50C24DB12BEE1539B4EA8A77D4F21BF927ADB4C18E66DDB6712F97E7F7922097"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR23.usf",
+      "HEADBlob": "776e466990c35f1fe5dbe7494debd4b81d3f8a7e",
+      "WorkingBlob": "776e466990c35f1fe5dbe7494debd4b81d3f8a7e",
+      "MatchesHEAD": true,
+      "SHA256": "E15A2C5DD5E666BD6590BFBA50600DF607ADAA55647F61131D89BBE8737AA4CC"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR24.usf",
+      "HEADBlob": "5856c96a5f98964e866f5e717e0aaef2dab64def",
+      "WorkingBlob": "5856c96a5f98964e866f5e717e0aaef2dab64def",
+      "MatchesHEAD": true,
+      "SHA256": "61730197C1D0F03BF482CC87BD9B4F0FA9572C2CFE72AB986C7573AC9D84A9E1"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR25.usf",
+      "HEADBlob": "daf7d3f9de7b33dacd6a3ea06dd5c5afb0d948e1",
+      "WorkingBlob": "daf7d3f9de7b33dacd6a3ea06dd5c5afb0d948e1",
+      "MatchesHEAD": true,
+      "SHA256": "5D6BEE1BE158DF8C42599DB524A25BB7A6737190FFD864001E21D661E789EF0D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR26.usf",
+      "HEADBlob": "95e05a68d72c7e34778091fc6353934421873818",
+      "WorkingBlob": "95e05a68d72c7e34778091fc6353934421873818",
+      "MatchesHEAD": true,
+      "SHA256": "DF40CB70CDDB84A4F80A2BF77CF47B4FF9C9319AADC696B2D9BABD85413384AD"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR27.usf",
+      "HEADBlob": "46b3ebe4a77c80e31b0271a40bfa4761f8064ec2",
+      "WorkingBlob": "46b3ebe4a77c80e31b0271a40bfa4761f8064ec2",
+      "MatchesHEAD": true,
+      "SHA256": "B3AAA294BA6383BDF5E7DDB3C417C00BD04DE6768CA461BBED30C96465F3390F"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR28.usf",
+      "HEADBlob": "d331c1b25ff2dd138d82d158f31cde4bdcf2fe28",
+      "WorkingBlob": "d331c1b25ff2dd138d82d158f31cde4bdcf2fe28",
+      "MatchesHEAD": true,
+      "SHA256": "C55A67615DDA270E0820BC8EBC9D75DDBF9D1B194F5154C9684F3069C188ED9B"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR29.usf",
+      "HEADBlob": "c7a52d60617ec65cc3a4cbb7709dbe52122d278e",
+      "WorkingBlob": "c7a52d60617ec65cc3a4cbb7709dbe52122d278e",
+      "MatchesHEAD": true,
+      "SHA256": "E08741C3FD8580BBE7333BD8954A387E4CF7F05DCE9125DB21DD94943A4CFE71"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR30.usf",
+      "HEADBlob": "f17237311721c4f5a8ac90981d3a4831540caf9a",
+      "WorkingBlob": "f17237311721c4f5a8ac90981d3a4831540caf9a",
+      "MatchesHEAD": true,
+      "SHA256": "C66B162B2F1B359372EB850965028FA755AC6BF9FCE827512F521F2944FFE2D0"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR31.usf",
+      "HEADBlob": "5799fc1b0560438c26263a35af0c77bab30371a2",
+      "WorkingBlob": "5799fc1b0560438c26263a35af0c77bab30371a2",
+      "MatchesHEAD": true,
+      "SHA256": "B21662189C4082FC71859B1C5B7D474550C93D704ABECB21B961DDA4182B3776"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR32.usf",
+      "HEADBlob": "3bdc9ed2730c2606e7c1b29a324dcc038942f795",
+      "WorkingBlob": "3bdc9ed2730c2606e7c1b29a324dcc038942f795",
+      "MatchesHEAD": true,
+      "SHA256": "FB99B941E5608F7AE5CE5F794DD561E184D0C3915198FCD3E8145AC5DAA66BB7"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR33.usf",
+      "HEADBlob": "c98466708a109480a50b708aa3a78af342909183",
+      "WorkingBlob": "c98466708a109480a50b708aa3a78af342909183",
+      "MatchesHEAD": true,
+      "SHA256": "0C83377D78073A15EBF61B5CABB07FF01E4C74175B5003025504626CBFF968FC"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR34.usf",
+      "HEADBlob": "0d1cc34228a502a8cc721ee0b2b00ba9f8409b54",
+      "WorkingBlob": "0d1cc34228a502a8cc721ee0b2b00ba9f8409b54",
+      "MatchesHEAD": true,
+      "SHA256": "DC41A5526E64EDAB62D888EBDDC89BDFC9E08B52233FED6B466309160D58C49D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR35.usf",
+      "HEADBlob": "2d5b2e5722c6917763d51fc42c6130852513b10a",
+      "WorkingBlob": "2d5b2e5722c6917763d51fc42c6130852513b10a",
+      "MatchesHEAD": true,
+      "SHA256": "F905DDC2A78AE35B5946DD29438310819FF7CF6888189812E10FC0A1E433FF4E"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR36.usf",
+      "HEADBlob": "6c387fda1e7254493963c0ac51dc9a7eba1e106e",
+      "WorkingBlob": "6c387fda1e7254493963c0ac51dc9a7eba1e106e",
+      "MatchesHEAD": true,
+      "SHA256": "60D95423CC6E86147D8ABE3B036E55A35FAAA012B99FFFB38C44ABB00671CFA5"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR37.usf",
+      "HEADBlob": "0ae1e48b2cf19f43c540b75ec1d06d7122bb82a5",
+      "WorkingBlob": "0ae1e48b2cf19f43c540b75ec1d06d7122bb82a5",
+      "MatchesHEAD": true,
+      "SHA256": "A3F5C5030CBC36AB43848F2D1E769D5238BD28658AFB0E7ADD015AC1113DC142"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR38.usf",
+      "HEADBlob": "f1f6bf4ba8c96e9431587cd7834d609983abf736",
+      "WorkingBlob": "f1f6bf4ba8c96e9431587cd7834d609983abf736",
+      "MatchesHEAD": true,
+      "SHA256": "21DFF79F97DFF29B1C6D283587756C2AEEB440B1264237F33EF858ED28E83504"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR39.usf",
+      "HEADBlob": "0bb86f412d99fedce0c0ca1a509dee4dd0af6ef9",
+      "WorkingBlob": "0bb86f412d99fedce0c0ca1a509dee4dd0af6ef9",
+      "MatchesHEAD": true,
+      "SHA256": "594092A77F1EC8E96D567AA9C0F489564B4491D334DC162009A94EF8CA6F04A0"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR40.usf",
+      "HEADBlob": "723a7f5df91c49f3f253b15fd5d754e8c4a346ef",
+      "WorkingBlob": "723a7f5df91c49f3f253b15fd5d754e8c4a346ef",
+      "MatchesHEAD": true,
+      "SHA256": "EFA8534F09B4D294DFF7B33C762FD86BF62290B86F4FF06DCC54B663B4713A12"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR41.usf",
+      "HEADBlob": "680b98fb4a84e5f4e639fa087ff7c8bc35894037",
+      "WorkingBlob": "680b98fb4a84e5f4e639fa087ff7c8bc35894037",
+      "MatchesHEAD": true,
+      "SHA256": "23F9B4B9C1A479126DAD7CFDE65180FE98D17A8BD44890C598CB7CC33CC9DAFD"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR42.usf",
+      "HEADBlob": "d45deeff284ed5a909c736d206def9661c2588cb",
+      "WorkingBlob": "d45deeff284ed5a909c736d206def9661c2588cb",
+      "MatchesHEAD": true,
+      "SHA256": "6AE7C24D89FD45EC118E02F18FBF7DCB3D7341E55455A1435BAFFB61F9D2EBEA"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR43.usf",
+      "HEADBlob": "fed94529344702a985044328ab95264c9e17cd34",
+      "WorkingBlob": "fed94529344702a985044328ab95264c9e17cd34",
+      "MatchesHEAD": true,
+      "SHA256": "ED330888D1BE78D7A55DDAAF1E4F381890247B90B92298456FFC9520899075ED"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR44.usf",
+      "HEADBlob": "ace03f4fd1467233e09b1f85edc43fe49a628678",
+      "WorkingBlob": "ace03f4fd1467233e09b1f85edc43fe49a628678",
+      "MatchesHEAD": true,
+      "SHA256": "D40895E435920306D6434FC0D832C40156F2B8F1DFE17AF9542E6D618A1BD21B"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR45.usf",
+      "HEADBlob": "27879ca97e36f134e81f5b07a9949e2e04a72d26",
+      "WorkingBlob": "27879ca97e36f134e81f5b07a9949e2e04a72d26",
+      "MatchesHEAD": true,
+      "SHA256": "7EA5AF663493C3BC444095700048E7D21CE7CF939B2D1E1BBAECED70A2213703"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR46.usf",
+      "HEADBlob": "9239353cebd527225bb5cd90d83aaea1b0bffb38",
+      "WorkingBlob": "9239353cebd527225bb5cd90d83aaea1b0bffb38",
+      "MatchesHEAD": true,
+      "SHA256": "680014C87C9F505392C547745B6DF342A15689EA093B572A954FCDAFDD60498F"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR47.usf",
+      "HEADBlob": "e0066f03ddfe69a2fc5ec62a8806b74ee11010af",
+      "WorkingBlob": "e0066f03ddfe69a2fc5ec62a8806b74ee11010af",
+      "MatchesHEAD": true,
+      "SHA256": "4DAD4E2A63BDCD010D81E6FA84A4F073F2223D69D5FF490211C6365F7F618133"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR48.usf",
+      "HEADBlob": "68126ce38c12dd4dfb8e8e259cf44bbed1db06c6",
+      "WorkingBlob": "68126ce38c12dd4dfb8e8e259cf44bbed1db06c6",
+      "MatchesHEAD": true,
+      "SHA256": "0158A1E3AB01AD7341CEB63D8BAFF50CC0D3173C8B631E6E0EE266C6FE96E5C0"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR49.usf",
+      "HEADBlob": "d8b7a0e4214a67ed4e18c0edb050e779e7a68add",
+      "WorkingBlob": "d8b7a0e4214a67ed4e18c0edb050e779e7a68add",
+      "MatchesHEAD": true,
+      "SHA256": "2AC3A68BE35D9BFBE45269FE31AAAC044818EB95AAE7FF96566403160A3BC020"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR50.usf",
+      "HEADBlob": "68731915f475476efd3eecc784d8be60bacc8a4f",
+      "WorkingBlob": "68731915f475476efd3eecc784d8be60bacc8a4f",
+      "MatchesHEAD": true,
+      "SHA256": "79EBEE1106046A30EA06704FBD643D924CD8FA84C2F3E2E817D2DDE819D2537D"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR51.usf",
+      "HEADBlob": "ad8fbd529d9a174c7e81e5b5ddede32fe7a24110",
+      "WorkingBlob": "ad8fbd529d9a174c7e81e5b5ddede32fe7a24110",
+      "MatchesHEAD": true,
+      "SHA256": "7135B0D8BD71B3C4460BDA8F730CD203B6400B5EDAD6A7C5063A20826962D7B2"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR52.usf",
+      "HEADBlob": "740a5cf33ca65e4f63f5921c1ed129bd06c08f53",
+      "WorkingBlob": "740a5cf33ca65e4f63f5921c1ed129bd06c08f53",
+      "MatchesHEAD": true,
+      "SHA256": "C6018FD49FB91AFB2738B50C0A5B9F365381D93DFA04194E4F1A5C2BA6B1C0C2"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR53.usf",
+      "HEADBlob": "de611fb4a7682e1bd5ce732c06a3b30c54e81ed8",
+      "WorkingBlob": "de611fb4a7682e1bd5ce732c06a3b30c54e81ed8",
+      "MatchesHEAD": true,
+      "SHA256": "215476544935AE2C32C024C2DC83568943CCD0C5B605092D1E33076F132C077F"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR54.usf",
+      "HEADBlob": "4578c01b900a103e5d1d4d5f215633202b6ed458",
+      "WorkingBlob": "4578c01b900a103e5d1d4d5f215633202b6ed458",
+      "MatchesHEAD": true,
+      "SHA256": "C88FAB969ED7C0A0C33F89332E98F7B5E4821BBEB9D4FA30A16BA2712C29CEED"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR55.usf",
+      "HEADBlob": "a566f2dd306a8a7456f7772f9eab67fa8ad666df",
+      "WorkingBlob": "a566f2dd306a8a7456f7772f9eab67fa8ad666df",
+      "MatchesHEAD": true,
+      "SHA256": "D169087FFD90874BFE93BF508E3E6AED9CE3D4B4478C6A3102D20C18C6362232"
+    },
+    {
+      "Path": "Shaders/TMMDShader/MMDUniversalAnimeToonR56.usf",
+      "HEADBlob": "b414d9f3a6eb31408bb2c5d30ec257eaf0c45eea",
+      "WorkingBlob": "b414d9f3a6eb31408bb2c5d30ec257eaf0c45eea",
+      "MatchesHEAD": true,
+      "SHA256": "81B43D191C8467359DC091BE16A5C9D5232A8781B8D282E383F4B38C35E10552"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDAnimeCloth.usf",
+      "HEADBlob": "5ac9123af36bbb53007bce0eb41d60afd99098c2",
+      "WorkingBlob": "5ac9123af36bbb53007bce0eb41d60afd99098c2",
+      "MatchesHEAD": true,
+      "SHA256": "08A89D2D2B59FA68B6B97D19B322A6F8409746929850AC517D9A14B5241BED21"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDAnimeFace.usf",
+      "HEADBlob": "412d3127d377d94cb4c28b7b2c00884a5aa72fef",
+      "WorkingBlob": "412d3127d377d94cb4c28b7b2c00884a5aa72fef",
+      "MatchesHEAD": true,
+      "SHA256": "59B39C645D3AE36270F5E79254A1CE29540B23DE96DD97700FAF6A61627D57A4"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDAnimeHair.usf",
+      "HEADBlob": "e0da81894a2a4ed251b6aecb44babda874dec525",
+      "WorkingBlob": "e0da81894a2a4ed251b6aecb44babda874dec525",
+      "MatchesHEAD": true,
+      "SHA256": "CCD307B225E0B8E665DC7EAE6AD92C99095DB256996D342D341FE3D193E607FA"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDAnimeSkin.usf",
+      "HEADBlob": "97efe680e85430b57fcbeabe72dd35ecbaf3da10",
+      "WorkingBlob": "97efe680e85430b57fcbeabe72dd35ecbaf3da10",
+      "MatchesHEAD": true,
+      "SHA256": "C15B9E2B8333A35A551984E57043807B67706800FCEA2E1670890DC11D60EF4F"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDGardenSurface.usf",
+      "HEADBlob": "d9c69ea427c9df2a9ecf86afb0c9488e841c7b9c",
+      "WorkingBlob": "c1323f163eae901d96fca0d1786e7be14dbf792e",
+      "MatchesHEAD": false,
+      "SHA256": "487C43BC2D03C47CF89CB55A9C36846B6EAA2D32B8277C0A3368633FDAA94815"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDGardenWater.usf",
+      "HEADBlob": "1d910063c8d95dfa8dc2ac525d04d02fa44e6700",
+      "WorkingBlob": "1d910063c8d95dfa8dc2ac525d04d02fa44e6700",
+      "MatchesHEAD": true,
+      "SHA256": "06E6F68FC60F0FAC9025DAC2E6A27EFEA2FA7928D35FF6F658B06019C30DA562"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDOutline.usf",
+      "HEADBlob": "ccb2109a67debba285b7454fee710c48644fcff3",
+      "WorkingBlob": "ccb2109a67debba285b7454fee710c48644fcff3",
+      "MatchesHEAD": true,
+      "SHA256": "DC9DDD50C4F36A8DC2652EBDB7CB6F55E35E736DC7E3F8EF4A033AE7BFA4A6BB"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDReferenceCharacter.usf",
+      "HEADBlob": "871c22521f711327524e993c8569fb036a5a0216",
+      "WorkingBlob": "c88df991452858efc86f2fdccb6c473a23a48c45",
+      "MatchesHEAD": false,
+      "SHA256": "C49FBCC1820D50FEA4F7CDA5BAE4C272A570D9C0F4C29D8C9E90BF4F9BC7B34E"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDStageBackdrop.usf",
+      "HEADBlob": "ecf9c2087c620eb473bb35df49dff9f58c970cef",
+      "WorkingBlob": "2b265c5fa591f8bec94aad44618a427e39a7b601",
+      "MatchesHEAD": false,
+      "SHA256": "EC29F5DF359908890C17C6473BDB56F6E3F64E004755A2234BDB2968E821E301"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDStageSurface.usf",
+      "HEADBlob": "37d195fa78de8939c32fb05dff53cde05d292caf",
+      "WorkingBlob": "37d195fa78de8939c32fb05dff53cde05d292caf",
+      "MatchesHEAD": true,
+      "SHA256": "A24ADFA444AB77A4509CB1740AC790C555B8FBDBC2EEDE0607271EB0B892D6D9"
+    },
+    {
+      "Path": "Shaders/TMMDShader/TMMDStageToon.usf",
+      "HEADBlob": "63e973a65d0f40f990cd12e90a66ad3991bc8ce0",
+      "WorkingBlob": "63e973a65d0f40f990cd12e90a66ad3991bc8ce0",
+      "MatchesHEAD": true,
+      "SHA256": "EED8883EE57131BD168057B6580B35941EF99F4EA5B6039CA080461718F8B862"
+    },
+    {
+      "Path": "Shaders/TShaderFunctionLibrary/AnimeEnvironment.usf",
+      "HEADBlob": "51c21e360e3ff31fd6178aee81a40c423a1d2b39",
+      "WorkingBlob": "51c21e360e3ff31fd6178aee81a40c423a1d2b39",
+      "MatchesHEAD": true,
+      "SHA256": "F2C2BECB07D9E8623187A505E8D81F7E266EF0253362DCCDD281827C081BF807"
+    },
+    {
+      "Path": "Shaders/TShaderFunctionLibrary/AnimeLightingCommon.usf",
+      "HEADBlob": "e331751b199a9b91760124c7225bfeb2774a4b98",
+      "WorkingBlob": "e331751b199a9b91760124c7225bfeb2774a4b98",
+      "MatchesHEAD": true,
+      "SHA256": "592E46FA321D3F1EF3E24D36C0D9C43DE05E41324C7FEDC095167F2DCD8803EB"
+    }
+  ],
+  "Scope": "HEAD对比使用Git路径过滤后的blob；另以原文件字节SHA256核对10月11冻结清单。未修改shader、Content、DLL或stash。"
+}

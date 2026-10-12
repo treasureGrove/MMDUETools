@@ -1,0 +1,522 @@
+// 终末地二期专属 BRDF；独立组织宏观法线、镜面微法线和材质响应。
+// 材质 Custom 节点内复用，不依赖模型 UV 或配套贴图；旧共享文件保持冻结。
+struct TMMDEndfieldPhase2SurfaceDetail
+{
+    float3 diffuse_normal;
+    float3 specular_normal;
+    float3 hair_tangent;
+    float roughness;
+    float strand_mask;
+    float cloth_cavity;
+    float cloth_weave;
+    float face_mask;
+};
+
+struct TMMDEndfieldPhase2BRDF
+{
+    float GetRoleRoughness(float roughness, float material_role, float style_family, float specular_power)
+    {
+        float role = floor(material_role + 0.5);
+        float role_roughness = 0.55;
+        float minimum_roughness = 0.30;
+        if (role == 1.0)
+        {
+            role_roughness = 0.46;
+            minimum_roughness = 0.38;
+        }
+        else if (role == 2.0)
+        {
+            role_roughness = style_family < 0.5 ? 0.34 : (style_family < 1.5 ? 0.30 : (style_family < 2.5 ? 0.40 : 0.38));
+            minimum_roughness = 0.27;
+        }
+        else if (role == 3.0)
+        {
+            role_roughness = 0.62;
+            minimum_roughness = 0.48;
+        }
+        else if (role == 4.0)
+        {
+            role_roughness = 0.25;
+            minimum_roughness = 0.20;
+        }
+        else if (role == 5.0)
+        {
+            role_roughness = 0.18;
+            minimum_roughness = 0.12;
+        }
+        float artist_scale = clamp(roughness / 0.60, 0.65, 1.5)
+                           * pow(48.0 / max(specular_power, 1.0), 0.10);
+        return clamp(role_roughness * artist_scale, minimum_roughness, 0.95);
+    }
+
+    float3 GetF0(float3 base_color, float3 specular_tint, float material_role)
+    {
+        float role = floor(material_role + 0.5);
+        // 眼球湿润反射保持中性介质 F0，只使用真实几何与场景辐射。
+        if (role == 5.0) return float3(0.025, 0.025, 0.025);
+        float dielectric_f0 = role == 1.0 ? 0.028 : (role == 2.0 ? 0.046 : (role == 3.0 ? 0.025 : 0.04));
+        float3 tint = clamp(specular_tint, 0.0, 1.25);
+        return role == 4.0 ? clamp(base_color * tint, 0.04, 0.92) : clamp(dielectric_f0 * tint, 0.0, 0.08);
+    }
+
+    float3 SchlickFresnel(float3 f0, float v_dot_h)
+    {
+        float grazing = pow(1.0 - saturate(v_dot_h), 5.0);
+        return f0 + (1.0 - f0) * grazing;
+    }
+
+    float DistributionGGX(float n_dot_h, float roughness)
+    {
+        float alpha = roughness * roughness;
+        float alpha_squared = alpha * alpha;
+        float denominator = n_dot_h * n_dot_h * (alpha_squared - 1.0) + 1.0;
+        return alpha_squared / max(3.14159265 * denominator * denominator, 1e-6);
+    }
+
+    float SmithVisibility(float n_dot_v, float n_dot_l, float roughness)
+    {
+        float alpha = roughness * roughness;
+        float alpha_squared = alpha * alpha;
+        float visibility_v = n_dot_l * sqrt(n_dot_v * n_dot_v * (1.0 - alpha_squared) + alpha_squared);
+        float visibility_l = n_dot_v * sqrt(n_dot_l * n_dot_l * (1.0 - alpha_squared) + alpha_squared);
+        return 0.5 / max(visibility_v + visibility_l, 1e-5);
+    }
+
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        return dot(value, value) > 1e-6 ? value * rsqrt(dot(value, value)) : fallback;
+    }
+
+    float3 OrthogonalizeHairTangent(float3 world_normal, float3 hair_tangent)
+    {
+        float3 normal = SafeNormalize(world_normal, float3(0.0, 0.0, 1.0));
+        float3 fallback_axis = abs(normal.z) < 0.90 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+        float3 fallback_tangent = SafeNormalize(fallback_axis - normal * dot(fallback_axis, normal), float3(0.0, 1.0, 0.0));
+        return SafeNormalize(hair_tangent - normal * dot(hair_tangent, normal), fallback_tangent);
+    }
+
+    bool PrepareHeadFrame(float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+                          out float3 head_forward, out float3 head_right, out float3 head_up)
+    {
+        head_forward = float3(0.0, 1.0, 0.0);
+        head_right = float3(1.0, 0.0, 0.0);
+        head_up = float3(0.0, 0.0, 1.0);
+        if (head_position_radius.w <= 1e-3 || dot(head_forward_ws.xyz, head_forward_ws.xyz) < 1e-4
+            || dot(head_right_ws.xyz, head_right_ws.xyz) < 1e-4) return false;
+        head_forward = SafeNormalize(head_forward_ws.xyz, head_forward);
+        float3 orthogonal_right = head_right_ws.xyz - head_forward * dot(head_right_ws.xyz, head_forward);
+        if (dot(orthogonal_right, orthogonal_right) < 1e-4) return false;
+        head_right = SafeNormalize(orthogonal_right, head_right);
+        head_up = SafeNormalize(cross(head_right, head_forward), head_up);
+        return true;
+    }
+
+    void PrepareSkinNormals(float3 world_pos, float3 world_normal, float material_role, float style_family,
+                            float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+                            out float3 diffuse_normal, out float3 specular_normal, out float face_mask)
+    {
+        diffuse_normal = world_normal;
+        specular_normal = world_normal;
+        face_mask = 0.0;
+        float3 head_forward;
+        float3 head_right;
+        float3 head_up;
+        // 头部几何基可缺省；半径为 0 时完全保留通用 Skin，不采脸图、不增加部位分类。
+        [branch]
+        if (floor(material_role + 0.5) == 1.0
+            && PrepareHeadFrame(head_forward_ws, head_right_ws, head_position_radius, head_forward, head_right, head_up))
+        {
+            float3 offset = (world_pos - head_position_radius.xyz) / head_position_radius.w;
+            float3 head_pos = float3(dot(offset, head_right), dot(offset, head_forward), dot(offset, head_up));
+            float front_mask = smoothstep(-0.08, 0.25, head_pos.y);
+            float chin_mask = smoothstep(-0.95, -0.62, head_pos.z);
+            float crown_mask = 1.0 - smoothstep(1.0, 1.3, head_pos.z);
+            float distance_mask = 1.0 - smoothstep(1.05, 1.55, length(head_pos));
+            float normal_mask = lerp(0.65, 1.0, smoothstep(-0.65, 0.25, dot(world_normal, head_forward)));
+            face_mask = front_mask * chin_mask * crown_mask * distance_mask * normal_mask;
+            // 局部曲面平滑大面与尖面过渡；鼻翼、嘴唇仍保留较多原几何受光方向。
+            float3 ellipsoid_gradient = head_right * (head_pos.x / (0.78 * 0.78))
+                                      + head_forward * (head_pos.y / (0.98 * 0.98)) + head_up * head_pos.z;
+            float3 face_normal = SafeNormalize(ellipsoid_gradient + head_forward * 0.12, head_forward);
+            float diffuse_smoothing = 0.80;
+            float specular_smoothing = 0.45;
+            if (style_family >= 1.5 && style_family < 2.5)
+            {
+                float planar_agreement = smoothstep(0.65, 0.95, dot(world_normal, face_normal));
+                // 尖面最多混合 0.45，避免反向法线在 0.5 权重处抵消；大面可再提高平滑。
+                diffuse_smoothing = lerp(0.45, 0.65, planar_agreement);
+                specular_smoothing = lerp(0.30, 0.45, planar_agreement);
+            }
+            diffuse_normal = SafeNormalize(lerp(world_normal, face_normal, face_mask * diffuse_smoothing), world_normal);
+            specular_normal = SafeNormalize(lerp(world_normal, face_normal, face_mask * specular_smoothing), world_normal);
+        }
+    }
+
+    float3 PrepareHairFlow(FMaterialPixelParameters Parameters, float3 world_normal,
+                           float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius)
+    {
+        float3x3 local_to_world = GetLocalToWorld3x3(Parameters);
+        float3 object_up = SafeNormalize(mul(float3(0,0,1), local_to_world), float3(0,0,1));
+        float3 object_right = SafeNormalize(mul(float3(1,0,0), local_to_world), float3(1,0,0));
+        float3 flow_direction = object_up;
+        float3 head_forward;
+        float3 head_right;
+        float3 head_up;
+        if (PrepareHeadFrame(head_forward_ws, head_right_ws, head_position_radius, head_forward, head_right, head_up))
+        {
+            float3 crown = head_position_radius.xyz + head_up * (head_position_radius.w * 0.75);
+            flow_direction = SafeNormalize(LWCToFloat(Parameters.AbsoluteWorldPosition) - crown, -head_up);
+        }
+        float3 tangent = flow_direction - world_normal * dot(flow_direction, world_normal);
+        if (dot(tangent, tangent) <= 1e-6)
+            tangent = object_right - world_normal * dot(object_right, world_normal);
+        return OrthogonalizeHairTangent(world_normal, tangent);
+    }
+
+    void PrepareHair(FMaterialPixelParameters Parameters, float3 world_normal, float material_role,
+                     Texture2D hair_shift_tex, SamplerState hair_shift_sampler,
+                     float hair_shift_strength, float hair_shift_scale,
+                     float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+                     out float3 hair_normal, out float3 hair_tangent, out float strand_mask,
+                     out float band_shift, out float band_breakup)
+    {
+        hair_normal = world_normal;
+        hair_tangent = float3(0.0, 0.0, 1.0);
+        strand_mask = 1.0;
+        band_shift = 0.0;
+        band_breakup = 1.0;
+        // 通用偏移图是可选的艺术细节；0 强度不采样并保留几何发流，不涉及模型 UV。
+        [branch]
+        if (floor(material_role + 0.5) == 2.0)
+        {
+            float3x3 local_to_world = GetLocalToWorld3x3(Parameters);
+            hair_tangent = PrepareHairFlow(Parameters, world_normal, head_forward_ws, head_right_ws, head_position_radius);
+            if (hair_shift_strength <= 1e-4) return;
+            float3 local_pos = WSMultiplyDemote(GetWorldPosition(Parameters), GetWorldToLocal(Parameters));
+            float3 local_normal = SafeNormalize(mul(world_normal, transpose(local_to_world)), float3(0.0, 0.0, 1.0));
+            float3 weights = pow(abs(local_normal), 4.0);
+            weights /= max(weights.x + weights.y + weights.z, 1e-5);
+            float3 sample_pos = local_pos * clamp(hair_shift_scale, 0.0001, 0.20);
+            float3 coarse_pos = sample_pos * 0.40 + float3(0.17, 0.31, 0.07);
+            float coarse_sample = Texture2DSample(hair_shift_tex, hair_shift_sampler, coarse_pos.yz).r * weights.x
+                                + Texture2DSample(hair_shift_tex, hair_shift_sampler, coarse_pos.xz).r * weights.y
+                                + Texture2DSample(hair_shift_tex, hair_shift_sampler, coarse_pos.xy).r * weights.z;
+            float fine_sample = Texture2DSample(hair_shift_tex, hair_shift_sampler, sample_pos.yz).r * weights.x
+                              + Texture2DSample(hair_shift_tex, hair_shift_sampler, sample_pos.xz).r * weights.y
+                              + Texture2DSample(hair_shift_tex, hair_shift_sampler, sample_pos.xy).r * weights.z;
+            float coarse_shift = saturate(coarse_sample) * 2.0 - 1.0;
+            float fine_shift = saturate(fine_sample) * 2.0 - 1.0;
+            float strength = saturate(hair_shift_strength);
+            float rotation = coarse_shift * strength * 0.10471976;
+            float3 bitangent = SafeNormalize(cross(world_normal, hair_tangent), float3(1,0,0));
+            // 发流、带位置和微法线分别控制；偏移图不再扭转镜面法线及环境反射。
+            hair_tangent = OrthogonalizeHairTangent(world_normal,
+                hair_tangent * cos(rotation) + bitangent * sin(rotation));
+            band_shift = (coarse_shift * 0.10 + fine_shift * 0.025) * strength;
+            band_breakup = 1.0 + fine_shift * (0.22 * strength);
+            strand_mask = 1.0 + fine_shift * (0.15 * strength);
+        }
+    }
+
+    float3 ProjectionWeights(float3 object_normal)
+    {
+        float3 weights = pow(abs(object_normal), 4.0);
+        return weights / max(weights.x + weights.y + weights.z, 1e-5);
+    }
+
+    float3 DecodeBC5(float2 encoded_normal)
+    {
+        float2 normal_xy = encoded_normal * 2.0 - 1.0;
+        float length_squared = dot(normal_xy, normal_xy);
+        normal_xy *= rsqrt(max(length_squared, 1.0));
+        return float3(normal_xy, sqrt(saturate(1.0 - dot(normal_xy, normal_xy))));
+    }
+
+    float3 WhiteoutProjection(float3 sampled_normal, float3 object_normal, float3 tangent,
+                              float3 bitangent, float3 axis)
+    {
+        float3 base_normal = float3(dot(object_normal, tangent), dot(object_normal, bitangent), dot(object_normal, axis));
+        float3 blended_normal = SafeNormalize(float3(sampled_normal.xy + base_normal.xy,
+                                                     sampled_normal.z * base_normal.z), base_normal);
+        return tangent * blended_normal.x + bitangent * blended_normal.y + axis * blended_normal.z;
+    }
+
+    float3 AddAnalyticWeave(float3 sampled_normal, float2 projected_uv, out float weave_variation)
+    {
+        // 650 周期/贴图 * 默认 0.01/cm = 约 1.5 mm；屏幕欠采样时平滑退出。
+        float2 phase = projected_uv * (6.2831853 * 650.0);
+        float2 band_limit = 1.0 - smoothstep(2.0, 6.2831853, fwidth(phase));
+        float fade = band_limit.x * band_limit.y;
+        float2 gradient = float2(cos(phase.x) * sin(phase.y), sin(phase.x) * cos(phase.y));
+        weave_variation = cos(phase.x) * cos(phase.y) * fade;
+        return SafeNormalize(sampled_normal + float3(gradient * (0.03 * fade), 0.0), sampled_normal);
+    }
+
+    float3 SampleDetailNormal(Texture2D detail_normal, SamplerState detail_sampler, float3 sample_pos,
+                               float3 object_normal, float strength, bool use_weave, float mip_bias, out float weave_variation)
+    {
+        weave_variation = 0.0;
+        if (strength <= 1e-4) return object_normal;
+        float3 signs = float3(object_normal.x < 0.0 ? -1.0 : 1.0,
+                              object_normal.y < 0.0 ? -1.0 : 1.0,
+                              object_normal.z < 0.0 ? -1.0 : 1.0);
+        float2 uv_x = float2(sample_pos.y, sample_pos.z * signs.x);
+        float2 uv_y = float2(sample_pos.x, -sample_pos.z * signs.y);
+        float2 uv_z = float2(sample_pos.x, sample_pos.y * signs.z);
+        float3 normal_x = DecodeBC5(Texture2DSampleBias(detail_normal, detail_sampler, uv_x, mip_bias).rg);
+        float3 normal_y = DecodeBC5(Texture2DSampleBias(detail_normal, detail_sampler, uv_y, mip_bias).rg);
+        float3 normal_z = DecodeBC5(Texture2DSampleBias(detail_normal, detail_sampler, uv_z, mip_bias).rg);
+        float3 weights = ProjectionWeights(object_normal);
+        if (use_weave)
+        {
+            float weave_x;
+            float weave_y;
+            float weave_z;
+            normal_x = AddAnalyticWeave(normal_x, uv_x, weave_x);
+            normal_y = AddAnalyticWeave(normal_y, uv_y, weave_y);
+            normal_z = AddAnalyticWeave(normal_z, uv_z, weave_z);
+            weave_variation = dot(float3(weave_x, weave_y, weave_z), weights);
+        }
+        // 每个投影先重定向到几何法线再融合；平法线图在正负轴及三向交界严格还原 N。
+        normal_x = WhiteoutProjection(normal_x, object_normal, float3(0,1,0), float3(0,0,signs.x), float3(signs.x,0,0));
+        normal_y = WhiteoutProjection(normal_y, object_normal, float3(1,0,0), float3(0,0,-signs.y), float3(0,signs.y,0));
+        normal_z = WhiteoutProjection(normal_z, object_normal, float3(1,0,0), float3(0,signs.z,0), float3(0,0,signs.z));
+        float3 blended_normal = SafeNormalize(normal_x * weights.x + normal_y * weights.y + normal_z * weights.z, object_normal);
+        return SafeNormalize(lerp(object_normal, blended_normal, saturate(strength)), object_normal);
+    }
+
+    float3 SampleDetailData(Texture2D detail_data, SamplerState detail_sampler, float3 sample_pos, float3 object_normal)
+    {
+        float3 signs = float3(object_normal.x < 0.0 ? -1.0 : 1.0,
+                              object_normal.y < 0.0 ? -1.0 : 1.0,
+                              object_normal.z < 0.0 ? -1.0 : 1.0);
+        float3 data_x = Texture2DSample(detail_data, detail_sampler, float2(sample_pos.y, sample_pos.z * signs.x)).rgb;
+        float3 data_y = Texture2DSample(detail_data, detail_sampler, float2(sample_pos.x, -sample_pos.z * signs.y)).rgb;
+        float3 data_z = Texture2DSample(detail_data, detail_sampler, float2(sample_pos.x, sample_pos.y * signs.z)).rgb;
+        float3 weights = ProjectionWeights(object_normal);
+        return data_x * weights.x + data_y * weights.y + data_z * weights.z;
+    }
+
+    TMMDEndfieldPhase2SurfaceDetail PrepareSurfaceDetail(FMaterialPixelParameters Parameters, float3 world_normal,
+        float material_role, float roughness, float style_family, float specular_power,
+        Texture2D hair_shift_tex, SamplerState hair_shift_sampler, float hair_shift_strength, float hair_shift_scale,
+        float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+        Texture2D hair_detail_normal, SamplerState hair_detail_sampler, float hair_detail_strength,
+        Texture2D cloth_detail_normal, SamplerState cloth_detail_sampler, float cloth_detail_strength,
+        Texture2D cloth_detail_data, SamplerState cloth_data_sampler, float cloth_detail_scale, float hair_detail_scale)
+    {
+        TMMDEndfieldPhase2SurfaceDetail surface;
+        surface.roughness = GetRoleRoughness(roughness, material_role, style_family, specular_power);
+        surface.strand_mask = 1.0;
+        surface.cloth_cavity = 1.0;
+        surface.cloth_weave = 1.0;
+        surface.hair_tangent = float3(0,0,1);
+        PrepareSkinNormals(LWCToFloat(Parameters.AbsoluteWorldPosition), world_normal, material_role, style_family,
+            head_forward_ws, head_right_ws, head_position_radius,
+            surface.diffuse_normal, surface.specular_normal, surface.face_mask);
+        float role = floor(material_role + 0.5);
+        // 整个图只调用一次；Role/强度判断位于任何细节采样之前，Skin 等材质零采样。
+        [branch]
+        if ((role == 2.0 && hair_detail_strength > 1e-4) || (role == 3.0 && cloth_detail_strength > 1e-4))
+        {
+            float3x3 local_to_world = GetLocalToWorld3x3(Parameters);
+            float3x3 object_axes = float3x3(SafeNormalize(local_to_world[0], float3(1,0,0)),
+                SafeNormalize(local_to_world[1], float3(0,1,0)), SafeNormalize(local_to_world[2], float3(0,0,1)));
+            float3 object_normal = SafeNormalize(mul(world_normal, transpose(object_axes)), float3(0,0,1));
+            float3 object_pos = WSMultiplyDemote(GetWorldPosition(Parameters), GetWorldToLocal(Parameters));
+            float weave_variation;
+            float3 detailed_normal;
+            float3 macro_diffuse_normal = world_normal;
+            if (role == 2.0)
+            {
+                detailed_normal = SampleDetailNormal(hair_detail_normal, hair_detail_sampler,
+                    object_pos * clamp(hair_detail_scale, 0.0001, 0.20), object_normal, hair_detail_strength, false, 0.0, weave_variation);
+                float macro_weave_unused;
+                float3 macro_object_normal = SampleDetailNormal(hair_detail_normal, hair_detail_sampler,
+                    object_pos * clamp(hair_detail_scale, 0.0001, 0.20), object_normal,
+                    saturate(hair_detail_strength) * 0.45, false, 2.5, macro_weave_unused);
+                macro_diffuse_normal = SafeNormalize(mul(macro_object_normal, object_axes), world_normal);
+            }
+            else
+            {
+                float strength = saturate(cloth_detail_strength);
+                float3 sample_pos = object_pos * clamp(cloth_detail_scale, 0.0001, 0.10);
+                detailed_normal = SampleDetailNormal(cloth_detail_normal, cloth_detail_sampler,
+                    sample_pos, object_normal, strength, true, 0.0, weave_variation);
+                float3 detail_data = SampleDetailData(cloth_detail_data, cloth_data_sampler, sample_pos, object_normal);
+                float detailed_roughness = clamp(surface.roughness * clamp(detail_data.r, 0.50, 0.95) / 0.75
+                    + weave_variation * 0.025, 0.45, 0.95);
+                surface.roughness = lerp(surface.roughness, detailed_roughness, strength);
+                surface.cloth_cavity = lerp(1.0, clamp(detail_data.g, 0.88, 1.0), strength);
+                surface.cloth_weave = lerp(1.0, lerp(0.88, 1.12, saturate((detail_data.b - 0.35) / 0.40)), strength);
+                // 第三响应按角色复用；布料记录纤维比例，皮肤仍记录几何脸部区域。
+                surface.face_mask = lerp(0.35, lerp(0.25, 0.50, saturate(detail_data.b)), strength);
+                // 三向宏法线保留折脊的低阶谐波；+3 mip 过滤细丝织纹，不重复数据采样。
+                float macro_strength = clamp(0.35 * saturate(cloth_detail_strength / 0.40), 0.0, 0.35);
+                float macro_weave_unused;
+                float3 macro_object_normal = SampleDetailNormal(cloth_detail_normal, cloth_detail_sampler,
+                    sample_pos, object_normal, macro_strength, false, 3.0, macro_weave_unused);
+                macro_diffuse_normal = SafeNormalize(mul(macro_object_normal, object_axes), world_normal);
+            }
+            surface.specular_normal = SafeNormalize(mul(detailed_normal, object_axes), world_normal);
+            if (role == 2.0)
+            {
+                float3 hair_tangent = PrepareHairFlow(Parameters, world_normal, head_forward_ws, head_right_ws, head_position_radius);
+                float3 hair_bitangent = SafeNormalize(cross(world_normal, hair_tangent), float3(1,0,0));
+                float3 normal_delta = surface.specular_normal - world_normal;
+                // 仅重组法线扰动方向；沿发流变化压至 20%，不重排三向贴图坐标。
+                surface.specular_normal = SafeNormalize(world_normal + hair_bitangent * dot(normal_delta, hair_bitangent)
+                    + hair_tangent * (dot(normal_delta, hair_tangent) * 0.20), world_normal);
+            }
+            // 镜面保留微细节；漫反射使用过滤后的宏观细节，避免发丝与织纹污染大面明暗。
+            surface.diffuse_normal = macro_diffuse_normal;
+        }
+        if (role == 3.0 && cloth_detail_strength <= 1e-4) surface.face_mask = 0.35;
+        if (role == 2.0)
+            PrepareHair(Parameters, surface.specular_normal, material_role, hair_shift_tex, hair_shift_sampler,
+                hair_shift_strength, hair_shift_scale, head_forward_ws, head_right_ws, head_position_radius,
+                surface.specular_normal, surface.hair_tangent, surface.strand_mask,
+                surface.cloth_cavity, surface.cloth_weave);
+        return surface;
+    }
+
+    float PrepareHairBandOffset(float3 world_pos, float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius)
+    {
+        float3 head_forward;
+        float3 head_right;
+        float3 head_up;
+        if (!PrepareHeadFrame(head_forward_ws, head_right_ws, head_position_radius, head_forward, head_right, head_up)) return 0.0;
+        float3 offset = (world_pos - head_position_radius.xyz) / head_position_radius.w;
+        float height = dot(offset, head_up);
+        float radial_distance = length(float2(dot(offset, head_right), dot(offset, head_forward)));
+        float near_head = smoothstep(-2.0, -1.0, height) * (1.0 - smoothstep(1.0, 1.5, height))
+                        * (1.0 - smoothstep(1.1, 1.6, radial_distance));
+        // 只为平发片补小幅曲率，双瓣仍有独立基线；缺头骨时不偏移。
+        return clamp(height * 0.15, -0.15, 0.15) * near_head;
+    }
+
+    float3 EvaluateHairLobe(float3 world_normal, float3 hair_tangent, float3 view_dir, float3 L,
+                           float3 f0, float roughness, float tangent_shift)
+    {
+        // 同时旋转 N/T 保持正交微表面基；只偏移高光瓣，不改变共享法线或天空采样方向。
+        float3 lobe_normal = SafeNormalize(world_normal - hair_tangent * tangent_shift, world_normal);
+        float3 lobe_tangent = SafeNormalize(hair_tangent + world_normal * tangent_shift, hair_tangent);
+        float n_dot_v = saturate(dot(lobe_normal, view_dir));
+        float n_dot_l = saturate(dot(lobe_normal, L));
+        if (n_dot_v <= 1e-5 || n_dot_l <= 1e-5) return 0.0;
+        float3 H = SafeNormalize(view_dir + L, lobe_normal);
+        float3 bitangent = SafeNormalize(cross(lobe_normal, lobe_tangent), float3(1.0, 0.0, 0.0));
+        float alpha = roughness * roughness;
+        float alpha_tangent = clamp(alpha * 0.30, 0.025, 0.90);
+        float alpha_bitangent = clamp(alpha * 1.15, 0.025, 0.90);
+        float t_dot_h = dot(lobe_tangent, H);
+        float b_dot_h = dot(bitangent, H);
+        float n_dot_h = saturate(dot(lobe_normal, H));
+        float denominator = t_dot_h * t_dot_h / (alpha_tangent * alpha_tangent)
+                          + b_dot_h * b_dot_h / (alpha_bitangent * alpha_bitangent) + n_dot_h * n_dot_h;
+        float distribution = 1.0 / max(3.14159265 * alpha_tangent * alpha_bitangent * denominator * denominator, 1e-6);
+        float3 projected_view = float3(alpha_tangent * dot(lobe_tangent, view_dir),
+                                      alpha_bitangent * dot(bitangent, view_dir), n_dot_v);
+        float3 projected_light = float3(alpha_tangent * dot(lobe_tangent, L),
+                                       alpha_bitangent * dot(bitangent, L), n_dot_l);
+        float visibility = 0.5 / max(n_dot_l * length(projected_view) + n_dot_v * length(projected_light), 1e-5);
+        return distribution * visibility * SchlickFresnel(f0, saturate(dot(view_dir, H))) * n_dot_l;
+    }
+
+    float EvaluateHairBand(float3 world_normal, float3 hair_tangent, float3 H, float tangent_shift,
+                           float band_power, float angular_footprint)
+    {
+        float3 band_tangent = SafeNormalize(hair_tangent + world_normal * tangent_shift, hair_tangent);
+        float3 band_normal = SafeNormalize(world_normal - hair_tangent * tangent_shift, world_normal);
+        float t_dot_h = clamp(dot(band_tangent, H), -1.0, 1.0);
+        // 约束发丝法截面的方位，避免半程向量平面把整张发片照成长亮轨。
+        float azimuth_n_dot_h = saturate(dot(band_normal, H));
+        float azimuth_weight = azimuth_n_dot_h * azimuth_n_dot_h;
+        // 足迹由灯循环前的屏幕导数传播，分歧分支内只做算术滤波。
+        float footprint = clamp(angular_footprint, 0.0, 2.0);
+        float filtered_power = band_power / (1.0 + band_power * footprint * footprint);
+        float filter_weight = sqrt(filtered_power / band_power);
+        return pow(saturate(1.0 - t_dot_h * t_dot_h), filtered_power * 0.5) * filter_weight * azimuth_weight;
+    }
+
+    float3 EvaluateHairSpecular(float3 world_normal, float3 hair_tangent, float3 view_dir, float3 L,
+                               float3 f0, float roughness, float style_family, float specular_power,
+                               float angular_footprint, float shape_offset, float band_shift, float band_breakup)
+    {
+        if (dot(world_normal, view_dir) <= 1e-5 || dot(world_normal, L) <= 1e-5) return 0.0;
+        hair_tangent = OrthogonalizeHairTangent(world_normal, hair_tangent);
+        [branch]
+        if (style_family >= 1.5 && style_family < 2.5)
+        {
+            float3 H = SafeNormalize(view_dir + L, world_normal);
+            float roughness_scale = clamp(0.16 / max(roughness * roughness, 0.04), 0.60, 1.60);
+            float primary_power = clamp(specular_power * 1.25 * roughness_scale, 24.0, 140.0);
+            float secondary_power = clamp(primary_power * 2.75, 96.0, 256.0);
+            float primary_band = EvaluateHairBand(world_normal, hair_tangent, H, -0.24 + shape_offset + band_shift, primary_power, angular_footprint);
+            float secondary_band = EvaluateHairBand(world_normal, hair_tangent, H, 0.20 + shape_offset * 0.45 - band_shift * 0.60, secondary_power, angular_footprint);
+            float band = primary_band * 0.72 + secondary_band * (0.28 * clamp(band_breakup, 0.75, 1.25));
+            float n_dot_l = saturate(dot(world_normal, L));
+            float edge_fade = smoothstep(0.0, 0.18, saturate(dot(world_normal, view_dir)));
+            float3 fresnel = SchlickFresnel(f0, saturate(dot(view_dir, H)));
+            // 通用几何双亮带是有界艺术 BRDF；颜色仍受 F0、真实灯辐射及场景遮挡控制。
+            return min(fresnel * (band * 4.0), float3(0.65, 0.65, 0.65)) * n_dot_l * edge_fade;
+        }
+        float wide_roughness = clamp(roughness + 0.06, 0.40, 0.45);
+        float narrow_roughness = clamp(roughness * 0.70, 0.26, 0.30);
+        // 两个归一化 GGX 瓣的权重和为 1；粗糙度下限与 Smith 遮蔽限制尖峰能量。
+        return 0.82 * EvaluateHairLobe(world_normal, hair_tangent, view_dir, L, f0, wide_roughness, -0.04)
+             + 0.18 * EvaluateHairLobe(world_normal, hair_tangent, view_dir, L, f0, narrow_roughness, 0.07);
+    }
+
+    float3 EvaluateClothBroadSpecular(float3 broad_normal, float3 view_dir, float3 L, float roughness)
+    {
+        float n_dot_v = saturate(dot(broad_normal, view_dir));
+        float n_dot_l = saturate(dot(broad_normal, L));
+        if (n_dot_v <= 1e-5 || n_dot_l <= 1e-5) return 0.0;
+        float3 H = SafeNormalize(view_dir + L, broad_normal);
+        float n_dot_h = saturate(dot(broad_normal, H));
+        float v_dot_h = saturate(dot(view_dir, H));
+        float broad_roughness = max(roughness, 0.72);
+        // 宏观褶皱上的中性宽瓣；与原高光归一混合，避免直接叠加两瓣。
+        float3 f0 = float3(0.025, 0.025, 0.025);
+        return DistributionGGX(n_dot_h, broad_roughness)
+             * SmithVisibility(n_dot_v, n_dot_l, broad_roughness) * SchlickFresnel(f0, v_dot_h) * n_dot_l;
+    }
+
+    float3 EvaluateClothFiber(float3 broad_normal, float3 view_dir, float3 L, float roughness, float3 albedo)
+    {
+        float n_dot_v = saturate(dot(broad_normal, view_dir));
+        float n_dot_l = saturate(dot(broad_normal, L));
+        if (n_dot_v <= 1e-5 || n_dot_l <= 1e-5) return 0.0;
+        float3 H = SafeNormalize(view_dir + L, broad_normal);
+        float n_dot_h = saturate(dot(broad_normal, H));
+        float inverse_roughness = 1.0 / max(roughness, 0.40);
+        float distribution = (2.0 + inverse_roughness) * pow(max(1.0 - n_dot_h * n_dot_h, 0.0), inverse_roughness * 0.5) / 6.28318531;
+        float visibility = 1.0 / max(4.0 * (n_dot_l + n_dot_v - n_dot_l * n_dot_v), 1e-4);
+        float3 fiber_color = lerp(float3(0.08, 0.08, 0.08), sqrt(saturate(albedo)), 0.30);
+        // Charlie 分布与有界可见性塑造掠射纤维；和微表面高光混合，不直接加白色。
+        return min(fiber_color * distribution * visibility * n_dot_l, float3(0.12, 0.12, 0.12));
+    }
+
+    void EvaluateDirect(float3 albedo, float3 f0, float metallic, float roughness,
+                        float diffuse_n_dot_l, float n_dot_v, float n_dot_l, float n_dot_h, float v_dot_h,
+                        out float3 diffuse_brdf, out float3 specular_brdf)
+    {
+        float3 fresnel = SchlickFresnel(f0, v_dot_h);
+        float3 diffuse_energy = (1.0 - fresnel) * (1.0 - saturate(metallic));
+        diffuse_brdf = diffuse_energy * albedo * (diffuse_n_dot_l / 3.14159265);
+        specular_brdf = DistributionGGX(n_dot_h, roughness)
+                      * SmithVisibility(max(n_dot_v, 1e-4), n_dot_l, roughness) * fresnel * n_dot_l;
+    }
+
+    float3 EnvironmentBRDF(float3 f0, float roughness, float n_dot_v)
+    {
+        // 与引擎 EnvBRDFApprox 相同的二项积分拟合；输入环境已经过引擎粗糙度预过滤。
+        float4 coefficient_0 = float4(-1.0, -0.0275, -0.572, 0.022);
+        float4 coefficient_1 = float4(1.0, 0.0425, 1.04, -0.04);
+        float4 fit = roughness * coefficient_0 + coefficient_1;
+        float integral = min(fit.x * fit.x, exp2(-9.28 * saturate(n_dot_v))) * fit.x + fit.y;
+        float2 ab = float2(-1.04, 1.04) * integral + fit.zw;
+        return max(f0 * ab.x + saturate(50.0 * f0.g) * ab.y, 0.0);
+    }
+};

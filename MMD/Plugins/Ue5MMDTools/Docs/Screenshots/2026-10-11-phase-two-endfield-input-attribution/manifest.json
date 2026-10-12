@@ -1,0 +1,300 @@
+{
+  "ArchivedAt": "2026-10-11T22:38:22.949991+08:00",
+  "Engine": "UE5.8.3/CL58210709/PCD3D_SM6",
+  "FrozenInputsSHA256": "25457E2DBBD86EFC09DDC471AEF92E0BFB1D8C717887324B74C7772D99920000",
+  "ShaderSourceSignature": "// EndfieldPhase2源码签名：1f630372aa72ce447e33d93d1a279e5d",
+  "SourceBatch": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldInputAttribution4",
+  "Batch": {
+    "Success": true,
+    "Failure": null,
+    "CompletedStages": [
+      "Build",
+      "Normal3",
+      "FlatHair3"
+    ],
+    "CompletedAt": "2026-10-11T22:34:04.5923736+08:00",
+    "Execution": "Reviewed gate; UBT root wait; UE tree wait; no kill/retry; actual input attribution pair; startup JobCacheDDC=0 for complete shader-map compile; reuse true RoleShading3 Generate receipt; four existing assets immutable; no asset writes"
+  },
+  "VisualTargetPassed": false,
+  "Character": "插件 Miku 测试夹具；非终末地角色",
+  "Cases": [
+    {
+      "Variant": "Normal3",
+      "Process": {
+        "StartedAt": "2026-10-11T22:32:54.8947343+08:00",
+        "FinishedAt": "2026-10-11T22:33:50.3718657+08:00",
+        "ExitCode": 0,
+        "Foreground": false
+      },
+      "RuntimeValidationPassed": true,
+      "Failed": 0,
+      "Captures": [
+        {
+          "Framing": "character_detail",
+          "Passed": true,
+          "MIDCount": 35,
+          "ParentCount": 3,
+          "HairSlotCount": 3,
+          "FlatHairVerifiedSlots": 0,
+          "PhysicsSteps": 156,
+          "PhysicsRigidBodies": 178,
+          "CoveredShadowCascades": 4,
+          "FlatHairInputs": []
+        },
+        {
+          "Framing": "face_detail",
+          "Passed": true,
+          "MIDCount": 35,
+          "ParentCount": 3,
+          "HairSlotCount": 3,
+          "FlatHairVerifiedSlots": 0,
+          "PhysicsSteps": 156,
+          "PhysicsRigidBodies": 178,
+          "CoveredShadowCascades": 4,
+          "FlatHairInputs": []
+        },
+        {
+          "Framing": "cloth_detail",
+          "Passed": true,
+          "MIDCount": 35,
+          "ParentCount": 3,
+          "HairSlotCount": 3,
+          "FlatHairVerifiedSlots": 0,
+          "PhysicsSteps": 156,
+          "PhysicsRigidBodies": 178,
+          "CoveredShadowCascades": 4,
+          "FlatHairInputs": []
+        }
+      ]
+    },
+    {
+      "Variant": "FlatHair3",
+      "Process": {
+        "StartedAt": "2026-10-11T22:33:52.0605292+08:00",
+        "FinishedAt": "2026-10-11T22:34:02.9245245+08:00",
+        "ExitCode": 0,
+        "Foreground": false
+      },
+      "RuntimeValidationPassed": true,
+      "Failed": 0,
+      "Captures": [
+        {
+          "Framing": "character_detail",
+          "Passed": true,
+          "MIDCount": 35,
+          "ParentCount": 3,
+          "HairSlotCount": 3,
+          "FlatHairVerifiedSlots": 3,
+          "PhysicsSteps": 156,
+          "PhysicsRigidBodies": 178,
+          "CoveredShadowCascades": 4,
+          "FlatHairInputs": [
+            {
+              "slot": 10,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair_png.Hair_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 1200,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 2457600,
+              "source_alpha_min": 16,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            },
+            {
+              "slot": 11,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair_png.Hair_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 1200,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 2457600,
+              "source_alpha_min": 16,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            },
+            {
+              "slot": 13,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair02_png.Hair02_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 2048,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 4194304,
+              "source_alpha_min": 136,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            }
+          ]
+        },
+        {
+          "Framing": "face_detail",
+          "Passed": true,
+          "MIDCount": 35,
+          "ParentCount": 3,
+          "HairSlotCount": 3,
+          "FlatHairVerifiedSlots": 3,
+          "PhysicsSteps": 156,
+          "PhysicsRigidBodies": 178,
+          "CoveredShadowCascades": 4,
+          "FlatHairInputs": [
+            {
+              "slot": 10,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair_png.Hair_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 1200,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 2457600,
+              "source_alpha_min": 16,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            },
+            {
+              "slot": 11,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair_png.Hair_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 1200,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 2457600,
+              "source_alpha_min": 16,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            },
+            {
+              "slot": 13,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair02_png.Hair02_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 2048,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 4194304,
+              "source_alpha_min": 136,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            }
+          ]
+        },
+        {
+          "Framing": "cloth_detail",
+          "Passed": true,
+          "MIDCount": 35,
+          "ParentCount": 3,
+          "HairSlotCount": 3,
+          "FlatHairVerifiedSlots": 3,
+          "PhysicsSteps": 156,
+          "PhysicsRigidBodies": 178,
+          "CoveredShadowCascades": 4,
+          "FlatHairInputs": [
+            {
+              "slot": 10,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair_png.Hair_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 1200,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 2457600,
+              "source_alpha_min": 16,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            },
+            {
+              "slot": 11,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair_png.Hair_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 1200,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 2457600,
+              "source_alpha_min": 16,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            },
+            {
+              "slot": 13,
+              "diagnostic_flat_hair_source_texture": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Textures/Hair02_png.Hair02_png",
+              "flat_texture_width": 2048,
+              "flat_texture_height": 2048,
+              "alpha_mip0_preserved": true,
+              "alpha_mip0_verified_samples": 4194304,
+              "source_alpha_min": 136,
+              "source_alpha_max": 255,
+              "source_source_mip_count": 1,
+              "flat_texture_mip_count": 1,
+              "flat_texture_sampler_settings_inherited": true,
+              "flat_texture_actual_dimensions_match_source": true,
+              "diagnostic_flat_hair_mip_limitation": "Original uncompressed Source mip0 alpha copied and verified before upload; transient has one PF_B8G8R8A8 mip; source built/compressed mip chain is not reproduced"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "Scope": "三张原始截图及摘要；无角色/游戏贴图、Saved、构建产物归档；仅本机；无提交推送、无主Content或DLL发布。",
+  "Limits": [
+    "平色诊断只验证CPU源数据与实际MID/RHI材料资源；未拦截GPU绘制调用。",
+    "平色临时纹理逐像素保留源Mip0 alpha和采样设置，但只有单Mip，未复现原压缩和mip链，不能作为逐LOD透明边缘等价证明。",
+    "当前仅固定一组光向与镜头；宽亮带残留不能单凭该对照再细分漫反射、镜面及几何贡献。",
+    "正常输入仍未达到终末地人物目标；技术检查通过不是画质验收。"
+  ],
+  "Files": [
+    {
+      "File": "normal_face.png",
+      "Source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldInputAttribution4\\Normal3\\screenshots\\runtime_endfield_phase2_face.png",
+      "SourcePNGLastWriteAt": "2026-10-11T22:33:46.737229+08:00",
+      "Bytes": 1440762,
+      "SHA256": "4F42D25000D747825709292ACE9F0ACF79071AC22AF1E4E3F95C7F63F8C00E79",
+      "Kind": "实际UE离屏主视图原图",
+      "Variant": "Normal3",
+      "GeneratedImage": false,
+      "Edited": false
+    },
+    {
+      "File": "flat_hair_face.png",
+      "Source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldInputAttribution4\\FlatHair3\\screenshots\\runtime_endfield_phase2_face.png",
+      "SourcePNGLastWriteAt": "2026-10-11T22:33:59.701923+08:00",
+      "Bytes": 1419939,
+      "SHA256": "86F615CF519C0850AA686504ECDB4C3BE82391B55325CC4A2554B893CA7458D9",
+      "Kind": "实际UE离屏主视图原图",
+      "Variant": "FlatHair3",
+      "GeneratedImage": false,
+      "Edited": false
+    },
+    {
+      "File": "normal_cloth.png",
+      "Source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldInputAttribution4\\Normal3\\screenshots\\runtime_endfield_phase2_cloth.png",
+      "SourcePNGLastWriteAt": "2026-10-11T22:33:47.089895+08:00",
+      "Bytes": 1344997,
+      "SHA256": "8B554ACF5FAC9B221831F899F4E4047206541A717934F93563F29339625B3321",
+      "Kind": "实际UE离屏主视图原图",
+      "Variant": "Normal3",
+      "GeneratedImage": false,
+      "Edited": false
+    }
+  ]
+}

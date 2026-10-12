@@ -86,6 +86,14 @@ struct TMMDReferenceBRDF
         return dot(value, value) > 1e-6 ? value * rsqrt(dot(value, value)) : fallback;
     }
 
+    float3 OrthogonalizeHairTangent(float3 world_normal, float3 hair_tangent)
+    {
+        float3 normal = SafeNormalize(world_normal, float3(0.0, 0.0, 1.0));
+        float3 fallback_axis = abs(normal.z) < 0.90 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+        float3 fallback_tangent = SafeNormalize(fallback_axis - normal * dot(fallback_axis, normal), float3(0.0, 1.0, 0.0));
+        return SafeNormalize(hair_tangent - normal * dot(hair_tangent, normal), fallback_tangent);
+    }
+
     bool PrepareHeadFrame(float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
                           out float3 head_forward, out float3 head_right, out float3 head_up)
     {
@@ -102,7 +110,7 @@ struct TMMDReferenceBRDF
         return true;
     }
 
-    void PrepareSkinNormals(float3 world_pos, float3 world_normal, float material_role,
+    void PrepareSkinNormals(float3 world_pos, float3 world_normal, float material_role, float style_family,
                             float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
                             out float3 diffuse_normal, out float3 specular_normal, out float face_mask)
     {
@@ -125,12 +133,21 @@ struct TMMDReferenceBRDF
             float distance_mask = 1.0 - smoothstep(1.05, 1.55, length(head_pos));
             float normal_mask = lerp(0.65, 1.0, smoothstep(-0.65, 0.25, dot(world_normal, head_forward)));
             face_mask = front_mask * chin_mask * crown_mask * distance_mask * normal_mask;
-            // 使用桥接提供的几何中心；椭球梯度平滑鼻翼碎面，仍保留真实灯位与头骨转向。
+            // 局部曲面平滑大面与尖面过渡；鼻翼、嘴唇仍保留较多原几何受光方向。
             float3 ellipsoid_gradient = head_right * (head_pos.x / (0.78 * 0.78))
                                       + head_forward * (head_pos.y / (0.98 * 0.98)) + head_up * head_pos.z;
             float3 face_normal = SafeNormalize(ellipsoid_gradient + head_forward * 0.12, head_forward);
-            diffuse_normal = SafeNormalize(lerp(world_normal, face_normal, face_mask * 0.80), world_normal);
-            specular_normal = SafeNormalize(lerp(world_normal, face_normal, face_mask * 0.45), world_normal);
+            float diffuse_smoothing = 0.80;
+            float specular_smoothing = 0.45;
+            if (style_family >= 1.5 && style_family < 2.5)
+            {
+                float planar_agreement = smoothstep(0.65, 0.95, dot(world_normal, face_normal));
+                // 尖面最多混合 0.45，避免反向法线在 0.5 权重处抵消；大面可再提高平滑。
+                diffuse_smoothing = lerp(0.45, 0.65, planar_agreement);
+                specular_smoothing = lerp(0.30, 0.45, planar_agreement);
+            }
+            diffuse_normal = SafeNormalize(lerp(world_normal, face_normal, face_mask * diffuse_smoothing), world_normal);
+            specular_normal = SafeNormalize(lerp(world_normal, face_normal, face_mask * specular_smoothing), world_normal);
         }
     }
 
@@ -149,9 +166,10 @@ struct TMMDReferenceBRDF
             float3 crown = head_position_radius.xyz + head_up * (head_position_radius.w * 0.75);
             flow_direction = SafeNormalize(LWCToFloat(Parameters.AbsoluteWorldPosition) - crown, -head_up);
         }
-        float3 tangent_fallback = SafeNormalize(object_right - world_normal * dot(object_right, world_normal),
-            SafeNormalize(cross(world_normal, float3(0,1,0)), float3(1,0,0)));
-        return SafeNormalize(flow_direction - world_normal * dot(flow_direction, world_normal), tangent_fallback);
+        float3 tangent = flow_direction - world_normal * dot(flow_direction, world_normal);
+        if (dot(tangent, tangent) <= 1e-6)
+            tangent = object_right - world_normal * dot(object_right, world_normal);
+        return OrthogonalizeHairTangent(world_normal, tangent);
     }
 
     void PrepareHair(FMaterialPixelParameters Parameters, float3 world_normal, float material_role,
@@ -163,7 +181,7 @@ struct TMMDReferenceBRDF
         hair_normal = world_normal;
         hair_tangent = float3(0.0, 0.0, 1.0);
         strand_mask = 1.0;
-        // 通用偏移图是可选的艺术细节；0 强度不采样且完全退回原几何 BRDF，不涉及模型 UV。
+        // 通用偏移图是可选的艺术细节；0 强度不采样并保留几何发流，不涉及模型 UV。
         [branch]
         if (floor(material_role + 0.5) == 2.0)
         {
@@ -285,7 +303,7 @@ struct TMMDReferenceBRDF
         surface.cloth_cavity = 1.0;
         surface.cloth_weave = 1.0;
         surface.hair_tangent = float3(0,0,1);
-        PrepareSkinNormals(LWCToFloat(Parameters.AbsoluteWorldPosition), world_normal, material_role,
+        PrepareSkinNormals(LWCToFloat(Parameters.AbsoluteWorldPosition), world_normal, material_role, style_family,
             head_forward_ws, head_right_ws, head_position_radius,
             surface.diffuse_normal, surface.specular_normal, surface.face_mask);
         float role = floor(material_role + 0.5);
@@ -374,15 +392,60 @@ struct TMMDReferenceBRDF
         return distribution * visibility * SchlickFresnel(f0, saturate(dot(view_dir, H))) * n_dot_l;
     }
 
+    float EvaluateHairBand(float3 world_normal, float3 hair_tangent, float3 H, float tangent_shift,
+                           float band_power, float angular_footprint)
+    {
+        float3 band_tangent = SafeNormalize(hair_tangent + world_normal * tangent_shift, hair_tangent);
+        float t_dot_h = clamp(dot(band_tangent, H), -1.0, 1.0);
+        // 足迹由灯循环前的屏幕导数传播，分歧分支内只做算术滤波。
+        float footprint = clamp(angular_footprint, 0.0, 2.0);
+        float filtered_power = band_power / (1.0 + band_power * footprint * footprint);
+        float filter_weight = sqrt(filtered_power / band_power);
+        return pow(saturate(1.0 - t_dot_h * t_dot_h), filtered_power * 0.5) * filter_weight;
+    }
+
     float3 EvaluateHairSpecular(float3 world_normal, float3 hair_tangent, float3 view_dir, float3 L,
-                               float3 f0, float roughness)
+                               float3 f0, float roughness, float style_family, float specular_power,
+                               float angular_footprint)
     {
         if (dot(world_normal, view_dir) <= 1e-5 || dot(world_normal, L) <= 1e-5) return 0.0;
+        hair_tangent = OrthogonalizeHairTangent(world_normal, hair_tangent);
+        [branch]
+        if (style_family >= 1.5 && style_family < 2.5)
+        {
+            float3 H = SafeNormalize(view_dir + L, world_normal);
+            float roughness_scale = clamp(0.16 / max(roughness * roughness, 0.04), 0.60, 1.60);
+            float primary_power = clamp(specular_power * 1.25 * roughness_scale, 24.0, 140.0);
+            float secondary_power = clamp(primary_power * 2.75, 96.0, 256.0);
+            float primary_band = EvaluateHairBand(world_normal, hair_tangent, H, -0.24, primary_power, angular_footprint);
+            float secondary_band = EvaluateHairBand(world_normal, hair_tangent, H, 0.20, secondary_power, angular_footprint);
+            float band = primary_band * 0.72 + secondary_band * (0.28 * (1.0 - primary_band * 0.50));
+            float n_dot_l = saturate(dot(world_normal, L));
+            float edge_fade = smoothstep(0.0, 0.18, saturate(dot(world_normal, view_dir)));
+            float3 fresnel = SchlickFresnel(f0, saturate(dot(view_dir, H)));
+            // 通用几何双亮带是有界艺术 BRDF；颜色仍受 F0、真实灯辐射及场景遮挡控制。
+            return min(fresnel * (band * 4.0), float3(0.65, 0.65, 0.65)) * n_dot_l * edge_fade;
+        }
         float wide_roughness = clamp(roughness + 0.06, 0.40, 0.45);
         float narrow_roughness = clamp(roughness * 0.70, 0.26, 0.30);
         // 两个归一化 GGX 瓣的权重和为 1；粗糙度下限与 Smith 遮蔽限制尖峰能量。
         return 0.82 * EvaluateHairLobe(world_normal, hair_tangent, view_dir, L, f0, wide_roughness, -0.04)
              + 0.18 * EvaluateHairLobe(world_normal, hair_tangent, view_dir, L, f0, narrow_roughness, 0.07);
+    }
+
+    float3 EvaluateClothBroadSpecular(float3 broad_normal, float3 view_dir, float3 L, float roughness)
+    {
+        float n_dot_v = saturate(dot(broad_normal, view_dir));
+        float n_dot_l = saturate(dot(broad_normal, L));
+        if (n_dot_v <= 1e-5 || n_dot_l <= 1e-5) return 0.0;
+        float3 H = SafeNormalize(view_dir + L, broad_normal);
+        float n_dot_h = saturate(dot(broad_normal, H));
+        float v_dot_h = saturate(dot(view_dir, H));
+        float broad_roughness = max(roughness, 0.72);
+        // 宏观褶皱上的中性宽瓣；与原高光归一混合，避免直接叠加两瓣。
+        float3 f0 = float3(0.025, 0.025, 0.025);
+        return DistributionGGX(n_dot_h, broad_roughness)
+             * SmithVisibility(n_dot_v, n_dot_l, broad_roughness) * SchlickFresnel(f0, v_dot_h) * n_dot_l;
     }
 
     void EvaluateDirect(float3 albedo, float3 f0, float metallic, float roughness,

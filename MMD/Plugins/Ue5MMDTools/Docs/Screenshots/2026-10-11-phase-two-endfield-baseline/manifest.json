@@ -1,0 +1,66 @@
+{
+  "CapturedOn": "2026-10-11",
+  "ArchivedOn": "2026-10-11",
+  "TimeZone": "Asia/Singapore",
+  "Engine": "5.8.3-58210709",
+  "GeneratedImage": false,
+  "Source": "Plugin test character / UE D3D12 offscreen SceneCapture FinalColorLDR",
+  "Comparison": "Reference_Endfield",
+  "ReferenceFamily": 2,
+  "SourcePreset": "IndustrialAnime",
+  "ComparisonStage": "NeonConcert",
+  "ActualParents": [
+    "/Ue5MMDTools/Stages/Materials/M_MMD_Reference_Endfield_Masked.M_MMD_Reference_Endfield_Masked",
+    "/Ue5MMDTools/Stages/Materials/M_MMD_Reference_Endfield_Opaque.M_MMD_Reference_Endfield_Opaque",
+    "/Ue5MMDTools/Stages/Materials/M_MMD_Reference_Endfield_Translucent.M_MMD_Reference_Endfield_Translucent"
+  ],
+  "StartupCVars": {
+    "r.DepthOfFieldQuality": [
+      {
+        "LineNumber": 836,
+        "Value": "0",
+        "Priority": "Commandline",
+        "Kind": "RejectedLowerPrioritySetGetString",
+        "Line": "[2026.10.11-02.54.56:825][  0]LogConsoleManager: Verbose: Setting the console variable 'r.DepthOfFieldQuality' with 'SetByConsoleVariablesIni' was ignored as it is lower priority than the previous 'SetByCommandline'. Value remains '0'"
+      }
+    ],
+    "r.MotionBlurQuality": [
+      {
+        "LineNumber": 837,
+        "Value": "0",
+        "Priority": "Commandline",
+        "Kind": "RejectedLowerPrioritySetGetString",
+        "Line": "[2026.10.11-02.54.56:825][  0]LogConsoleManager: Verbose: Setting the console variable 'r.MotionBlurQuality' with 'SetByConsoleVariablesIni' was ignored as it is lower priority than the previous 'SetByCommandline'. Value remains '0'"
+      }
+    ]
+  },
+  "VisualAcceptance": "Not achieved; diagnostic baseline, not original-game output or a visual improvement",
+  "Files": [
+    {
+      "File": "endfield_face.png",
+      "Framing": "face_detail",
+      "Source": "Saved/Phase2Reference/EndfieldDiagnostic583/screenshots/reference_endfield_face.png",
+      "CapturedAt": "2026-10-11T10:55:49.587732+08:00",
+      "CaptureTimeBasis": "Original PNG file last-write time",
+      "Bytes": 1002334,
+      "Size": [
+        1280,
+        720
+      ],
+      "SHA256": "61BA7E0EF4353FD46CAA30293EF73694DE4A1F6AE8EDE160CA9965F280E438B5"
+    },
+    {
+      "File": "endfield_detail.png",
+      "Framing": "character_detail",
+      "Source": "Saved/Phase2Reference/EndfieldDiagnostic583/screenshots/reference_endfield_detail.png",
+      "CapturedAt": "2026-10-11T10:55:49.377042+08:00",
+      "CaptureTimeBasis": "Original PNG file last-write time",
+      "Bytes": 959477,
+      "Size": [
+        1280,
+        720
+      ],
+      "SHA256": "3ADCF8BABEF286ECD40F92CE36DFD1C272D69066F9F344DCE78C47378BB200DA"
+    }
+  ]
+}

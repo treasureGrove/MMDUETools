@@ -138,7 +138,7 @@ namespace
 	{
 		const FString Name(Definition.Name);
 		if (Name == TEXT("MoonMirror") || Name == TEXT("CinematicAnime")) return 1;
-		if (Name == TEXT("IndustrialAnime")) return 2;
+		if (Name == TEXT("IndustrialAnime") || Name == TEXT("SakuraTheater")) return 2;
 		if (Name == TEXT("SilverCity")) return 3;
 		return 0;
 	}
@@ -224,36 +224,36 @@ namespace
 			Preset->AccentTint = FLinearColor(1.0f, 0.43f, 0.63f);
 			Preset->SecondaryTint = FLinearColor(1.0f, 0.79f, 0.44f);
 			Preset->KeyLightColor = FLinearColor(1.00f, 0.88f, 0.80f);
-			Preset->KeyLightRotation = FRotator(-28.0f, 65.0f, 0.0f);
-			Preset->KeyLightIntensity = 4.20f;
+			Preset->KeyLightRotation = FRotator(-32.0f, 48.0f, 0.0f);
+			Preset->KeyLightIntensity = 3.80f;
 			Preset->FillLightColor = FLinearColor(0.58f, 0.68f, 0.88f);
 			Preset->FillLightRotation = FRotator(-8.0f, 135.0f, 0.0f);
-			Preset->FillLightIntensity = 0.60f;
+			Preset->FillLightIntensity = 0.28f;
 			Preset->RimLightColor = FLinearColor(0.32f, 0.72f, 1.00f);
 			Preset->RimLightRotation = FRotator(-9.0f, -100.0f, 0.0f);
-			Preset->RimLightIntensity = 1.10f;
+			Preset->RimLightIntensity = 0.90f;
 			Preset->AccentLightIntensity = 1.50f;
 			Preset->ExposureBias = 0.0f;
-			Preset->BloomIntensity = 0.40f;
-			Preset->AmbientStrength = 0.22f;
-			Preset->ColorGradingContrast = 1.08f;
+			Preset->BloomIntensity = 0.25f;
+			Preset->AmbientStrength = 0.12f;
+			Preset->ColorGradingContrast = 1.03f;
 			Preset->ColorGradingSaturation = 1.05f;
 			Preset->LightScale = 1.02f;
-			Preset->ShadowThreshold = 0.38f;
-			Preset->ShadowSoftness = 0.18f;
+			Preset->ShadowThreshold = 0.43f;
+			Preset->ShadowSoftness = 0.12f;
 			Preset->ShadowTint = FLinearColor(0.67f, 0.73f, 0.84f);
 			Preset->DiffuseWrap = 0.10f;
-			Preset->ToonAmount = 0.78f;
-			Preset->SpecularStrength = 0.80f;
-			Preset->SpecularPower = 42.0f;
+			Preset->ToonAmount = 0.65f;
+			Preset->SpecularStrength = 0.50f;
+			Preset->SpecularPower = 64.0f;
 			Preset->SoftSpecularStrength = 0.18f;
-			Preset->Roughness = 0.66f;
+			Preset->Roughness = 0.62f;
 			Preset->SpecularTint = FLinearColor(0.78f, 0.92f, 1.10f);
 			Preset->RimStrength = 0.14f;
 			Preset->RimPower = 3.20f;
 			Preset->BlackLift = 0.035f;
 			Preset->ColorSaturation = 1.02f;
-			Preset->OutlinePixelWidth = 1.25f;
+			Preset->OutlinePixelWidth = 0.90f;
 		}
 		else if (Name == TEXT("SilverCity"))
 		{
@@ -1018,7 +1018,7 @@ namespace
 		PP.bOverride_FilmToe = true;
 		PP.FilmToe = Preset->FilmToe;
 		PP.bOverride_FilmSlope = true;
-		PP.FilmSlope = 0.82f;
+		PP.FilmSlope = 0.86f;
 		PP.bOverride_ScreenSpaceReflectionIntensity = true;
 		PP.ScreenSpaceReflectionIntensity = 85.0f;
 		PP.bOverride_ScreenSpaceReflectionQuality = true;

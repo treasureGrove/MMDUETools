@@ -92,7 +92,7 @@ struct TMMDStageBackdrop
     float3 Moon(float3 sky_color, float3 local_pos, float3 camera_pos)
     {
         // 用角半径投影月面，换机位仍是圆盘；树林等真实几何自然遮挡远景。
-        float3 moon_offset = float3(-460.0, 1135.0, 425.0) - camera_pos;
+        float3 moon_offset = float3(-919.906095, 1780.0, 164.879681) - camera_pos;
         float3 moon_dir = normalize(moon_offset);
         float3 ray = normalize(local_pos - camera_pos);
         float3 moon_right = normalize(cross(moon_dir, float3(0.0, 0.0, 1.0)));
@@ -124,10 +124,11 @@ struct TMMDStageBackdrop
         float3 texture_color = 0.0;
         if (texture_mix > 0.0)
         {
-            // 从世界位置投影，不依赖 Cube 的六面 UV；主视角朝 +Y，屏右对应局部 -X。
-            float2 backdrop_uv = float2(0.5 - local_pos.x / 4200.0, 1.0 - (local_pos.z + 130.0) / 1400.0);
+            // 建筑水岸维持原纵横比与朝向，上部软退回天空，素材旧月面不参与。
+            float2 backdrop_uv = float2(0.5 - local_pos.x / 4200.0,
+                                       1.0 - (local_pos.z + 280.0) / 1400.0);
+            texture_mix *= smoothstep(0.60, 0.73, backdrop_uv.y);
             texture_color = max(Texture2DSample(backdrop_tex, backdrop_tex_sampler, saturate(backdrop_uv)).rgb, 0.0) * 1.1;
-            if (texture_mix >= 0.999) return texture_color * clamp(emissive_strength, 0.0, 4.0);
         }
         float3 top_color = max(stage_color, 0.0);
         float3 low_color = max(horizon_color, 0.0);
@@ -155,16 +156,17 @@ struct TMMDStageBackdrop
         {
             if (theme < 1.5)
                 sky_color += float3(0.31, 0.38, 0.46) * Stars(local_pos, stage_time);
-            else
-            {
-                float3 camera_offset = LWCToFloat(GetWorldCameraOrigin(Parameters)) - stage_origin;
-                float3 camera_pos = float3(dot(camera_offset, stage_right), dot(camera_offset, stage_forward),
-                                           dot(camera_offset, stage_up));
-                sky_color = Moon(sky_color, local_pos, camera_pos);
-            }
             sky_color = Mountains(sky_color, top_color, low_color, local_pos, theme);
         }
-        return lerp(max(sky_color, 0.0), texture_color, texture_mix) * clamp(emissive_strength, 0.0, 4.0);
+        float3 backdrop_color = lerp(max(sky_color, 0.0), texture_color, texture_mix);
+        if (theme >= 1.5)
+        {
+            float3 camera_offset = LWCToFloat(GetWorldCameraOrigin(Parameters)) - stage_origin;
+            float3 camera_pos = float3(dot(camera_offset, stage_right), dot(camera_offset, stage_forward),
+                                       dot(camera_offset, stage_up));
+            backdrop_color = Moon(backdrop_color, local_pos, camera_pos);
+        }
+        return backdrop_color * clamp(emissive_strength, 0.0, 4.0);
     }
 };
 

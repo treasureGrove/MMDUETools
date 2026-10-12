@@ -1,0 +1,81 @@
+{
+  "ArchivedAt": "2026-10-11T21:25:51.264121+08:00",
+  "Batch": "EndfieldDedicated1",
+  "Engine": "UE 5.8.3 CL58210709",
+  "BuildPassed": true,
+  "GeneratePassed": true,
+  "CaptureValidationPassed": false,
+  "VisualAccepted": false,
+  "Target": "终末地人物方向",
+  "Scope": "Three dedicated parents + one preset, Miku fixture, native Sakura stage; diagnostic baseline only",
+  "Errors": [
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated foreground four GPU depth cascades are not all populated",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid",
+    "Dedicated parent identity or actual SM6 shader map invalid"
+  ],
+  "SourceSignature": "// EndfieldPhase2源码签名：6e3c6228d230a5509e5e1ae61ddbb75c",
+  "Files": [
+    {
+      "File": "diagnostic_face.png",
+      "SHA256": "9CE32F238943AB3995FECBF2436CFBDC29D9668BB40A8ACE6EC07793507B067E",
+      "Bytes": 1518333,
+      "Source": "Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\screenshots\\runtime_endfield_phase2_face.png",
+      "SourceFileWrittenAt": "2026-10-11T21:06:58.310546+08:00",
+      "GeneratedImage": false,
+      "CaptureSource": "GameViewport / FScreenshotRequest",
+      "CaptureProcess": {
+        "StartedAt": "2026-10-11T21:06:36.4993234+08:00",
+        "FinishedAt": "2026-10-11T21:07:01.9858047+08:00",
+        "EnginePid": 92616,
+        "ExitCode": 0,
+        "Executable": "D:\\software\\EpicEngine\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+        "Arguments": "\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\MainViewProbe\\MMDPluginRuntimeProbe.uproject\" -game -MMDEndfieldPhase2Visual -MMDValidationSpec=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\runtime-spec.json\" -MMDValidationReport=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\runtime-smoke.json\" -MMDVisualReport=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\runtime-visual.json\" -MMDVisualDir=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\screenshots\" -RenderOffscreen -d3d12 -sm6 -unattended -nosplash -nosound -NoCrashDialog -ResX=1280 -ResY=720 -ForceRes -windowed -ForceDPCVars=\"r.DepthOfFieldQuality=0,r.MotionBlurQuality=0\" -cvarsini=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\diagnostic-cvars.ini\" -DisablePlugins=RenderDocPlugin,AndroidFileServer -ddc=InstalledNoZenLocalFallback -LocalDataCachePath=\"D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/DDC583Main\" -abslog=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\runtime.engine.log\" -stdout -UTF8Output",
+        "Foreground": false,
+        "WaitStrategy": "Start-Process -Wait; natural exit of process tree; no kill/retry/service"
+      },
+      "ValidationPassed": false,
+      "VisualAccepted": false,
+      "Width": 1280,
+      "Height": 720
+    },
+    {
+      "File": "diagnostic_cloth.png",
+      "SHA256": "5C44A7DB846481F66B05DF32D846D762B7FF0B3A1FB42346E5F82BCBBE295793",
+      "Bytes": 1475781,
+      "Source": "Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\screenshots\\runtime_endfield_phase2_cloth.png",
+      "SourceFileWrittenAt": "2026-10-11T21:06:58.599162+08:00",
+      "GeneratedImage": false,
+      "CaptureSource": "GameViewport / FScreenshotRequest",
+      "CaptureProcess": {
+        "StartedAt": "2026-10-11T21:06:36.4993234+08:00",
+        "FinishedAt": "2026-10-11T21:07:01.9858047+08:00",
+        "EnginePid": 92616,
+        "ExitCode": 0,
+        "Executable": "D:\\software\\EpicEngine\\UE_5.8\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+        "Arguments": "\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\MainViewProbe\\MMDPluginRuntimeProbe.uproject\" -game -MMDEndfieldPhase2Visual -MMDValidationSpec=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\runtime-spec.json\" -MMDValidationReport=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\runtime-smoke.json\" -MMDVisualReport=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\runtime-visual.json\" -MMDVisualDir=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\screenshots\" -RenderOffscreen -d3d12 -sm6 -unattended -nosplash -nosound -NoCrashDialog -ResX=1280 -ResY=720 -ForceRes -windowed -ForceDPCVars=\"r.DepthOfFieldQuality=0,r.MotionBlurQuality=0\" -cvarsini=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\diagnostic-cvars.ini\" -DisablePlugins=RenderDocPlugin,AndroidFileServer -ddc=InstalledNoZenLocalFallback -LocalDataCachePath=\"D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/DDC583Main\" -abslog=\"D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Preparation20261011\\EndfieldDedicated1\\Capture3\\runtime.engine.log\" -stdout -UTF8Output",
+        "Foreground": false,
+        "WaitStrategy": "Start-Process -Wait; natural exit of process tree; no kill/retry/service"
+      },
+      "ValidationPassed": false,
+      "VisualAccepted": false,
+      "Width": 1280,
+      "Height": 720
+    }
+  ],
+  "LocalOnly": true,
+  "NotExecuted": [
+    "Packaging",
+    "Saved map workflow",
+    "Main Content promotion",
+    "Cloud upload",
+    "Commit",
+    "Push"
+  ]
+}

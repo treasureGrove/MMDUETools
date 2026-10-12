@@ -1,0 +1,30 @@
+{
+  "CapturedOn": "2026-10-11",
+  "ArchivedOn": "2026-10-11",
+  "TimeZone": "Asia/Singapore",
+  "Source": "UE D3D12 offscreen SceneCapture FinalColorLDR",
+  "GeneratedImage": false,
+  "Files": [
+    {
+      "File": "cloth_before.png",
+      "Source": "EngineBaseline/recheck/screenshots/sakura_theater_cloth.png",
+      "CapturedAt": "2026-10-11 09:34:01",
+      "Bytes": 1103156,
+      "SHA256": "38EAC7F284E28BD9EDFD6E40FBA4BBF6BE61F90C3D159F11114507F66C6B8B54"
+    },
+    {
+      "File": "cloth_after.png",
+      "Source": "EngineMaterialV1/screenshots/sakura_theater_cloth.png",
+      "CapturedAt": "2026-10-11 09:37:10",
+      "Bytes": 1102984,
+      "SHA256": "BB607C189752D29BDC929D25C0EA82199A764FAED887A0982BFC31A23A8968D5"
+    },
+    {
+      "File": "face_turn_after.png",
+      "Source": "EngineMaterialV1/screenshots/sakura_theater_face_turn.png",
+      "CapturedAt": "2026-10-11 09:37:10",
+      "Bytes": 1054510,
+      "SHA256": "4775E3210ADCE7A9A72828F776B731CFCDCE780179942B3419DEAA3A96165A55"
+    }
+  ]
+}

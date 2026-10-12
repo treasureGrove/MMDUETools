@@ -51,7 +51,9 @@ Reference 材质在 Unlit Custom 内实现逐灯 GGX/Smith/Schlick BRDF。光强
 
 这属于插件内的着色实现，尚未接入新的引擎 GBuffer ShadingModel。它使用全局天空反射和插件主平行光阴影，不会自动获得局部 Reflection Capture、Lumen/SSR 角色反射、引擎 AO 或点光阴影；庭院的 Default Lit 材质则沿用引擎环境响应。
 
-头发支持可选通用偏移贴图 `HairShiftTexture`，默认使用自动生成的原创 128² G8 平铺资产 `T_MMD_GenericHairShift`。`HairShiftStrength` 默认 0.5，设为 0 时跳过偏移贴图采样；通用发丝法线由 `HairDetailStrength` 独立控制，两者均为 0 时退回几何法线与基础 BRDF。`HairShiftScale` 默认每厘米 0.045。贴图从物体空间三向投影采样，不要求模型 UV 布局，方向跟随 Actor 转动。直射采用双瓣各向异性 GGX，环境采用偏移法线配合引擎各向同性预过滤的近似；大幅骨骼变形可能产生细节游移。
+头发支持可选通用偏移贴图 `HairShiftTexture`，默认使用自动生成的原创 128² G8 平铺资产 `T_MMD_GenericHairShift`。`HairShiftStrength` 默认 0.5，设为 0 时跳过偏移贴图采样；通用发丝法线由 `HairDetailStrength` 独立控制，两者均为 0 时使用几何法线与程序化发流，仍保留双瓣各向异性 GGX。`HairShiftScale` 默认每厘米 0.045。贴图从物体空间三向投影采样，不要求模型 UV 布局，方向跟随 Actor 转动。环境采用镜面法线配合引擎各向同性预过滤的近似；大幅骨骼变形可能产生细节游移。
+
+Cloth 的 `SoftSpecularStrength` 现在同时控制原有柔和镜面强度与中性宽 GGX 瓣混合：宽瓣使用宏观褶皱法线、粗糙度下限 0.72，混合权重为 `0.30 * saturate(SoftSpecularStrength)`，不会直接叠加两瓣。设为 0 保留原 Cloth BRDF；它不增加环境光或阴影底色，也不要求新增贴图。首批实拍与验证边界见 [二期材质记录](Screenshots/2026-10-11-phase-two-material-v1/README.md)。
 
 角色预设默认启用 `bCharacterSelfShadow`。套用预设时组件通过 `MMDShadowInclude` 进入插件主光深度，刘海、领口与手臂可以产生真实遮挡；关闭选项会临时排除该组件，恢复原材质时恢复原有阴影标签。显式 `MMDShadowExclude` 与子系统排除列表仍优先。角色阴影采用较小接收偏移及逐 texel 接收平面校正，原环境阴影偏移与过滤质量设置保持独立。辅助灯暂不采单独阴影图，应控制补光和天空漫反射，保留主光暗部层次。
 
@@ -71,7 +73,7 @@ Reference 材质在 Unlit Custom 内实现逐灯 GGX/Smith/Schlick BRDF。光强
 
 `HairDetailStrength` 默认 0.20，`ClothDetailStrength` 默认 0.40；`HairDetailScale` 默认每厘米 0.040，`ClothDetailScale` 默认每厘米 0.010。布料漫反射使用过滤后的宽褶皱，镜面保留细节；直射高光和天空预过滤共用同一镜面法线与粗糙度。贴图只用于 Hair / Cloth，不给皮肤或眼球添加噪点。
 
-细节强度为 0 时跳过对应细节采样，布料恢复几何法线与基础粗糙度；头发还需同时将 `HairShiftStrength` 设为 0，才完全恢复几何法线与基础 BRDF。法线不会改变模型轮廓或产生真实衣物形变。
+细节强度为 0 时跳过对应细节采样，布料恢复几何法线与基础粗糙度；头发还需同时将 `HairShiftStrength` 设为 0，才完全恢复几何法线，通用各向异性高光仍然启用。法线不会改变模型轮廓或产生真实衣物形变。
 
 V2 使用新资产名，生成器不会覆盖 V1 或已有同名纹理。父材质升级只将旧默认 `T_MMD_GenericHairNormal`、`T_MMD_GenericClothNormal`、`T_MMD_GenericClothData` 的精确链接迁移到 V2；自选贴图、实例覆盖与自定义强度保持原样。可在材质实例中替换三张通用图，法线图使用线性 BC5，数据图使用线性颜色采样。
 
