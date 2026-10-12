@@ -4,6 +4,7 @@
 
 ## 2026-10-12 — 二期收尾与用户接手
 
+- 按用户最新要求简化 `MMD/AGENTS.md`：删除强制模型等级/领域路由与成本优先限制，允许当前 Codex/ChatGPT 模型自主完成任务；普通提交、非强制 push 和远端分支创建/更新不再重复等待确认，默认使用用户原当前分支。保留字面非空单 refspec、共享分支备份/dry-run、禁止删除分支/force/stash 清理等保护。上级项目技术规则及 shader 原文件未改；本次仅检查 Markdown 差异，无 UE 运行。
 - 新增[交接说明](PHASE_TWO_HANDOFF.md)及[逐 shader 审计](PHASE_TWO_SHADER_AUDIT.json)。相对一期基线核对全部已跟踪 shader，既有改动仅 Reference BRDF/Character、GardenSurface、StageBackdrop 四个；新增两个 EndfieldPhase2 shader。明确 `TMMDReferenceBRDF.ush` 有修改，不能笼统声称所有 `.ush` 未动。
 - `MMDToonLighting.ush`、Archived、MMDStandardCore、实验版 lighting 和用户 Face 均未修改；原文件 SHA256 与 10 月 11 日冻结值核对。旧主 691 文件及新四源码仍与最后真实验证的冻结值一致，未继续调 shader。
 - 交接源码、研究/失败记录和代表截图；独立四资产仍留在私有验证工程，主 Content/DLL 未发布。文档说明编译与定向生成入口、共享变更影响及后续未完成项，当前画质仍未达标。另一个任务的 Mobile 文档不纳入提交。
