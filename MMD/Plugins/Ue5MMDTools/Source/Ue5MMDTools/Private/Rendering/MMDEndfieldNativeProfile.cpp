@@ -4,7 +4,9 @@
 #include "Rendering/MMDEndfieldNativeBackend.h"
 #include "Misc/SecureHash.h"
 #include "Serialization/ObjectWriter.h"
+#include "UObject/StrongObjectPtr.h"
 #include "UObject/UObjectGlobals.h"
+#include "MMDEndfieldNativeRampData.inl"
 
 namespace MMDEndfieldNativeProfile
 {
@@ -16,6 +18,80 @@ namespace MMDEndfieldNativeProfile
             float diffuse_scale = 1.0f;
             float specular_scale = 1.0f;
         };
+
+        struct FOriginalRampState
+        {
+            FRuntimeCurveLinearColor diffuse_ramp;
+            FRuntimeCurveLinearColor specular_ramp;
+            TStrongObjectPtr<UCurveLinearColor> diffuse_external;
+            TStrongObjectPtr<UCurveLinearColor> specular_external;
+        };
+
+        struct FClientRampSelection
+        {
+            const uint8 (*diffuse_pixels)[4] = nullptr;
+            const uint8 (*specular_rows)[MMDEndfieldNativeRampData::sample_count][3] = nullptr;
+            float specular_v = 0.0f;
+        };
+
+        FClientRampSelection SelectClientRamps(EMMDMaterialRole role)
+        {
+            using namespace MMDEndfieldNativeRampData;
+            switch (role)
+            {
+                // Body01 与 Face01 的完整 RD 像素相同；代表皮肤材质没有启用 RS。
+                case EMMDMaterialRole::Skin: return {body_rd, nullptr, 0.0f};
+                case EMMDMaterialRole::Hair: return {hair_rd, hair_rs_fixed_rows, hair_rs_v};
+                case EMMDMaterialRole::Cloth: return {cloth_rd, cloth_rs_fixed_rows, cloth_rs_v};
+                default: return {};
+            }
+        }
+
+        template <typename FSample>
+        void WriteSampledCurve(FRichCurve& curve, const FSample& sample)
+        {
+            curve.Reset();
+            curve.PreInfinityExtrap = RCCE_Constant;
+            curve.PostInfinityExtrap = RCCE_Constant;
+            curve.SetDefaultValue(sample(0));
+            // 曲线键放在原纹理 texel 中心；atlas 的 64/256 分辨率均按同一 UV 重采样。
+            for (int32 x = 0; x < MMDEndfieldNativeRampData::sample_count; ++x)
+            {
+                const float u = (static_cast<float>(x) + 0.5f) / MMDEndfieldNativeRampData::sample_count;
+                curve.SetKeyInterpMode(curve.AddKey(u, sample(x)), RCIM_Linear);
+            }
+        }
+
+        void ApplyClientRamps(UToonProfile* profile, const FClientRampSelection& selection)
+        {
+            if (!selection.diffuse_pixels) return;
+            auto& diffuse = profile->Settings.DiffuseRamp;
+            auto& specular = profile->Settings.SpecularRamp;
+            // 客户端线性数值直接写入嵌入曲线，避免外部曲线的 HSV/alpha 调整改变真实数据。
+            diffuse.ExternalCurve = nullptr;
+            specular.ExternalCurve = nullptr;
+            const float source_y = selection.specular_v * MMDEndfieldNativeRampData::sample_count - 0.5f;
+            const float row_fraction = source_y - FMath::FloorToFloat(source_y);
+            for (int32 channel = 0; channel < 3; ++channel)
+            {
+                WriteSampledCurve(diffuse.ColorCurves[channel], [&](int32 x)
+                {
+                    return static_cast<float>(selection.diffuse_pixels[x][channel]) / 255.0f;
+                });
+                WriteSampledCurve(specular.ColorCurves[channel], [&](int32 x)
+                {
+                    if (!selection.specular_rows) return 1.0f;
+                    const float first = static_cast<float>(selection.specular_rows[0][x][channel]);
+                    const float last = static_cast<float>(selection.specular_rows[1][x][channel]);
+                    return FMath::Lerp(first, last, row_fraction) / 255.0f;
+                });
+            }
+            // 原生 EvaluateToonProfileSpecularRamp 只读取 RGB；RD alpha 存放此处供插件按 diffuse u 读取。
+            WriteSampledCurve(specular.ColorCurves[3], [&](int32 x)
+            {
+                return static_cast<float>(selection.diffuse_pixels[x][3]) / 255.0f;
+            });
+        }
 
         FNativeProfileOptions GetNativeProfileOptions()
         {
@@ -55,15 +131,44 @@ namespace MMDEndfieldNativeProfile
             hasher.Update(reinterpret_cast<const uint8*>(&options.mode), sizeof(options.mode));
             hasher.Update(reinterpret_cast<const uint8*>(&options.diffuse_scale), sizeof(options.diffuse_scale));
             hasher.Update(reinterpret_cast<const uint8*>(&options.specular_scale), sizeof(options.specular_scale));
+            using namespace MMDEndfieldNativeRampData;
+            hasher.Update(reinterpret_cast<const uint8*>(&algorithm_version), sizeof(algorithm_version));
+            hasher.Update(reinterpret_cast<const uint8*>(body_rd), sizeof(body_rd));
+            hasher.Update(reinterpret_cast<const uint8*>(hair_rd), sizeof(hair_rd));
+            hasher.Update(reinterpret_cast<const uint8*>(cloth_rd), sizeof(cloth_rd));
+            hasher.Update(reinterpret_cast<const uint8*>(cloth_rs_fixed_rows), sizeof(cloth_rs_fixed_rows));
+            hasher.Update(reinterpret_cast<const uint8*>(hair_rs_fixed_rows), sizeof(hair_rs_fixed_rows));
+            hasher.Update(reinterpret_cast<const uint8*>(&cloth_rs_v), sizeof(cloth_rs_v));
+            hasher.Update(reinterpret_cast<const uint8*>(&hair_rs_v), sizeof(hair_rs_v));
             signature = hasher.Finalize();
             return true;
         }
     }
 
-    bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role)
+    bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role, bool apply_client_ramps)
     {
         if (!IsValid(profile) || !profile->HasAnyFlags(RF_Transient) || static_cast<uint8>(role) > 5) return false;
         check(IsInGameThread());
+        // 弱引用包含 UObject 序列号，地址复用不会误用旧快照；外部源曲线由强引用保护。
+        static TMap<TWeakObjectPtr<UToonProfile>, FOriginalRampState> original_ramps;
+        for (auto iterator = original_ramps.CreateIterator(); iterator; ++iterator)
+        {
+            if (!iterator.Key().IsValid()) iterator.RemoveCurrent();
+        }
+        FOriginalRampState* original = original_ramps.Find(profile);
+        if (!original)
+        {
+            original = &original_ramps.FindOrAdd(profile);
+            original->diffuse_ramp = profile->Settings.DiffuseRamp;
+            original->specular_ramp = profile->Settings.SpecularRamp;
+            original->diffuse_external = TStrongObjectPtr<UCurveLinearColor>(original->diffuse_ramp.ExternalCurve.Get());
+            original->specular_external = TStrongObjectPtr<UCurveLinearColor>(original->specular_ramp.ExternalCurve.Get());
+        }
+        // 先还原两个 ramp，支持同一瞬态副本跨角色、模式 0/1/2 重用。
+        profile->Settings.DiffuseRamp = original->diffuse_ramp;
+        profile->Settings.SpecularRamp = original->specular_ramp;
+        const FNativeProfileOptions options = GetNativeProfileOptions();
+        if (apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role));
         FRichCurve* alpha_curve = &profile->Settings.DiffuseRamp.ColorCurves[3];
         if (UCurveLinearColor* source_curve = profile->Settings.DiffuseRamp.ExternalCurve)
         {
@@ -80,8 +185,7 @@ namespace MMDEndfieldNativeProfile
         alpha.Reset();
         const float first = -32.0f - static_cast<float>(role);
         const float last = -64.0f - static_cast<float>(role);
-        const FNativeProfileOptions options = GetNativeProfileOptions();
-        // 各平台保持平坦，平台间线性过渡；RGB 与外部源曲线始终不变。
+        // metadata 的键位置和值约定保持不变，客户端 RD alpha 不占用这些位置。
         for (const TPair<float, float>& key : {
             TPair<float, float>(0.0f, first), {0.125f, first},
             {0.1875f, static_cast<float>(options.mode)}, {0.3125f, static_cast<float>(options.mode)},

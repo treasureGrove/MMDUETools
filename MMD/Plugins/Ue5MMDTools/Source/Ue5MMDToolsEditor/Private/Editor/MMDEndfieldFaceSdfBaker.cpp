@@ -1,4 +1,4 @@
-// 将 LOD0 三角形栅格化到原生 UV，分别烘焙左右光照阈值；不假定脸部 UV 对称。
+// 将 LOD0 三角形栅格化到原 UV，保存完整头空间漫反射方向；不新增 UV 或烘焙实际遮挡。
 #include "Editor/MMDEndfieldFaceSdfBaker.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -24,6 +24,7 @@
 
 namespace MMDEnfieldFaceSdf
 {
+    static_assert(DirectionFieldVersion == UMMDEndfieldFaceData::CurrentVersion, "Face direction schema version mismatch");
     static bool BuildHeadFrame(const FBakeSettings& Settings,
                         FVector& OutForward, FVector& OutRight, FVector& OutUp)
     {
@@ -180,16 +181,30 @@ namespace MMDEnfieldFaceSdf
         return static_cast<uint8>(FMath::RoundToInt(FMath::Clamp(Value, 0.0f, 1.0f) * 255.0f));
     }
 
-    static bool MergeFaceTexel(uint8* Pixel, FVector3f& StoredPosition, bool bCovered,
-                               const FVector3f& Position, uint8 RightThreshold, uint8 LeftThreshold,
-                               float AngleTolerance, float PositionTolerance, float SideMinimum)
+    static void EncodeOctDirection(const FVector3f& Direction, uint8* Pixel)
+    {
+        const float Denominator = FMath::Abs(Direction.X) + FMath::Abs(Direction.Y) + FMath::Abs(Direction.Z);
+        FVector3f Oct = Direction / FMath::Max(Denominator, UE_SMALL_NUMBER);
+        if (Oct.Z < 0.0f)
+        {
+            const float PreviousX = Oct.X;
+            Oct.X = (1.0f - FMath::Abs(Oct.Y)) * (PreviousX >= 0.0f ? 1.0f : -1.0f);
+            Oct.Y = (1.0f - FMath::Abs(PreviousX)) * (Oct.Y >= 0.0f ? 1.0f : -1.0f);
+        }
+        Pixel[0] = EncodeUnit(Oct.X * 0.5f + 0.5f);
+        Pixel[1] = EncodeUnit(Oct.Y * 0.5f + 0.5f);
+    }
+
+    static bool MergeFaceTexel(uint8* Pixel, FVector3f& StoredPosition, FVector3f& StoredDirection,
+                               bool bCovered, const FVector3f& Position, const FVector3f& Direction,
+                               float NormalToleranceCos, float PositionTolerance, float SideMinimum)
     {
         if (!bCovered)
         {
-            Pixel[0] = RightThreshold;
-            Pixel[1] = LeftThreshold;
+            EncodeOctDirection(Direction, Pixel);
             Pixel[2] = 0;
             StoredPosition = Position;
+            StoredDirection = Direction;
             return true;
         }
         const bool bReliableSides = FMath::Abs(StoredPosition.X) >= SideMinimum && FMath::Abs(Position.X) >= SideMinimum;
@@ -197,40 +212,29 @@ namespace MMDEnfieldFaceSdf
             && FMath::Abs(StoredPosition.X + Position.X) <= PositionTolerance
             && FMath::Abs(StoredPosition.Y - Position.Y) <= PositionTolerance
             && FMath::Abs(StoredPosition.Z - Position.Z) <= PositionTolerance;
+        const bool bSameGeometry = FMath::Abs(StoredPosition.X - Position.X) <= PositionTolerance
+            && FMath::Abs(StoredPosition.Y - Position.Y) <= PositionTolerance
+            && FMath::Abs(StoredPosition.Z - Position.Z) <= PositionTolerance;
         if (Pixel[2] == 255)
         {
-            const bool bSameGeometry = bReliableSides && StoredPosition.X * Position.X > 0.0f
-                && FMath::Abs(StoredPosition.X - Position.X) <= PositionTolerance
-                && FMath::Abs(StoredPosition.Y - Position.Y) <= PositionTolerance
-                && FMath::Abs(StoredPosition.Z - Position.Z) <= PositionTolerance;
-            // 第三次及以后覆盖按当前几何侧恢复原始 R/G；不把所有 RG 互换都当镜像。
-            const int32 ExpectedRight = Position.X >= 0.0f ? Pixel[0] : Pixel[1];
-            const int32 ExpectedLeft = Position.X >= 0.0f ? Pixel[1] : Pixel[0];
-            return (bSameGeometry || bMirrorGeometry)
-                && FMath::Abs(ExpectedRight - RightThreshold) <= AngleTolerance
-                && FMath::Abs(ExpectedLeft - LeftThreshold) <= AngleTolerance;
+            // 第三次覆盖恢复当前几何侧方向；不能把任何相似法线都接受为同一 UV。
+            FVector3f Expected = StoredDirection;
+            if (Position.X < 0.0f) Expected.X = -Expected.X;
+            return bReliableSides && ((bSameGeometry && StoredPosition.X * Position.X > 0.0f) || bMirrorGeometry)
+                && FVector3f::DotProduct(Expected, Direction) >= NormalToleranceCos;
         }
-        const int32 StoredRight = Pixel[0];
-        const int32 StoredLeft = Pixel[1];
-        const bool bSwappedAngles = FMath::Abs(StoredRight - LeftThreshold) <= AngleTolerance
-            && FMath::Abs(StoredLeft - RightThreshold) <= AngleTolerance;
-        // 规范化后运行时用位置侧恢复中心角符号，因此反向中心角不能误编码为镜像。
-        const bool bStoredSideMatches = (StoredPosition.X >= 0.0f ? StoredRight - StoredLeft : StoredLeft - StoredRight) >= -1;
-        const bool bNewSideMatches = (Position.X >= 0.0f ? static_cast<int32>(RightThreshold) - LeftThreshold
-            : static_cast<int32>(LeftThreshold) - RightThreshold) >= -1;
-        if (bMirrorGeometry && bSwappedAngles && bStoredSideMatches && bNewSideMatches)
+        FVector3f MirroredStored = StoredDirection;
+        MirroredStored.X = -MirroredStored.X;
+        if (bMirrorGeometry && FVector3f::DotProduct(MirroredStored, Direction) >= NormalToleranceCos)
         {
-            Pixel[0] = static_cast<uint8>(FMath::Max(StoredRight, StoredLeft));
-            Pixel[1] = static_cast<uint8>(FMath::Min(StoredRight, StoredLeft));
+            // canonical 是正 Right 几何侧，x 可指向内侧；禁止 abs(x) 抹掉折面方向。
+            if (StoredPosition.X < 0.0f) StoredDirection.X = -StoredDirection.X;
+            EncodeOctDirection(StoredDirection, Pixel);
             Pixel[2] = 255;
             return true;
         }
-        if (FMath::Abs(StoredRight - RightThreshold) > AngleTolerance
-            || FMath::Abs(StoredLeft - LeftThreshold) > AngleTolerance) return false;
-        Pixel[0] = RightThreshold;
-        Pixel[1] = LeftThreshold;
-        StoredPosition = Position;
-        return true;
+        // 方向相似但几何无关的 UV 重叠仍回退；保留第一次方向，避免重复平均积累误差。
+        return bSameGeometry && FVector3f::DotProduct(StoredDirection, Direction) >= NormalToleranceCos;
     }
 
     bool BakeFaceSdf(USkeletalMesh* Mesh, const FBakeSettings& Settings, FBakeResult& OutResult)
@@ -247,6 +251,8 @@ namespace MMDEnfieldFaceSdf
             || !FMath::IsFinite(Settings.FaceForwardMinimum) || !FMath::IsFinite(Settings.ChinHeight)
             || !FMath::IsFinite(Settings.CrownHeight) || Settings.ChinHeight >= Settings.CrownHeight
             || !FMath::IsFinite(Settings.UVOverlapThresholdTolerance)
+            || !FMath::IsFinite(Settings.DirectionNormalAngleToleranceDegrees)
+            || Settings.DirectionNormalAngleToleranceDegrees < 0.0f || Settings.DirectionNormalAngleToleranceDegrees > 45.0f
             || !FMath::IsFinite(Settings.GeometryNormalWeight)
             || !FMath::IsFinite(Settings.MirrorPositionTolerance) || Settings.MirrorPositionTolerance <= 0.0f
             || !FMath::IsFinite(Settings.MirrorSideMinimum) || Settings.MirrorSideMinimum <= 0.0f)
@@ -331,13 +337,13 @@ namespace MMDEnfieldFaceSdf
         TexelState.SetNumZeroed(TexelCount);
         TArray<FVector3f> TexelLocalPosition;
         TexelLocalPosition.SetNumZeroed(TexelCount);
+        TArray<FVector3f> TexelLocalDirection;
+        TexelLocalDirection.SetNumZeroed(TexelCount);
         TBitArray<> ConsideredVertices(false, VertexCount);
-        TBitArray<> NonContinuousTexels(false, TexelCount);
-        TBitArray<> FrontDarkTexels(false, TexelCount);
         OutResult.GeometryNormalWeight = FMath::Clamp(Settings.GeometryNormalWeight, 0.0f, 1.0f);
         OutResult.Pixels.SetNumZeroed(TexelCount * 4);
         const FVector FrontLight = Forward * FMath::Cos(KeyLightPitch) + Up * FMath::Sin(KeyLightPitch);
-        const float OverlapTolerance = FMath::Clamp(Settings.UVOverlapThresholdTolerance, 0.0f, 1.0f) * 255.0f;
+        const float NormalToleranceCos = FMath::Cos(FMath::DegreesToRadians(Settings.DirectionNormalAngleToleranceDegrees));
 
         const FSkeletalMeshLODInfo* LODInfo = Mesh->GetLODInfo(0);
         for (int32 SectionIndex = 0; SectionIndex < LODData.RenderSections.Num(); ++SectionIndex)
@@ -423,27 +429,25 @@ namespace MMDEnfieldFaceSdf
                         const FVector SphereNormal = (Position - Settings.HeadCenter).GetSafeNormal();
                         const FVector BlendedNormal = (SphereNormal * (1.0f - OutResult.GeometryNormalWeight)
                             + Normal * OutResult.GeometryNormalWeight).GetSafeNormal();
-                        const FVector ThresholdNormal = BlendedNormal.IsNearlyZero() ? Normal : BlendedNormal;
-                        bool bRightNonContinuous = false;
-                        bool bLeftNonContinuous = false;
-                        const uint8 RightThreshold = EncodeUnit(SideThreshold(ThresholdNormal, Forward, Right, Up, 1.0f, bRightNonContinuous));
-                        const uint8 LeftThreshold = EncodeUnit(SideThreshold(ThresholdNormal, Forward, Right, Up, -1.0f, bLeftNonContinuous));
+                        const FVector DirectionNormal = BlendedNormal.IsNearlyZero() ? Normal : BlendedNormal;
                         const FVector LocalOffset = (Position - Settings.HeadCenter) / Settings.HeadRadius;
                         const FVector3f LocalPosition(static_cast<float>(FVector::DotProduct(LocalOffset, Right)),
                             static_cast<float>(FVector::DotProduct(LocalOffset, Forward)), static_cast<float>(FVector::DotProduct(LocalOffset, Up)));
+                        const FVector3f LocalDirection = FVector3f(
+                            static_cast<float>(FVector::DotProduct(DirectionNormal, Right)),
+                            static_cast<float>(FVector::DotProduct(DirectionNormal, Forward)),
+                            static_cast<float>(FVector::DotProduct(DirectionNormal, Up))).GetSafeNormal();
                         if (!MergeFaceTexel(OutResult.Pixels.GetData() + ByteIndex, TexelLocalPosition[TexelIndex],
-                            TexelState[TexelIndex] == 1, LocalPosition, RightThreshold, LeftThreshold,
-                            OverlapTolerance, Settings.MirrorPositionTolerance, Settings.MirrorSideMinimum))
+                            TexelLocalDirection[TexelIndex], TexelState[TexelIndex] == 1, LocalPosition, LocalDirection,
+                            NormalToleranceCos, Settings.MirrorPositionTolerance, Settings.MirrorSideMinimum))
                         {
                             TexelState[TexelIndex] = 2;
-                            OutResult.Pixels[ByteIndex + 3] = 0;
+                            FMemory::Memzero(OutResult.Pixels.GetData() + ByteIndex, 4);
                             ++OutResult.ConflictingTexelCount;
                             continue;
                         }
                         TexelState[TexelIndex] = 1;
                         OutResult.Pixels[ByteIndex + 3] = 255;
-                        NonContinuousTexels[TexelIndex] = bRightNonContinuous || bLeftNonContinuous;
-                        FrontDarkTexels[TexelIndex] = FVector::DotProduct(ThresholdNormal, FrontLight) <= 0.0f;
                     }
                 }
                 if (bTriangleContributed)
@@ -460,9 +464,17 @@ namespace MMDEnfieldFaceSdf
             {
                 ++OutResult.FaceTexelCount;
                 if (OutResult.Pixels[TexelIndex * 4 + 2] == 255) ++OutResult.MirroredTexelCount;
-                if (OutResult.Pixels[TexelIndex * 4] > 0 || OutResult.Pixels[TexelIndex * 4 + 1] > 0) ++OutResult.LitTexelCount;
-                if (NonContinuousTexels[TexelIndex]) ++OutResult.NonContinuousTexelCount;
-                if (FrontDarkTexels[TexelIndex]) ++OutResult.FrontDarkTexelCount;
+                const FVector3f Local = TexelLocalDirection[TexelIndex];
+                const FVector Direction = Right * Local.X + Forward * Local.Y + Up * Local.Z;
+                const bool bFrontDark = FVector::DotProduct(Direction, FrontLight) <= 0.0f;
+                if (bFrontDark) ++OutResult.FrontDarkTexelCount;
+                else ++OutResult.LitTexelCount;
+                // 旧固定仰角仅作已保留方向的诊断，绝不参与 V4 编码或有效覆盖判定。
+                bool bRightNonContinuous = false;
+                bool bLeftNonContinuous = false;
+                SideThreshold(Direction, Forward, Right, Up, 1.0f, bRightNonContinuous);
+                SideThreshold(Direction, Forward, Right, Up, -1.0f, bLeftNonContinuous);
+                if (bRightNonContinuous || bLeftNonContinuous) ++OutResult.NonContinuousTexelCount;
             }
         }
         for (TConstSetBitIterator<> It(ConsideredVertices); It; ++It) ++OutResult.ConsideredVertexCount;
@@ -472,7 +484,7 @@ namespace MMDEnfieldFaceSdf
             return false;
         }
 
-        // 只扩展阈值颜色，不扩大有效遮罩；冲突像素永远不作为扩展来源。
+        // 只扩展方向与镜像类别，不扩大有效遮罩；冲突像素永远不作扩展来源。
         for (int32 Pass = 0; Pass < FMath::Clamp(Settings.PaddingTexels, 0, 8); ++Pass)
         {
             TArray<int32> PendingDestinations;
@@ -546,9 +558,10 @@ namespace MMDEnfieldFaceSdf
     static bool InitializeTexture(const FBakeResult& Result, UTexture2D* Texture, FString& OutError)
     {
         if (!Texture || !Result.bSuccess || Result.Size <= 0 || Result.Size > 4096
+            || Result.DataVersion != DirectionFieldVersion
             || Result.Pixels.Num() != Result.Size * Result.Size * 4 || Result.FaceTexelCount <= 0)
         {
-            OutError = TEXT("烘焙结果为空，拒绝写出贴图");
+            OutError = TEXT("烘焙结果为空或不是 V4 几何方向场，拒绝写出贴图");
             return false;
         }
         // Result 为 RGBA；UE 的 TSF_BGRA8 必须显式交换 R/B，不能直接复制源数组。
@@ -564,16 +577,17 @@ namespace MMDEnfieldFaceSdf
         Texture->Source.Init(Result.Size, Result.Size, 1, 1, TSF_BGRA8, SourceBGRA.GetData());
         Texture->SRGB = false;
         Texture->CompressionSettings = TC_VectorDisplacementmap;
-        // 角度阈值与有效 mask 不做有损压缩或 mip 混合，边缘由双线性采样与 RGB padding 处理。
+        // oct 和镜像类别不做有损压缩或 mip 混合；shader 四 tap 分别解码后插值。
         Texture->MipGenSettings = TMGS_NoMipmaps;
         Texture->AddressX = TA_Clamp;
         Texture->AddressY = TA_Clamp;
-        Texture->Filter = TF_Bilinear;
+        Texture->Filter = TF_Nearest;
         Texture->VirtualTextureStreaming = false;
         Texture->NeverStream = true;
         Texture->LODGroup = TEXTUREGROUP_Character;
         const FString VersionTag = FString::FromInt(UMMDEndfieldFaceData::CurrentVersion);
-        Texture->GetOutermost()->GetMetaData().SetValue(Texture, TEXT("MMDGeneratedFaceSdfVersion"), *VersionTag);
+        Texture->GetOutermost()->GetMetaData().SetValue(Texture, TEXT("MMDGeneratedFaceDirectionVersion"), *VersionTag);
+        Texture->GetOutermost()->GetMetaData().SetValue(Texture, TEXT("MMDFaceDirectionEncoding"), TEXT("oct-unorm8-right-forward-up-mirror-positive-position-side"));
         Texture->PostEditChange();
         UTexture* PendingTextures[] = { Texture };
         FTextureCompilingManager::Get().FinishCompilation(PendingTextures);
@@ -595,16 +609,23 @@ namespace MMDEnfieldFaceSdf
         if (!FPackageName::IsValidLongPackageName(PackageName) || AssetName.IsEmpty()
             || FPackageName::GetShortName(PackageName) != AssetName)
         {
-            OutError = TEXT("SDF 资产需要完整包名，且 AssetName 必须与包短名一致");
+            OutError = TEXT("方向场资产需要完整包名，且 AssetName 必须与包短名一致");
             return false;
         }
         const bool bExists = FPackageName::DoesPackageExist(PackageName);
         UTexture2D* Texture = bExists
             ? LoadObject<UTexture2D>(nullptr, *(PackageName + TEXT(".") + AssetName))
             : nullptr;
+        if (Texture) Texture->GetOutermost()->FullyLoad();
         if (bExists && !Texture)
         {
-            OutError = FString::Printf(TEXT("无法加载已存在的 SDF 贴图：%s"), *PackageName);
+            OutError = FString::Printf(TEXT("无法加载已存在的方向贴图：%s"), *PackageName);
+            return false;
+        }
+        if (Texture && Texture->GetOutermost()->GetMetaData().GetValue(Texture, TEXT("MMDGeneratedFaceDirectionVersion"))
+            != FString::FromInt(DirectionFieldVersion))
+        {
+            OutError = TEXT("已有贴图不是本工具 V4 方向缓存，保留旧阈值图或用户资产：") + PackageName;
             return false;
         }
         if (!Texture)
@@ -627,7 +648,7 @@ namespace MMDEnfieldFaceSdf
         Args.SaveFlags = SAVE_NoError;
         if (!UPackage::SavePackage(Texture->GetOutermost(), Texture, *Filename, Args))
         {
-            OutError = FString::Printf(TEXT("无法保存 SDF 贴图：%s"), *PackageName);
+            OutError = FString::Printf(TEXT("无法保存方向贴图：%s"), *PackageName);
             return false;
         }
         return true;

@@ -4,6 +4,16 @@
 
 读者入门入口：[终末地插件着色入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，含三版方案对比、数据流图、实际 GI 对照和代码入口。
 
+## 当前迭代：正式脸部 payload 与客户端 ramp（2026-10-14）
+
+沿用用户确认的插件原生后端。新增 v6／图版本4：专用材质 CustomOutput 把头空间漫反射方向和旋转交给 BasePass，packed export/read 后在每盏灯 BSDF 中消费；独立原生 Normal 供高光／GI。仅单 Toon Skin／Mode2／adaptive fmt1 opaque/masked，有24 bytes预算及简化回退保护。
+
+自动 V4 方向场不再丢失固定俯角以外的信息，保留 UV0并逐tap解镜像。它是几何方向场，不是实际遮挡距离场；保留 V3 旧阈值路径。当前跟随头骨刚性旋转，Morph／下颌局部变形修正未完成。Skin／Hair／Cloth真实256点 RD 以 alpha混明暗、RGB tint及亮度补偿处理；移除三档先量化。RS／F0／高光波瓣已继续对齐，Hair/Cloth二维RS目前固定切片，头发方向仍用几何近似。
+
+Editor build4、Game game-build2 和11包 generate2 已通过。新版 fidelity2/3 共71图／350槽检查0失败，覆盖多仰角、组件旋转、多灯、原生遮挡、packed有效性与高光/GI对照。方向贴图GPU覆盖已实际可见，packed开启／关闭分别读回绿／红；禁用漫反射后的脸区均差.113/255，没有此前共享法线明显漂移。Mode0和后端关闭对照均通过。代表[原图与来源](Screenshots/2026-10-14-endfield-fidelity/README.md)，没有把绿色诊断或图片数量当画质验收。
+
+完整十项范围持续有效，眼睛、深度rim、描边、后处理及完整头发响应仍未完成。本轮尚未重新Cook／验证发行包；以下v4打包及V3自动SDF段均为历史记录。下一步已查明Eye真实Specular/Smoothness=0且Matcap分层，描边需新增自有V2底色采样材质并复用现overlay/WPO链路，不能覆盖用户dirty Outline资产；rim应按真实深度差/分辨率公式接入一次合成，不能每盏灯重复叠加。
+
 ## 原生着色后端实施（2026-10-14，已完成本批验证）
 
 用户已授权实施“插件内写类似自定义 ShadingModel、取得原生渲染结果”的方案。新增固定 UE 5.8.3 / CL58210709 的 shader 目录适配：仅修改工程 Intermediate 中的副本，通过更深虚拟路径接入；安装引擎源文件不改。自有 `.ush` 接逐灯光 Context、ShadowTerms、AreaLight 和 50 项原生灯光／阴影输入，补传统聚簇灯光以及 GI／反射最终贡献入口。

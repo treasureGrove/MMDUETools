@@ -1061,6 +1061,16 @@ namespace
 				Texture = nullptr;
 				MID->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceSdfTexture")), Texture);
 				Item->SetStringField(TEXT("face_sdf_texture"), Texture ? Texture->GetPathName() : TEXT("none"));
+				float DirectionEnabled = 0.0f, PayloadEnabled = 0.0f, DirectionVersion = 0.0f;
+				MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceDirectionEnabled")), DirectionEnabled);
+				MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonNativePayloadEnabled")), PayloadEnabled);
+				MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceDirectionVersion")), DirectionVersion);
+				Item->SetNumberField(TEXT("face_direction_enabled"), DirectionEnabled);
+				Item->SetNumberField(TEXT("native_payload_enabled"), PayloadEnabled);
+				Item->SetNumberField(TEXT("face_direction_version"), DirectionVersion);
+				Texture = nullptr;
+				MID->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceDirectionTexture")), Texture);
+				Item->SetStringField(TEXT("face_direction_texture"), Texture ? Texture->GetPathName() : TEXT("none"));
 			}
 			if (const UMMDStageMaterialState* State = Cast<UMMDStageMaterialState>(Rig.Character->GetAssetUserDataOfClass(UMMDStageMaterialState::StaticClass())))
 			{
@@ -1146,7 +1156,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	TArray<FString> Exps;
 	ExpText.ParseIntoArray(Exps, TEXT(","), true);
 	const TArray<FString> AllowedExps = { TEXT("ab"), TEXT("shadow"), TEXT("ramp"), TEXT("lighting"), TEXT("face"),
-		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("all") };
+		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("all") };
 	for (const FString& Exp : Exps)
 	{
 		if (!AllowedExps.Contains(Exp))
@@ -1207,9 +1217,9 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		Report->SetStringField(TEXT("native_preset"), NativePresetPath);
 		for (const FString& Exp : Exps)
 		{
-			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend"))
+			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity"))
 			{
-				UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend, received %s"), *Exp);
+					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity, received %s"), *Exp);
 				return 1;
 			}
 		}
@@ -1532,8 +1542,10 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	if (ToonProbeHasExp(Exps, TEXT("sdf")) && NativePreset.IsValid() && (bCanToon || !bSubstrate))
 	{
 		UseToonBaseline();
-		const TCHAR* SdfEnabledName = bSubstrate ? TEXT("ToonFaceSdfEnabled") : TEXT("UseSdfMap");
-		const TCHAR* SdfTextureName = bSubstrate ? TEXT("ToonFaceSdfTexture") : TEXT("SDFMap");
+		const bool bDirection = bSubstrate && MMDEndfieldNativeBackend::GetStatus().Mode == 2
+			&& MMDEndfieldNativeBackend::GetStatus().bProfileMarkerAllowed && ToonProbeCVar(TEXT("r.Substrate.ProjectGBufferFormat")) == TEXT("1");
+		const TCHAR* SdfEnabledName = bDirection ? TEXT("ToonFaceDirectionEnabled") : bSubstrate ? TEXT("ToonFaceSdfEnabled") : TEXT("UseSdfMap");
+		const TCHAR* SdfTextureName = bDirection ? TEXT("ToonFaceDirectionTexture") : bSubstrate ? TEXT("ToonFaceSdfTexture") : TEXT("SDFMap");
 		auto Check = [&](const TCHAR* Name, bool bOk)
 		{
 			Log.Note(Name, bOk ? TEXT("passed") : TEXT("failed"));
@@ -1554,7 +1566,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 					MID->GetScalarParameterValue(FHashedMaterialParameterInfo(SdfEnabledName), Enabled);
 					MID->GetTextureParameterValue(FHashedMaterialParameterInfo(SdfTextureName), Texture);
 				}
-				return MID && Enabled == 1.0f && Texture == Data->Slots[0].Texture;
+				return MID && Enabled == 1.0f && Texture == (bDirection ? Data->Slots[0].DirectionTexture.Get() : Data->Slots[0].Texture.Get());
 			};
 			Check(TEXT("sdf_runtime_texture_bound"), IsBound());
 			Check(TEXT("sdf_role_override_generic"), UMMDStageLibrary::SetCharacterMaterialRoleOverride(Rig.Character.Get(), FaceSlot, EMMDMaterialRole::Generic));
@@ -1628,6 +1640,19 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 				Diagnostic->CharacterToonMaterialTranslucent = Parents[2];
 				for (auto& Role : Diagnostic->CharacterToonRoles) Role.Value.Specular = 0.0f;
 				ToonProbeApplyPreset(Rig, Diagnostic.Get());
+				if (bDirection)
+				{
+					// 临时诊断父材质不在正式资产路径，显式绑定，不能误用生产路径门控结果。
+					for (const FMMDGeneratedFaceSdfSlot& Slot : Data->Slots)
+						if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot.MaterialIndex)))
+						{
+							MID->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), 1.0f);
+							MID->SetScalarParameterValue(TEXT("ToonFaceDirectionVersion"), 4.0f);
+							MID->SetScalarParameterValue(SdfEnabledName, 1.0f);
+							MID->SetTextureParameterValue(SdfTextureName, Slot.DirectionTexture);
+						}
+					UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+				}
 				ToonProbeFinishMaterialSwap(Rig, Sample);
 				ToonProbeValidateSlots(Rig, Log, TEXT("sdf_gpu_mask"));
 				ToonProbeCaptureShot(Rig, Sample, Log, TEXT("sdf_gpu_mask_on"), EToonProbeShot::Face);
@@ -1637,6 +1662,99 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 				ToonProbeCaptureShot(Rig, Sample, Log, TEXT("sdf_gpu_mask_off"), EToonProbeShot::Face);
 				UseToonBaseline();
 			}
+		}
+	}
+	if (ToonProbeHasExp(Exps, TEXT("fidelity")) && NativePreset.IsValid() && bCanToon)
+	{
+		UseToonBaseline();
+		ToonProbeSetLights(Rig, true, false, false);
+		ToonProbePose(Rig, Sample.FaceTimes.Num() > 0 ? Sample.FaceTimes[0] : Sample.BeautyTime);
+		UMMDEndfieldFaceData* Data = Sample.Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
+		if (!Data || Data->Version != 4 || Data->Slots.IsEmpty())
+		{
+			++Log.Failures;
+			Log.Note(TEXT("fidelity_direction_fixture"), TEXT("需要 V4 方向场夹具"));
+		}
+		else
+		{
+			const FRotator LightRotation = Rig.Stage->KeyLight->GetComponentRotation();
+			const FRotator MeshRotation = Rig.Character->GetComponentRotation();
+			const int32 FaceSlot = Data->Slots[0].MaterialIndex;
+			auto SetDirection = [&](bool bEnabled)
+			{
+				for (const FMMDGeneratedFaceSdfSlot& Slot : Data->Slots)
+					if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot.MaterialIndex)))
+						MID->SetScalarParameterValue(TEXT("ToonFaceDirectionEnabled"), bEnabled ? 1.0f : 0.0f);
+			};
+			auto HeadFrame = [&](FVector& F, FVector& R, FVector& U)
+			{
+				UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+				FLinearColor Forward, Right;
+				Rig.Character->GetMaterial(FaceSlot)->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadForward), Forward);
+				Rig.Character->GetMaterial(FaceSlot)->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadRight), Right);
+				F = FVector(Forward.R, Forward.G, Forward.B).GetSafeNormal();
+				R = FVector(Right.R, Right.G, Right.B).GetSafeNormal();
+				U = FVector::CrossProduct(R, F).GetSafeNormal();
+			};
+			FVector F, R, U;
+			HeadFrame(F, R, U);
+			for (const float Elevation : { -20.0f, 45.0f })
+				for (const float Azimuth : { -65.0f, 65.0f })
+				{
+					const float Pitch = FMath::DegreesToRadians(Elevation), Yaw = FMath::DegreesToRadians(Azimuth);
+					const FVector L = (F * FMath::Cos(Yaw) + R * FMath::Sin(Yaw)) * FMath::Cos(Pitch) + U * FMath::Sin(Pitch);
+					Rig.Stage->KeyLight->SetWorldRotation((-L).Rotation());
+					SetDirection(true);
+					ToonProbeCaptureShot(Rig, Sample, Log, FString::Printf(TEXT("fidelity_pitch_%d_yaw_%d"), FMath::RoundToInt(Elevation), FMath::RoundToInt(Azimuth)), EToonProbeShot::Face);
+				}
+			// 固定世界光，旋转整个骨骼组件，验证本帧头部旋转四元数的解码。
+			Rig.Stage->KeyLight->SetWorldRotation((-(F * 0.8 + R * 0.5 + U * 0.3).GetSafeNormal()).Rotation());
+			for (const float Yaw : { -35.0f, 35.0f })
+			{
+				Rig.Character->SetWorldRotation(MeshRotation + FRotator(0.0f, Yaw, 0.0f));
+				ToonProbeCaptureShot(Rig, Sample, Log, FString::Printf(TEXT("fidelity_head_yaw_%d"), FMath::RoundToInt(Yaw)), EToonProbeShot::Face);
+			}
+			Rig.Character->SetWorldRotation(MeshRotation);
+			Rig.Stage->KeyLight->SetWorldRotation(LightRotation);
+			ToonProbeSetShowFlags(Rig, { TEXT("Diffuse") });
+			for (const bool bEnabled : { true, false })
+			{
+				SetDirection(bEnabled);
+				ToonProbeCaptureShot(Rig, Sample, Log, bEnabled ? TEXT("fidelity_spec_gi_direction_on") : TEXT("fidelity_spec_gi_direction_off"), EToonProbeShot::Face);
+			}
+			ToonProbeSetShowFlags(Rig, {});
+			ToonProbeSetLights(Rig, true, true, true);
+			UseToonBaseline();
+			for (const EToonProbeShot Shot : { EToonProbeShot::Hero, EToonProbeShot::Hair, EToonProbeShot::Cloth })
+				ToonProbeCaptureShot(Rig, Sample, Log, TEXT("fidelity_materials"), Shot);
+			ToonProbeValidateSlots(Rig, Log, TEXT("fidelity_native_payload"));
+			// 材质 Custom mask 只能证明 BasePass；此图由逐灯 BSDF 读回 packed valid 后着色。
+			ToonProbeSetLights(Rig, true, false, false);
+			for (const FMMDGeneratedFaceSdfSlot& Slot : Data->Slots)
+			{
+				UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot.MaterialIndex));
+				if (!MID || !MID->ToonProfileOverride) continue;
+				UToonProfile* Diagnostic = DuplicateObject<UToonProfile>(MID->ToonProfileOverride, GetTransientPackage());
+				KeepAlive.Emplace(Diagnostic);
+				Diagnostic->Guid = FGuid::NewGuid();
+				FRichCurve& Alpha = Diagnostic->Settings.DiffuseRamp.ColorCurves[3];
+				for (const float Time : { 0.6875f, 0.8125f }) Alpha.SetKeyInterpMode(Alpha.AddKey(Time, 17.0f), RCIM_Linear);
+				MID->ToonProfileOverride = Diagnostic;
+				MID->bOverrideToonProfile = true;
+				MID->ClearParameterValues();
+				MID->SetScalarParameterValue(TEXT("ToonSphereBlend"), 0.75f);
+				ToonProbeRefreshProfile(Diagnostic);
+			}
+			for (const bool bEnabled : { true, false })
+			{
+				for (const FMMDGeneratedFaceSdfSlot& Slot : Data->Slots)
+					if (UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot.MaterialIndex)))
+						MID->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), bEnabled ? 1.0f : 0.0f);
+				UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+				ToonProbeCaptureShot(Rig, Sample, Log, bEnabled ? TEXT("fidelity_packed_valid_on") : TEXT("fidelity_packed_valid_off"), EToonProbeShot::Face);
+			}
+			UseToonBaseline();
+			ToonProbeSetLights(Rig, true, true, true);
 		}
 	}
 	if (ToonProbeHasExp(Exps, TEXT("runtime")) && NativePreset.IsValid())

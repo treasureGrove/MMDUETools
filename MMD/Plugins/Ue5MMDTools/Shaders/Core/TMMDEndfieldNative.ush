@@ -21,7 +21,7 @@ struct TMMDEndfieldNative
         return normal_length_squared > 0.000001 ? blended * rsqrt(normal_length_squared) : mesh_normal;
     }
 
-    float3 PrepareSurface(float3 world_pos, float3 mesh_normal, float4 head_position_radius,
+    float3 PrepareLegacySurface(float3 world_pos, float3 mesh_normal, float4 head_position_radius,
         float3 head_forward, float3 head_right, float sphere_blend, float2 surface_uv,
         Texture2D sdf_tex, SamplerState sdf_sampler, float sdf_enabled, float ramp_boundary, float shadow_suppress,
         out float2 pattern_uv, out float face_mask, out float shadow_coverage)
@@ -71,5 +71,110 @@ struct TMMDEndfieldNative
         offset = clamp(offset, -0.9, 0.34);
         pattern_uv.x = 0.5 + 0.5 * offset * face_mask;
         return SafeNormalize(lerp(surface_normal, sdf_normal, face_mask), surface_normal);
+    }
+
+    float3 DecodeDirection(float4 texel, float side)
+    {
+        float2 oct = texel.rg * 2.0 - 1.0;
+        float3 normal = float3(oct, 1.0 - abs(oct.x) - abs(oct.y));
+        if (normal.z < 0.0)
+            normal.xy = (1.0 - abs(normal.yx)) * float2(normal.x >= 0.0 ? 1.0 : -1.0, normal.y >= 0.0 ? 1.0 : -1.0);
+        // B 是离散镜像标记；正 Right 侧的原法线可以指向内，不能 abs(x)。
+        if (texel.b > 0.5) normal.x *= side;
+        return SafeNormalize(normal, float3(0.0, 1.0, 0.0));
+    }
+
+    float4 ReadDirection(Texture2D direction_tex, float2 surface_uv, float side, float3 fallback)
+    {
+        uint width, height;
+        direction_tex.GetDimensions(width, height);
+        if (width < 1u || height < 1u) return float4(fallback, 0.0);
+        float2 sample_position = frac(surface_uv) * float2(width, height) - 0.5;
+        int2 origin = int2(floor(sample_position));
+        float2 weights = frac(sample_position);
+        float3 direction = 0.0;
+        float coverage = 0.0;
+        for (int y = 0; y < 2; ++y)
+        {
+            for (int x = 0; x < 2; ++x)
+            {
+                int2 coord = clamp(origin + int2(x, y), int2(0, 0), int2(width - 1u, height - 1u));
+                float4 texel = direction_tex.Load(int3(coord, 0));
+                float weight = (x == 0 ? 1.0 - weights.x : weights.x) * (y == 0 ? 1.0 - weights.y : weights.y);
+                weight *= saturate(texel.a);
+                direction += DecodeDirection(texel, side) * weight;
+                coverage += weight;
+            }
+        }
+        return float4(SafeNormalize(direction, fallback), saturate(coverage));
+    }
+
+    float4 FrameQuaternion(float3 right, float3 forward, float3 up)
+    {
+        float4 q;
+        float trace = right.x + forward.y + up.z;
+        if (trace > 0.0)
+        {
+            float s = sqrt(trace + 1.0) * 2.0;
+            q = float4((forward.z - up.y) / s, (up.x - right.z) / s, (right.y - forward.x) / s, s * 0.25);
+        }
+        else if (right.x > forward.y && right.x > up.z)
+        {
+            float s = sqrt(max(1.0 + right.x - forward.y - up.z, 0.000001)) * 2.0;
+            q = float4(s * 0.25, (forward.x + right.y) / s, (up.x + right.z) / s, (forward.z - up.y) / s);
+        }
+        else if (forward.y > up.z)
+        {
+            float s = sqrt(max(1.0 + forward.y - right.x - up.z, 0.000001)) * 2.0;
+            q = float4((forward.x + right.y) / s, s * 0.25, (up.y + forward.z) / s, (up.x - right.z) / s);
+        }
+        else
+        {
+            float s = sqrt(max(1.0 + up.z - right.x - forward.y, 0.000001)) * 2.0;
+            q = float4((up.x + right.z) / s, (up.y + forward.z) / s, s * 0.25, (right.y - forward.x) / s);
+        }
+        return q * rsqrt(max(dot(q, q), 0.000001));
+    }
+
+    float3 PrepareSurface(float3 world_pos, float3 mesh_normal, float4 head_position_radius,
+        float3 head_forward, float3 head_right, float sphere_blend, float2 surface_uv,
+        Texture2D sdf_tex, SamplerState sdf_sampler, float sdf_enabled, float ramp_boundary, float shadow_suppress,
+        Texture2D direction_tex, SamplerState direction_sampler, float direction_enabled, float direction_version,
+        float payload_enabled, float specular_sphere_blend, out float2 pattern_uv, out float face_mask,
+        out float shadow_coverage, out float4 face_direction, out float4 head_quaternion)
+    {
+        face_direction = float4(0.0, 1.0, 0.0, 0.0);
+        head_quaternion = float4(0.0, 0.0, 0.0, 1.0);
+        // 普通 Toon、透明和兼容 GBuffer 沿用已存在的输入协议。
+        if (payload_enabled != 1.0)
+            return PrepareLegacySurface(world_pos, mesh_normal, head_position_radius, head_forward, head_right,
+                sphere_blend, surface_uv, sdf_tex, sdf_sampler, sdf_enabled, ramp_boundary, shadow_suppress,
+                pattern_uv, face_mask, shadow_coverage);
+
+        pattern_uv = float2(0.5, 0.5);
+        face_mask = 0.0;
+        shadow_coverage = 1.0;
+        float3 specular_normal = SphereNormal(world_pos, mesh_normal, head_position_radius, specular_sphere_blend);
+        if (head_position_radius.w <= 0.0 || dot(head_forward, head_forward) < 0.000001) return specular_normal;
+        float3 forward = SafeNormalize(head_forward, float3(0.0, 1.0, 0.0));
+        float3 projected_right = head_right - forward * dot(head_right, forward);
+        if (dot(projected_right, projected_right) < 0.000001) return specular_normal;
+        float3 right = SafeNormalize(projected_right, float3(1.0, 0.0, 0.0));
+        float3 up = SafeNormalize(cross(right, forward), float3(0.0, 0.0, 1.0));
+        head_quaternion = FrameQuaternion(right, forward, up);
+        float3 diffuse_normal = SphereNormal(world_pos, mesh_normal, head_position_radius, sphere_blend);
+        float3 local_normal = float3(dot(diffuse_normal, right), dot(diffuse_normal, forward), dot(diffuse_normal, up));
+        float3 head_offset = world_pos - head_position_radius.xyz;
+        float head_mask = 1.0 - smoothstep(head_position_radius.w * 1.5, head_position_radius.w * 2.0, length(head_offset));
+        if (direction_enabled == 1.0 && direction_version == 4.0)
+        {
+            float4 direction = ReadDirection(direction_tex, surface_uv, dot(head_offset, right) >= 0.0 ? 1.0 : -1.0, local_normal);
+            face_mask = direction.a * head_mask;
+            local_normal = SafeNormalize(lerp(local_normal, direction.xyz, face_mask), local_normal);
+        }
+        face_direction = float4(local_normal, 1.0);
+        shadow_coverage = 1.0 - face_mask * saturate(shadow_suppress);
+        // SDF/方向数据只交给逐灯漫反射；高光和 Lumen 读取独立的原生 Normal。
+        return specular_normal;
     }
 };

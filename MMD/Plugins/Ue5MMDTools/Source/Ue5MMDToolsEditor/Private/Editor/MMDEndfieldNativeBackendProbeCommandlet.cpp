@@ -7,6 +7,7 @@
 #include "MMDEndfieldToonProbeCommandlet.h"
 #include "Dom/JsonObject.h"
 #include "HAL/FileManager.h"
+#include "Interfaces/IPluginManager.h"
 #include "Misc/DateTime.h"
 #include "Misc/EngineVersion.h"
 #include "Misc/FileHelper.h"
@@ -61,12 +62,20 @@ namespace
 
 	FString EndfieldBackendProbePluginSourcePath(const FString& Key)
 	{
+		if (Key.StartsWith(TEXT("Source/")))
+		{
+			const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
+			return Plugin.IsValid() ? FPaths::ConvertRelativePathToFull(FPaths::Combine(Plugin->GetBaseDir(), Key)) : FString();
+		}
 		return FPaths::ConvertRelativePathToFull(GetShaderSourceFilePath(TEXT("/Plugin/Ue5MMDTools/") + Key));
 	}
 
 	const TCHAR* EndfieldBackendProbePluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"),
 		TEXT("Core/TMMDEndfieldNativeData.ush"), TEXT("Core/TMMDEndfieldNativeLightCapture.ush"),
-		TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush") };
+		TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
+		TEXT("Core/TMMDEndfieldNativePayload.ush"),
+		TEXT("Source/Ue5MMDTools/Public/Materials/MaterialExpressionMMDEndfieldNativePayload.h"),
+		TEXT("Source/Ue5MMDTools/Private/Materials/MaterialExpressionMMDEndfieldNativePayload.cpp") };
 
 	bool EndfieldBackendProbeVerifyPluginSources(const MMDEndfieldNativeBackend::FStatus& Status,
 		TArray<FString>& Errors, const TCHAR* Stage)

@@ -1,4 +1,5 @@
 #include "Rendering/MMDEndfieldNativeBackend.h"
+#include "HAL/IConsoleManager.h"
 
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
@@ -22,7 +23,7 @@ namespace
 {
 	constexpr TCHAR MMDEndfieldBackendSection[] = TEXT("Ue5MMDTools.EndfieldNativeBackend");
 	constexpr TCHAR MMDEndfieldBackendVirtualRoot[] = TEXT("/Engine/Private");
-	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v4-native-data-clustered-tile-input");
+	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v6-skin-direction-payload");
 	MMDEndfieldNativeBackend::FStatus MMDEndfieldBackendStatus;
 	bool MMDEndfieldBackendInitialized = false;
 
@@ -48,7 +49,10 @@ namespace
 		{ TEXT("Private/DeferredLightingCommon.ush"), TEXT("3748B2D8EC74830208410121A373BE1B003214BB"), true },
 		{ TEXT("Private/ShadingModels.ush"), TEXT("EC8761898EAAF49FC8077266C3498F63508E5456"), true },
 		{ TEXT("Private/ClusteredDeferredShadingPixelShader.usf"), TEXT("2D2DCA949116D453ECBEE7138E43F2A8AE8305D1"), true },
+		{ TEXT("Private/Substrate/SubstrateExport.ush"), TEXT("B3113DC6071E9CA010505517CA299C8FC7C6FF9B"), true },
+		{ TEXT("Private/BasePassPixelShader.usf"), TEXT("938DAE7F895A35382C0FB75902909E35E6ED9B21"), true },
 		{ TEXT("Source/Runtime/Engine/Private/Rendering/ToonProfile.cpp"), TEXT("D53A66718C5C09DDB74687FBB8F2D14A49BA07F1"), false },
+		{ TEXT("Source/Runtime/Engine/Private/Materials/SubstrateTranslatorCommon.cpp"), TEXT("1031A237D3C0C97342484DC962987A568A5F4DA8"), false },
 	};
 
 	FString MMDEndfieldBackendCanonicalPath(const FString& Path)
@@ -148,6 +152,7 @@ namespace
 		Json += TEXT(",\n  \"reason\": ") + MMDEndfieldBackendQuote(Status.Reason);
 		Json += TEXT(",\n  \"profile_isolation\": \"Only plugin-marked Endfield profiles use custom response and environment scales; all other Toon profiles evaluate native formulas.\"");
 		Json += TEXT(",\n  \"control_source\": \"Mode and indirect scales are encoded in marked profile alpha; the native shader kernel is shared across those controls.\"");
+		Json += TEXT(",\n  \"skin_payload_contract\": \"Adaptive format1 only, one Toon closure and one normal basis, connected anisotropy reservation with physical value zero, neutral PatternUVs, at least 24 bytes budget. CustomOutput Enabled=1 identifies Skin; direction oct16 plus mask8 reuses Pattern24, quaternion32 reuses the reserved anisotropy word. Disabled or unsupported variants keep native packing.\"");
 		Json += TEXT(",\n  \"cook_contract\": \"Enable this plugin backend during Cook. Packaged runtime cannot install a source mapping or prove backend presence from startup flags. Runtime profile routing can update profile alpha controls; behavior requires image comparison and Cook provenance.\"");
 		Json += TEXT(",\n  \"source_hashes\": {");
 		TArray<FString> Keys;
@@ -300,6 +305,99 @@ namespace
 
 	#include "MMDEndfieldNativeIndirectPatch.inl"
 
+	bool MMDEndfieldBackendPatchPayloadRead(FString& Text)
+	{
+		const FString StructAnchor = TEXT("struct FSubstrateBSDF");
+		int32 StructIndex;
+		if (!MMDEndfieldBackendSingleAnchor(Text, StructAnchor, StructIndex)) return false;
+		const FString ReadAnchor = TEXT("\t\t\t\tUnpackToonCustomData(DataY, TOON_PATTERNUVS(OutBSDF), TOON_PROFILEID(OutBSDF));\n\n\t\t\t\tif (BSDF_GETHASANISOTROPY(OutBSDF))\n\t\t\t\t{\n\t\t\t\t\tTOON_ANISOTROPY(OutBSDF) = asfloat(SubstrateLoadUint1(SubstrateBuffer, SubstrateAddressing));\n\t\t\t\t}");
+		const FString Newline = Text.Contains(TEXT("\r\n")) ? TEXT("\r\n") : TEXT("\n");
+		FString NativeReadAnchor = ReadAnchor;
+		if (Newline != TEXT("\n")) NativeReadAnchor.ReplaceInline(TEXT("\n"), *Newline, ESearchCase::CaseSensitive);
+		const FString ReadPatch = TEXT(R"TMMD(                UnpackToonCustomData(DataY, TOON_PATTERNUVS(OutBSDF), TOON_PROFILEID(OutBSDF));
+
+                if (BSDF_GETHASANISOTROPY(OutBSDF))
+                {
+                    const uint mmd_extra_word = SubstrateLoadUint1(SubstrateBuffer, SubstrateAddressing);
+                    if (BSDF_GETHASF90(OutBSDF))
+                    {
+                        TMMDEndfieldNativePayload mmd_payload_codec;
+                        OutBSDF.mmd_payload = mmd_payload_codec.Decode(DataY, mmd_extra_word);
+                        // 恢复原生中性 UV 的准确 12 bit 读回值，保真模式不改变原生 dither。
+                        TOON_PATTERNUVS(OutBSDF) = float2(2047.0 / 4095.0, 2047.0 / 4095.0);
+                        TOON_ANISOTROPY(OutBSDF) = 0.0;
+                        BSDF_SETHASANISOTROPY(OutBSDF, 0u);
+                        BSDF_SETHASF90(OutBSDF, 0u);
+                    }
+                    else
+                    {
+                        TOON_ANISOTROPY(OutBSDF) = asfloat(mmd_extra_word);
+                    }
+                })TMMD");
+		if (!MMDEndfieldBackendReplaceIndirectAnchor(Text, NativeReadAnchor, ReadPatch)) return false;
+		// FSubstrateBSDF 是局部表示；数据仍由上方真实 packed read 恢复，而非凭空跨 pass。
+		const int32 StructOpen = Text.Find(TEXT("{"), ESearchCase::CaseSensitive, ESearchDir::FromStart, StructIndex);
+		if (StructOpen == INDEX_NONE || StructOpen - StructIndex > 100) return false;
+		Text.InsertAt(StructOpen + 1, Newline + TEXT("\tTMMDEndfieldNativePayloadData mmd_payload;"));
+		Text.InsertAt(StructIndex, TEXT("#include \"/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativePayload.ush\"") + Newline + Newline);
+		return true;
+	}
+
+	bool MMDEndfieldBackendPatchPayloadBasePass(FString& Text)
+	{
+		const FString Anchor = TEXT("FSubstratePixelHeader SubstratePixelHeader = MaterialParameters.GetFrontSubstrateHeader();");
+		const FString Patch = Anchor + TEXT(R"TMMD(
+    #if !FORWARD_SHADING && SUBSTRATE_GBUFFER_FORMAT == 1 && MATERIAL_USES_ANISOTROPY && SUBSTRATE_FASTPATH == 0 && SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 0 && SUBSTRATE_MATERIAL_NUM_UINTS >= 6 && NUM_MATERIAL_OUTPUTS_GETMMDENDFIELDNATIVEPAYLOAD == 3
+    // 本轮只接单 Toon Skin；其它材质与简化/低预算变体保持原生布局。
+    if (SubstrateStruct.MaxBytesPerPixel >= 24u
+        && SubstratePixelHeader.SubstrateTree.BSDFCount == 1u && SubstratePixelHeader.SharedLocalBases.Count == 1u
+        && BSDF_GETTYPE(SubstratePixelHeader.SubstrateTree.BSDFs[0]) == SUBSTRATE_BSDF_TYPE_TOON
+        && BSDF_GETSHAREDLOCALBASISID(SubstratePixelHeader.SubstrateTree.BSDFs[0]) == 0u
+        && abs(TOON_ANISOTROPY(SubstratePixelHeader.SubstrateTree.BSDFs[0])) < 0.000001
+        && all(abs(TOON_PATTERNUVS(SubstratePixelHeader.SubstrateTree.BSDFs[0]) - float2(0.5, 0.5)) < 0.000001))
+    {
+        TMMDEndfieldNativePayload mmd_payload_codec;
+        TMMDEndfieldNativePayloadData mmd_payload = mmd_payload_codec.Make(
+            GetMMDEndfieldNativePayload0(MaterialParameters),
+            GetMMDEndfieldNativePayload1(MaterialParameters),
+            GetMMDEndfieldNativePayload2(MaterialParameters));
+        if (mmd_payload.valid)
+        {
+            SubstratePixelHeader.SubstrateTree.BSDFs[0].mmd_payload = mmd_payload;
+            // 复用 Toon 未消费的 F90 标记和编译器预留的 anisotropy word，物理值不变。
+            BSDF_SETHASF90(SubstratePixelHeader.SubstrateTree.BSDFs[0], 1u);
+            BSDF_SETHASANISOTROPY(SubstratePixelHeader.SubstrateTree.BSDFs[0], 1u);
+        }
+    }
+    #endif
+)TMMD");
+		return MMDEndfieldBackendReplaceIndirectAnchor(Text, Anchor, Patch);
+	}
+
+	bool MMDEndfieldBackendPatchPayloadExport(FString& Text)
+	{
+		const FString DirectionAnchor = TEXT("uint Data1 = PackToonCustomData(TOON_PATTERNUVS(BSDF), TOON_PROFILEID(BSDF), Dither);");
+		const FString RotationAnchor = TEXT("SUBSTRATE_STORE_UINT1(asuint(TOON_ANISOTROPY(BSDF)));");
+		const FString DirectionPatch = DirectionAnchor + TEXT(R"TMMD(
+                            if (BSDF.mmd_payload.valid)
+                            {
+                                TMMDEndfieldNativePayload mmd_payload_codec;
+                                Data1 = mmd_payload_codec.PackDirection24(BSDF.mmd_payload)
+                                    | ((uint(TOON_PROFILEID(BSDF)) & 255u) << 24u);
+                            })TMMD");
+		const FString RotationPatch = TEXT(R"TMMD(if (BSDF.mmd_payload.valid)
+                                {
+                                    TMMDEndfieldNativePayload mmd_payload_codec;
+                                    SUBSTRATE_STORE_UINT1(mmd_payload_codec.PackQuaternion32(BSDF.mmd_payload.head_quaternion));
+                                }
+                                else
+                                {
+                                    SUBSTRATE_STORE_UINT1(asuint(TOON_ANISOTROPY(BSDF)));
+                                })TMMD");
+		return MMDEndfieldBackendReplaceIndirectAnchor(Text, RotationAnchor, RotationPatch)
+			&& MMDEndfieldBackendReplaceIndirectAnchor(Text, DirectionAnchor, DirectionPatch);
+	}
+
 	bool MMDEndfieldBackendPatchClustered(FString& Text)
 	{
 		const FString Newline = Text.Contains(TEXT("\r\n")) ? TEXT("\r\n") : TEXT("\n");
@@ -403,12 +501,24 @@ namespace
 		if (!Plugin.IsValid()) return MMDEndfieldBackendFail(TEXT("Ue5MMDTools plugin directory was not found."));
 		const FString PluginShaderRoot = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
         const TCHAR* PluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"), TEXT("Core/TMMDEndfieldNativeData.ush"),
-            TEXT("Core/TMMDEndfieldNativeLightCapture.ush"), TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush") };
+            TEXT("Core/TMMDEndfieldNativeLightCapture.ush"), TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
+            TEXT("Core/TMMDEndfieldNativePayload.ush") };
         FString PluginSignature;
         for (const TCHAR* Relative : PluginSources)
         {
             FString Hash;
             if (!MMDEndfieldNativeBackend::ComputeFileHash(FPaths::Combine(PluginShaderRoot, Relative), Hash)) return MMDEndfieldBackendFail(TEXT("Plugin native shader could not be read."));
+            Status.PluginSourceHashes.Add(Relative, Hash);
+            PluginSignature += FString(Relative) + TEXT("=") + Hash + TEXT("\n");
+        }
+        const TCHAR* PluginDefinitionSources[] = {
+            TEXT("Source/Ue5MMDTools/Public/Materials/MaterialExpressionMMDEndfieldNativePayload.h"),
+            TEXT("Source/Ue5MMDTools/Private/Materials/MaterialExpressionMMDEndfieldNativePayload.cpp") };
+        for (const TCHAR* Relative : PluginDefinitionSources)
+        {
+            FString Hash;
+            if (!MMDEndfieldNativeBackend::ComputeFileHash(FPaths::Combine(Plugin->GetBaseDir(), Relative), Hash))
+                return MMDEndfieldBackendFail(TEXT("Plugin native payload expression source could not be read."));
             Status.PluginSourceHashes.Add(Relative, Hash);
             PluginSignature += FString(Relative) + TEXT("=") + Hash + TEXT("\n");
         }
@@ -450,7 +560,10 @@ namespace
             || !PreparePatch(TEXT("Substrate/SubstrateDeferredLighting.ush"), MMDEndfieldBackendPatchDeferred)
             || !PreparePatch(TEXT("DiffuseIndirectComposite.usf"), MMDEndfieldBackendPatchIndirect)
             || !PreparePatch(TEXT("ReflectionEnvironmentPixelShader.usf"), MMDEndfieldBackendPatchReflection)
-            || !PreparePatch(TEXT("ClusteredDeferredShadingPixelShader.usf"), MMDEndfieldBackendPatchClustered))
+            || !PreparePatch(TEXT("ClusteredDeferredShadingPixelShader.usf"), MMDEndfieldBackendPatchClustered)
+            || !PreparePatch(TEXT("Substrate/Substrate.ush"), MMDEndfieldBackendPatchPayloadRead)
+            || !PreparePatch(TEXT("Substrate/SubstrateExport.ush"), MMDEndfieldBackendPatchPayloadExport)
+            || !PreparePatch(TEXT("BasePassPixelShader.usf"), MMDEndfieldBackendPatchPayloadBasePass))
             return MMDEndfieldBackendFail(TEXT("Exact native direct/indirect patch anchor was not found once."));
         Status.PatchedEvaluationHash = Status.PatchedSourceHashes[TEXT("Substrate/SubstrateEvaluation.ush")];
         Status.PatchedIndirectHash = Status.PatchedSourceHashes[TEXT("DiffuseIndirectComposite.usf")];
@@ -499,7 +612,8 @@ namespace
         for (const auto& Source : Status.PluginSourceHashes)
         {
             FString Hash;
-            if (!MMDEndfieldNativeBackend::ComputeFileHash(FPaths::Combine(PluginShaderRoot, Source.Key), Hash) || Hash != Source.Value)
+            const FString PluginSourcePath = FPaths::Combine(Source.Key.StartsWith(TEXT("Source/")) ? Plugin->GetBaseDir() : PluginShaderRoot, Source.Key);
+            if (!MMDEndfieldNativeBackend::ComputeFileHash(PluginSourcePath, Hash) || Hash != Source.Value)
                 return MMDEndfieldBackendFail(TEXT("Plugin shader changed during adapter generation; retry in a fresh process."));
         }
 		Status.bEngineSourcesUnchanged = true;
@@ -548,6 +662,13 @@ namespace MMDEndfieldNativeBackend
 			return;
 		}
 		if (!IsInGameThread()) { MMDEndfieldBackendFail(TEXT("Initialize must run on the PostConfigInit game thread.")); return; }
+		const IConsoleVariable* UnifiedDiffuse = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse"));
+		if (Status.Mode == 2 && UnifiedDiffuse && UnifiedDiffuse->GetInt() != 0)
+		{
+			// RD 的 alpha/tint 必须逐灯处理；统一后段会再次把 RGB 当反射率，当前不支持。
+			MMDEndfieldBackendFail(TEXT("Endfield mode 2 requires r.Substrate.Experimental.ToonUnifiedDiffuse=0; unified diffuse is not adapted to client RD alpha/tint semantics."));
+			return;
+		}
 		if (Version.GetMajor() != 5 || Version.GetMinor() != 8 || Version.GetPatch() != 3 || Version.GetChangelist() != 58210709)
 		{
 			MMDEndfieldBackendFail(FString::Printf(TEXT("Requires UE 5.8.3 CL58210709, found %s."), *Status.EngineVersion));

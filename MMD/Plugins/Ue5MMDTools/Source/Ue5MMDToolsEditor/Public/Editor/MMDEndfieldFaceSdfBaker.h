@@ -6,23 +6,21 @@ class USkeletalMesh;
 class UTexture2D;
 
 /**
- * 脸部 SDF 自动烘焙。
- *
- * 终末地脸部阴影依赖一张"逐 texel 阴影边界方位角阈值"图。原版由美术/工具产出，
- * 属于模型配套资产；本工具把它变成可从网格自动生成的派生资产，
- * 因此不违反"不依赖手绘配套贴图"的通用性要求（任何 PMX 导入后都能重烘）。
+ * V4 脸部几何方向场自动烘焙；保留旧 API 名称供导入工具调用。
+ * 保存完整漫反射方向，不是实际遮挡 SDF，不截断固定仰角的亮区。
  *
  * 输出 RGBA8：
- *   R = 光沿 head_right 转向时的归一化阈值（0..1，乘 π 得弧度）。
- *   G = 光沿 -head_right 转向时的独立阈值；运行时选择通道，不镜像 UV。
- *   B   = 0：直接左右阈值；1：已验证镜像几何共用 UV，R/G 为大/小阈值，按几何侧恢复。
- *   A   = 脸部遮罩（供角色轮廓光与脸部区域使用）。
+ *   RG = head-local (Right, Forward, Up) 单位方向的标准 oct 编码，[-1,1] 映射到 [0,1]。
+ *   B = 0：直接方向；255：验证镜像共 UV，RG 是正 Right 几何侧方向，x 允许为负。
+ *       镜像读取时仅 direction.x 乘当前几何侧符号，不能对 x 先 abs。
+ *   A = 255 有效 / 0 回退。四个采样点先分别解 oct、镜像，再插值单位方向。
  */
 namespace MMDEnfieldFaceSdf
 {
-    // 每一侧从正前方到正后方的方位角区间数。
+    constexpr int32 DirectionFieldVersion = 4;
+    // 旧 V3 校准条件仅保留作统计，不影响 V4 方向编码。
     constexpr int32 LightAngleSamples = 64;
-    // 主光俯角（弧度），约 20°，与舞台预设的 KeyLightRotation 同量级。
+    // 统计参考仰角（弧度）。
     constexpr float KeyLightPitch = 0.35f;
 
     struct FBakeSettings
@@ -49,7 +47,7 @@ namespace MMDEnfieldFaceSdf
         float FaceForwardMinimum = -0.15f;
         /** 头部球的最大归一化距离。 */
         float MaximumHeadDistance = 1.35f;
-        /** 阈值法线中真实几何的权重；其余来自头部球面，缓和鼻部灰块并保留眼窝细节。 */
+        /** 漫反射方向中真实几何的权重；其余来自头部球面。 */
         float GeometryNormalWeight = 0.25f;
         /** 烘焙使用的 UV 通道；运行时必须采样同一通道的 frac(UV)。 */
         int32 UVChannel = 0;
@@ -57,13 +55,15 @@ namespace MMDEnfieldFaceSdf
         TArray<int32> MaterialIndices;
         /** 未指定材质槽时只使用自动识别为 Skin 的槽，排除头发、眼球和饰品。 */
         bool bAutoDetectFaceMaterials = true;
-        /** 不同几何共用 UV 但左右阈值矛盾时，使该 texel 无效而退回普通 toon。 */
+        /** 旧 V3 调用参数保留，不参与 V4 方向比较。 */
         float UVOverlapThresholdTolerance = 0.08f;
+        /** 同一几何或镜像几何重叠时允许的方向角误差；复杂重叠仍回退。 */
+        float DirectionNormalAngleToleranceDegrees = 10.0f;
         /** 镜像几何的位置误差上限，单位为头部半径；仅交换 R/G 不足以判定为镜像。 */
         float MirrorPositionTolerance = 0.025f;
         /** 接近中心线的几何不可靠地判左右，继续使用直接阈值或冲突回退。 */
         float MirrorSideMinimum = 0.02f;
-        /** 只扩展 RGB，A 仍为零，避免双线性采样在有效边界读到黑色阈值。 */
+        /** 只扩展 RGB，A 仍为零；方向与 B 类别应分别解码后插值。 */
         int32 PaddingTexels = 2;
         /** 普通自动路径不猜测缺失的头骨；显式开启才使用旧包围盒兜底。 */
         bool bAllowBoundsFallback = false;
@@ -71,6 +71,7 @@ namespace MMDEnfieldFaceSdf
 
     struct FBakeResult
     {
+        int32 DataVersion = DirectionFieldVersion;
         /** RGBA8 像素，行优先，V 向下（与 UE 纹理存储一致）。 */
         TArray<uint8> Pixels;
         int32 Size = 0;
@@ -114,7 +115,7 @@ namespace MMDEnfieldFaceSdf
                          FBakeSettings& OutSettings, EHeadFrameSource& OutSource, FString& OutError);
 
     /**
-     * 从骨骼网格烘焙脸部 SDF。
+     * 从骨骼网格烘焙 V4 脸部方向场；不新增或修改任何 UV。
      *
      * @return 成功返回 true；失败时 OutResult.Error 说明原因，且不写出任何文件。
      */
@@ -123,7 +124,7 @@ namespace MMDEnfieldFaceSdf
     /** 写出未压缩 32 位 TGA，便于在引擎外查看中间结果。 */
     bool WriteTga(const FBakeResult& Result, const FString& FilePath);
 
-    /** 创建可绑定的线性 SDF 纹理；临时验证和保存资产共用相同像素格式。 */
+    /** 创建可绑定的线性 V4 方向纹理；临时验证和保存共用相同像素格式。 */
     UTexture2D* CreateTexture(const FBakeResult& Result, UObject* Outer, FName Name,
                              EObjectFlags Flags, FString& OutError);
 

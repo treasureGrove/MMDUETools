@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="420" viewBox="0 0 1040 420">
+ <defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8" fill="#62728c"/></marker></defs>
+ <rect width="1040" height="420" rx="18" fill="#f5f7fb"/>
+ <g font-family="Microsoft YaHei, sans-serif" fill="#243047">
+  <text x="30" y="42" font-size="24" font-weight="bold">脸部明暗与高光分开计算</text>
+  <text x="30" y="85" font-size="17">旧版：固定俯角阈值 → 共享法线 → 明暗、高光和 GI 一起改变</text>
+  <path d="M30 108H1010" stroke="#d8dfeb"/>
+  <rect x="30" y="145" width="235" height="95" rx="12" fill="#dfedff"/>
+  <text x="48" y="173" font-size="18">自动 V4 几何方向场</text>
+  <text x="48" y="200" font-size="15">完整方向；按采样点解镜像</text>
+  <text x="48" y="223" font-size="15">无贴图时退回球面／几何</text>
+  <rect x="325" y="145" width="285" height="95" rx="12" fill="#e1f2ef"/>
+  <text x="343" y="173" font-size="18">BasePass 打包</text>
+  <text x="343" y="200" font-size="15">方向 16 bit + 权重 8 bit</text>
+  <text x="343" y="223" font-size="15">头部旋转 32 bit；保留 Profile ID</text>
+  <rect x="680" y="145" width="330" height="95" rx="12" fill="#e8e5fb"/>
+  <text x="698" y="173" font-size="18">每盏灯的漫反射</text>
+  <text x="698" y="200" font-size="15">转回世界方向 → N·L → 真实 RD</text>
+  <text x="698" y="223" font-size="15">接 UE 本次光照 pass 的原生阴影</text>
+  <rect x="30" y="292" width="580" height="62" rx="12" fill="#dfedff"/>
+  <text x="48" y="319" font-size="18">独立原生 Normal</text>
+  <text x="48" y="343" font-size="15">脸部方向场的开关不重建这条法线</text>
+  <rect x="680" y="292" width="330" height="62" rx="12" fill="#fff0d9"/>
+  <text x="698" y="319" font-size="18">高光与 GI</text>
+  <text x="698" y="343" font-size="15">各自使用独立法线和原生光照数据</text>
+  <path d="M265 192H318M610 192H673M610 323H673" fill="none" stroke="#62728c" stroke-width="2" marker-end="url(#a)"/>
+  <text x="30" y="393" font-size="14" fill="#62728c">只在自有 Skin／Mode2／adaptive GBuffer 生效；复用现有字段，没有增加角色绘制 pass。</text>
+ </g>
+</svg>

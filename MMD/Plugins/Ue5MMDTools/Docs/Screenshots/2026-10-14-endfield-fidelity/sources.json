@@ -1,0 +1,46 @@
+{
+  "captured_date": "2026-10-14",
+  "source": "UE5.8.3 CL58210709; UnrealEditor-Cmd D3D12 RenderOffscreen; original pixels, no generated images",
+  "images": [
+    {
+      "file": "before-side.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/baseline2/baseline2_sdf_on_angle_75_face.png",
+      "sha256": "e397b06a3e31c7e95f0bb6112b85eae9fa891b10b8ae282d8f78cd140ba19026"
+    },
+    {
+      "file": "after-side.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity3/fidelity3_sdf_on_angle_75_face.png",
+      "sha256": "628f5053decebe6b6e04402176fae0d8e5d4584c7a88b1af1c419329a2f0d794"
+    },
+    {
+      "file": "full.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity2/fidelity2_toon_full.png",
+      "sha256": "e0e0b17544a6d24f6ab2ce4a58284d9de2ff0b7f27eb1100f24a239a0a3dda22"
+    },
+    {
+      "file": "hair.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity3/fidelity3_fidelity_materials_hair.png",
+      "sha256": "deb36431aa3bb7b3544f432c3cf776e296cfa78408f6c5c39fe374cd73834bc1"
+    },
+    {
+      "file": "cloth.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity3/fidelity3_fidelity_materials_cloth.png",
+      "sha256": "9d581fad1acbb59aa6ed95e1ae43fef738268cf79f2ceed592e6aab9a233e799"
+    },
+    {
+      "file": "packed-on.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity3/fidelity3_fidelity_packed_valid_on_face.png",
+      "sha256": "db85dc474ca88eeb1530c2337c9d97aa6085ff3f0a1060f60d5ffab12c0c0745"
+    },
+    {
+      "file": "packed-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity3/fidelity3_fidelity_packed_valid_off_face.png",
+      "sha256": "4677c3b2111055c3d895959807adab4b9b1c169c2977791e64de01916fe6384f"
+    },
+    {
+      "file": "direction-mask.png",
+      "source": "Saved/Phase2Reference/Endfield2/native-fidelity-2026-10-14/fidelity3/fidelity3_sdf_gpu_mask_on_face.png",
+      "sha256": "2f54aa44626ef6b5cdc56c7e0dd9c95c1f836e92ba4e158877a9fb9552e43b92"
+    }
+  ]
+}

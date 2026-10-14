@@ -32,6 +32,7 @@
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "Rendering/UMMDHeadBoneSubsystem.h"
+#include "Materials/MaterialExpressionMMDEndfieldNativePayload.h"
 #include "RenderingThread.h"
 #include "RenderUtils.h"
 #include "RHI.h"
@@ -63,7 +64,7 @@ namespace
 		TEXT("/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear") };
 	constexpr const TCHAR* EndfieldToonTemplatePath = TEXT("/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield.DA_Render_Endfield");
-	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=3");
+	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=4");
 	constexpr int32 EndfieldToonMaterialCount = 3;
 	constexpr int32 EndfieldToonProfileCount = 6;
 	constexpr int32 EndfieldToonGradientWidth = 256;
@@ -424,7 +425,7 @@ namespace
 		UMaterialExpressionVectorParameter* Head = EndfieldToonVector(Material,
 			UMMDHeadBoneSubsystem::ParamHeadPositionRadius, FLinearColor(0, 0, 0, 0));
 		UMaterialExpressionCustom* Normal = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
-		Normal->Description = TEXT("头部球面法线、自动 SDF 与原生逐灯 ramp offset");
+		Normal->Description = TEXT("独立高光法线、头空间漫反射方向与兼容 SDF");
 		Normal->Desc = EndfieldToonGraphVersion;
 		Normal->OutputType = CMOT_Float3;
 		Normal->Code = TEXT(
@@ -432,7 +433,8 @@ namespace
 			"TMMDEndfieldNative geometry;\n"
 			"return geometry.PrepareSurface(world_pos, mesh_normal, head_position_radius, head_forward, head_right, "
 			"sphere_blend, surface_uv, sdf_tex, sdf_texSampler, sdf_enabled, ramp_boundary, shadow_suppress, "
-			"pattern_uv, face_mask, shadow_coverage);\n");
+			"direction_tex, direction_texSampler, direction_enabled, direction_version, payload_enabled, specular_sphere_blend, "
+			"pattern_uv, face_mask, shadow_coverage, face_direction, head_quaternion);\n");
 		Normal->Inputs.Reset();
 		EndfieldToonCustomInput(Normal, TEXT("world_pos"), Position);
 		EndfieldToonCustomInput(Normal, TEXT("mesh_normal"), MeshNormal);
@@ -455,6 +457,18 @@ namespace
 		EndfieldToonCustomInput(Normal, TEXT("sdf_enabled"), EndfieldToonScalar(Material, TEXT("ToonFaceSdfEnabled"), 0.0f));
 		EndfieldToonCustomInput(Normal, TEXT("ramp_boundary"), EndfieldToonScalar(Material, TEXT("ToonFaceRampBoundary"), 0.55f));
 		EndfieldToonCustomInput(Normal, TEXT("shadow_suppress"), EndfieldToonScalar(Material, TEXT("ToonFaceShadowSuppress"), 0.0f));
+		UMaterialExpressionTextureObjectParameter* Direction = EndfieldToonAdd<UMaterialExpressionTextureObjectParameter>(Material);
+		Direction->ParameterName = TEXT("ToonFaceDirectionTexture");
+		Direction->ExpressionGUID = FGuid::NewGuid();
+		Direction->Group = TEXT("Endfield V2 Toon");
+		Direction->Texture = Black;
+		Direction->SamplerType = SAMPLERTYPE_LinearColor;
+		EndfieldToonCustomInput(Normal, TEXT("direction_tex"), Direction);
+		EndfieldToonCustomInput(Normal, TEXT("direction_enabled"), EndfieldToonScalar(Material, TEXT("ToonFaceDirectionEnabled"), 0.0f));
+		EndfieldToonCustomInput(Normal, TEXT("direction_version"), EndfieldToonScalar(Material, TEXT("ToonFaceDirectionVersion"), 0.0f));
+		UMaterialExpressionScalarParameter* PayloadEnabled = EndfieldToonScalar(Material, TEXT("ToonNativePayloadEnabled"), 0.0f);
+		EndfieldToonCustomInput(Normal, TEXT("payload_enabled"), PayloadEnabled);
+		EndfieldToonCustomInput(Normal, TEXT("specular_sphere_blend"), EndfieldToonScalar(Material, TEXT("ToonSpecularSphereBlend"), 0.0f));
 		FCustomOutput& Pattern = Normal->AdditionalOutputs.AddDefaulted_GetRef();
 		Pattern.OutputName = TEXT("pattern_uv");
 		Pattern.OutputType = CMOT_Float2;
@@ -464,9 +478,19 @@ namespace
 		FCustomOutput& ShadowCoverage = Normal->AdditionalOutputs.AddDefaulted_GetRef();
 		ShadowCoverage.OutputName = TEXT("shadow_coverage");
 		ShadowCoverage.OutputType = CMOT_Float1;
+		FCustomOutput& FaceDirection = Normal->AdditionalOutputs.AddDefaulted_GetRef();
+		FaceDirection.OutputName = TEXT("face_direction");
+		FaceDirection.OutputType = CMOT_Float4;
+		FCustomOutput& HeadQuaternion = Normal->AdditionalOutputs.AddDefaulted_GetRef();
+		HeadQuaternion.OutputName = TEXT("head_quaternion");
+		HeadQuaternion.OutputType = CMOT_Float4;
 		Normal->RebuildOutputs();
 		Toon->Normal.Connect(0, Normal);
 		Toon->PatternUVs.Connect(1, Normal);
+		UMaterialExpressionMMDEndfieldNativePayload* Payload = EndfieldToonAdd<UMaterialExpressionMMDEndfieldNativePayload>(Material);
+		Payload->FaceDirection.Connect(4, Normal);
+		Payload->HeadQuaternion.Connect(5, Normal);
+		Payload->Enabled.Connect(0, PayloadEnabled);
 
 		// 本机 UE5.8 Toon 编译器不消费 Tangent，保留引擎默认 basis；不伪接切线参数。
 		// Skin 的共享线性 offset 将 .ush 输出的偏移交给原生 Toon；其他 Profile 偏移关闭。
@@ -621,8 +645,8 @@ namespace
 		Preset->CharacterToonMaterialTranslucent = Materials[2].Get();
 		Preset->CharacterToonRoles.Reset();
 		Preset->bCharacterContactShadow = false;
-		const float Roughness[] = { 0.5f, 0.55f, 0.35f, 0.6f, 0.25f, 0.25f };
-		const float Specular[] = { 0.5f, 0.35f, 0.5f, 0.3f, 0.8f, 0.5f };
+		const float Roughness[] = { 0.696f, 0.742f, 0.35f, 0.696f, 0.25f, 0.25f };
+		const float Specular[] = { 0.454f, 0.454f, 0.5f, 0.454f, 0.8f, 0.5f };
 		for (int32 Index = 0; Index < EndfieldToonProfileCount; ++Index)
 		{
 			const EMMDMaterialRole Role = static_cast<EMMDMaterialRole>(Index);
@@ -632,7 +656,7 @@ namespace
 			Settings.Specular = Specular[Index];
 			Settings.Metallic = Role == EMMDMaterialRole::Metal ? 0.8f : 0.0f;
 			Settings.Anisotropy = Role == EMMDMaterialRole::Hair ? -0.8f : 0.0f;
-			Settings.SphereBlend = Role == EMMDMaterialRole::Skin ? 1.0f : 0.0f;
+			Settings.SphereBlend = Role == EMMDMaterialRole::Skin ? 0.75f : 0.0f;
 			Settings.FaceShadowSuppress = 0.0f;
 			Preset->CharacterToonRoles.Add(Role, Settings);
 		}
@@ -922,8 +946,8 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("r.Substrate"), EndfieldToonCVar(TEXT("r.Substrate")));
 	Report->SetStringField(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse"), EndfieldToonCVar(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse")));
 	Report->SetStringField(TEXT("unified_diffuse_notice"), TEXT("ToonUnifiedDiffuse 是可选实验开关，引擎默认 0；设为 1 的路径尚未通过视觉验收，生成与编译校验不要求启用。"));
-	Report->SetStringField(TEXT("candidate_notice"), TEXT("Ramp、粗糙度、高光、Metal Metallic=0.8 与 Hair Anisotropy=-0.8 是待真实模型视觉调优的候选参数，不是原作真实数值。Skin SphereBlend=1，仅在有效头部半径的两倍范围内生效；无有效 SDF 时保留球面法线/通用 Toon。"));
-	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("自动 SDF 的 R/G 分别记录左右角阈值，A 表示有效覆盖；单个 ush Custom 同时输出 normal、PatternUV 和诊断 mask。Skin 共享 identity gradient 的 offset strength/size=1，Boundary=0.55，offset 限制 [-0.9,0.34] 防止全遮挡被提亮；因此超出范围的角边界会压缩。单个原生 Toon 法线同时用于漫反射与高光，尚不能独立保持完整球面高光法线。"));
+	Report->SetStringField(TEXT("candidate_notice"), TEXT("后端 Mode2 的 Skin/Hair/Cloth 使用客户端 RD 数据语义。Skin roughness=.742/specular=.454、Cloth roughness=.696 来自代表样本；Metal/Eye 和无贴图头发方向仍是通用近似，不代表原作完整复刻。"));
+	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("Mode2 + adaptive GBuffer 的自有 Skin 通过专用 CustomOutput 传递头空间方向和旋转，原生 Normal 独立保留高光/GI。自动 V4 是完整几何方向场（非遮挡距离场），四tap先解离散镜像再插值，未提供时用球面/几何法线。Mode0/1、fmt0和透明保持旧 threshold bridge/原生 Toon 回退。"));
 	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("默认保留脸面普通投影（FaceShadowSuppress=0），关闭角色接触阴影。P15 对照确认鼻灰点来自接触阴影，单独关闭已改善；普通投影和外部遮挡仍工作。可选 masked ShadowPassSwitch 的正常分支保持原 alpha，投影分支乘 1-SDF有效脸面mask*suppress；启用时也影响脸面对身体和场景的投射。无有效 SDF/head frame 时覆盖率=1；opaque/translucent 不使用此开关。"));
 	Report->SetStringField(TEXT("anisotropy_limit"), TEXT("本机 UE5.8 原生 Toon 不消费 Tangent 输入，各向异性方向只用引擎默认 basis，尚不能定制天使环。"));
 	Report->SetArrayField(TEXT("assets"), AssetReports);

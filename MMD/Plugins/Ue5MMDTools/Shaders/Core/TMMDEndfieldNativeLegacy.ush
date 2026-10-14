@@ -3,7 +3,7 @@
 #include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeLightCapture.ush"
 
 // 在桌面 Clustered 的 DeferredLightingCommon、SubstrateEvaluation 与 SubstrateDeferredLighting 之后 include。
-// 仅补传统 GBuffer 的桌面逐灯路径；模式 2 仍是三档响应探针。
+// 传统 GBuffer 的桌面逐灯路径；不传新脸部 payload，RD/RS 语义与 adaptive 共享。
 #if SUBSTRATE_ENABLED
 struct TMMDEndfieldNativeLegacy
 {
@@ -33,6 +33,7 @@ struct TMMDEndfieldNativeLegacy
             result.Transmission = 0.0;
             return result;
         }
+        if (role != 1u && role != 2u && role != 3u) return result;
 
         FToonProfileEvaluateSettings profile_settings = GetToonProfileEvaluateSettings(profile_id);
         float shadow = shadow_terms.TransmittanceOrOpticalThickness;
@@ -45,11 +46,23 @@ struct TMMDEndfieldNativeLegacy
         // 使用接收点真实 L；完整原生描述保留在 native_light_data，便于后续脸部响应扩展。
         float n_dot_l = dot(N, native_light_data.light_vector);
         float ramp_coordinate = saturate(n_dot_l * 0.5 + 0.5);
-        if (profile_settings.bDiffuseRampIncludeShadow) ramp_coordinate *= shadow;
-        ramp_coordinate = profile_control.QuantizeToonCoordinate(ramp_coordinate);
-        float3 diffuse_ramp = EvaluateToonProfileDiffuseRamp(profile_id, ramp_coordinate + diffuse_offset);
-        result.Diffuse = (profile_settings.bDiffuseRampIncludeShadow ? 1.0 : shadow)
-            * area_light.Falloff * area_light.FalloffColor * Diffuse_Lambert(gbuffer.DiffuseColor * diffuse_ramp);
+        float4 diffuse_ramp = profile_control.ReadDiffuseRamp(profile_id, ramp_coordinate + diffuse_offset);
+        float3 shaded_diffuse = profile_control.ApplyDiffuseRamp(gbuffer.DiffuseColor * 0.96, diffuse_ramp, shadow, role);
+        result.Diffuse = area_light.Falloff * area_light.FalloffColor * Diffuse_Lambert(shaded_diffuse);
+        FSubstrateBSDFContext context = (FSubstrateBSDFContext)0;
+        context.N = N;
+        context.V = V;
+        context.L = native_light_data.light_vector;
+        float3x3 tangent_basis = GetTangentBasis(N);
+        context.X = tangent_basis[0];
+        TOON_BASECOLOR(context.BSDF) = gbuffer.BaseColor;
+        TOON_ROUGHNESS(context.BSDF) = gbuffer.Roughness;
+        TOON_METALLIC(context.BSDF) = gbuffer.Metallic;
+        TOON_SPECULAR(context.BSDF) = gbuffer.Specular;
+        TOON_PROFILEID(context.BSDF) = profile_id;
+        if (!native_light_data.rect_light)
+            result.Specular = saturate(shadow_terms.SurfaceShadow) * saturate(area_light.NoL)
+                * area_light.Falloff * area_light.FalloffColor * profile_control.EvaluateSpecular(context, N, role);
         // ToonBxDF 的高光已乘 SurfaceShadow；自定义分支外层不能再乘一次。
         result.Transmission = 0.0;
         return result;

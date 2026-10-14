@@ -77,7 +77,8 @@ namespace
 		for (const FMMDGeneratedFaceSdfSlot& Binding : Data->Slots)
 		{
 			TArray<FString> Failures;
-			UTexture2D* Texture = Binding.Texture.Get();
+			const bool bDirection = Data->Version == 4 && Binding.DirectionVersion == 4;
+			UTexture2D* Texture = bDirection ? Binding.DirectionTexture.Get() : Binding.Texture.Get();
 			const bool bValidSlot = Mesh->GetMaterials().IsValidIndex(Binding.MaterialIndex);
 			if (!bValidSlot) Failures.Add(TEXT("材质槽越界"));
 			else if (Mesh->GetMaterials()[Binding.MaterialIndex].MaterialSlotName != Binding.MaterialSlotName)
@@ -92,15 +93,17 @@ namespace
 				if (Texture->SRGB) Failures.Add(TEXT("SDF 纹理启用了 sRGB"));
 				if (!Texture->Source.IsValid()) Failures.Add(TEXT("SDF 纹理缺少源数据"));
 				const FString VersionTag = FString::FromInt(UMMDEndfieldFaceData::CurrentVersion);
-				if (Texture->GetOutermost()->GetMetaData().GetValue(Texture, TEXT("MMDGeneratedFaceSdfVersion")) != VersionTag)
+				if (Texture->GetOutermost()->GetMetaData().GetValue(Texture, bDirection ? TEXT("MMDGeneratedFaceDirectionVersion") : TEXT("MMDGeneratedFaceSdfVersion")) != VersionTag)
 					Failures.Add(TEXT("纹理缺少本工具当前版本的派生资产标记"));
-				if (Data->FindTexture(Binding.MaterialIndex, Binding.MaterialSlotName) != Texture)
+				if ((bDirection ? Data->FindDirectionTexture(Binding.MaterialIndex, Binding.MaterialSlotName)
+					: Data->FindTexture(Binding.MaterialIndex, Binding.MaterialSlotName)) != Texture)
 					Failures.Add(TEXT("运行时绑定查找不能返回该纹理"));
 			}
 			TSharedRef<FJsonObject> Check = MakeShared<FJsonObject>();
 			Check->SetNumberField(TEXT("slot"), Binding.MaterialIndex);
 			Check->SetStringField(TEXT("slot_name"), Binding.MaterialSlotName.ToString());
 			Check->SetStringField(TEXT("texture"), Texture ? Texture->GetPathName() : TEXT("missing"));
+			Check->SetStringField(TEXT("encoding"), bDirection ? TEXT("head-local oct direction; discrete mirror; coverage") : TEXT("legacy fixed-elevation threshold"));
 			Check->SetBoolField(TEXT("passed"), Failures.IsEmpty());
 			Check->SetArrayField(TEXT("errors"), EndfieldBindSdfJsonStrings(Failures));
 			Checks.Add(MakeShared<FJsonValueObject>(Check));

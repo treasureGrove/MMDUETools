@@ -4,6 +4,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/ToonProfile.h"
+#include "HAL/IConsoleManager.h"
 #include "Rendering/MMDEndfieldNativeBackend.h"
 #include "Rendering/MMDEndfieldNativeProfile.h"
 #include "Materials/MaterialInstance.h"
@@ -335,7 +336,10 @@ namespace
 		{
 			USkeletalMesh* Mesh = Component->GetSkeletalMeshAsset();
 			const UMMDEndfieldFaceData* Face = Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
-			if (Face && Face->FindTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))
+			const auto& ShadowBackend = MMDEndfieldNativeBackend::GetStatus();
+			if (Face && (Face->FindTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName)
+				|| (ShadowBackend.bProfileMarkerAllowed && ShadowBackend.Mode == 2
+					&& Face->FindDirectionTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))))
 				Configured = Preset->CharacterToonMaterialMasked.Get();
 		}
 		UMaterialInterface* Parent = bReplaceMaterials ? ResolveParent(Configured, Blend) : Source;
@@ -364,13 +368,33 @@ namespace
 		if (bUseToon) MMDStageToonApplyRoleParameters(Material, ToonSettings);
 		// 缺少派生数据或切换分类时显式关闭，避免复制源 MID 后残留脸部参数。
 		Material->SetScalarParameterValue(TEXT("ToonFaceSdfEnabled"), 0.0f);
+		Material->SetScalarParameterValue(TEXT("ToonFaceDirectionEnabled"), 0.0f);
+		Material->SetScalarParameterValue(TEXT("ToonFaceDirectionVersion"), 0.0f);
+		Material->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), 0.0f);
 		Material->SetScalarParameterValue(TEXT("UseSdfMap"), 0.0f);
+		const IConsoleVariable* FormatVariable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Substrate.ProjectGBufferFormat"));
+		const MMDEndfieldNativeBackend::FStatus& Backend = MMDEndfieldNativeBackend::GetStatus();
+		const bool bNativePayload = bUseToon && Role == EMMDMaterialRole::Skin && Backend.bProfileMarkerAllowed
+			&& Backend.Mode == 2 && FormatVariable && FormatVariable->GetInt() == 1
+			&& Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))
+			&& (Configured->GetBlendMode() == BLEND_Opaque || Configured->GetBlendMode() == BLEND_Masked);
+		Material->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), bNativePayload ? 1.0f : 0.0f);
 		bool bFaceBound = false;
 		if (bReplaceMaterials && Role == EMMDMaterialRole::Skin)
 		{
 			USkeletalMesh* Mesh = Component->GetSkeletalMeshAsset();
 			if (const UMMDEndfieldFaceData* Face = Mesh->GetAssetUserData<UMMDEndfieldFaceData>())
 			{
+				if (bNativePayload)
+				{
+					if (UTexture2D* Direction = Face->FindDirectionTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))
+					{
+						Material->SetTextureParameterValue(TEXT("ToonFaceDirectionTexture"), Direction);
+						Material->SetScalarParameterValue(TEXT("ToonFaceDirectionEnabled"), 1.0f);
+						Material->SetScalarParameterValue(TEXT("ToonFaceDirectionVersion"), 4.0f);
+						bFaceBound = true;
+					}
+				}
 				if (UTexture2D* Texture = Face->FindTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))
 				{
 					Material->SetTextureParameterValue(bUseToon ? TEXT("ToonFaceSdfTexture") : TEXT("SDFMap"), Texture);

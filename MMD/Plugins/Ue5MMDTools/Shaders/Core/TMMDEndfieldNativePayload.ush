@@ -1,0 +1,127 @@
+#pragma once
+
+// 仅保存计算值；跨阶段持久化由 Toon 的 24 bit 字段和已预留的 32 bit 字段完成。
+struct TMMDEndfieldNativePayloadData
+{
+    bool valid;
+    float3 diffuse_normal_head_local;
+    float mask;
+    float4 head_quaternion;
+    uint role;
+};
+
+struct TMMDEndfieldNativePayload
+{
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001 ? value * rsqrt(length_squared) : fallback;
+    }
+
+    float4 NormalizeQuaternion(float4 value)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001
+            ? value * rsqrt(length_squared) : float4(0.0, 0.0, 0.0, 1.0);
+    }
+
+    TMMDEndfieldNativePayloadData Make(float4 face_direction, float4 head_quaternion, float enabled)
+    {
+        TMMDEndfieldNativePayloadData data = (TMMDEndfieldNativePayloadData)0;
+        // 本轮只允许 Skin=1；未连线、无有效覆盖或坏输入均回到普通 Toon。
+        if (abs(enabled - 1.0) > 0.0001 || !isfinite(enabled)
+            || !all(isfinite(face_direction)) || !all(isfinite(head_quaternion))
+            || !isfinite(dot(face_direction.xyz, face_direction.xyz))
+            || !isfinite(dot(head_quaternion, head_quaternion))
+            || dot(face_direction.xyz, face_direction.xyz) < 0.000001
+            || dot(head_quaternion, head_quaternion) < 0.000001) return data;
+        uint mask_bits = uint(round(saturate(face_direction.w) * 255.0));
+        if (mask_bits == 0u) return data;
+        data.diffuse_normal_head_local = SafeNormalize(face_direction.xyz, float3(0.0, 1.0, 0.0));
+        data.mask = float(mask_bits) * (1.0 / 255.0);
+        data.head_quaternion = NormalizeQuaternion(head_quaternion);
+        data.role = 1u;
+        data.valid = true;
+        return data;
+    }
+
+    uint PackDirection24(TMMDEndfieldNativePayloadData data)
+    {
+        float3 normal = SafeNormalize(data.diffuse_normal_head_local, float3(0.0, 1.0, 0.0));
+        float2 oct = normal.xy / (abs(normal.x) + abs(normal.y) + abs(normal.z));
+        if (normal.z < 0.0)
+            oct = (1.0 - abs(oct.yx)) * float2(oct.x >= 0.0 ? 1.0 : -1.0, oct.y >= 0.0 ? 1.0 : -1.0);
+        uint2 direction_bits = uint2(round(saturate(oct * 0.5 + 0.5) * 255.0));
+        uint mask_bits = uint(round(saturate(data.mask) * 255.0));
+        return direction_bits.x | (direction_bits.y << 8u) | (mask_bits << 16u);
+    }
+
+    float3 UnpackDirection16(uint packed)
+    {
+        float2 oct = float2(packed & 255u, (packed >> 8u) & 255u) * (2.0 / 255.0) - 1.0;
+        float3 normal = float3(oct, 1.0 - abs(oct.x) - abs(oct.y));
+        float correction = saturate(-normal.z);
+        normal.xy += float2(normal.x >= 0.0 ? -correction : correction,
+            normal.y >= 0.0 ? -correction : correction);
+        return SafeNormalize(normal, float3(0.0, 1.0, 0.0));
+    }
+
+    uint PackQuaternion32(float4 head_quaternion)
+    {
+        float4 rotation = NormalizeQuaternion(head_quaternion);
+        uint largest_index = 0u;
+        for (uint i = 1u; i < 4u; ++i)
+            if (abs(rotation[i]) > abs(rotation[largest_index])) largest_index = i;
+        if (rotation[largest_index] < 0.0) rotation = -rotation;
+
+        // 最大分量索引占 2 bit，其余三分量各占 10 bit；省略分量总为正。
+        uint packed = largest_index << 30u;
+        uint component_index = 0u;
+        for (uint i = 0u; i < 4u; ++i)
+        {
+            if (i == largest_index) continue;
+            uint component_bits = uint(round(saturate(rotation[i] * 0.7071067811865475 + 0.5) * 1023.0));
+            packed |= component_bits << (component_index * 10u);
+            ++component_index;
+        }
+        return packed;
+    }
+
+    float4 UnpackQuaternion32(uint packed)
+    {
+        uint largest_index = packed >> 30u;
+        float4 rotation = 0.0;
+        uint component_index = 0u;
+        for (uint i = 0u; i < 4u; ++i)
+        {
+            if (i == largest_index) continue;
+            uint component_bits = (packed >> (component_index * 10u)) & 1023u;
+            rotation[i] = (float(component_bits) * (1.0 / 1023.0) - 0.5) * 1.414213562373095;
+            ++component_index;
+        }
+        rotation[largest_index] = sqrt(max(1.0 - dot(rotation, rotation), 0.0));
+        return NormalizeQuaternion(rotation);
+    }
+
+    TMMDEndfieldNativePayloadData Decode(uint packed_direction, uint packed_rotation)
+    {
+        TMMDEndfieldNativePayloadData data = (TMMDEndfieldNativePayloadData)0;
+        uint mask_bits = (packed_direction >> 16u) & 255u;
+        if (mask_bits == 0u) return data;
+        data.diffuse_normal_head_local = UnpackDirection16(packed_direction);
+        data.mask = float(mask_bits) * (1.0 / 255.0);
+        data.head_quaternion = UnpackQuaternion32(packed_rotation);
+        data.role = 1u;
+        data.valid = true;
+        return data;
+    }
+
+    float3 ToWorldDirection(TMMDEndfieldNativePayloadData data)
+    {
+        float4 rotation = NormalizeQuaternion(data.head_quaternion);
+        float3 direction = data.diffuse_normal_head_local;
+        float3 rotated = direction + 2.0 * cross(rotation.xyz,
+            cross(rotation.xyz, direction) + rotation.w * direction);
+        return SafeNormalize(rotated, float3(0.0, 1.0, 0.0));
+    }
+};

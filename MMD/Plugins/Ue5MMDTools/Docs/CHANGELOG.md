@@ -2,6 +2,16 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-14 — 脸部独立方向、真实 RD／RS 与材质响应迭代
+
+- 沿用用户认可的原生后端推进画质：图版本4、适配器v6新增专用材质CustomOutput和真实packed export/read。单Toon Skin的Mode2/adaptive fmt1把完整头空间漫反射方向及头部旋转传到逐灯BSDF；原生Normal独立用于高光/GI。复用Pattern24和预留anisotropy32，ProfileID/底色/粗糙度保持；单basis、24 bytes实际/请求预算、简化、格式、真实anisotropy及非中性UV均有门控。原生零anisotropy可跳过extra word，新通道实际会写／读此word，未测性能。
+- 旧V3固定俯角阈值不是真正遮挡SDF，无法表示非连续亮区，也会污染共享高光法线。本轮V4改为完整头空间几何方向，保留UV0，按各texel分别解oct/离散镜像后插值；复杂冲突回退。新DirectionTexture/Version字段与旧阈值严格隔离，不覆盖旧SDF或用户纹理。重烘5槽共29,042有效texel，主脸15,748有效／15,555镜像／85冲突；noncontinuous统计仅作诊断，不再截断方向。方向场目前只随头骨刚性旋转，Morph/下颌修正待补。
+- Skin/Hair/Cloth接完整256点客户端RD：alpha混明暗、RGB作chroma tint并保亮度；移除三档先量化，再与当前原生遮挡混合。保留无LUT影色派生、`.96` diffuse、`.04×specular` F0和GGX波瓣幅度；头发加入几何竖向切线主波瓣、水平投影edge fade，scalar代P.g。Skin代表样本禁用RS；Hair09/Cloth04真实RS暂取固定V=.5/.696相邻两行。各源字节与参数纳入缓存签名；Mode0/1恢复源曲线，Cook载体保持源RGB。Mode2明确拒绝UnifiedDiffuse=1，避免后段重复解释RD。
+- Editor最终build4、Game最终game-build2通过；generate2只写11个允许包，实际3材质shader21/40/29且无fallback。fidelity2的45图/210槽、修正临时mask绑定后的fidelity3的26图/140槽均0失败；含多仰角、±35°组件旋转、三灯、平行/点/聚/矩形原生遮挡及GI。packed逐灯开/关诊断显示绿/红；V4GPU覆盖白/黑可见。关闭直射漫反射后方向开关的脸区均差.113/255、95%≤1，没有旧共享法线明显漂移，不声称逐像素无时序差。
+- Mode0和后端关闭各8图/70槽通过；同新资产下脸/头发/衣料/全景均差.116/.089/.048/.005（0–255）。fmt0普通与聚簇各11图/70槽通过，仍无新脸部payload但共享RD/RS语义。新版与负对照合计109图/630槽0失败，图片数量不是画质验收。安装引擎shader、Config、用户Face及所有非本轮Content保持；2,378项保护基线中仅5个自有V2包有意变化，其余2,373不变。仅归档8张[实际原图与来源](Screenshots/2026-10-14-endfield-fidelity/README.md)及数据流SVG，不提交Saved、构建或测试角色。原用户/Claude资产与Mobile文档保留。
+- 冷编译/探针失败留档：generate1主动停止补Legacy响应；fidelity1将新增C++签名路径误作shader路径，出图前终止，后续按插件物理源码路径校验修复。fidelity2临时mask材质受生产路径门控而未绑定V4，不能用该图证明采样；fidelity3已显式绑定诊断并重跑，没有修改生产门控来放宽检查。
+- **限制**：这是有实际改善的开发迭代，侧光鼻/脸颊硬条块减少，仍不是最终终末地验收。没有关闭整角色普通投影；原RT后台开销仍在。本轮未重新Cook/验证发行包，不能沿用v4结果。完整二维RS/Skin LUT、头发独立高光法线与第二波瓣/体积、眼部Matcap分层、真实深度rim/底色描边、后处理及Morph继续按既定十项清单推进。
+
 ## 2026-10-14 — 原生着色入门图解与维护说明
 
 - 新增[入门与维护指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，用三版方案职责图、同材质直射／间接流程图和两张既有打包实拍，解释为什么接管光照方程、哪些原生数据仍由 UE 计算，以及改明暗／高光、GI、脸部数据、Profile、引擎适配和旧 RT 的具体文件入口。示意图为可维护 SVG；实拍沿用 2026-10-14 的原始归档，不生成目标效果图。

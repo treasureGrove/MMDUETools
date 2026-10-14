@@ -26,7 +26,7 @@ namespace MMDEndfieldFaceBinding
 		int32 FaceTexelCount = 0;
 	};
 
-	/** 空 Slots 自动筛选皮肤槽；没有可靠的脸部覆盖时保留通用着色。只保存本工具派生纹理。 */
+	/** V4 几何方向场；空 Slots 自动筛选皮肤，缺覆盖回退，只保存本工具派生纹理。 */
 	UE5MMDTOOLSEDITOR_API bool BakeAndBind(USkeletalMesh* Mesh, const FString& TextureFolder,
 		bool bSaveTextures, FResult& Result, const TArray<int32>& Slots = {}, int32 Size = 512);
 }

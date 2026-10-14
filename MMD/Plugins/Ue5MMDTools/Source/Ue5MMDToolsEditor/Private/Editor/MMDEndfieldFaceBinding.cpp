@@ -32,7 +32,7 @@ bool MMDEndfieldFaceBinding::BakeAndBind(USkeletalMesh* Mesh, const FString& Tex
 	if (!MMDEnfieldFaceSdf::DeriveHeadFrame(Mesh, NAME_None, Settings, Source, FrameMessage)
 		|| Source != MMDEnfieldFaceSdf::EHeadFrameSource::HeadBone)
 	{
-		Result.Notes.Add(TEXT("没有可靠头骨，未绑定 SDF，保留通用 Toon：") + FrameMessage);
+		Result.Notes.Add(TEXT("没有可靠头骨，未绑定脸部方向场，保留通用 Toon：") + FrameMessage);
 		Mesh->RemoveUserDataOfClass(UMMDEndfieldFaceData::StaticClass());
 		if (bSaveTextures) Mesh->MarkPackageDirty();
 		return true;
@@ -49,6 +49,8 @@ bool MMDEndfieldFaceBinding::BakeAndBind(USkeletalMesh* Mesh, const FString& Tex
 	}
 	TStrongObjectPtr<UMMDEndfieldFaceData> Data(NewObject<UMMDEndfieldFaceData>(Mesh, NAME_None,
 		bSaveTextures ? RF_NoFlags : RF_Transient));
+	Data->Version = UMMDEndfieldFaceData::CurrentVersion;
+	Result.Notes.Add(TEXT("V4 是自动几何方向场，不是实际遮挡 SDF；UV0 未修改，旧 V3 阈值不会作方向读取"));
 	for (const int32 Slot : Candidates)
 	{
 		if (!Mesh->GetMaterials().IsValidIndex(Slot))
@@ -72,13 +74,13 @@ bool MMDEndfieldFaceBinding::BakeAndBind(USkeletalMesh* Mesh, const FString& Tex
 			Result.Notes.Add(FString::Printf(TEXT("槽 %d 无可靠脸部覆盖，保持回退：%s"), Slot, *Bake.Error));
 			continue;
 		}
-		FString Name = FString::Printf(TEXT("T_%s_FaceSdf_%d"), *Mesh->GetName(), Slot);
+		FString Name = FString::Printf(TEXT("T_%s_FaceDirection_%d_%d"), *Mesh->GetName(), UMMDEndfieldFaceData::CurrentVersion, Slot);
 		FString Package = TextureFolder / Name;
 		if (bSaveTextures && FPackageName::DoesPackageExist(Package))
 		{
 			UTexture2D* Existing = LoadObject<UTexture2D>(nullptr, *(Package + TEXT(".") + Name));
-			const FString Version = Existing ? Existing->GetOutermost()->GetMetaData().GetValue(Existing, TEXT("MMDGeneratedFaceSdfVersion")) : FString();
-			if (!Existing || (Version != TEXT("2") && Version != TEXT("3")))
+			const FString Version = Existing ? Existing->GetOutermost()->GetMetaData().GetValue(Existing, TEXT("MMDGeneratedFaceDirectionVersion")) : FString();
+			if (!Existing || Version != FString::FromInt(UMMDEndfieldFaceData::CurrentVersion))
 			{
 				// 同名用户资产不属于派生缓存，保留原件并选择新的资产路径。
 				const FString OriginalPackage = Package;
@@ -105,7 +107,9 @@ bool MMDEndfieldFaceBinding::BakeAndBind(USkeletalMesh* Mesh, const FString& Tex
 		FMMDGeneratedFaceSdfSlot& Binding = Data->Slots.AddDefaulted_GetRef();
 		Binding.MaterialIndex = Slot;
 		Binding.MaterialSlotName = Mesh->GetMaterials()[Slot].MaterialSlotName;
-		Binding.Texture = Texture;
+		Binding.DirectionTexture = Texture;
+		Binding.DirectionVersion = UMMDEndfieldFaceData::CurrentVersion;
+		Binding.UVChannel = Settings.UVChannel;
 		Result.BoundSlots.Add(Slot);
 		Result.TexturePaths.Add(Texture->GetPathName());
 		Result.FaceTexelCount += Bake.FaceTexelCount;

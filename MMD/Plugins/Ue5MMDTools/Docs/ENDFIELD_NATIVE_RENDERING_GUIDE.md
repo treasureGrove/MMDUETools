@@ -46,7 +46,7 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 ![材质直射间接与反射入口在管线中的位置](Images/EndfieldNative/pipeline-hooks.svg)
 
-- **A 材质准备，在 BasePass 内。** 材质 Custom 调用 `TMMDEndfieldNative::PrepareSurface()`，算出法线和 PatternUV，随后 UE 打包材质数据。这一步还没有当前逐灯光的最终阴影。
+- **A 材质准备，在 BasePass 内。** 材质 Custom 调用 `TMMDEndfieldNative::PrepareSurface()`，计算独立原生法线、脸部漫反射方向和头部旋转。专用 CustomOutput 将后两项交给 BasePass 的打包入口，再供逐灯读取。这一步还没有当前逐灯光的最终阴影。
 - **B 直射，在 RenderLights 内。** `DeferredLightPixelShaders.usf` 调用 `SubstrateDeferredLighting()`；该调用链准备原生阴影、接触阴影与 AreaLight，再在 `SubstrateEvaluation.ush` 的 Toon 分支调用我们的 `EvaluatePerLight()`。返回后，UE 外层乘灯色／LightMask 等并累加。额外灯光参数的复制在同一调用链中完成。
 - **C 间接，在 DiffuseIndirectComposite 内。** UE 已取得 GI／反射输入，算好原生材质权重和 AO，插件再调用 `Process()`；adaptive 路径处理 `OutBSDF.Diffuse/Specular`，传统路径处理 `IndirectLighting.Diffuse/Specular`，随后才累加到 SceneColor。位置在原生分离输出及后续合成之前，不在 Lumen 射线追踪或历史更新内部。
 - **D 独立环境／反射，在 ReflectionEnvironment 内。** `SubstrateEnvLightingCommon()` 及适用的独立 Lumen 反射合成先计算贡献，再调用插件 `Process()`，之后进入原生反射量化、分离输出和颜色合成。如果 Lumen 的组合路径已经在 C 合成了对应贡献，这个独立 pass 会按配置跳过，不能重复处理同一份结果。
@@ -61,7 +61,7 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 ## GBuffer 和 ShadingModel 到底变了什么
 
-可以把 **GBuffer／Substrate 材质容器**理解为每个像素的“材质记录”：保存颜色、法线、粗糙度等，供后面的光照读取。当前没有新增通道或改变它的存储格式。
+可以把 **GBuffer／Substrate 材质容器**理解为每个像素的“材质记录”：保存颜色、法线、粗糙度等，供后面的光照读取。没有新增独立的 GBuffer render target；新版在自己的 Skin 材质里复用已有字段传递脸部参数。
 
 **ShadingModel／BSDF** 是使用这些记录计算受光效果的规则。当前仍使用原生 Toon 类型，没有新增一个 ShadingModel ID；替换的是指定 Toon 材质分支中的光照计算函数。
 
@@ -69,7 +69,35 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 GBuffer 里保存的是 Profile ID，用它查找对应色带；这些标记和倍率不占用 GBuffer 的 alpha 通道。
 
-shader 中新加的 `mmd_light_data` 只是“这一次光照计算的参数包”。它不写入 GBuffer，也不能把材质阶段的数据自动传到下一阶段。完整头部朝向、原始 SDF 和独立高光法线仍需要正式的逐像素传递通道。
+shader 中的 `mmd_light_data` 只是“这一次光照计算的参数包”，不写入 GBuffer。新版另有正式打包的 `mmd_payload`：24 bit 保存头空间漫反射方向及权重，32 bit 保存头部旋转。它复用自有 Toon 的 PatternUV 字段和材质编译器已预留的 anisotropy word；Profile ID、底色和粗糙度保持。原生 Normal 独立供高光与 GI 使用。
+
+目前这条通道只用于 **Mode2、adaptive GBuffer=1、不透明／遮罩、单 Toon Skin**，并检查实际预算。真实各向异性、透明、fmt0、多层和简化变体会回退；不能把这套字段分配当成所有材质都可使用的空闲存储。普通材质不使用这些标记。没有新增一次角色绘制或离屏光照 pass。
+
+这也不是“完全没有额外写入”：原生零 anisotropy 的像素可能跳过该32 bit word，新通道会写它，只是没有超出编译器预留预算。打包、读回和解码都有成本，目前未测净性能收益。
+
+## 本轮脸部与 ramp 改了什么
+
+![脸部方向与独立原生法线的数据流](Images/EndfieldNative/face-payload.svg)
+
+旧版把固定俯角下的脸部阈值转换成一条共享法线，同时影响明暗、高光和 GI。改变灯光俯角时，这条法线无法重建烘焙时的方向；原型还会先做三档分类、再叠加偏移。
+
+新版自动生成 **V4 几何方向场**：保存完整的头空间方向，逐灯用真实光方向求明暗，不再依赖固定俯角。镜像共 UV 的四个采样点先恢复各自左右语义再插值；复杂冲突退回几何计算。保留 UV0，未增加 UV2，也不需要用户手绘贴图。这个方向场没有计算遮挡距离，不能称为真正的阴影 SDF；真实遮挡仍来自 UE。
+
+V4 的烘焙方向目前跟随头骨刚性旋转，尚未重建嘴／脸颊 Morph 或独立下颌骨造成的局部方向变化；无派生数据时的几何回退使用实时位置和顶点法线。这里仍需加入变形修正，高光与 GI 的原生法线则继续跟随真实几何。payload 的权重表示准备后方向有效，贴图的覆盖权重已在材质阶段混合，不能再次相乘。
+
+```text
+BasePass：几何／自动方向场 → 漫反射方向 + 头部旋转 → 打包
+逐盏灯：读回方向 → 与本盏灯求 N·L → RD 明暗混合 + 颜色 tint
+高光／GI：独立原生 Normal → 原生数据 + 对应着色响应
+```
+
+Skin、Hair、Cloth 的 RD 使用已有客户端完整 256 点数据。RD 的 alpha 决定明暗混合量，RGB 负责 tint；影色由底色亮度与饱和度派生，再作亮度补偿。RD alpha 存在 Profile 的 specular 行 alpha，diffuse 行 alpha 继续保存模式标记。**真实 RD 不能直接当作一个 RGB 乘数。**
+
+衣料高光保留 GGX 波瓣幅度与原作 `.04 × specular` 的 F0 约定；代表 Skin 未启用 RS，使用白色乘数。Hair／Cloth 的二维 RS 暂取固定纵坐标切片，头发用几何竖向切线计算主高光环；没有原作 P 图／flow 图时属于明确的近似。完整二维 RS、Skin 颜色 LUT、头发第二波瓣与独立高光法线数据、眼睛、深度 rim／描边及最终调色仍在复刻清单里。
+
+Mode2 要求 `r.Substrate.Experimental.ToonUnifiedDiffuse=0`，由每盏灯处理 RD 语义；统一漫反射后段尚未适配，会拒绝启用此模式，避免二次套用色带。验证使用 Profile atlas 256 点；引擎默认 64 点会重采样，插件没有改工程的默认配置。
+
+本轮同镜头侧光、头发／衣料及packed读回原图见[2026-10-14画质迭代归档](Screenshots/2026-10-14-endfield-fidelity/README.md)。旧版鼻部、脸颊硬条块已明显减少；其余复刻项继续按清单推进，不以编译或图片数量判定终末地画质达标。
 
 ## 看实拍理解 GI 接口
 
@@ -101,7 +129,7 @@ shader 中新加的 `mmd_light_data` 只是“这一次光照计算的参数包�
 安装引擎的 Private shader
         ↓ 只读复制
 工程 Intermediate 中的副本
-        ↓ 适配五个入口并 include 插件 ush
+        ↓ 适配光照、合成及材质打包入口并 include 插件 ush
 Editor／Cook 编译 shader
         ↓
 打包程序使用编译好的 shader 库
@@ -119,7 +147,7 @@ Editor／Cook 编译 shader
 
 打开 [TMMDEndfieldNativeBSDF.ush](../Shaders/Core/TMMDEndfieldNativeBSDF.ush)，看 `EvaluateToonResponse()`。
 
-这里接收材质、当前灯光、阴影和面积光。当前 Mode2 只替换了三档漫反射，高光仍复用原生 Toon。要写终末地的材质分路和高光，主要从这里开始；`BuildSpecularContext()` 已准备独立法线接口，但目前传入的两个法线仍相同。
+这里接收材质、当前灯光、阴影和面积光。Mode2 的 Skin／Hair／Cloth 用 `ReadDiffuseRamp()`、`ApplyDiffuseRamp()` 和 `EvaluateSpecular()` 处理真实 RD 语义及高光。Skin 的漫反射方向来自 `BSDF.mmd_payload`，高光法线来自独立原生 Normal；矩形灯保留原生 LTC／Toon 积分，使用当前 RS 切片。
 
 ### 改 GI 或反射的表现
 
@@ -131,13 +159,15 @@ Editor／Cook 编译 shader
 
 打开 [TMMDEndfieldNative.ush](../Shaders/Core/TMMDEndfieldNative.ush) 的 `PrepareSurface()`；材质图由 [MMDEndfieldToonPresetsCommandlet.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp) 构建。
 
-这层负责底色、几何、SDF 等材质准备。目前 SDF 主要转换成法线和 PatternUV，侧向错误仍待修。若要在逐灯函数中使用完整 SDF 或独立高光法线，还需补跨阶段存储与解码，不能只给局部 struct 加一个成员。
+这层负责底色、几何和脸部方向场。`ReadDirection()` 负责逐 texel 解镜像，`FrameQuaternion()` 负责头部旋转。旧 V3 阈值桥保留在 `PrepareLegacySurface()`，与 V4 分开读取。派生数据由 [MMDEndfieldFaceSdfBaker.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldFaceSdfBaker.cpp) 自动生成。
+
+跨阶段打包维护 [TMMDEndfieldNativePayload.ush](../Shaders/Core/TMMDEndfieldNativePayload.ush)；正式材质输出是 [MaterialExpressionMMDEndfieldNativePayload.h](../Source/Ue5MMDTools/Public/Materials/MaterialExpressionMMDEndfieldNativePayload.h)。新增数据时必须一起检查 CustomOutput、BasePass 注入、packed export/read、预算与简化回退，不能只给局部 struct 加成员。
 
 ### 改材质识别和引擎接入
 
-- [MMDEndfieldNativeProfile.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp)：`MarkTransient()` 和 `GetOrCreate()`，负责 Profile 标记、控制值和瞬态副本。
+- [MMDEndfieldNativeProfile.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp)：`MarkTransient()` 和 `GetOrCreate()`，负责 Profile 标记、真实 RD／RS 曲线、控制值和瞬态副本；同目录 `MMDEndfieldNativeRampData.inl` 保存样本数据及来源。
 - [MMDStageLibrary.cpp](../Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp)：把对应 Profile 应用到角色材质。
-- [MMDEndfieldNativeBackend.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp)：版本保护、源码校验、缓存与五个入口适配。
+- [MMDEndfieldNativeBackend.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp)：版本保护、源码校验、缓存、光照入口及新增的 BasePass／Substrate packed export/read 适配。
 - [MMDEndfieldNativeIndirectPatch.inl](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeIndirectPatch.inl)：GI／反射合成位置。
 - [TMMDEndfieldNativeLightCapture.ush](../Shaders/Core/TMMDEndfieldNativeLightCapture.ush)：复制原生灯光输入；只有 `mmd_light_data.valid=true` 时这些额外字段才有效。
 - [TMMDEndfieldNativeLegacy.ush](../Shaders/Core/TMMDEndfieldNativeLegacy.ush)：传统 GBuffer 的聚簇灯光兼容路径。
@@ -159,7 +189,7 @@ Editor／Cook 编译 shader
 
 - 模式 0：原生透传，用作基线。
 - 模式 1：把阴影通道显示成 RGB，用于确认收到的是原生阴影。
-- 模式 2：当前自定义响应原型，不代表最终终末地画质。
+- 模式 2：当前 RD／RS 与脸部方向响应迭代，不代表最终终末地画质。
 
 先用 [MMDEndfieldNativeBackendProbe](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldNativeBackendProbeCommandlet.cpp) 比较原生／自定义、无遮挡／有遮挡、间接光开／关，并确认普通材质保持原生。改材质图时同步更新生成器中的图版本／签名。
 

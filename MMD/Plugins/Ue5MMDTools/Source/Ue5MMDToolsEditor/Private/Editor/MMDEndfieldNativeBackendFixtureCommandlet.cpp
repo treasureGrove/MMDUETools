@@ -222,7 +222,7 @@ namespace
 		Copy->SetFlags(RF_Transient);
 		Copy->ClearFlags(RF_Public | RF_Standalone);
 		Copy->Guid = FGuid::NewGuid();
-		if (!MMDEndfieldNativeProfile::MarkTransient(Copy, static_cast<EMMDMaterialRole>(Role)) || !FixtureRgbUnchanged(Source, Copy))
+		if (!MMDEndfieldNativeProfile::MarkTransient(Copy, static_cast<EMMDMaterialRole>(Role), false) || !FixtureRgbUnchanged(Source, Copy))
 		{
 			Error = TEXT("Profile 角色标记失败或改变了 RGB：") + Source->GetPathName();
 			return nullptr;

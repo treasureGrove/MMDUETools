@@ -1,6 +1,22 @@
 # 终末地原生着色后端
 
-2026-10-14 开发记录。本后端用于实现用户指定的终末地复刻，当前三档响应只是接入验证，不代表最终终末地画质。
+2026-10-14 开发记录。本后端用于实现用户指定的终末地复刻；下方 v4 记录是接入验证，当前新增 v6 画质迭代，不代表最终终末地画质验收。
+
+## v6：脸部数据与真实 ramp 迭代
+
+材质图版本4新增专用 CustomOutput。仅自有单 Toon Skin 的 Mode2／adaptive fmt1 不透明与遮罩路径接通：Pattern24 保存头空间漫反射方向 oct16 和准备后方向权重8；编译器预留 anisotropy32 保存头部旋转。最低请求／运行时预算24 bytes，不新增 render target 或绘制 pass。Toon 未消费的 F90 标记识别编码；读取后恢复中性 PatternUV、physical anisotropy=0 和原生标记，局部 `mmd_payload.valid` 保留。真实 anisotropy、非中性 UV、多层、低预算、简化和 fmt0 不写该通道。
+
+与原生零anisotropy跳过extra word相比，自有Skin实际多写／读32 bit并解码，只是使用已有请求预算；不是零写入成本，未测性能。
+
+自动 V4 保存完整头空间几何方向，四个 texel 分别解离散镜像再插值；V3 固定俯角阈值与 V4 字段／标记／缓存严格隔离。它不是遮挡 SDF，保留 UV0；没有数据时使用实时球面／几何回退。烘焙方向当前只随头骨刚性旋转，局部 Morph／下颌变形修正尚待实现。独立原生 Normal 供高光和 GI，方向场开关不改变该法线。
+
+Mode2 的 Skin／Hair／Cloth 使用完整256点客户端 RD RGB，以及保存在 specular row alpha 的 RD 明暗权重。恢复无 LUT 的影色亮度／饱和、chroma tint、亮度补偿、`.96` diffuse 系数、`.04 × specular` F0 与保留波瓣幅度的 GGX 高光。Skin 代表样本未启用 RS；Hair09／Cloth04 RS 暂取 V=.5／.696 的真实固定切片。头发主波瓣使用几何竖向切线，缺少原作 P／flow／split normal 图时是近似；二维纵轴、Skin LUT、第二波瓣仍未恢复。
+
+Mode0/1 恢复源 RGB；Cook Fixture 用 `MarkTransient(..., false)` 保存源曲线载体，再由运行时按模式创建瞬态曲线，避免 Mode2 数据固化到基线。Mode2 明确拒绝 `ToonUnifiedDiffuse=1`，避免后段重复将 RD RGB 当反射率。验证进程使用 Profile atlas256；项目默认配置未改。
+
+详细数据流、维护入口与后续范围见[入门指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)。以下五入口／三档响应及打包结果属于本批之前的 v4 历史，不能当作 v6 已重新发行验证。
+
+v6本轮实测：Editor build4/Game game-build2、11包generate2通过；fidelity2/3、Mode0/关闭后端、fmt0普通/聚簇合计109图/630槽0失败。实际packed绿/红、V4覆盖和多角度原图见[本轮归档](Screenshots/2026-10-14-endfield-fidelity/README.md)。侧光硬条块已减少，高光/GI对照脸区均差.113/255；未重Cook或验证发行包，完整复刻与变形支持仍按清单推进。
 
 第一次接触这套方案，先看[图解入门与维护指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)。本文保留具体接口、配置与验证记录。
 
