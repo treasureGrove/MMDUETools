@@ -1,0 +1,428 @@
+{
+  "engine": "UE 5.8.3 / CL58210709",
+  "capture_type": "后台 RenderOffscreen / SceneCapture2D",
+  "character": "插件已有 Saved/BackgroundValidation Miku 测试夹具；不归档角色资产",
+  "animation": "已有 MMDStagePreview8s，顺序推进 Bullet 后固定机位",
+  "capture_date_sgt": "2026-10-13",
+  "archive_date_sgt": "2026-10-13",
+  "files": [
+    {
+      "file": "native_full.png",
+      "source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p12\\p12_toon_full.png",
+      "source_batch": "p12",
+      "captured_utc": "2026.10.13 07:54:20",
+      "capture_date_sgt": "2026-10-13",
+      "source_build": "build6",
+      "bytes": 1573659,
+      "sha256": "d0a963820d1298ed7d66fcfc56be6e37487c337ee5ae1c18dd783a40f4216452",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "visual_status": "未通过终末地画质验收",
+      "image_processing": "无；原始引擎PNG直接复制"
+    },
+    {
+      "file": "native_face.png",
+      "source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p12\\p12_toon_face.png",
+      "source_batch": "p12",
+      "captured_utc": "2026.10.13 07:54:20",
+      "capture_date_sgt": "2026-10-13",
+      "source_build": "build6",
+      "bytes": 1601791,
+      "sha256": "e40dfbe7ca94335ad9bef1e2a2a170d0be1b8848f537e97c2a7c53c6a7b9ab65",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "visual_status": "未通过终末地画质验收",
+      "image_processing": "无；原始引擎PNG直接复制"
+    },
+    {
+      "file": "native_hair.png",
+      "source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p12\\p12_toon_hair.png",
+      "source_batch": "p12",
+      "captured_utc": "2026.10.13 07:54:21",
+      "capture_date_sgt": "2026-10-13",
+      "source_build": "build6",
+      "bytes": 1286125,
+      "sha256": "0d6c83f9f4d8fea0685d0b0e326ed6939620d2609d1200edc491916d54f38d41",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "visual_status": "未通过终末地画质验收",
+      "image_processing": "无；原始引擎PNG直接复制"
+    },
+    {
+      "file": "unified1_dark_face.png",
+      "source": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p10\\p10_toon_face.png",
+      "source_batch": "p10",
+      "captured_utc": "2026.10.13 07:50:10",
+      "capture_date_sgt": "2026-10-13",
+      "source_build": "build6",
+      "bytes": 1503802,
+      "sha256": "f680b19218be368bd4a5a67b8806e807ce6cf5c6e60ab9a9a7c0bad307306ec9",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "1",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "visual_status": "多灯统一漫反射实验过暗，未采用",
+      "image_processing": "无；原始引擎PNG直接复制"
+    }
+  ],
+  "validation": {
+    "p10": {
+      "images": 53,
+      "failures": 0,
+      "default_material_slots": 0,
+      "render_proxy_fallbacks": 0,
+      "slot_checks": 105,
+      "notes": [
+        {
+          "toon_apply_compile_wait_seconds": "0.066353"
+        },
+        {
+          "runtime_set_role": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_profile_matches_role": "passed"
+        },
+        {
+          "runtime_roughness_matches_role": "passed"
+        },
+        {
+          "runtime_set_generic": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_profile_matches_role": "passed"
+        },
+        {
+          "runtime_roughness_matches_role": "passed"
+        },
+        {
+          "runtime_clear_role": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_profile_matches_role": "passed"
+        },
+        {
+          "runtime_roughness_matches_role": "passed"
+        },
+        {
+          "runtime_restore_materials": "passed"
+        },
+        {
+          "runtime_restored_initial_overrides": "passed"
+        }
+      ],
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "1",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      }
+    },
+    "p11": {
+      "images": 9,
+      "failures": 0,
+      "default_material_slots": 0,
+      "render_proxy_fallbacks": 0,
+      "slot_checks": 105,
+      "notes": [
+        {
+          "toon_apply_compile_wait_seconds": "0.001883"
+        },
+        {
+          "runtime_set_role": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_set_generic": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_clear_role": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_restore_materials": "passed"
+        },
+        {
+          "runtime_restored_initial_overrides": "passed"
+        }
+      ],
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": false,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": false,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "0",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      }
+    },
+    "p12": {
+      "images": 53,
+      "failures": 0,
+      "default_material_slots": 0,
+      "render_proxy_fallbacks": 0,
+      "slot_checks": 105,
+      "notes": [
+        {
+          "toon_apply_compile_wait_seconds": "0.070238"
+        },
+        {
+          "runtime_set_role": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_profile_matches_role": "passed"
+        },
+        {
+          "runtime_roughness_matches_role": "passed"
+        },
+        {
+          "runtime_set_generic": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_profile_matches_role": "passed"
+        },
+        {
+          "runtime_roughness_matches_role": "passed"
+        },
+        {
+          "runtime_clear_role": "passed"
+        },
+        {
+          "runtime_source_texture_preserved": "passed"
+        },
+        {
+          "runtime_other_slot_preserved": "passed"
+        },
+        {
+          "runtime_profile_matches_role": "passed"
+        },
+        {
+          "runtime_roughness_matches_role": "passed"
+        },
+        {
+          "runtime_restore_materials": "passed"
+        },
+        {
+          "runtime_restored_initial_overrides": "passed"
+        }
+      ],
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "64",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      }
+    }
+  },
+  "build6_inputs": [
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Stage\\MMDStageLibrary.cpp",
+      "Hash": "D8F02DC5C4D56736E318E904AAE597BD35E626722FAB76D4CD2AA574253EAFD4"
+    },
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Stage\\MMDStageRenderPreset.h",
+      "Hash": "6D98238630DABB2C56FE340826BD99FCFCBB55B57F67AFC4CF0B0E6473AD9D42"
+    },
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Stage\\MMDStageMaterialState.h",
+      "Hash": "746E2DB6C51FA8081E30AC90E80574D4CF3C106A9BCDB1F4411694724413AD65"
+    },
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldToonPresetsCommandlet.cpp",
+      "Hash": "6E837E6E18ACE033AAE1A1EAB9EA0CB099E2FCC6542F372E04AC9DEE6B31E568"
+    },
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldToonProbeCommandlet.cpp",
+      "Hash": "2216E7A2B37601C5CA6DFF17252783EB83E8B79A3FD6DB92966323EBC6DFED51"
+    },
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Binaries\\Win64\\UnrealEditor-Ue5MMDTools.dll",
+      "Hash": "C44A770E9F435A93E18331C9E9852ED674E4D2ADFCC5A2EAA731AD0C2909F2B7"
+    },
+    {
+      "Path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Binaries\\Win64\\UnrealEditor-Ue5MMDToolsEditor.dll",
+      "Hash": "35888D4E22967DB19E6411826FE01631F9C073D729DEFA4517816351C49DFD77"
+    }
+  ],
+  "limitations": [
+    "这些是功能验证和问题记录，未通过终末地画质验收",
+    "未验证打包、主视图GI或移动平台",
+    "p9原报告保留exit1：新增代理检查未初始化输出造成35次误报；p10/p12已修复并重新验证",
+    "verify原报告保留exit1：曲线临时句柄造成误报；verify2严格序列化字段回读通过"
+  ]
+}

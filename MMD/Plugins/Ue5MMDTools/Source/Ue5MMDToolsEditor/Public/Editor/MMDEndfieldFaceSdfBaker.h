@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class USkeletalMesh;
+class UTexture2D;
 
 /**
  * 脸部 SDF 自动烘焙。
@@ -12,13 +13,14 @@ class USkeletalMesh;
  * 因此不违反"不依赖手绘配套贴图"的通用性要求（任何 PMX 导入后都能重烘）。
  *
  * 输出 RGBA8：
- *   R/G = 归一化阈值（0..1，乘 π 得弧度）；数值越大，该处越晚进入阴影。
- *   B   = 正面受光占比。
+ *   R = 光沿 head_right 转向时的归一化阈值（0..1，乘 π 得弧度）。
+ *   G = 光沿 -head_right 转向时的独立阈值；运行时选择通道，不镜像 UV。
+ *   B   = 0：直接左右阈值；1：已验证镜像几何共用 UV，R/G 为大/小阈值，按几何侧恢复。
  *   A   = 脸部遮罩（供角色轮廓光与脸部区域使用）。
  */
 namespace MMDEnfieldFaceSdf
 {
-    // 光照方位角采样数。uint64 位掩码上限为 64。
+    // 每一侧从正前方到正后方的方位角区间数。
     constexpr int32 LightAngleSamples = 64;
     // 主光俯角（弧度），约 20°，与舞台预设的 KeyLightRotation 同量级。
     constexpr float KeyLightPitch = 0.35f;
@@ -43,16 +45,47 @@ namespace MMDEnfieldFaceSdf
         float ChinHeight = -0.95f;
         /** 头顶高度上限（归一化到头部半径）。 */
         float CrownHeight = 1.30f;
+        /** 脸部位置必须在头心前侧，排除后脑与后颈。 */
+        float FaceForwardMinimum = -0.15f;
+        /** 头部球的最大归一化距离。 */
+        float MaximumHeadDistance = 1.35f;
+        /** 阈值法线中真实几何的权重；其余来自头部球面，缓和鼻部灰块并保留眼窝细节。 */
+        float GeometryNormalWeight = 0.25f;
+        /** 烘焙使用的 UV 通道；运行时必须采样同一通道的 frac(UV)。 */
+        int32 UVChannel = 0;
+        /** 非空时仅烘焙这些材质槽；建议按 Skin 槽分别生成贴图。 */
+        TArray<int32> MaterialIndices;
+        /** 未指定材质槽时只使用自动识别为 Skin 的槽，排除头发、眼球和饰品。 */
+        bool bAutoDetectFaceMaterials = true;
+        /** 不同几何共用 UV 但左右阈值矛盾时，使该 texel 无效而退回普通 toon。 */
+        float UVOverlapThresholdTolerance = 0.08f;
+        /** 镜像几何的位置误差上限，单位为头部半径；仅交换 R/G 不足以判定为镜像。 */
+        float MirrorPositionTolerance = 0.025f;
+        /** 接近中心线的几何不可靠地判左右，继续使用直接阈值或冲突回退。 */
+        float MirrorSideMinimum = 0.02f;
+        /** 只扩展 RGB，A 仍为零，避免双线性采样在有效边界读到黑色阈值。 */
+        int32 PaddingTexels = 2;
+        /** 普通自动路径不猜测缺失的头骨；显式开启才使用旧包围盒兜底。 */
+        bool bAllowBoundsFallback = false;
     };
 
     struct FBakeResult
     {
         /** RGBA8 像素，行优先，V 向下（与 UE 纹理存储一致）。 */
-        TArray<u8> Pixels;
+        TArray<uint8> Pixels;
         int32 Size = 0;
         int32 FaceTexelCount = 0;
         int32 LitTexelCount = 0;
         int32 ConsideredVertexCount = 0;
+        int32 ConsideredTriangleCount = 0;
+        int32 RejectedTriangleCount = 0;
+        int32 ConflictingTexelCount = 0;
+        int32 MirroredTexelCount = 0;
+        int32 PaddingTexelCount = 0;
+        int32 FrontDarkTexelCount = 0;
+        int32 NonContinuousTexelCount = 0;
+        float GeometryNormalWeight = 0.25f;
+        TArray<int32> BakedMaterialIndices;
         bool bSuccess = false;
         FString Error;
     };
@@ -71,8 +104,9 @@ namespace MMDEnfieldFaceSdf
     /**
      * 从骨骼网格自动推导头部基。
      *
-     * 优先使用 @p HeadBoneName 骨骼的参考姿势变换；骨架或该骨骼缺失时，
-     * 退回包围盒推理并在 @p OutSource 标注来源。半径按"头心到最高顶点"估算。
+     * 优先使用 @p HeadBoneName，再尝试运行时支持的常见头骨名称。
+     * 参考姿势转换到组件空间，头心、眼骨偏移、轴和半径与 HeadBoneSubsystem 一致。
+     * 缺失有效头骨默认失败；只在显式允许时使用包围盒兜底。
      *
      * @return 成功返回 true；失败时 OutError 说明原因。
      */
@@ -88,6 +122,10 @@ namespace MMDEnfieldFaceSdf
 
     /** 写出未压缩 32 位 TGA，便于在引擎外查看中间结果。 */
     bool WriteTga(const FBakeResult& Result, const FString& FilePath);
+
+    /** 创建可绑定的线性 SDF 纹理；临时验证和保存资产共用相同像素格式。 */
+    UTexture2D* CreateTexture(const FBakeResult& Result, UObject* Outer, FName Name,
+                             EObjectFlags Flags, FString& OutError);
 
     /** 把烘焙结果写入（或更新）一个 UTexture2D 资产并保存。 */
     bool SaveAsTexture(const FBakeResult& Result, const FString& PackageName,

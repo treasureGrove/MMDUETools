@@ -37,7 +37,7 @@ namespace
 	constexpr const TCHAR* OutlineObjectPath = TEXT("/Ue5MMDTools/Resources/MaterialInstance/M_MMD_Outline.M_MMD_Outline");
 
 	template<typename T>
-	T* AddExpression(UMaterial* Material)
+	T* OutlineAddExpression(UMaterial* Material)
 	{
 		T* Expression = NewObject<T>(Material);
 		Expression->Material = Material;
@@ -45,9 +45,9 @@ namespace
 		return Expression;
 	}
 
-	UMaterialExpressionScalarParameter* AddScalar(UMaterial* Material, FName Name, float DefaultValue)
+	UMaterialExpressionScalarParameter* OutlineAddScalar(UMaterial* Material, FName Name, float DefaultValue)
 	{
-		UMaterialExpressionScalarParameter* Scalar = AddExpression<UMaterialExpressionScalarParameter>(Material);
+		UMaterialExpressionScalarParameter* Scalar = OutlineAddExpression<UMaterialExpressionScalarParameter>(Material);
 		Scalar->ParameterName = Name;
 		Scalar->DefaultValue = DefaultValue;
 		return Scalar;
@@ -79,7 +79,7 @@ namespace
 
 	UMaterialExpressionCustom* AddOutlineVisibility(UMaterial* Material, UMaterialExpression* Opacity, UMaterialExpression* ScreenSpace, int32 OpacityOutputIndex = 0)
 	{
-		UMaterialExpressionCustom* Visibility = AddExpression<UMaterialExpressionCustom>(Material);
+		UMaterialExpressionCustom* Visibility = OutlineAddExpression<UMaterialExpressionCustom>(Material);
 		Visibility->OutputType = CMOT_Float1;
 		Visibility->Description = TEXT("细描边正交深度隔离");
 		Visibility->Code = OutlineVisibilityCode;
@@ -114,7 +114,7 @@ namespace
 			{
 				FCustomInput& Input = Offset->Inputs.AddDefaulted_GetRef();
 				Input.InputName = ExpectedNames[Index + 5];
-				Input.Input.Connect(0, AddScalar(Material, ParameterNames[Index], Defaults[Index]));
+				Input.Input.Connect(0, OutlineAddScalar(Material, ParameterNames[Index], Defaults[Index]));
 			}
 			bChanged = true;
 		}
@@ -162,18 +162,18 @@ UMaterial* CreateMMDOutlineMaterial(UObject* Outer, FName Name, EObjectFlags Fla
 	Material->OpacityMaskClipValue = 0.001f;
 	Material->MaxWorldPositionOffsetDisplacement = 10.0f;
 
-	UMaterialExpressionVectorParameter* EdgeColor = AddExpression<UMaterialExpressionVectorParameter>(Material);
+	UMaterialExpressionVectorParameter* EdgeColor = OutlineAddExpression<UMaterialExpressionVectorParameter>(Material);
 	EdgeColor->ParameterName = TEXT("EdgeColor");
 	EdgeColor->DefaultValue = FLinearColor::Black;
-	UMaterialExpressionScalarParameter* EdgeSize = AddScalar(Material, TEXT("EdgeSize"), 1.0f);
-	UMaterialExpressionScalarParameter* OutlineWidth = AddScalar(Material, TEXT("OutlineWidth"), 0.1f);
-	UMaterialExpressionScalarParameter* MaxOffset = AddScalar(Material, TEXT("OutlineMaxOffset"), 10.0f);
-	UMaterialExpressionScalarParameter* ScreenSpace = AddScalar(Material, TEXT("OutlineScreenSpace"), 0.0f);
-	UMaterialExpressionScalarParameter* PixelWidth = AddScalar(Material, TEXT("OutlinePixelWidth"), 1.20f);
-	UMaterialExpressionScalarParameter* ReferenceHeight = AddScalar(Material, TEXT("OutlineReferenceHeight"), 1080.0f);
-	UMaterialExpressionVertexColor* VertexColor = AddExpression<UMaterialExpressionVertexColor>(Material);
-	UMaterialExpressionVertexNormalWS* VertexNormal = AddExpression<UMaterialExpressionVertexNormalWS>(Material);
-	UMaterialExpressionCustom* Offset = AddExpression<UMaterialExpressionCustom>(Material);
+	UMaterialExpressionScalarParameter* EdgeSize = OutlineAddScalar(Material, TEXT("EdgeSize"), 1.0f);
+	UMaterialExpressionScalarParameter* OutlineWidth = OutlineAddScalar(Material, TEXT("OutlineWidth"), 0.1f);
+	UMaterialExpressionScalarParameter* MaxOffset = OutlineAddScalar(Material, TEXT("OutlineMaxOffset"), 10.0f);
+	UMaterialExpressionScalarParameter* ScreenSpace = OutlineAddScalar(Material, TEXT("OutlineScreenSpace"), 0.0f);
+	UMaterialExpressionScalarParameter* PixelWidth = OutlineAddScalar(Material, TEXT("OutlinePixelWidth"), 1.20f);
+	UMaterialExpressionScalarParameter* ReferenceHeight = OutlineAddScalar(Material, TEXT("OutlineReferenceHeight"), 1080.0f);
+	UMaterialExpressionVertexColor* VertexColor = OutlineAddExpression<UMaterialExpressionVertexColor>(Material);
+	UMaterialExpressionVertexNormalWS* VertexNormal = OutlineAddExpression<UMaterialExpressionVertexNormalWS>(Material);
+	UMaterialExpressionCustom* Offset = OutlineAddExpression<UMaterialExpressionCustom>(Material);
 	Offset->OutputType = CMOT_Float3;
 	Offset->Description = TEXT("PMX geometry outline offset");
 	Offset->Code = MakeOutlineCode();
@@ -194,13 +194,13 @@ UMaterial* CreateMMDOutlineMaterial(UObject* Outer, FName Name, EObjectFlags Fla
 	AddInput(TEXT("reference_height"), ReferenceHeight);
 
 	// TwoSidedSign 正面为 +1，背面为 -1；仅保留外扩后的背面壳。
-	UMaterialExpressionTwoSidedSign* FaceSign = AddExpression<UMaterialExpressionTwoSidedSign>(Material);
-	UMaterialExpressionOneMinus* BackFace = AddExpression<UMaterialExpressionOneMinus>(Material);
+	UMaterialExpressionTwoSidedSign* FaceSign = OutlineAddExpression<UMaterialExpressionTwoSidedSign>(Material);
+	UMaterialExpressionOneMinus* BackFace = OutlineAddExpression<UMaterialExpressionOneMinus>(Material);
 	BackFace->Input.Connect(0, FaceSign);
-	UMaterialExpressionMultiply* BackFaceMask = AddExpression<UMaterialExpressionMultiply>(Material);
+	UMaterialExpressionMultiply* BackFaceMask = OutlineAddExpression<UMaterialExpressionMultiply>(Material);
 	BackFaceMask->A.Connect(0, BackFace);
 	BackFaceMask->ConstB = 0.5f;
-	UMaterialExpressionMultiply* AlphaMask = AddExpression<UMaterialExpressionMultiply>(Material);
+	UMaterialExpressionMultiply* AlphaMask = OutlineAddExpression<UMaterialExpressionMultiply>(Material);
 	AlphaMask->A.Connect(0, BackFaceMask);
 	AlphaMask->B.Connect(4, EdgeColor);
 	UMaterialEditorOnlyData* Data = Material->GetEditorOnlyData();

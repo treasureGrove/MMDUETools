@@ -2,6 +2,58 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-14 — 原生着色入门图解与维护说明
+
+- 新增[入门与维护指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，用三版方案职责图、同材质直射／间接流程图和两张既有打包实拍，解释为什么接管光照方程、哪些原生数据仍由 UE 计算，以及改明暗／高光、GI、脸部数据、Profile、引擎适配和旧 RT 的具体文件入口。示意图为可维护 SVG；实拍沿用 2026-10-14 的原始归档，不生成目标效果图。
+- 明确新后端不依赖旧阴影／灯光 RT，但旧系统仍在后台提交四级阴影深度 pass 与 RT 更新；尚未按材质需求停用或测得性能收益。原生 ID／GBuffer 格式保持，独立高光法线及正式 face payload 仍待补齐。
+- 补充时序说明：逐灯入口直接使用当前光照 pass 的参数，不新增 RT 跨帧等待；Lumen 历史累积、VSM 有效缓存和原有线程流水线仍保留，不能声称所有结果均每帧从零重算。
+- 增加管线位置图，标注 A 材质 BasePass、B RenderLights 内逐灯响应、C DiffuseIndirectComposite、D 可选 ReflectionEnvironment 的具体函数和计算边界；核对本机 UE 的早／晚 GI 调度，说明异步计算及现有 pass 内嵌入口，不把所有 GI 合成误画成固定串行顺序。
+- 本批只新增图文与交付记录，没有重新运行 UE 或修改着色逻辑；沿用同日已完成的编译／Editor／Cook／打包验证。检查本地文档与源码链接、SVG 渲染和截图来源，提交范围包含终末地实现及必要承接依赖；既有旧舞台资产和 Mobile 文档保留在工作区，不上传 Saved／构建产物／测试角色。
+
+## 2026-10-14 — 插件原生 BSDF 后端、阴影／GI 与实际发行验证
+
+- 按用户授权实现类似自定义 ShadingModel 的插件入口：限定 UE5.8.3 / CL58210709，完整镜像 Private shader 到工程 Intermediate，通过目录映射适配五个入口；安装引擎源文件不写入。精确源 hash、锚点与版本保护，缓存签名覆盖原树、插件 ush 和最终适配源码，按签名原子发布。没有新增 ShadingModel ID 或修改原生材质缓冲布局，后端默认关闭。
+- 自有 struct `.ush` 接逐灯光 BSDFContext、完整原生 ShadowTerms、AreaLight，以及50项灯光／阴影输入；补传统聚簇路径与 adaptive／传统 GI、独立反射最终合成入口。只对双签名 Endfield Profile 生效；模式及 GI 倍率写瞬态 Profile alpha，源 RGB 和资产保持，支持同一 Cook 运行时切换。模式0透传、1阴影诊断、2三档原型；正式独立高光法线尚未接通。
+- Editor build8、Game game-build3 实际构建通过。r3–r8 各11图／70次槽检查，v4 r11 传统 GBuffer=0／聚簇开启另11图／70槽，全计77图／490槽通过；三种绘制材质 shader 为21／40／29，无默认／代理 fallback。VSM 下平行、点、聚光、矩形灯的 clear／blocked 遮挡均已实际出图。模式0对关闭后端间接脸视图平均RGB差0.0429（0–255），不称逐像素完全一致。
+- r9 与关闭后端的 r10 在相同 VS／PS hash 处失败，核对为 Substrate tile VS 与传统聚簇 PS 语义不匹配；v4 仅改工程副本接口，r11 实跑通过。最初内存不足、移动宏条件／实验白名单和r2中断均保留原记录。首次 Cook 因编辑器资源过滤失败，第二次 Cook 成功后 Zen staging 记录404，最终命令行 SkipZenStore 的 package3 完整 Cook／Stage／Pak／Archive exit0；package4 将最新 Game 二进制重新 Stage，SHA256 与本地构建相同。
+- 最终相同 Cook 的 final0/1/2/6/7 五次后台 D3D12 SM6 打包游戏均 exit0：12／12专属槽重绑并匹配控制，第120帧1280×720实拍、第160帧报告。阴影诊断、间接漫反射归零、间接镜面归零对模式2全图平均RGB差8.1818／7.5538／5.1399；同模式重复差0.4027。Cook来源加实际变化证明本批内核已消费运行时控制，CPU报告单独不宣称内核验证。首次game0第1帧0xc0000374无调用栈，原因未定位；同命令game0r与final0成功，保留失败，不宣称修复。
+- 代表实际截图与来源见[本日归档](Screenshots/2026-10-14-endfield-native-backend/README.md)，机制见[后端说明](ENDFIELD_NATIVE_BACKEND.md)。全部安装引擎shader、原工程／插件Content、Config与用户Face共2,378项SHA256保持；13个专用测试包和manifest移到Saved备份，无前台窗口、无默认配置更改、未提交／推送。既有用户／Claude工作区修改保留。
+- **限制**：这是原生后端完成，不是终末地画质验收；仍需正式逐像素face／SDF／独立高光法线payload，修SDF Version3侧向错误及自阴影策略，继续真实ramp、头发、眼睛、rim、描边与后处理。原生灯光剔除／早退仍生效，未接BRDF加权前的天空／capture辐射、非零独立SSR；固定私有接口不保证跨版本兼容。未验证CSM、移动端、Cook后的骨骼/Morph、SDF或透明发片，未测性能。
+
+## 2026-10-13 — 自动 SDF 接通、ush 收敛与接触阴影修复
+
+- 公共计算移入 `Core/TMMDEndfieldNative.ush` 的 struct 成员函数，一个 Custom 输出法线、PatternUV、脸部 mask 和可选投影覆盖率；材质图保留必要输入与原生 Toon。共享线性 offset gradient 随插件保存，避免每模型创建 Profile 和堆叠连线。图指纹纳入 ush 源码、额外输出与纹理配置。
+- SDF 改成三角形 UV 栅格化；头部基与运行时对齐，R/G 独立左右角阈值。Version3 仅对几何镜像、阈值互换和侧向一致的共 UV 标记 B，运行时按实际几何侧解码而不翻 UV；复杂冲突 A=0 回退。修正 RGBA/BGRA 交换、角度范围及完整纹理包路径，纹理线性无损、无 mip。
+- 同步/异步 PMX 导入完成后自动烘焙并将按槽数据保存在网格 AssetUserData；应用预设时自动绑定，分类切换与恢复支持 native/旧回退。新增 `MMDEndfieldBindSdf` 供已有网格生成或只读校验。派生纹理具有版本标记，同名非工具资产采用新名称保留；重烘无覆盖会清掉旧缓存。
+- 按用户要求排查自阴影：同姿态对照确认鼻灰点来自接触阴影。V2 默认关闭角色接触阴影，保留普通投影与外部遮挡，恢复材质时恢复原开关。保留 masked ShadowPassSwitch 的脸面投影抑制选项，默认 0；启用会同时影响脸面对身体/场景的投影，不是仅关闭自身接收。
+- UE5.8.3 后台构建最终 `build13` 通过；`generate4` 白名单写入 11 个包。p17 重新保存 Version3 夹具：29 图、140 次槽检查、0 失败；5 槽共 29,472 个有效 texel。主脸槽 15,777 有效、15,510 镜像、56 冲突；GPU mask 已自行看图。p18 在 Substrate=0 独立回读保存夹具，12 图、105 次槽检查、0 失败，包含 SDF 绑定/解绑、角色切换与接触开关恢复。
+- 最终 `verify3` 原生资产只读回读通过、写包列表为空；p19 在 Substrate=1 独立回读 Version3，14 图、140 次槽检查、0 失败，接触阴影恢复通过。实际 Cook/打包与更多模型尚未验证。
+- 早期 p13/p14 的 Version2 镜像冲突遮罩过窄，已由 p17 修正；p16 保存已有夹具包时报部分加载错误，已改为先加载完整包再重烘，并由 p17 成功重跑。失败日志保留 Saved。渲染日志有 Non-Nanite VSM marking queue 溢出警告，尚需性能审查。
+- 代表实拍和来源见[本批归档](Screenshots/2026-10-13-endfield-sdf-contact/README.md)。原有 598 项保护范围仅两个 Endfield shader 为本批有意修改，其余 596 项保持接手哈希；用户 Face、引擎和项目默认配置未改。未提交/推送，不归档 Saved、构建或测试角色资产。完整终末地目标仍未完成，真实 ramp/头发/眼睛/rim/描边/后处理继续保留在既定清单。
+
+## 2026-10-13 — 重新核对 Claude 原会话，恢复完整终末地复刻范围
+
+- 按用户要求读取本机 Claude Code 原会话，核对已定十项考虑清单；目标持续为本机真实终末地，自动 SDF 已获用户再次确认。修正交接与渲染文档，把原生 Toon 接入定位为基础设施，把球面法线 + 自动 SDF、真实 ramp、头发高光环、材质/眼部分路、深度 rim、底色驱动描边、打光与后处理恢复为完整实施范围。
+- 只读核查当前源码：新 V2 没有消费 SDF/真实 ramp 或接深度 rim/眼部分层，旧烘焙工具也未完成自动绑定；不能宣称 SDF 已在当前 V2 出图中生效。不再因旧通用性约定排除用户批准的自动派生 SDF；仍保留单 base_color 兜底。
+- 本批仅修正文档与任务范围，未修改 shader/材质/引擎/配置、未运行 UE、无新截图、未提交/推送；原会话提取和只读审查材料保留 Saved，不归档原始私人会话。
+
+## 2026-10-13 — 终末地 V2 原生 Toon 接入与灰模修复（画质未验收）
+
+- 定位灰模为 UE5.8 `PostEditChange(None)` 没有主动编译绘制 shader；新增显式预编译并恢复 success/finalized/shader_count 严格检查。修复探针多实验逗号解析，新增保存预设、渲染代理和角色切换/恢复验证。
+- 新增 `MMDEndfieldToonPresets` 生成器，白名单保存三种原生 Toon 父材质、六个共享 Profile 与独立 `DA_Render_EndfieldV2`，全部 Profile 禁用 offset/hatching 贴图；球面法线默认关闭并仅影响有效头部范围。半透明接 Coverage Weight 与每像素前向光照。没有改引擎、用户 Face、旧 shader 或项目默认 Substrate 开关。
+- 运行时按 Substrate 能力与新父材质选择原生/旧回退；MID 在复制源输入之前刷新 Profile。部位分类更改只重建仍由预设持有的那个槽，保留源快照和其他用户覆盖。新增字段缺省时，旧预设沿用原行为。
+- UE5.8.3 / CL58210709 后台真实构建、十资产保存与最终 `verify2` 回读通过，三材质绘制 shader 为 21/40/29；回读没有写包。`p12` 原生 53 图 / 0 失败、`p11` 关闭 Substrate 回退 9 图 / 0 失败，三组各35槽无默认材质/代理回退；角色 Profile/粗糙度切换、贴图保留、其他槽保留和恢复全部通过。两个旧静态检查器及 diff 空白检查通过。
+- 归档[四张本日实际引擎图与来源](Screenshots/2026-10-13-endfield-native-v2/README.md)：原生全景/脸/发与未采用的 UnifiedDiffuse=1 过暗对照。默认采用 UnifiedDiffuse=0；原有598个 Content/shader/Config 文件与接手时哈希相同，未还原既有工作区改动，未提交/推送。
+- **限制**：鼻部灰点、天使环、布料层次和后处理尚未达标；本机 Toon 节点不消费自定义 Tangent，移除无效控制。天空/自阴影/场景遮挡响应明确，GI 变化接近时序噪声，不能宣称完整 Lumen GI 验证；主视图、Cook、打包及移动端未验证。首次 `verify` 的曲线临时句柄误报与 `p9` 的代理输出未初始化误报均保留原失败报告，修复后已重新验证；不把检查通过写成视觉验收。
+
+## 2026-10-13 — 终末地预设接入真实引擎截图（旧 Unlit，已被用户否决）
+
+- `MMDStagePresetsCommandlet.cpp` 新增只读开关 `-EndfieldCapture`：在既有七套预设与四套对比流程**之外**单开一条分支，加载 `/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield` 与三套 `M_MMD_Endfield_*` 父材质，把它们并入原有 `CapturePreset(...)` 截图流程。**不改动** `Definitions[]`、`SourcePresetIndices`、`ReferenceFamilyFor` 与预设绑定校验，旧七套行为逐字不变（选独立分支而非追加条目，正是为了避开这些耦合）。
+- 新增内容仅三处：`EndfieldCaptureDefinition` + 路径常量（匿名命名空间）、`EndfieldCaptureLoadBundle()`（只读加载并校验预设确实绑定新父材质）、`Main()` 内 4 段小改动（解析开关、编译等待队列并入新父材质、跳过旧循环与对比、单跑终末地捕获）。helper 一律带 `EndfieldCapture` 前缀以规避本模块 unity build 撞名史。
+- 编译：`Result: Succeeded`（`Saved/EndfieldValidation/endfield_capture_build.log`，37.4s）。截图：12 张 PNG 全部产出且非空非黑，整组 `passed: true`。真实绑定已核对（`Hair01 → M_MMD_Endfield_Masked`、`Hair02 → M_MMD_Endfield_Opaque`），环境光响应 22.99 vs 全关 0.05，178 刚体 / 337 骨骼变化。归档[实拍截图与说明](Screenshots/2026-10-13-endfield-preset/README.md)。
+- 回归：旧七套 + 四套对比 `-Screenshots` 实跑 **57/57 通过、11 组全过**（`Saved/EndfieldValidation/regress-seven-screenshots.json`）；`-Generate` 实跑 50/50。
+- **限制**：本次 `-Generate` 会重写旧七套预设，其中 `SakuraTheater` 因共享 `References.Families[2]` 被终末地生成器改绑 `M_MMD_Endfield_*` 而一度失败，重跑 `-Generate` 后恢复（`DA_Render_Endfield.uasset` 前后逐字节一致，未被回归运行改动）。未修改 `Shaders/` 下任何 `.usf/.ush`，未改引擎文件，未提交/推送。
+
 ## 2026-10-12 — 终末地渲染重写与正式预设入库（未编译、未验收）
 
 - 按用户要求复刻终末地人物渲染，**依据改用本机真实逆向数据**而非网上逐步复刻教程：`Saved/Phase2Reference/StaticProbe/CharacterShaderMetadata/` 的真实属性表（`HGRP/CharacterNPR` 256 项、`_Skin` 131、`_Hair` 115、`_Eye` 78）、`StaticProbe/EndfieldBytecodeSamples/` 反编译 HLSL，以及 `Tooling/EndfieldCharacterRendering-public-code/`（完整 URP 光照库 980 行）与 `Tooling/Endfield-MME-public-code/`。反编译 HLSL 的 DXC 重编译未通过，仅作结构参考，不称原版等价复刻。

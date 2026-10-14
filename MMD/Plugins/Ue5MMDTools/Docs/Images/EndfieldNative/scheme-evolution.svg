@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">三版着色方案的职责变化</title>
+  <desc id="desc">从 Unlit 材质内自行算光照，到调整原生 Toon 输入，再到插件后端调整着色响应。每版分别说明 UE 和插件的职责；旧灯光 RT 仍在运行，不据此声称性能降低。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 8 4.5 L 0 9 Z" fill="#64748b"/>
+    </marker>
+    <style>
+      text { font-family: 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #172b45; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 17px; fill: #52657b; }
+      .card-title { font-size: 22px; font-weight: 700; }
+      .version { font-size: 15px; font-weight: 700; fill: #ffffff; }
+      .section { font-size: 17px; font-weight: 700; fill: #245b98; }
+      .body { font-size: 17px; }
+      .small { font-size: 14px; fill: #52657b; }
+      .footer { font-size: 15px; fill: #52657b; }
+    </style>
+  </defs>
+  <rect width="1280" height="720" fill="#ffffff"/>
+  <text x="40" y="58" class="title">三版方案：光照职责如何变化</text>
+  <text x="40" y="93" class="subtitle">原生灯光与阴影负责提供数据；我们逐步把自定义逻辑放到合适的入口。</text>
+
+  <rect x="40" y="138" width="360" height="446" rx="16" fill="#ffffff" stroke="#ced8e5" stroke-width="1.5"/>
+  <rect x="60" y="160" width="92" height="30" rx="15" fill="#64748b"/>
+  <text x="106" y="181" class="version" text-anchor="middle">方案一</text>
+  <text x="60" y="226" class="card-title">Unlit + 自算光照</text>
+  <text x="60" y="256" class="small">主要光照逻辑位于材质内部</text>
+  <line x1="60" y1="276" x2="380" y2="276" stroke="#e2e8f0"/>
+  <text x="60" y="310" class="section">UE 负责</text>
+  <text x="60" y="342" class="body">提供几何、相机与天空信息</text>
+  <text x="60" y="370" class="body">执行材质、输出画面</text>
+  <text x="60" y="415" class="section">我们负责</text>
+  <text x="60" y="447" class="body">从 light_data_tex 读取灯光</text>
+  <text x="60" y="475" class="body">自己计算明暗、高光与阴影</text>
+  <text x="60" y="503" class="small">旧系统包含自采阴影深度 RT</text>
+  <rect x="60" y="534" width="320" height="32" rx="6" fill="#f1f5f9"/>
+  <text x="220" y="555" class="small" text-anchor="middle">Custom / .ush 内自行着色</text>
+
+  <path d="M 417 357 H 443" fill="none" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <rect x="460" y="138" width="360" height="446" rx="16" fill="#ffffff" stroke="#ced8e5" stroke-width="1.5"/>
+  <rect x="480" y="160" width="92" height="30" rx="15" fill="#3b76b5"/>
+  <text x="526" y="181" class="version" text-anchor="middle">方案二</text>
+  <text x="480" y="226" class="card-title">原生 Toon · 调整输入</text>
+  <text x="480" y="256" class="small">使用原生着色方程</text>
+  <line x1="480" y1="276" x2="800" y2="276" stroke="#e2e8f0"/>
+  <text x="480" y="310" class="section">UE 负责</text>
+  <text x="480" y="342" class="body">每盏灯的光照与真实阴影</text>
+  <text x="480" y="370" class="body">GI、Lumen、反射和最终合成</text>
+  <text x="480" y="415" class="section">我们负责</text>
+  <text x="480" y="447" class="body">调整 Toon 法线、Profile 与参数</text>
+  <text x="480" y="475" class="body">通过输入影响原生 Toon 响应</text>
+  <rect x="480" y="534" width="320" height="32" rx="6" fill="#edf4fc"/>
+  <text x="640" y="555" class="small" text-anchor="middle">着色方程由 UE 原生 Toon 决定</text>
+
+  <path d="M 837 357 H 863" fill="none" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <rect x="880" y="138" width="360" height="446" rx="16" fill="#ffffff" stroke="#b9d9cd" stroke-width="1.5"/>
+  <rect x="900" y="160" width="92" height="30" rx="15" fill="#23785e"/>
+  <text x="946" y="181" class="version" text-anchor="middle">方案三</text>
+  <text x="900" y="226" class="card-title">插件后端 · 调整响应</text>
+  <text x="900" y="256" class="small">当前已完成工程入口验证</text>
+  <line x1="900" y1="276" x2="1220" y2="276" stroke="#e2e8f0"/>
+  <text x="900" y="310" class="section">UE 负责</text>
+  <text x="900" y="342" class="body">灯光、阴影与间接光的计算</text>
+  <text x="900" y="370" class="body">外层灯色 / LightMask 与累加</text>
+  <text x="900" y="415" class="section">我们负责</text>
+  <text x="900" y="447" class="body">在插件 .ush 中定义 BSDF 响应</text>
+  <text x="900" y="475" class="body">处理原生 GI / 反射合成结果</text>
+  <rect x="900" y="534" width="320" height="32" rx="6" fill="#edf8f3"/>
+  <text x="1060" y="555" class="small" text-anchor="middle">通过插件副本映射接入原生流程</text>
+
+  <text x="40" y="636" class="footer">三版说明职责变化；当前旧灯光 RT 仍在运行，尚未据此证明性能降低。</text>
+  <text x="40" y="682" class="footer">机制示意 · 不代表最终画质</text>
+</svg>

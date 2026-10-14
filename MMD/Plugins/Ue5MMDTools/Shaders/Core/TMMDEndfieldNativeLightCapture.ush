@@ -1,0 +1,75 @@
+#pragma once
+
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeData.ush"
+
+// 在 FDeferredLightData 已定义后 include；这里只捕获原始逐灯输入，不合并阴影或计算辐射。
+struct TMMDEndfieldNativeLightCapture
+{
+    TMMDEndfieldNativeLightData Build(FDeferredLightData light_data, float3 L,
+        float3 to_light, float light_mask, float4 light_attenuation,
+        float4 precomputed_shadow_factors, float3 translated_world_position,
+        float scene_depth, float dither, bool evaluate_shadow_terms,
+        bool use_shadow_terms_hair_transmittance)
+    {
+        TMMDEndfieldNativeLightData data = (TMMDEndfieldNativeLightData)0;
+
+        // Color 已含光强；外层仍负责灯颜色、DiffuseScale / SpecularScale，不能在此重复相乘。
+        data.light_color = light_data.Color;
+        data.light_direction = light_data.Direction;
+        data.light_tangent = light_data.Tangent;
+        data.light_translated_position = light_data.TranslatedWorldPosition;
+        data.inv_radius = light_data.InvRadius;
+        data.falloff_exponent = light_data.FalloffExponent;
+        data.spot_angles = light_data.SpotAngles;
+        data.source_radius = light_data.SourceRadius;
+        data.soft_source_radius = light_data.SoftSourceRadius;
+        data.source_length = light_data.SourceLength;
+        data.diffuse_scale = light_data.DiffuseScale;
+        data.specular_scale = light_data.SpecularScale;
+        data.radial_light = light_data.bRadialLight;
+        data.spot_light = light_data.bSpotLight;
+        data.rect_light = light_data.bRectLight;
+        data.inverse_squared = light_data.bInverseSquared;
+        data.shadowed_bits = light_data.ShadowedBits;
+        data.affects_translucent_lighting = light_data.bAffectsTranslucentLighting;
+
+        data.contact_shadow_length = light_data.ContactShadowLength;
+        data.contact_shadow_casting_intensity = light_data.ContactShadowCastingIntensity;
+        data.contact_shadow_non_casting_intensity = light_data.ContactShadowNonCastingIntensity;
+        data.contact_shadow_length_in_world_space = light_data.ContactShadowLengthInWS;
+        data.distance_fade_mad = light_data.DistanceFadeMAD;
+        data.shadow_map_channel_mask = light_data.ShadowMapChannelMask;
+        data.ies_atlas_index = light_data.IESAtlasIndex;
+        data.light_function_atlas_light_index = light_data.LightFunctionAtlasLightIndex;
+
+        data.rect_barn_cos_angle = light_data.RectLightData.BarnCosAngle;
+        data.rect_barn_length = light_data.RectLightData.BarnLength;
+        data.rect_atlas_uv_offset = light_data.RectLightData.AtlasData.AtlasUVOffset;
+        data.rect_atlas_uv_scale = light_data.RectLightData.AtlasData.AtlasUVScale;
+        data.rect_atlas_max_level = light_data.RectLightData.AtlasData.AtlasMaxLevel;
+        data.hair_use_legacy_absorption = light_data.HairTransmittance.bUseLegacyAbsorption;
+        data.hair_use_separable_r = light_data.HairTransmittance.bUseSeparableR;
+        data.hair_use_backlit = light_data.HairTransmittance.bUseBacklit;
+        data.hair_clamp_bsdf_value = light_data.HairTransmittance.bClampBSDFValue;
+        data.hair_opaque_visibility = light_data.HairTransmittance.OpaqueVisibility;
+        data.hair_local_scattering = light_data.HairTransmittance.LocalScattering;
+        data.hair_global_scattering = light_data.HairTransmittance.GlobalScattering;
+        data.hair_scattering_component = light_data.HairTransmittance.ScatteringComponent;
+
+        // 灯描述方向与接收点 L 分别保留；坐标均为引擎当前平移世界空间，不再转换。
+        data.light_vector = L;
+        data.to_light = to_light;
+        data.light_mask = light_mask;
+        data.evaluate_shadow_terms = evaluate_shadow_terms;
+        data.use_shadow_terms_hair_transmittance = use_shadow_terms_hair_transmittance;
+        data.shadow_attenuation = light_attenuation;
+        data.precomputed_shadow_factors = precomputed_shadow_factors;
+        data.receiver_translated_position = translated_world_position;
+        data.scene_depth = scene_depth;
+        data.dither = dither;
+
+        // 完成全部字段后再标记有效；合并后的 FShadowTerms 继续由原生调用链传递。
+        data.valid = true;
+        return data;
+    }
+};

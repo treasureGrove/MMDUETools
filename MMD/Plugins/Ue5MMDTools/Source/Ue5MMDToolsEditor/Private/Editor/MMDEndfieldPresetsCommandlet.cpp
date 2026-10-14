@@ -16,13 +16,16 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionCustom.h"
+#include "Materials/MaterialExpressionMultiply.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionTextureObjectParameter.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
 #include "MaterialShared.h"
 #include "Misc/App.h"
@@ -46,7 +49,7 @@
 namespace
 {
     // 严格写入白名单：只有这四个包允许被本 commandlet 创建或覆盖。
-    const TCHAR* AllowedPackages[] = {
+    const TCHAR* EndfieldAllowedPackages[] = {
         TEXT("/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_Opaque"),
         TEXT("/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_Masked"),
         TEXT("/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_Translucent"),
@@ -83,13 +86,13 @@ namespace
 
     constexpr int32 MainInputCount = UE_ARRAY_COUNT(MainInputNames);
 
-    FString ObjectPath(const FString& Package)
+    FString EndfieldObjectPath(const FString& Package)
     {
         return Package + TEXT(".") + FPackageName::GetLongPackageAssetName(Package);
     }
 
     template<typename T>
-    T* AddExpression(UMaterial* Material)
+    T* EndfieldAddExpression(UMaterial* Material)
     {
         T* Expression = NewObject<T>(Material);
         Expression->Material = Material;
@@ -97,11 +100,11 @@ namespace
         return Expression;
     }
 
-    UMaterialExpressionScalarParameter* AddScalar(UMaterial* Material, const TCHAR* Name, float Value,
+    UMaterialExpressionScalarParameter* EndfieldAddScalar(UMaterial* Material, const TCHAR* Name, float Value,
                                                   const TCHAR* Group = TEXT("Endfield character"),
                                                   float Min = 0.0f, float Max = 0.0f)
     {
-        UMaterialExpressionScalarParameter* Parameter = AddExpression<UMaterialExpressionScalarParameter>(Material);
+        UMaterialExpressionScalarParameter* Parameter = EndfieldAddExpression<UMaterialExpressionScalarParameter>(Material);
         Parameter->ParameterName = Name;
         Parameter->ExpressionGUID = FGuid::NewGuid();
         Parameter->Group = Group;
@@ -114,10 +117,10 @@ namespace
         return Parameter;
     }
 
-    UMaterialExpressionVectorParameter* AddVector(UMaterial* Material, const TCHAR* Name, const FLinearColor& Value,
+    UMaterialExpressionVectorParameter* EndfieldAddVector(UMaterial* Material, const TCHAR* Name, const FLinearColor& Value,
                                                   const TCHAR* Group = TEXT("Endfield character"))
     {
-        UMaterialExpressionVectorParameter* Parameter = AddExpression<UMaterialExpressionVectorParameter>(Material);
+        UMaterialExpressionVectorParameter* Parameter = EndfieldAddExpression<UMaterialExpressionVectorParameter>(Material);
         Parameter->ParameterName = Name;
         Parameter->ExpressionGUID = FGuid::NewGuid();
         Parameter->Group = Group;
@@ -127,11 +130,11 @@ namespace
 
     // UMaterialExpressionTextureObjectParameter 的 Texture 成员是 UTexture*，
     // 因此接受 UTexture*（灯光 RT 与阴影 RT 都是 UTextureRenderTarget2D，不是 UTexture2D）。
-    UMaterialExpressionTextureObjectParameter* AddTexture(UMaterial* Material, const TCHAR* Name,
+    UMaterialExpressionTextureObjectParameter* EndfieldAddTexture(UMaterial* Material, const TCHAR* Name,
                                                           UTexture* DefaultTexture,
                                                           EMaterialSamplerType SamplerType = SAMPLERTYPE_Color)
     {
-        UMaterialExpressionTextureObjectParameter* Texture = AddExpression<UMaterialExpressionTextureObjectParameter>(Material);
+        UMaterialExpressionTextureObjectParameter* Texture = EndfieldAddExpression<UMaterialExpressionTextureObjectParameter>(Material);
         Texture->ParameterName = Name;
         Texture->ExpressionGUID = FGuid::NewGuid();
         Texture->Group = TEXT("Optional Endfield inputs");
@@ -140,7 +143,7 @@ namespace
         return Texture;
     }
 
-    void AddCustomInput(UMaterialExpressionCustom* Custom, const TCHAR* Name,
+    void EndfieldAddCustomInput(UMaterialExpressionCustom* Custom, const TCHAR* Name,
                         UMaterialExpression* Expression, int32 OutputIndex = 0)
     {
         if (!Expression)
@@ -172,7 +175,7 @@ namespace
                                      bool bGenerate, FString& Error)
     {
         const bool bExists = FPackageName::DoesPackageExist(Package);
-        UMaterial* Material = bExists ? LoadObject<UMaterial>(nullptr, *ObjectPath(Package)) : nullptr;
+        UMaterial* Material = bExists ? LoadObject<UMaterial>(nullptr, *EndfieldObjectPath(Package)) : nullptr;
         if (bExists && !Material)
         {
             Error = FString::Printf(TEXT("无法加载已存在的父材质：%s"), *Package);
@@ -222,104 +225,112 @@ namespace
         Material->bCastDynamicShadowAsMasked = Blend == BLEND_Translucent;
 
         // base_color：贴图 × 实例色，与导入材质管线兼容。
-        UMaterialExpressionTextureObjectParameter* BaseTexture = AddTexture(Material, TEXT("base_color_tex"), WhiteTexture);
-        UMaterialExpressionVectorParameter* BaseColor = AddVector(Material, TEXT("BaseColor"), FLinearColor::White,
+        // 必须用 TextureSampleParameter2D（采样出颜色）；TextureObjectParameter 是纹理对象，
+        // 参与 Multiply 会报 "arithmetic on non-primitive types: texture2D"。
+        UMaterialExpressionTextureSampleParameter2D* BaseTexture = EndfieldAddExpression<UMaterialExpressionTextureSampleParameter2D>(Material);
+        BaseTexture->ParameterName = TEXT("base_color_tex");
+        BaseTexture->ExpressionGUID = FGuid::NewGuid();
+        BaseTexture->Group = TEXT("Imported material");
+        BaseTexture->Texture = WhiteTexture;
+        BaseTexture->SamplerType = SAMPLERTYPE_Color;
+        UMaterialExpressionVectorParameter* BaseColor = EndfieldAddVector(Material, TEXT("BaseColor"), FLinearColor::White,
                                                                  TEXT("Imported material"));
-        UMaterialExpressionMultiply* TintedBase = AddExpression<UMaterialExpressionMultiply>(Material);
+        UMaterialExpressionMultiply* TintedBase = EndfieldAddExpression<UMaterialExpressionMultiply>(Material);
         TintedBase->A.Connect(0, BaseTexture);
         TintedBase->B.Connect(0, BaseColor);
 
-        UMaterialExpressionScalarParameter* Opacity = AddScalar(Material, TEXT("Opacity"), 1.0f, TEXT("Imported material"));
-        UMaterialExpressionMultiply* FinalOpacity = AddExpression<UMaterialExpressionMultiply>(Material);
-        FinalOpacity->A.Connect(0, BaseTexture);
+        UMaterialExpressionScalarParameter* Opacity = EndfieldAddScalar(Material, TEXT("Opacity"), 1.0f, TEXT("Imported material"));
+        UMaterialExpressionMultiply* FinalOpacity = EndfieldAddExpression<UMaterialExpressionMultiply>(Material);
+        // 输出索引 4 = 采样节点的 A（alpha 通道）。
+        FinalOpacity->A.Connect(4, BaseTexture);
         FinalOpacity->B.Connect(0, Opacity);
 
-        UMaterialExpressionCustom* Shader = AddExpression<UMaterialExpressionCustom>(Material);
+        UMaterialExpressionCustom* Shader = EndfieldAddExpression<UMaterialExpressionCustom>(Material);
         Shader->OutputType = CMOT_Float3;
         Shader->Description = TEXT("Endfield 角色着色");
         Shader->Code = Signature + TEXT("\n#include \"") + EndfieldCharacter + TEXT("\"\nreturn 0;");
         Shader->Inputs.Reset();
 
         // ---- 按 MainInputNames 顺序接线；每个输入都有默认值兜底 ----
-        AddCustomInput(Shader, TEXT("base_color"), TintedBase);
-        AddCustomInput(Shader, TEXT("light_data_tex"), AddTexture(Material, TEXT("light_data_tex"), LightData));
-        AddCustomInput(Shader, TEXT("mmd_shadow_map"), AddTexture(Material, TEXT("mmd_shadow_map"), ShadowMap));
-        AddCustomInput(Shader, TEXT("mat_cap"), AddTexture(Material, TEXT("mat_cap"), BlackTexture));
-        AddCustomInput(Shader, TEXT("shadow_threshold"), AddScalar(Material, TEXT("ShadowThreshold"), 0.43f, TEXT("Toon"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("shadow_softness"), AddScalar(Material, TEXT("ShadowSoftness"), 0.10f, TEXT("Toon"), 0.001f, 1.0f));
-        AddCustomInput(Shader, TEXT("shadow_tint"), AddVector(Material, TEXT("ShadowTint"), FLinearColor(0.67f, 0.73f, 0.84f), TEXT("Toon")));
-        AddCustomInput(Shader, TEXT("ambient_strength"), AddScalar(Material, TEXT("AmbientStrength"), 0.12f, TEXT("Toon"), 0.0f, 2.0f));
-        AddCustomInput(Shader, TEXT("light_scale"), AddScalar(Material, TEXT("LightScale"), 1.0f, TEXT("Toon"), 0.0f, 4.0f));
-        AddCustomInput(Shader, TEXT("specular_strength"), AddScalar(Material, TEXT("SpecularStrength"), 0.40f, TEXT("Toon"), 0.0f, 1.25f));
-        AddCustomInput(Shader, TEXT("specular_power"), AddScalar(Material, TEXT("SpecularPower"), 64.0f, TEXT("Toon"), 1.0f, 512.0f));
-        AddCustomInput(Shader, TEXT("rim_strength"), AddScalar(Material, TEXT("RimStrength"), 0.14f, TEXT("Toon"), 0.0f, 0.5f));
-        AddCustomInput(Shader, TEXT("rim_power"), AddScalar(Material, TEXT("RimPower"), 3.2f, TEXT("Toon"), 0.1f, 16.0f));
-        AddCustomInput(Shader, TEXT("toon_amount"), AddScalar(Material, TEXT("ToonAmount"), 1.0f, TEXT("Toon"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("diffuse_wrap"), AddScalar(Material, TEXT("DiffuseWrap"), 0.10f, TEXT("Toon"), 0.0f, 0.5f));
-        AddCustomInput(Shader, TEXT("color_saturation"), AddScalar(Material, TEXT("ColorSaturation"), 1.02f, TEXT("Toon"), 0.0f, 2.0f));
-        AddCustomInput(Shader, TEXT("shadow_saturation"), AddScalar(Material, TEXT("ShadowSaturation"), 0.90f, TEXT("Toon"), 0.0f, 2.0f));
-        AddCustomInput(Shader, TEXT("roughness"), AddScalar(Material, TEXT("Roughness"), 0.55f, TEXT("Toon"), 0.04f, 1.0f));
-        AddCustomInput(Shader, TEXT("specular_tint"), AddVector(Material, TEXT("SpecularTint"), FLinearColor(0.82f, 0.92f, 1.10f), TEXT("Toon")));
-        AddCustomInput(Shader, TEXT("sphere_mode"), AddScalar(Material, TEXT("sphere_mode"), 0.0f, TEXT("Imported material"), 0.0f, 3.0f));
-        AddCustomInput(Shader, TEXT("sphere_strength"), AddScalar(Material, TEXT("SphereStrength"), 0.10f, TEXT("Imported material"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("black_lift"), AddScalar(Material, TEXT("BlackLift"), 0.035f, TEXT("Toon"), 0.0f, 0.035f));
+        EndfieldAddCustomInput(Shader, TEXT("base_color"), TintedBase);
+        EndfieldAddCustomInput(Shader, TEXT("light_data_tex"), EndfieldAddTexture(Material, TEXT("light_data_tex"), LightData));
+        EndfieldAddCustomInput(Shader, TEXT("mmd_shadow_map"), EndfieldAddTexture(Material, TEXT("mmd_shadow_map"), ShadowMap));
+        EndfieldAddCustomInput(Shader, TEXT("mat_cap"), EndfieldAddTexture(Material, TEXT("mat_cap"), BlackTexture));
+        EndfieldAddCustomInput(Shader, TEXT("shadow_threshold"), EndfieldAddScalar(Material, TEXT("ShadowThreshold"), 0.43f, TEXT("Toon"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("shadow_softness"), EndfieldAddScalar(Material, TEXT("ShadowSoftness"), 0.10f, TEXT("Toon"), 0.001f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("shadow_tint"), EndfieldAddVector(Material, TEXT("ShadowTint"), FLinearColor(0.67f, 0.73f, 0.84f), TEXT("Toon")));
+        EndfieldAddCustomInput(Shader, TEXT("ambient_strength"), EndfieldAddScalar(Material, TEXT("AmbientStrength"), 0.12f, TEXT("Toon"), 0.0f, 2.0f));
+        EndfieldAddCustomInput(Shader, TEXT("light_scale"), EndfieldAddScalar(Material, TEXT("LightScale"), 1.0f, TEXT("Toon"), 0.0f, 4.0f));
+        EndfieldAddCustomInput(Shader, TEXT("specular_strength"), EndfieldAddScalar(Material, TEXT("SpecularStrength"), 0.40f, TEXT("Toon"), 0.0f, 1.25f));
+        EndfieldAddCustomInput(Shader, TEXT("specular_power"), EndfieldAddScalar(Material, TEXT("SpecularPower"), 64.0f, TEXT("Toon"), 1.0f, 512.0f));
+        EndfieldAddCustomInput(Shader, TEXT("rim_strength"), EndfieldAddScalar(Material, TEXT("RimStrength"), 0.14f, TEXT("Toon"), 0.0f, 0.5f));
+        EndfieldAddCustomInput(Shader, TEXT("rim_power"), EndfieldAddScalar(Material, TEXT("RimPower"), 3.2f, TEXT("Toon"), 0.1f, 16.0f));
+        EndfieldAddCustomInput(Shader, TEXT("toon_amount"), EndfieldAddScalar(Material, TEXT("ToonAmount"), 1.0f, TEXT("Toon"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("diffuse_wrap"), EndfieldAddScalar(Material, TEXT("DiffuseWrap"), 0.10f, TEXT("Toon"), 0.0f, 0.5f));
+        EndfieldAddCustomInput(Shader, TEXT("color_saturation"), EndfieldAddScalar(Material, TEXT("ColorSaturation"), 1.02f, TEXT("Toon"), 0.0f, 2.0f));
+        EndfieldAddCustomInput(Shader, TEXT("shadow_saturation"), EndfieldAddScalar(Material, TEXT("ShadowSaturation"), 0.90f, TEXT("Toon"), 0.0f, 2.0f));
+        EndfieldAddCustomInput(Shader, TEXT("roughness"), EndfieldAddScalar(Material, TEXT("Roughness"), 0.55f, TEXT("Toon"), 0.04f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("specular_tint"), EndfieldAddVector(Material, TEXT("SpecularTint"), FLinearColor(0.82f, 0.92f, 1.10f), TEXT("Toon")));
+        EndfieldAddCustomInput(Shader, TEXT("sphere_mode"), EndfieldAddScalar(Material, TEXT("sphere_mode"), 0.0f, TEXT("Imported material"), 0.0f, 3.0f));
+        EndfieldAddCustomInput(Shader, TEXT("sphere_strength"), EndfieldAddScalar(Material, TEXT("SphereStrength"), 0.10f, TEXT("Imported material"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("black_lift"), EndfieldAddScalar(Material, TEXT("BlackLift"), 0.035f, TEXT("Toon"), 0.0f, 0.035f));
         // style_family = 2 即 Endfield 风格族（与导入管线约定一致）。
-        AddCustomInput(Shader, TEXT("style_family"), AddScalar(Material, TEXT("style_family"), 2.0f, TEXT("Toon"), 0.0f, 3.0f));
-        AddCustomInput(Shader, TEXT("material_role"), AddScalar(Material, TEXT("MaterialRole"), 0.0f, TEXT("Material role"), 0.0f, 5.0f));
+        EndfieldAddCustomInput(Shader, TEXT("style_family"), EndfieldAddScalar(Material, TEXT("style_family"), 2.0f, TEXT("Toon"), 0.0f, 3.0f));
+        EndfieldAddCustomInput(Shader, TEXT("material_role"), EndfieldAddScalar(Material, TEXT("MaterialRole"), 0.0f, TEXT("Material role"), 0.0f, 5.0f));
         // environment_reflection 由 SkyLightEnvMapSample 提供时画面更准；默认常量保证可编译。
-        UMaterialExpressionConstant* NoReflection = AddExpression<UMaterialExpressionConstant>(Material);
+        UMaterialExpressionConstant* NoReflection = EndfieldAddExpression<UMaterialExpressionConstant>(Material);
         NoReflection->R = 0.0f;
-        AddCustomInput(Shader, TEXT("environment_reflection"), NoReflection);
-        AddCustomInput(Shader, TEXT("environment_specular_strength"), AddScalar(Material, TEXT("EnvironmentSpecularStrength"), 0.35f, TEXT("Toon"), 0.0f, 2.0f));
+        EndfieldAddCustomInput(Shader, TEXT("environment_reflection"), NoReflection);
+        EndfieldAddCustomInput(Shader, TEXT("environment_specular_strength"), EndfieldAddScalar(Material, TEXT("EnvironmentSpecularStrength"), 0.35f, TEXT("Toon"), 0.0f, 2.0f));
 
         // 头部几何基：由 MMDHeadBoneSubsystem 每帧写入；默认零向量会让脸部效果自动退化。
         const TCHAR* HeadParameters[] = { TEXT("MMDHeadForward"), TEXT("MMDHeadRight"), TEXT("MMDHeadPositionRadius") };
         for (int32 Index = 0; Index < UE_ARRAY_COUNT(HeadParameters); ++Index)
         {
-            UMaterialExpressionVectorParameter* Head = AddVector(Material, HeadParameters[Index],
+            UMaterialExpressionVectorParameter* Head = EndfieldAddVector(Material, HeadParameters[Index],
                                                                 FLinearColor(0, 0, 0, 0), TEXT("Geometric head frame"));
             // VectorParameter 的 RGBA 输出索引为 5，必须保留 W（半径），不能用 RGB。
-            AddCustomInput(Shader, MainInputNames[26 + Index], Head, 5);
+            EndfieldAddCustomInput(Shader, MainInputNames[26 + Index], Head, 5);
         }
 
-        AddCustomInput(Shader, TEXT("scene_shadow_sharpness"), AddScalar(Material, TEXT("SceneShadowSharpness"), 0.10f, TEXT("Endfield shadow"), 0.05f, 1.0f));
-        AddCustomInput(Shader, TEXT("half_lambert_shadow_sharpness"), AddScalar(Material, TEXT("HalfLambertShadowSharpness"), 0.10f, TEXT("Endfield shadow"), 0.05f, 1.0f));
-        AddCustomInput(Shader, TEXT("direct_lighting_intensity"), AddScalar(Material, TEXT("DirectLightingIntensity"), 1.0f, TEXT("Endfield shadow"), 0.0f, 5.0f));
-        AddCustomInput(Shader, TEXT("gi_intensity"), AddScalar(Material, TEXT("GIIntensity"), 0.85f, TEXT("Endfield shadow"), 0.0f, 5.0f));
-        AddCustomInput(Shader, TEXT("rim_intensity"), AddScalar(Material, TEXT("RimIntensity"), 1.0f, TEXT("Endfield rim"), 0.1f, 10.0f));
-        AddCustomInput(Shader, TEXT("rim_width"), AddScalar(Material, TEXT("RimWidth"), 1.0f, TEXT("Endfield rim"), 0.1f, 1.0f));
-        AddCustomInput(Shader, TEXT("rim_color"), AddVector(Material, TEXT("RimColor"), FLinearColor::White, TEXT("Endfield rim")));
+        EndfieldAddCustomInput(Shader, TEXT("scene_shadow_sharpness"), EndfieldAddScalar(Material, TEXT("SceneShadowSharpness"), 0.10f, TEXT("Endfield shadow"), 0.05f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("half_lambert_shadow_sharpness"), EndfieldAddScalar(Material, TEXT("HalfLambertShadowSharpness"), 0.10f, TEXT("Endfield shadow"), 0.05f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("direct_lighting_intensity"), EndfieldAddScalar(Material, TEXT("DirectLightingIntensity"), 1.0f, TEXT("Endfield shadow"), 0.0f, 5.0f));
+        EndfieldAddCustomInput(Shader, TEXT("gi_intensity"), EndfieldAddScalar(Material, TEXT("GIIntensity"), 0.85f, TEXT("Endfield shadow"), 0.0f, 5.0f));
+        EndfieldAddCustomInput(Shader, TEXT("rim_intensity"), EndfieldAddScalar(Material, TEXT("RimIntensity"), 1.0f, TEXT("Endfield rim"), 0.1f, 10.0f));
+        EndfieldAddCustomInput(Shader, TEXT("rim_width"), EndfieldAddScalar(Material, TEXT("RimWidth"), 1.0f, TEXT("Endfield rim"), 0.1f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("rim_color"), EndfieldAddVector(Material, TEXT("RimColor"), FLinearColor::White, TEXT("Endfield rim")));
 
         // 脸部 SDF：默认关闭（走半兰伯特），连上烘焙好的 SDF 后把开关设为 1 即启用。
-        AddCustomInput(Shader, TEXT("flip_sdf_threshold"), AddScalar(Material, TEXT("FlipSDFThreshold"), 0.0f, TEXT("Endfield face SDF"), -1.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("sdf_shadow_center"), AddScalar(Material, TEXT("SDFShadowCenter"), 1.0f, TEXT("Endfield face SDF"), -1.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("sdf_sharpness"), AddScalar(Material, TEXT("SDFSharpness"), 0.10f, TEXT("Endfield face SDF"), 0.05f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("flip_sdf_threshold"), EndfieldAddScalar(Material, TEXT("FlipSDFThreshold"), 0.0f, TEXT("Endfield face SDF"), -1.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("sdf_shadow_center"), EndfieldAddScalar(Material, TEXT("SDFShadowCenter"), 1.0f, TEXT("Endfield face SDF"), -1.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("sdf_sharpness"), EndfieldAddScalar(Material, TEXT("SDFSharpness"), 0.10f, TEXT("Endfield face SDF"), 0.05f, 1.0f));
 
-        AddCustomInput(Shader, TEXT("anisotropy_value"), AddScalar(Material, TEXT("AnisotropyValue"), 0.35f, TEXT("Endfield anisotropy"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("anisotropy_intensity"), AddScalar(Material, TEXT("AnisotropyIntensity"), 1.0f, TEXT("Endfield anisotropy"), 0.0f, 3.0f));
-        AddCustomInput(Shader, TEXT("anisotropy_direction"), AddScalar(Material, TEXT("AnisotropyDirection"), 0.0f, TEXT("Endfield anisotropy"), -1.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("anisotropic_hl_power"), AddScalar(Material, TEXT("AnisotropicHLPower"), 5.0f, TEXT("Endfield anisotropy"), 1.0f, 32.0f));
-        AddCustomInput(Shader, TEXT("anisotropic_hl_threshold"), AddScalar(Material, TEXT("AnisotropicHLThreshold"), 0.995f, TEXT("Endfield anisotropy"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("anisotropic_hl_intensity"), AddScalar(Material, TEXT("AnisotropicHLIntensity"), 1.0f, TEXT("Endfield anisotropy"), 0.0f, 4.0f));
-        AddCustomInput(Shader, TEXT("anisotropic_hl_color"), AddVector(Material, TEXT("AnisotropicHLColor"), FLinearColor::White, TEXT("Endfield anisotropy")));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropy_value"), EndfieldAddScalar(Material, TEXT("AnisotropyValue"), 0.35f, TEXT("Endfield anisotropy"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropy_intensity"), EndfieldAddScalar(Material, TEXT("AnisotropyIntensity"), 1.0f, TEXT("Endfield anisotropy"), 0.0f, 3.0f));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropy_direction"), EndfieldAddScalar(Material, TEXT("AnisotropyDirection"), 0.0f, TEXT("Endfield anisotropy"), -1.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropic_hl_power"), EndfieldAddScalar(Material, TEXT("AnisotropicHLPower"), 5.0f, TEXT("Endfield anisotropy"), 1.0f, 32.0f));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropic_hl_threshold"), EndfieldAddScalar(Material, TEXT("AnisotropicHLThreshold"), 0.995f, TEXT("Endfield anisotropy"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropic_hl_intensity"), EndfieldAddScalar(Material, TEXT("AnisotropicHLIntensity"), 1.0f, TEXT("Endfield anisotropy"), 0.0f, 4.0f));
+        EndfieldAddCustomInput(Shader, TEXT("anisotropic_hl_color"), EndfieldAddVector(Material, TEXT("AnisotropicHLColor"), FLinearColor::White, TEXT("Endfield anisotropy")));
 
         // 皮肤透散默认关闭（与真实默认一致），需要时提高 SSSValue。
-        AddCustomInput(Shader, TEXT("sss_radius"), AddScalar(Material, TEXT("SSSRadius"), 1.0f, TEXT("Endfield skin"), 0.0f, 10.0f));
-        AddCustomInput(Shader, TEXT("sss_value"), AddScalar(Material, TEXT("SSSValue"), 0.0f, TEXT("Endfield skin"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("sss_color"), AddVector(Material, TEXT("SSSColor"), FLinearColor(1.0f, 0.76f, 0.63f), TEXT("Endfield skin")));
+        EndfieldAddCustomInput(Shader, TEXT("sss_radius"), EndfieldAddScalar(Material, TEXT("SSSRadius"), 1.0f, TEXT("Endfield skin"), 0.0f, 10.0f));
+        EndfieldAddCustomInput(Shader, TEXT("sss_value"), EndfieldAddScalar(Material, TEXT("SSSValue"), 0.0f, TEXT("Endfield skin"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("sss_color"), EndfieldAddVector(Material, TEXT("SSSColor"), FLinearColor(1.0f, 0.76f, 0.63f), TEXT("Endfield skin")));
 
         // 可选贴图开关：默认全 0，只连 base_color 也能完整着色。
-        AddCustomInput(Shader, TEXT("use_sdf_map"), AddScalar(Material, TEXT("UseSdfMap"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("use_ramp_map"), AddScalar(Material, TEXT("UseRampMap"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("use_scene_depth_rim"), AddScalar(Material, TEXT("UseSceneDepthRim"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("character_rim_mask"), AddScalar(Material, TEXT("CharacterRimMask"), 1.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("face_occlusion"), AddScalar(Material, TEXT("FaceOcclusion"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
-        AddCustomInput(Shader, TEXT("diffuse_ramp_map"), AddTexture(Material, TEXT("DiffuseRampMap"), BlackTexture));
-        AddCustomInput(Shader, TEXT("sdf_map"), AddTexture(Material, TEXT("SDFMap"), BlackTexture));
+        EndfieldAddCustomInput(Shader, TEXT("use_sdf_map"), EndfieldAddScalar(Material, TEXT("UseSdfMap"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("use_ramp_map"), EndfieldAddScalar(Material, TEXT("UseRampMap"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("use_scene_depth_rim"), EndfieldAddScalar(Material, TEXT("UseSceneDepthRim"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("character_rim_mask"), EndfieldAddScalar(Material, TEXT("CharacterRimMask"), 1.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("face_occlusion"), EndfieldAddScalar(Material, TEXT("FaceOcclusion"), 0.0f, TEXT("Optional Endfield inputs"), 0.0f, 1.0f));
+        EndfieldAddCustomInput(Shader, TEXT("diffuse_ramp_map"), EndfieldAddTexture(Material, TEXT("DiffuseRampMap"), BlackTexture));
+        EndfieldAddCustomInput(Shader, TEXT("sdf_map"), EndfieldAddTexture(Material, TEXT("SDFMap"), BlackTexture));
         // 纹理参数必须绑定一张有效贴图：空纹理会让引擎报 "Missing texture" 并导致整个材质编译失败。
         // 因此场景深度默认绑黑图，配合 UseSceneDepthRim = 0 关闭采样。
-        AddCustomInput(Shader, TEXT("scene_depth_tex"),
-                       AddTexture(Material, TEXT("SceneDepthTexture"),
+        EndfieldAddCustomInput(Shader, TEXT("scene_depth_tex"),
+                       EndfieldAddTexture(Material, TEXT("SceneDepthTexture"),
                                   SceneDepth ? SceneDepth : BlackTexture, SAMPLERTYPE_LinearGrayscale));
 
         if (Shader->Inputs.Num() != MainInputCount)
@@ -337,10 +348,10 @@ namespace
         return Material;
     }
 
-    bool SaveAsset(UObject* Asset, const FString& Package, FString& Error)
+    bool EndfieldSaveAsset(UObject* Asset, const FString& Package, FString& Error)
     {
         bool bAllowed = false;
-        for (const TCHAR* Allowed : AllowedPackages) bAllowed |= Package == Allowed;
+        for (const TCHAR* Allowed : EndfieldAllowedPackages) bAllowed |= Package == Allowed;
         if (!bAllowed)
         {
             Error = TEXT("拒绝写白名单之外的包：") + Package;
@@ -363,7 +374,7 @@ namespace
     }
 
     /** 汇总专用 shader 源码签名；源码改变时必须重写材质。 */
-    bool BuildSignature(FString& OutSignature, FString& Error)
+    bool EndfieldBuildSignature(FString& OutSignature, FString& Error)
     {
         const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
         if (!Plugin)
@@ -372,6 +383,9 @@ namespace
             return false;
         }
         FString Bundle;
+        // 材质图结构版本：本函数里的接线方式一旦改变（节点类型、输出索引、输入顺序），
+        // 必须同时提升此版本号，否则签名不变会被判定为"无需重建"而复用旧图。
+        Bundle += TEXT("EndfieldMaterialGraphVersion=2\n");
         for (const TCHAR* Relative : { TEXT("Shaders/TMMDShader/TMMDEndfieldCharacter.usf"),
             TEXT("Shaders/Core/MMDToonLighting.ush"), TEXT("Shaders/Core/TMMDEndfieldLighting.ush") })
         {
@@ -388,7 +402,7 @@ namespace
         return true;
     }
 
-    void ConfigurePreset(UMMDStageRenderPreset* Preset, const TArray<TStrongObjectPtr<UMaterial>>& Parents)
+    void EndfieldConfigurePreset(UMMDStageRenderPreset* Preset, const TArray<TStrongObjectPtr<UMaterial>>& Parents)
     {
         Preset->DisplayName = FText::FromString(TEXT("终末地"));
         // 保留樱庭水镜的舞台资源引用，但不切换主题，避免替换用户当前舞台。
@@ -471,7 +485,7 @@ int32 UMMDEndfieldPresetsCommandlet::Main(const FString& Params)
     FString Signature;
     FString Error;
 
-    if (!BuildSignature(Signature, Error))
+    if (!EndfieldBuildSignature(Signature, Error))
         Errors.Add(Error);
 
     // 需要的共享资源；缺失即报错，不静默生成错误外观的材质。
@@ -492,7 +506,7 @@ int32 UMMDEndfieldPresetsCommandlet::Main(const FString& Params)
     {
         for (int32 Index = 0; Index < 3; ++Index)
         {
-            UMaterial* Material = BuildEndfieldMaterial(AllowedPackages[Index], AssetNames[Index], BlendModes[Index],
+            UMaterial* Material = BuildEndfieldMaterial(EndfieldAllowedPackages[Index], AssetNames[Index], BlendModes[Index],
                                                         WhiteTexture, BlackTexture, LightData, ShadowMap,
                                                         nullptr, Signature, bGenerate, Error);
             if (!Material)
@@ -503,12 +517,12 @@ int32 UMMDEndfieldPresetsCommandlet::Main(const FString& Params)
             Parents.Emplace(Material);
             if (bGenerate)
             {
-                if (!SaveAsset(Material, AllowedPackages[Index], Error))
+                if (!EndfieldSaveAsset(Material, EndfieldAllowedPackages[Index], Error))
                 {
                     Errors.Add(Error);
                     break;
                 }
-                Written.Add(MakeShared<FJsonValueString>(AllowedPackages[Index]));
+                Written.Add(MakeShared<FJsonValueString>(EndfieldAllowedPackages[Index]));
             }
         }
     }
@@ -517,10 +531,10 @@ int32 UMMDEndfieldPresetsCommandlet::Main(const FString& Params)
     TStrongObjectPtr<UMMDStageRenderPreset> Preset;
     if (Errors.IsEmpty() && Parents.Num() == 3)
     {
-        const FString Package = AllowedPackages[3];
+        const FString Package = EndfieldAllowedPackages[3];
         const bool bExists = FPackageName::DoesPackageExist(Package);
         if (bExists)
-            Preset.Reset(LoadObject<UMMDStageRenderPreset>(nullptr, *ObjectPath(Package)));
+            Preset.Reset(LoadObject<UMMDStageRenderPreset>(nullptr, *EndfieldObjectPath(Package)));
         TStrongObjectPtr<UMMDStageRenderPreset> Expected(NewObject<UMMDStageRenderPreset>(GetTransientPackage()));
         if (!Expected.IsValid())
             Errors.Add(TEXT("无法构造预设配置"));
@@ -532,7 +546,7 @@ int32 UMMDEndfieldPresetsCommandlet::Main(const FString& Params)
             if (Template)
                 for (TFieldIterator<FProperty> It(UMMDStageRenderPreset::StaticClass(), EFieldIterationFlags::None); It; ++It)
                     It->CopyCompleteValue_InContainer(Expected.Get(), Template);
-            ConfigurePreset(Expected.Get(), Parents);
+            EndfieldConfigurePreset(Expected.Get(), Parents);
 
             bool bNeedsWrite = !Preset.IsValid();
             if (Preset.IsValid())
@@ -558,7 +572,7 @@ int32 UMMDEndfieldPresetsCommandlet::Main(const FString& Params)
                     {
                         for (TFieldIterator<FProperty> It(UMMDStageRenderPreset::StaticClass(), EFieldIterationFlags::None); It; ++It)
                             It->CopyCompleteValue_InContainer(Preset.Get(), Expected.Get());
-                        if (!SaveAsset(Preset.Get(), Package, Error))
+                        if (!EndfieldSaveAsset(Preset.Get(), Package, Error))
                             Errors.Add(Error);
                         else
                             Written.Add(MakeShared<FJsonValueString>(Package));

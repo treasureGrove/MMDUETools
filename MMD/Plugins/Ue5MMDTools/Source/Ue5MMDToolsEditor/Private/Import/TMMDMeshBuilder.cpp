@@ -3,6 +3,7 @@
 #include "TPMXParser.h"
 #include "MMDModelDataAsset.h"
 #include "Editor/MMDOutlineMaterial.h"
+#include "Editor/MMDEndfieldFaceBinding.h"
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataController.h"
@@ -65,6 +66,17 @@
 #pragma region 材质贴图
 static constexpr uint8 PMX_DRAW_DOUBLE_SIDED = 0x01;
 static constexpr uint8 PMX_DRAW_CAST_SHADOW = 0x04;
+
+static void MMDImportBakeFaceData(USkeletalMesh* Mesh)
+{
+	MMDEndfieldFaceBinding::FResult Result;
+	const FString Folder = FPackageName::GetLongPackagePath(Mesh->GetOutermost()->GetName()) / TEXT("Derived");
+	MMDEndfieldFaceBinding::BakeAndBind(Mesh, Folder, true, Result);
+	for (const FString& Error : Result.Errors)
+		UE_LOG(LogTemp, Warning, TEXT("[MMD 自动脸部数据] %s"), *Error);
+	UE_LOG(LogTemp, Log, TEXT("[MMD 自动脸部数据] %s: %d 个材质槽，%d 个有效 texel；未识别区域使用通用着色"),
+		*Mesh->GetName(), Result.BoundSlots.Num(), Result.FaceTexelCount);
+}
 
 static uint16 ReadBmpU16(const TArray<uint8>& Data, int32 Offset)
 {
@@ -4148,6 +4160,7 @@ static USkeletalMesh* BuildSkeletalMeshAssetsFromImportData(FSkeletalMeshImportD
 	TArray<USkinnedAsset*> SkinnedAssetsToFinish;
 	SkinnedAssetsToFinish.Add(SkeletalMesh);
 	FSkinnedAssetCompilingManager::Get().FinishCompilation(SkinnedAssetsToFinish);
+	MMDImportBakeFaceData(SkeletalMesh);
 	SaveMMDGeneratedAsset(ModelDataAsset, TEXT("MMDModelData"));
 	SaveMMDGeneratedAsset(Skeleton, TEXT("Skeleton"));
 	SaveMMDGeneratedAsset(SkeletalMesh, TEXT("SkeletalMesh"));
@@ -4575,6 +4588,7 @@ struct FMMDAsyncMeshImportState : public TSharedFromThis<FMMDAsyncMeshImportStat
 				TArray<USkinnedAsset*> SkinnedAssets;
 				SkinnedAssets.Add(SkeletalMesh);
 				FSkinnedAssetCompilingManager::Get().FinishCompilation(SkinnedAssets);
+				MMDImportBakeFaceData(SkeletalMesh);
 				SaveMMDGeneratedAsset(ModelDataAsset, TEXT("MMDModelData"));
 				SaveMMDGeneratedAsset(Skeleton, TEXT("Skeleton"));
 				SaveMMDGeneratedAsset(SkeletalMesh, TEXT("SkeletalMesh"));

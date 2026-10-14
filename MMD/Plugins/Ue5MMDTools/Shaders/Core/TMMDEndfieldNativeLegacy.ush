@@ -1,0 +1,147 @@
+#pragma once
+
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeLightCapture.ush"
+
+// 在桌面 Clustered 的 DeferredLightingCommon、SubstrateEvaluation 与 SubstrateDeferredLighting 之后 include。
+// 仅补传统 GBuffer 的桌面逐灯路径；模式 2 仍是三档响应探针。
+#if SUBSTRATE_ENABLED
+struct TMMDEndfieldNativeLegacy
+{
+#if !SHADING_PATH_MOBILE
+    FDirectLighting EvaluateLegacy(FGBufferData gbuffer, float3 N, float3 V,
+        FAreaLight area_light, FShadowTerms shadow_terms,
+        TMMDEndfieldNativeLightData native_light_data)
+    {
+        FDirectLighting result = ToonBxDF(gbuffer, N, V, area_light, shadow_terms);
+        if (!native_light_data.valid) return result;
+
+        float2 pattern_uv = 0.0;
+        float profile_id = 0.0;
+        UnpackToonCustomData(PackRGBA8(gbuffer.CustomData), pattern_uv, profile_id);
+        TMMDEndfieldNativeBSDF profile_control;
+        uint role;
+        if (!profile_control.IsEndfieldProfile(profile_id, role)) return result;
+        uint response_mode = uint(profile_control.ReadProfileControls(profile_id).x);
+        if (response_mode == 0u) return result;
+
+        if (response_mode == 1u)
+        {
+            float3 shadow_channels = saturate(float3(shadow_terms.SurfaceShadow,
+                shadow_terms.TransmissionShadow, shadow_terms.TransmittanceOrOpticalThickness));
+            result.Diffuse = area_light.Falloff * area_light.FalloffColor * Diffuse_Lambert(shadow_channels);
+            result.Specular = 0.0;
+            result.Transmission = 0.0;
+            return result;
+        }
+
+        FToonProfileEvaluateSettings profile_settings = GetToonProfileEvaluateSettings(profile_id);
+        float shadow = shadow_terms.TransmittanceOrOpticalThickness;
+        float diffuse_offset = 0.0;
+#if TOON_CAN_USE_PATTERNS_UVS
+        FToonProfileShadowSettings shadow_settings = GetToonProfileShadowSettings(profile_id);
+        shadow = EvaluateToonProfileShadowHatching(profile_id, pattern_uv, shadow_settings, shadow);
+        diffuse_offset = EvaluateToonProfileDiffuseDither(profile_id, pattern_uv, profile_settings);
+#endif
+        // 使用接收点真实 L；完整原生描述保留在 native_light_data，便于后续脸部响应扩展。
+        float n_dot_l = dot(N, native_light_data.light_vector);
+        float ramp_coordinate = saturate(n_dot_l * 0.5 + 0.5);
+        if (profile_settings.bDiffuseRampIncludeShadow) ramp_coordinate *= shadow;
+        ramp_coordinate = profile_control.QuantizeToonCoordinate(ramp_coordinate);
+        float3 diffuse_ramp = EvaluateToonProfileDiffuseRamp(profile_id, ramp_coordinate + diffuse_offset);
+        result.Diffuse = (profile_settings.bDiffuseRampIncludeShadow ? 1.0 : shadow)
+            * area_light.Falloff * area_light.FalloffColor * Diffuse_Lambert(gbuffer.DiffuseColor * diffuse_ramp);
+        // ToonBxDF 的高光已乘 SurfaceShadow；自定义分支外层不能再乘一次。
+        result.Transmission = 0.0;
+        return result;
+    }
+#endif
+
+    float4 EvaluateDynamicLighting(float3 translated_world_position, float3 camera_vector,
+        FGBufferData gbuffer, float ambient_occlusion, FDeferredLightData light_data,
+        float4 light_attenuation, float dither, uint2 pixel_coord,
+        inout float surface_shadow)
+    {
+#if SHADING_PATH_MOBILE
+        return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
+            light_data, light_attenuation, dither, pixel_coord, surface_shadow);
+#else
+        // 保留原调用及其分光、阴影和诊断行为，默认模式不能重新拼装原生结果。
+        if (gbuffer.ShadingModelID != SHADINGMODELID_SUBSTRATE_TOON)
+            return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
+                light_data, light_attenuation, dither, pixel_coord, surface_shadow);
+
+        float2 pattern_uv = 0.0;
+        float profile_id = 0.0;
+        UnpackToonCustomData(PackRGBA8(gbuffer.CustomData), pattern_uv, profile_id);
+        TMMDEndfieldNativeBSDF profile_control;
+        uint role;
+        if (!profile_control.IsEndfieldProfile(profile_id, role))
+            return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
+                light_data, light_attenuation, dither, pixel_coord, surface_shadow);
+        uint response_mode = uint(profile_control.ReadProfileControls(profile_id).x);
+        if (response_mode == 0u)
+            return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
+                light_data, light_attenuation, dither, pixel_coord, surface_shadow);
+
+        FLightAccumulator accumulator = (FLightAccumulator)0;
+        float3 V = -camera_vector;
+        float3 N = gbuffer.WorldNormal;
+        float3 L = light_data.Direction;
+        float3 to_light = L;
+        float light_mask = 1.0;
+        if (light_data.bRadialLight)
+            light_mask = GetLocalLightAttenuation(translated_world_position, light_data, to_light, L);
+        accumulator.EstimatedCost = 0.3;
+        if (light_mask > 0.0)
+        {
+            FShadowTerms shadow_terms = (FShadowTerms)0;
+            shadow_terms.SurfaceShadow = ambient_occlusion;
+            shadow_terms.TransmissionShadow = 1.0;
+            shadow_terms.TransmittanceOrOpticalThickness = 1.0;
+            shadow_terms.HairTransmittance = light_data.HairTransmittance;
+            GetShadowTerms(gbuffer.Depth, gbuffer.PrecomputedShadowFactors, gbuffer.ShadingModelID,
+                gbuffer.CustomData.a, light_data, translated_world_position, L,
+                light_attenuation, dither, shadow_terms);
+            surface_shadow = shadow_terms.SurfaceShadow;
+            accumulator.EstimatedCost += 0.3;
+            if (shadow_terms.SurfaceShadow + shadow_terms.TransmissionShadow > 0.0)
+            {
+                FAreaLight area_light = InitAreaLight();
+                if (light_data.bRectLight)
+                {
+                    FRect rect = GetRect(to_light, light_data);
+                    if (!IsRectVisible(rect)) return 0.0;
+                    FRectTexture source_texture = ConvertToRectTexture(light_data);
+                    area_light = CreateAreaLight(gbuffer.Roughness, N, V, rect, source_texture);
+                }
+                else
+                {
+                    FCapsuleLight capsule = GetCapsule(to_light, light_data);
+                    area_light = CreateAreaLight(gbuffer.Roughness, N, V, capsule, light_data.bInverseSquared);
+                }
+
+                TMMDEndfieldNativeLightCapture capture;
+                TMMDEndfieldNativeLightData native_light_data = capture.Build(light_data, L, to_light,
+                    light_mask, light_attenuation, gbuffer.PrecomputedShadowFactors,
+                    translated_world_position, gbuffer.Depth, dither, true, false);
+                FDirectLighting lighting = EvaluateLegacy(gbuffer, N, V, area_light,
+                    shadow_terms, native_light_data);
+                lighting.Diffuse *= light_data.DiffuseScale;
+                lighting.Specular *= light_data.SpecularScale;
+                float3 masked_light_color = light_data.Color * light_mask;
+#if USE_LIGHT_FUNCTION_ATLAS
+                masked_light_color *= GetLocalLightFunctionCommon(translated_world_position,
+                    light_data.LightFunctionAtlasLightIndex);
+#endif
+                bool separate_subsurface = UseSubsurfaceProfile(gbuffer.ShadingModelID);
+                LightAccumulator_AddSplit(accumulator, lighting.Diffuse, lighting.Specular,
+                    lighting.Diffuse, masked_light_color, separate_subsurface);
+                accumulator.EstimatedCost += 0.4;
+            }
+        }
+        FDeferredLightingSplit split_lighting = LightAccumulator_GetResultSplit(accumulator);
+        return split_lighting.SpecularLighting + split_lighting.DiffuseLighting;
+#endif
+    }
+};
+#endif

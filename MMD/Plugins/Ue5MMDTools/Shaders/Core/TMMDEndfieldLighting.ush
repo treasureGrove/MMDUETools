@@ -5,7 +5,7 @@
 //
 // 与原版的关键差异（有意为之，见 Docs/ENDFIELD_RENDERING.md）：
 // 1. 原版 _DiffRampMap 是配套 LUT；此处支持连接，未连接时用解析式 toon 曲线等价拟合。
-// 2. 原版脸部 SDF 是手绘/工具烘焙的配套图；此处支持由插件自动烘焙的 SDF（UV 无关通道）。
+// 2. 脸部 SDF 由插件按模型原始 UV 自动烘焙，不要求镜像 UV 或手绘配套图。
 // 3. 原版 _SDFMask 的 R/G/B 语义为 RimMask/SDFMask/FlatSHMask，此处同义但全部可选。
 struct TMMDEndfieldLighting
 {
@@ -167,10 +167,8 @@ struct TMMDEndfieldLighting
     }
 
     // ---------------- 脸部 SDF ----------------
-    // SDF 图在脸部 UV 空间存"该 texel 从受光转为阴影的光照方位角阈值"（归一化到 [0,1]，乘 π 得弧度）。
-    // 阈值按"光从前方向 +head_right 侧旋转"单一方向烘焙；光照落在另一侧时镜像 U，
-    // 与真实实现一致（对应 _FlipSDFThreshold 的 sdfUV.x = 1 - sdfUV.x）。
-    // flip_mode: 0 = 按光照侧自动镜像（默认）；<0 强制镜像；>0 从不镜像。
+    // 自动烘焙 V2：R/G 分别存向头部右侧/左侧转动的阈值 angle/π，A 为有效脸部遮罩。
+    // 两侧阈值都在原始 UV 采样，模型无需对称或镜像 UV。
     float FaceSdfAngle(float3 light_direction, float3 head_right, float3 head_forward)
     {
         // 水平投影上的方位角：0 = 正前方，π/2 = 正侧方，π = 正后方。
@@ -179,29 +177,36 @@ struct TMMDEndfieldLighting
         return abs(atan2(light_right, light_forward));
     }
 
-    bool FaceSdfNeedsFlip(float3 light_direction, float3 head_right, float flip_mode)
+    float FaceSdfShadowSample(float3 light_direction, float3 head_forward, float3 head_right,
+                             float4 sdf_sample, float sdf_center, float sdf_sharpness)
     {
-        if (flip_mode > 0.0) return false;
-        if (flip_mode < 0.0) return true;
-        return dot(light_direction, head_right) < 0.0;
+        float sdf_mask = saturate(sdf_sample.a);
+        if (sdf_mask <= 1e-4)
+            return 1.0;
+        if (sdf_sample.r + sdf_sample.g < 0.00196078431)
+            return 1.0 - sdf_mask;
+        float light_right = dot(light_direction, head_right);
+        float light_forward = dot(light_direction, head_forward);
+        if (light_right * light_right + light_forward * light_forward < 1e-6)
+            return 1.0;
+        float signed_angle = atan2(light_right, light_forward);
+        float sdf_threshold = saturate(signed_angle >= 0.0 ? sdf_sample.r : sdf_sample.g) * 3.14159265;
+        float sdf_shadow = SigmoidSharp(sdf_threshold - abs(signed_angle), sdf_center,
+                                       max(sdf_sharpness, 0.01));
+        return lerp(1.0, sdf_shadow, sdf_mask);
     }
 
-    // 未连接 SDF 图时返回 -1 表示不可用，调用方回退半兰伯特。
+    // 关闭或采到无效 A 时返回 1，不额外压暗通用半兰伯特；flip_mode 仅保留旧输入兼容。
     float FaceSdfShadow(float3 light_direction, float3 head_forward, float3 head_right,
                         float2 face_uv, Texture2D sdf_map, SamplerState sdf_sampler,
                         bool use_sdf_map, float flip_mode,
                         float sdf_center, float sdf_sharpness)
     {
         if (!use_sdf_map)
-            return -1.0;
-        float2 sdf_uv = face_uv;
-        if (FaceSdfNeedsFlip(light_direction, head_right, flip_mode))
-            sdf_uv.x = 1.0 - sdf_uv.x;
-        float4 sdf = Texture2DSample(sdf_map, sdf_sampler, sdf_uv);
-        // R/G 存同一阈值（工具输出），取平均对未镜像的自定义图也稳定。
-        float sdf_threshold = (sdf.r + sdf.g) * 0.5 * 3.14159265;
-        float light_angle = FaceSdfAngle(light_direction, head_right, head_forward);
-        return SigmoidSharp(sdf_threshold - light_angle, sdf_center, sdf_sharpness);
+            return 1.0;
+        float4 sdf_sample = Texture2DSample(sdf_map, sdf_sampler, frac(face_uv));
+        return FaceSdfShadowSample(light_direction, head_forward, head_right, sdf_sample,
+                                   sdf_center, sdf_sharpness);
     }
 
     // 原版脸部轮廓光：只在脸部朝前且被逆光时出现，由 SDF 阈值门控。

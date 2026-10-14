@@ -6,6 +6,7 @@
 #include "MMDStageMaterialState.generated.h"
 
 class UMaterialInterface;
+class UMMDStageRenderPreset;
 class USkeletalMesh;
 
 /** 只挂在组件上的临时恢复记录，不修改 SkeletalMesh 与材质资产。 */
@@ -24,6 +25,10 @@ public:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInterface>> AppliedMaterials;
 	UPROPERTY(Transient)
+	TObjectPtr<UMMDStageRenderPreset> AppliedPreset;
+	UPROPERTY(Transient)
+	bool bAppliedWithReplacement = false;
+	UPROPERTY(Transient)
 	TMap<int32, EMMDMaterialRole> RoleOverrides;
 	UPROPERTY(Transient)
 	TArray<EMMDMaterialRole> ResolvedRoles;
@@ -39,4 +44,8 @@ public:
 	bool bHadShadowExcludeTag = false;
 	UPROPERTY(Transient)
 	bool bAddedShadowExcludeTag = false;
+	UPROPERTY(Transient)
+	bool bHasContactShadowSnapshot = false;
+	UPROPERTY(Transient)
+	bool bHadContactShadow = true;
 };

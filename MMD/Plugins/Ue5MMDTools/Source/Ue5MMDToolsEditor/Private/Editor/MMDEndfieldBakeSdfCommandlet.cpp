@@ -110,7 +110,7 @@ int32 UMMDEndfieldBakeSdfCommandlet::Main(const FString& Params)
                 else
                 {
                     FString SaveError;
-                    const FString Package = FPaths::GetPath(SdfPath);
+                    const FString Package = SdfPath;
                     const FString AssetName = FPaths::GetBaseFilename(SdfPath);
                     if (!MMDEnfieldFaceSdf::SaveAsTexture(BakeResult, Package, AssetName, SaveError))
                         Errors.Add(SaveError);
@@ -140,6 +140,11 @@ int32 UMMDEndfieldBakeSdfCommandlet::Main(const FString& Params)
     Report->SetNumberField(TEXT("face_texel_count"), BakeResult.FaceTexelCount);
     Report->SetNumberField(TEXT("lit_texel_count"), BakeResult.LitTexelCount);
     Report->SetNumberField(TEXT("considered_vertex_count"), BakeResult.ConsideredVertexCount);
+    Report->SetNumberField(TEXT("considered_triangle_count"), BakeResult.ConsideredTriangleCount);
+    Report->SetNumberField(TEXT("rejected_triangle_count"), BakeResult.RejectedTriangleCount);
+    Report->SetNumberField(TEXT("conflicting_texel_count"), BakeResult.ConflictingTexelCount);
+    Report->SetNumberField(TEXT("noncontinuous_texel_count"), BakeResult.NonContinuousTexelCount);
+    Report->SetNumberField(TEXT("geometry_normal_weight"), BakeResult.GeometryNormalWeight);
     Report->SetArrayField(TEXT("notes"), Notes);
     Report->SetNumberField(TEXT("failed"), Errors.Num());
     TArray<TSharedPtr<FJsonValue>> JsonErrors;

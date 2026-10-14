@@ -1,0 +1,62 @@
+#pragma once
+
+// 由原生合成 shader 在 NativeBSDF 之后 include；只传引擎已有值，不新增纹理绑定。
+struct TMMDEndfieldNativeIndirectData
+{
+    // path：1 SSGI，2 Lumen GI 合成，3 天空/capture/SSR，4 standalone Lumen 反射。
+    uint path;
+    uint2 pixel_coord;
+    uint closure_index;
+    uint closure_count;
+    uint reflection_is_ssr;
+    uint lighting_is_pre_exposed;
+    // bit0 diffuse，1 rough specular，2 traced reflection，3 mixed glossy，4 计算后 AO，
+    // 5 material AO，6 translated position，7 short GI，8 raw sky/capture，9 scene AO。
+    // 未置位的字段只是零占位，不能当成原生数据；raw sky/capture 当前未接。
+    uint available_flags;
+    float2 buffer_uv;
+    float3 translated_world_position;
+    float3 normal;
+    float3 view_direction;
+    float3 bent_normal;
+    float roughness;
+    float n_dot_v;
+    float pre_exposure;
+    float one_over_pre_exposure;
+    float3 diffuse_radiance;
+    float3 rough_specular_radiance;
+    float4 traced_reflection_radiance;
+    float3 mixed_glossy_radiance;
+    float3 short_range_gi;
+    float3 sky_capture_radiance;
+    float3 diffuse_occlusion;
+    float specular_occlusion;
+    float dynamic_ao;
+    float material_ao;
+    float combined_screen_material_ao;
+    float final_scene_ao;
+    float cloud_ao;
+    float indirect_irradiance;
+    float3 bsdf_throughput;
+    float3 diffuse_weight;
+    float3 specular_weight;
+    float3 native_diffuse_final;
+    float3 native_specular_final;
+};
+
+struct TMMDEndfieldNativeIndirect
+{
+    void Process(float profile_id, TMMDEndfieldNativeIndirectData native_data,
+        inout float3 final_diffuse, inout float3 final_specular)
+    {
+        TMMDEndfieldNativeBSDF profile_reader;
+        uint role;
+        if (!profile_reader.IsEndfieldProfile(profile_id, role)) return;
+        float3 controls = profile_reader.ReadProfileControls(profile_id);
+        // 保真模式完全透传；单位倍率不写回，数据入口供后续角色响应复用。
+        if (controls.x == 0.0) return;
+        if (controls.y != 1.0) final_diffuse *= controls.y;
+        if (controls.z != 1.0) final_specular *= controls.z;
+        // 不改变 Lumen bounce albedo。独立 SSR 在原生 Toon 中权重为零；非零自定义 SSR 未接。
+    }
+};

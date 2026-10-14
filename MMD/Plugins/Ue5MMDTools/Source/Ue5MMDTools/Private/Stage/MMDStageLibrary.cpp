@@ -3,22 +3,32 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/Texture.h"
+#include "Engine/ToonProfile.h"
+#include "Rendering/MMDEndfieldNativeBackend.h"
+#include "Rendering/MMDEndfieldNativeProfile.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Rendering/MMDOutlineLibrary.h"
+#include "Rendering/MMDEndfieldFaceData.h"
+#include "Rendering/UMMDHeadBoneSubsystem.h"
+#include "Engine/Texture2D.h"
 #include "Stage/MMDStageMaterialState.h"
 #include "Stage/MMDStageRenderPreset.h"
 #include "Stage/MMDStageActor.h"
+#include "RenderUtils.h"
 #include <initializer_list>
 
 namespace
 {
 	const FName CharacterShadowIncludeTag(TEXT("MMDShadowInclude"));
 	const FName CharacterShadowExcludeTag(TEXT("MMDShadowExclude"));
+	bool MMDStageToonApplyMaterialSlot(USkeletalMeshComponent* Component, UMMDStageMaterialState* State,
+		UMMDStageRenderPreset* Preset, int32 MaterialIndex, bool bReplaceMaterials);
 
 	void RestoreCharacterShadowTag(USkeletalMeshComponent* Component, const UMMDStageMaterialState* State)
 	{
+		if (State->bHasContactShadowSnapshot) Component->SetCastContactShadow(State->bHadContactShadow);
 		if (!State->bHasShadowTagSnapshot) return;
 		if (State->bHadShadowIncludeTag) Component->ComponentTags.AddUnique(CharacterShadowIncludeTag);
 		else Component->ComponentTags.Remove(CharacterShadowIncludeTag);
@@ -222,6 +232,12 @@ namespace
 		RecordMaterialRole(State, MaterialIndex, Role, Reason);
 		if (State->AppliedMaterials.IsValidIndex(MaterialIndex) && Component->GetMaterial(MaterialIndex) == State->AppliedMaterials[MaterialIndex])
 		{
+			UMMDStageRenderPreset* Preset = State->AppliedPreset.Get();
+			if (State->bAppliedWithReplacement && IsValid(Preset))
+			{
+				// 只重建仍由预设占用的当前槽，使用最初源输入，保留其他槽上的用户修改。
+				if (MMDStageToonApplyMaterialSlot(Component, State, Preset, MaterialIndex, true)) return;
+			}
 			if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(State->AppliedMaterials[MaterialIndex]))
 				Material->SetScalarParameterValue(TEXT("MaterialRole"), static_cast<float>(Role));
 		}
@@ -272,6 +288,111 @@ namespace
 		Source->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("sphere_mode")), SphereMode);
 		Target->SetScalarParameterValue(TEXT("sphere_mode"), SphereMode);
 	}
+
+	float MMDStageToonClampSetting(float Value, float DefaultValue, float MinValue, float MaxValue)
+	{
+		return FMath::IsFinite(Value) ? FMath::Clamp(Value, MinValue, MaxValue) : DefaultValue;
+	}
+
+	void MMDStageToonApplyRoleParameters(UMaterialInstanceDynamic* Material, const FMMDStageToonRoleSettings& Settings)
+	{
+		Material->SetScalarParameterValue(TEXT("ToonRoughness"), MMDStageToonClampSetting(Settings.Roughness, 0.5f, 0.04f, 1.0f));
+		Material->SetScalarParameterValue(TEXT("ToonSpecular"), MMDStageToonClampSetting(Settings.Specular, 0.5f, 0.0f, 1.0f));
+		Material->SetScalarParameterValue(TEXT("ToonMetallic"), MMDStageToonClampSetting(Settings.Metallic, 0.0f, 0.0f, 1.0f));
+		Material->SetScalarParameterValue(TEXT("ToonAnisotropy"), MMDStageToonClampSetting(Settings.Anisotropy, 0.0f, -1.0f, 1.0f));
+		Material->SetScalarParameterValue(TEXT("ToonSphereBlend"), MMDStageToonClampSetting(Settings.SphereBlend, 0.0f, 0.0f, 1.0f));
+		Material->SetScalarParameterValue(TEXT("ToonFaceShadowSuppress"), MMDStageToonClampSetting(Settings.FaceShadowSuppress, 0.0f, 0.0f, 1.0f));
+	}
+
+	bool MMDStageToonApplyMaterialSlot(USkeletalMeshComponent* Component, UMMDStageMaterialState* State,
+		UMMDStageRenderPreset* Preset, int32 MaterialIndex, bool bReplaceMaterials)
+	{
+		if (!State->SourceMaterials.IsValidIndex(MaterialIndex)) return false;
+		UMaterialInterface* Source = State->SourceMaterials[MaterialIndex];
+		if (!Source) return false;
+		FString RoleReason;
+		const EMMDMaterialRole Role = ResolveMaterialRole(Component, MaterialIndex, State, RoleReason);
+		EBlendMode Blend = Source->GetBlendMode();
+		FLinearColor SourceBase;
+		float SourceOpacity;
+		ReadSourceBaseAndOpacity(Source, SourceBase, SourceOpacity);
+		// 只改变本次预设的父材质，源透明属性和材质恢复快照保持原样。
+		if (bReplaceMaterials && Preset->bUseMaskedHair && Blend == BLEND_Translucent && Role == EMMDMaterialRole::Hair
+			&& FMath::IsFinite(SourceBase.A) && FMath::IsFinite(SourceOpacity) && SourceBase.A >= 0.999f && SourceOpacity >= 0.999f)
+			Blend = BLEND_Masked;
+		UMaterialInterface* Configured = Blend == BLEND_Masked ? Preset->CharacterMaterialMasked.Get()
+			: Blend == BLEND_Translucent || Blend == BLEND_Additive || Blend == BLEND_AlphaComposite
+			? Preset->CharacterMaterialTranslucent.Get() : Preset->CharacterMaterialOpaque.Get();
+		UMaterialInterface* ToonConfigured = Blend == BLEND_Masked ? Preset->CharacterToonMaterialMasked.Get()
+			: Blend == BLEND_Translucent || Blend == BLEND_Additive || Blend == BLEND_AlphaComposite
+			? Preset->CharacterToonMaterialTranslucent.Get() : Preset->CharacterToonMaterialOpaque.Get();
+		const bool bUseToon = bReplaceMaterials && Substrate::IsToonProfileEnabled() && IsValid(ToonConfigured);
+		if (bUseToon) Configured = ToonConfigured;
+		const FMMDStageToonRoleSettings* FaceSettings = Preset->CharacterToonRoles.Find(Role);
+		if (bUseToon && Blend == BLEND_Opaque && Role == EMMDMaterialRole::Skin && FaceSettings
+			&& FMath::IsFinite(FaceSettings->FaceShadowSuppress) && FaceSettings->FaceShadowSuppress > 0.0f
+			&& IsValid(Preset->CharacterToonMaterialMasked.Get()))
+		{
+			USkeletalMesh* Mesh = Component->GetSkeletalMeshAsset();
+			const UMMDEndfieldFaceData* Face = Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
+			if (Face && Face->FindTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))
+				Configured = Preset->CharacterToonMaterialMasked.Get();
+		}
+		UMaterialInterface* Parent = bReplaceMaterials ? ResolveParent(Configured, Blend) : Source;
+		if (!Parent) return false;
+		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, Component);
+		if (!Material) return false;
+		const FMMDStageToonRoleSettings DefaultToonSettings;
+		const FMMDStageToonRoleSettings* RoleSettings = Preset->CharacterToonRoles.Find(Role);
+		if (!RoleSettings) RoleSettings = Preset->CharacterToonRoles.Find(EMMDMaterialRole::Generic);
+		const FMMDStageToonRoleSettings& ToonSettings = RoleSettings ? *RoleSettings : DefaultToonSettings;
+		if (bUseToon && IsValid(ToonSettings.ToonProfile.Get()))
+		{
+			UToonProfile* Profile = ToonSettings.ToonProfile.Get();
+			if (MMDEndfieldNativeBackend::GetStatus().bProfileMarkerAllowed
+				&& Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")))
+			{
+				Profile = MMDEndfieldNativeProfile::GetOrCreate(Profile, Role);
+			}
+			Material->ToonProfileOverride = Profile;
+			Material->bOverrideToonProfile = true;
+			// 新 MID 尚未复制输入；清空参数会初始化渲染代理并推送 Profile 覆盖。
+			Material->ClearParameterValues();
+		}
+		CopyMaterialInputs(Source, Material);
+		UMMDStageLibrary::ApplyPresetParameters(Material, Preset);
+		if (bUseToon) MMDStageToonApplyRoleParameters(Material, ToonSettings);
+		// 缺少派生数据或切换分类时显式关闭，避免复制源 MID 后残留脸部参数。
+		Material->SetScalarParameterValue(TEXT("ToonFaceSdfEnabled"), 0.0f);
+		Material->SetScalarParameterValue(TEXT("UseSdfMap"), 0.0f);
+		bool bFaceBound = false;
+		if (bReplaceMaterials && Role == EMMDMaterialRole::Skin)
+		{
+			USkeletalMesh* Mesh = Component->GetSkeletalMeshAsset();
+			if (const UMMDEndfieldFaceData* Face = Mesh->GetAssetUserData<UMMDEndfieldFaceData>())
+			{
+				if (UTexture2D* Texture = Face->FindTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))
+				{
+					Material->SetTextureParameterValue(bUseToon ? TEXT("ToonFaceSdfTexture") : TEXT("SDFMap"), Texture);
+					Material->SetScalarParameterValue(bUseToon ? TEXT("ToonFaceSdfEnabled") : TEXT("UseSdfMap"), 1.0f);
+					if (!bUseToon)
+					{
+						Material->SetScalarParameterValue(TEXT("SDFShadowCenter"), 0.0f);
+						Material->SetScalarParameterValue(TEXT("SDFSharpness"), 1.0f);
+						Material->SetScalarParameterValue(TEXT("FlipSDFThreshold"), 0.0f);
+					}
+					bFaceBound = true;
+				}
+			}
+		}
+		RecordMaterialRole(State, MaterialIndex, Role, RoleReason);
+		Material->SetScalarParameterValue(TEXT("MaterialRole"), static_cast<float>(Role));
+		Component->SetMaterial(MaterialIndex, Material);
+		if (State->AppliedMaterials.Num() <= MaterialIndex) State->AppliedMaterials.SetNum(MaterialIndex + 1);
+		State->AppliedMaterials[MaterialIndex] = Material;
+		if (bUseToon || bFaceBound) UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Component);
+		return true;
+	}
 }
 
 void UMMDStageLibrary::ApplyPresetParameters(UMaterialInstanceDynamic* Material, const UMMDStageRenderPreset* Preset)
@@ -311,36 +432,19 @@ bool UMMDStageLibrary::ApplyCharacterRenderPreset(USkeletalMeshComponent* Compon
 	int32 AppliedCount = 0;
 	for (int32 Index = 0; Index < State->SourceMaterials.Num(); ++Index)
 	{
-		UMaterialInterface* Source = State->SourceMaterials[Index];
-		if (!Source) continue;
-		FString RoleReason;
-		const EMMDMaterialRole Role = ResolveMaterialRole(Component, Index, State, RoleReason);
-		EBlendMode Blend = Source->GetBlendMode();
-		FLinearColor SourceBase;
-		float SourceOpacity;
-		ReadSourceBaseAndOpacity(Source, SourceBase, SourceOpacity);
-		// 只改变本次预设的父材质，源透明属性和材质恢复快照保持原样。
-		if (bReplaceMaterials && Preset->bUseMaskedHair && Blend == BLEND_Translucent && Role == EMMDMaterialRole::Hair
-			&& FMath::IsFinite(SourceBase.A) && FMath::IsFinite(SourceOpacity) && SourceBase.A >= 0.999f && SourceOpacity >= 0.999f)
-			Blend = BLEND_Masked;
-		UMaterialInterface* Configured = Blend == BLEND_Masked ? Preset->CharacterMaterialMasked.Get()
-			: Blend == BLEND_Translucent || Blend == BLEND_Additive || Blend == BLEND_AlphaComposite
-			? Preset->CharacterMaterialTranslucent.Get() : Preset->CharacterMaterialOpaque.Get();
-		UMaterialInterface* Parent = bReplaceMaterials ? ResolveParent(Configured, Blend) : Source;
-		if (!Parent) continue;
-		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, Component);
-		if (!Material) continue;
-		CopyMaterialInputs(Source, Material);
-		ApplyPresetParameters(Material, Preset);
-		RecordMaterialRole(State, Index, Role, RoleReason);
-		Material->SetScalarParameterValue(TEXT("MaterialRole"), static_cast<float>(Role));
-		Component->SetMaterial(Index, Material);
-		if (State->AppliedMaterials.Num() <= Index) State->AppliedMaterials.SetNum(Index + 1);
-		State->AppliedMaterials[Index] = Material;
-		++AppliedCount;
+		if (MMDStageToonApplyMaterialSlot(Component, State, Preset, Index, bReplaceMaterials)) ++AppliedCount;
 	}
 	if (AppliedCount > 0)
 	{
+		State->AppliedPreset = Preset;
+		State->bAppliedWithReplacement = bReplaceMaterials;
+		if (!Preset->bCharacterContactShadow && !State->bHasContactShadowSnapshot)
+		{
+			State->bHadContactShadow = Component->bCastContactShadow;
+			State->bHasContactShadowSnapshot = true;
+		}
+		if (!Preset->bCharacterContactShadow) Component->SetCastContactShadow(false);
+		else if (State->bHasContactShadowSnapshot) Component->SetCastContactShadow(State->bHadContactShadow);
 		UMMDOutlineLibrary::ApplyMMDOutlinePreset(Component, Preset);
 		if (!State->bHasShadowTagSnapshot)
 		{

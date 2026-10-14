@@ -1,0 +1,75 @@
+// 在材质 Custom 函数体内 include；公共计算集中于成员函数，材质图只负责输入和原生 Toon 输出。
+struct TMMDEndfieldNative
+{
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001 ? value * rsqrt(length_squared) : fallback;
+    }
+
+    float3 SphereNormal(float3 world_pos, float3 mesh_normal, float4 head_position_radius, float sphere_blend)
+    {
+        float3 offset = world_pos - head_position_radius.xyz;
+        float distance_squared = dot(offset, offset);
+        float radius = head_position_radius.w;
+        if (radius <= 0.0 || distance_squared < 0.000001) return mesh_normal;
+
+        float distance_to_head = sqrt(distance_squared);
+        float head_mask = 1.0 - smoothstep(radius * 1.5, radius * 2.0, distance_to_head);
+        float3 blended = lerp(mesh_normal, offset / distance_to_head, saturate(sphere_blend) * head_mask);
+        float normal_length_squared = dot(blended, blended);
+        return normal_length_squared > 0.000001 ? blended * rsqrt(normal_length_squared) : mesh_normal;
+    }
+
+    float3 PrepareSurface(float3 world_pos, float3 mesh_normal, float4 head_position_radius,
+        float3 head_forward, float3 head_right, float sphere_blend, float2 surface_uv,
+        Texture2D sdf_tex, SamplerState sdf_sampler, float sdf_enabled, float ramp_boundary, float shadow_suppress,
+        out float2 pattern_uv, out float face_mask, out float shadow_coverage)
+    {
+        float3 surface_normal = SphereNormal(world_pos, mesh_normal, head_position_radius, sphere_blend);
+        pattern_uv = float2(0.5, 0.5);
+        face_mask = 0.0;
+        shadow_coverage = 1.0;
+        if (sdf_enabled <= 0.0 || head_position_radius.w <= 0.0
+            || dot(head_forward, head_forward) < 0.000001) return surface_normal;
+
+        float3 forward = SafeNormalize(head_forward, float3(0.0, 1.0, 0.0));
+        float3 right_projected = head_right - forward * dot(head_right, forward);
+        if (dot(right_projected, right_projected) < 0.000001) return surface_normal;
+        float3 right = SafeNormalize(right_projected, float3(1.0, 0.0, 0.0));
+        float3 up = SafeNormalize(cross(right, forward), float3(0.0, 0.0, 1.0));
+        float distance_to_head = length(world_pos - head_position_radius.xyz);
+        float head_mask = 1.0 - smoothstep(head_position_radius.w * 1.5, head_position_radius.w * 2.0, distance_to_head);
+        float4 sdf = saturate(Texture2DSample(sdf_tex, sdf_sampler, frac(surface_uv)));
+        face_mask = saturate(sdf_enabled) * sdf.a * head_mask;
+        // 仅给 ShadowPassSwitch 的阴影投射分支使用；正常可见覆盖率仍保留原 alpha。
+        shadow_coverage = 1.0 - face_mask * saturate(shadow_suppress);
+        if (face_mask <= 0.0) return surface_normal;
+
+        // 有效覆盖但两侧阈值均为零表示没有正面连续亮区，保持最暗档。
+        if (sdf.r + sdf.g < 0.00196078431)
+        {
+            pattern_uv.x = 0.5 - 0.45 * face_mask;
+            return surface_normal;
+        }
+
+        // R/G 独立记录左右光的角度阈值，直接采模型 UV；不假设两侧 UV 对称。
+        float center_angle = (sdf.r - sdf.g) * 1.57079632679;
+        // 只有烘焙时确认的镜像共 UV 使用几何侧，不翻转 UV；普通数据保留原左右阈值。
+        if (sdf.b > 0.5)
+            center_angle = abs(center_angle) * (dot(world_pos - head_position_radius.xyz, right) >= 0.0 ? 1.0 : -1.0);
+        float half_width = (sdf.r + sdf.g) * 1.57079632679;
+        float3 horizontal = forward * cos(center_angle) + right * sin(center_angle);
+        float vertical = clamp(dot(surface_normal, up), -1.0, 1.0);
+        float planar = sqrt(max(1.0 - vertical * vertical, 0.0));
+        float3 sdf_normal = horizontal * planar + up * vertical;
+
+        // 单个 Toon BSDF 的漫反射与高光共用此法线；球面仰角保留，水平用于 SDF 边界。
+        float offset = saturate(ramp_boundary) - 0.5
+            - 0.5 * (planar * cos(0.35) * cos(half_width) + vertical * sin(0.35));
+        // 原生阴影先乘 ramp 输入再加 offset；上限防止全遮挡像素被抬入中间亮档。
+        offset = clamp(offset, -0.9, 0.34);
+        pattern_uv.x = 0.5 + 0.5 * offset * face_mask;
+        return SafeNormalize(lerp(surface_normal, sdf_normal, face_mask), surface_normal);
+    }
+};

@@ -1,0 +1,43 @@
+{
+  "engine": "5.8.3 / CL58210709",
+  "capture": "UnrealEditor-Cmd D3D12 RenderOffscreen, SceneCapture2D, diagnostic DOF/motion blur disabled",
+  "generated_art": false,
+  "target_visual_pass": false,
+  "source_images": [
+    {
+      "file": "contact_on_face.png",
+      "original": "Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p15\\p15_selfshadow_full_contact_face.png",
+      "sha256": "7a3e14f6e9748fd1f93c8ce1cb034539892e8016a7ca7de84ad8c28555f57d33",
+      "captured_at": "2026-10-13T18:58:35.240379+08:00",
+      "purpose": "接触阴影开启的同姿态对照"
+    },
+    {
+      "file": "contact_off_face.png",
+      "original": "Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p15\\p15_selfshadow_full_nocontact_face.png",
+      "sha256": "2c4a0efff7e2a3a3283b1fc422028da4a95d34e4a65332cce70356aba6d0c767",
+      "captured_at": "2026-10-13T18:58:34.976864+08:00",
+      "purpose": "同一SDF版本、同姿态，仅关闭角色接触阴影的因果对照"
+    },
+    {
+      "file": "contact_off_sdf_face.png",
+      "original": "Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p17\\p17_sdf_stage_face.png",
+      "sha256": "f42f1d49f3e5ecb53f76b1664be868f286715775db97094c717c176701e9fc6b",
+      "captured_at": "2026-10-13T19:34:35.418704+08:00",
+      "purpose": "默认关闭接触阴影，普通投影保留，SDF Version3"
+    },
+    {
+      "file": "sdf_gpu_mask.png",
+      "original": "Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p17\\p17_sdf_gpu_mask_on_face.png",
+      "sha256": "f3edd3a7f6bc332f00957175211bc093e48115deb7baface19870a6a4f7ca0b4",
+      "captured_at": "2026-10-13T19:34:41.666385+08:00",
+      "purpose": "原生材质的真实GPU脸部遮罩诊断，黑色是非脸部"
+    },
+    {
+      "file": "sdf_side_light.png",
+      "original": "Saved\\Phase2Reference\\Endfield2\\toon-probe\\gpt-v2\\p17\\p17_sdf_on_angle_75_face.png",
+      "sha256": "ba0c7740c3eab42f36ec36fd4897770f431635abc150084169e19a938b97a8db",
+      "captured_at": "2026-10-13T19:34:34.191865+08:00",
+      "purpose": "单主光75度方位角的SDF实际消费"
+    }
+  ]
+}

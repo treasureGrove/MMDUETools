@@ -21,7 +21,7 @@
 
 namespace
 {
-	bool SaveAsset(UObject* Asset, const FString& PackageName, bool bNewAsset, FString& Error)
+	bool GardenSaveAsset(UObject* Asset, const FString& PackageName, bool bNewAsset, FString& Error)
 	{
 		Asset->MarkPackageDirty();
 		if (bNewAsset) FAssetRegistryModule::AssetCreated(Asset);
@@ -90,7 +90,7 @@ namespace
 			Texture->VirtualTextureStreaming = false;
 			Texture->LODGroup = TEXTUREGROUP_World;
 			Texture->PostEditChange();
-			if (!SaveAsset(Texture, PackageName, !bSaved, Error)) return false;
+			if (!GardenSaveAsset(Texture, PackageName, !bSaved, Error)) return false;
 		}
 		OutTexture = Texture;
 		bAvailable = true;
@@ -143,13 +143,13 @@ namespace
 			Texture->MaxTextureSize = 512;
 			Texture->LODGroup = TEXTUREGROUP_Skybox;
 			Texture->PostEditChange();
-			if (!SaveAsset(Texture, PackageName, !bSaved, Error)) return false;
+			if (!GardenSaveAsset(Texture, PackageName, !bSaved, Error)) return false;
 		}
 		return true;
 	}
 
 	template<typename T>
-	T* AddExpression(UMaterial* Material)
+	T* GardenAddExpression(UMaterial* Material)
 	{
 		T* Expression = NewObject<T>(Material);
 		Expression->Material = Material;
@@ -174,7 +174,7 @@ namespace
 		UMaterialExpressionScalarParameter* Parameter = FindParameter<UMaterialExpressionScalarParameter>(Material, Name);
 		if (!Parameter)
 		{
-			Parameter = AddExpression<UMaterialExpressionScalarParameter>(Material);
+			Parameter = GardenAddExpression<UMaterialExpressionScalarParameter>(Material);
 			Parameter->ParameterName = Name;
 			Parameter->ExpressionGUID = FGuid::NewGuid();
 			Parameter->Group = TEXT("Garden");
@@ -192,7 +192,7 @@ namespace
 		UMaterialExpressionVectorParameter* Parameter = FindParameter<UMaterialExpressionVectorParameter>(Material, Name);
 		if (!Parameter)
 		{
-			Parameter = AddExpression<UMaterialExpressionVectorParameter>(Material);
+			Parameter = GardenAddExpression<UMaterialExpressionVectorParameter>(Material);
 			Parameter->ParameterName = Name;
 			Parameter->ExpressionGUID = FGuid::NewGuid();
 			Parameter->Group = Name.ToString().StartsWith(TEXT("Stage")) && Name != TEXT("StageColor")
@@ -209,7 +209,7 @@ namespace
 		UMaterialExpressionTextureObjectParameter* Parameter = FindParameter<UMaterialExpressionTextureObjectParameter>(Material, Name);
 		if (!Parameter)
 		{
-			Parameter = AddExpression<UMaterialExpressionTextureObjectParameter>(Material);
+			Parameter = GardenAddExpression<UMaterialExpressionTextureObjectParameter>(Material);
 			Parameter->ParameterName = Name;
 			Parameter->ExpressionGUID = FGuid::NewGuid();
 			Parameter->Group = TEXT("Optional garden textures");
@@ -311,7 +311,7 @@ namespace
 		}
 		if (!Shader)
 		{
-			Shader = AddExpression<UMaterialExpressionCustom>(Material);
+			Shader = GardenAddExpression<UMaterialExpressionCustom>(Material);
 			Shader->Inputs.Reset();
 			bChanged = true;
 		}
@@ -338,7 +338,7 @@ namespace
 		{
 			if (UMaterialExpressionTime* Candidate = Cast<UMaterialExpressionTime>(Expression)) { Time = Candidate; break; }
 		}
-		if (!Time) { Time = AddExpression<UMaterialExpressionTime>(Material); bChanged = true; }
+		if (!Time) { Time = GardenAddExpression<UMaterialExpressionTime>(Material); bChanged = true; }
 		EnsureInput(Shader, TEXT("time_seconds"), Time, bChanged);
 		if (!bWater)
 		{
@@ -393,7 +393,7 @@ namespace
 		{
 			Material->Modify();
 			Material->PostEditChange();
-			if (!SaveAsset(Material, PackageName, !bSaved, Error)) return false;
+			if (!GardenSaveAsset(Material, PackageName, !bSaved, Error)) return false;
 		}
 		Out = Material;
 		return true;

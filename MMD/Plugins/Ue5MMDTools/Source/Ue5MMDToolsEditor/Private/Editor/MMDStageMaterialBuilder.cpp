@@ -78,7 +78,7 @@ namespace
 	}
 
 	template<typename T>
-	T* AddExpression(UMaterial* Material)
+	T* StageAddExpression(UMaterial* Material)
 	{
 		T* Expression = NewObject<T>(Material);
 		Expression->Material = Material;
@@ -86,10 +86,10 @@ namespace
 		return Expression;
 	}
 
-	UMaterialExpressionScalarParameter* AddScalar(UMaterial* Material, FName Name, float DefaultValue,
+	UMaterialExpressionScalarParameter* StageAddScalar(UMaterial* Material, FName Name, float DefaultValue,
 		FName Group = TEXT("Rendering"), float Min = 0.0f, float Max = 1.0f)
 	{
-		UMaterialExpressionScalarParameter* Parameter = AddExpression<UMaterialExpressionScalarParameter>(Material);
+		UMaterialExpressionScalarParameter* Parameter = StageAddExpression<UMaterialExpressionScalarParameter>(Material);
 		Parameter->ParameterName = Name;
 		Parameter->ExpressionGUID = FGuid::NewGuid();
 		Parameter->Group = Group;
@@ -99,10 +99,10 @@ namespace
 		return Parameter;
 	}
 
-	UMaterialExpressionVectorParameter* AddVector(UMaterial* Material, FName Name, const FLinearColor& DefaultValue,
+	UMaterialExpressionVectorParameter* StageAddVector(UMaterial* Material, FName Name, const FLinearColor& DefaultValue,
 		FName Group = TEXT("Rendering"))
 	{
-		UMaterialExpressionVectorParameter* Parameter = AddExpression<UMaterialExpressionVectorParameter>(Material);
+		UMaterialExpressionVectorParameter* Parameter = StageAddExpression<UMaterialExpressionVectorParameter>(Material);
 		Parameter->ParameterName = Name;
 		Parameter->ExpressionGUID = FGuid::NewGuid();
 		Parameter->Group = Group;
@@ -110,10 +110,10 @@ namespace
 		return Parameter;
 	}
 
-	UMaterialExpressionTextureObjectParameter* AddTextureObject(UMaterial* Material, FName Name, UTexture* Texture,
+	UMaterialExpressionTextureObjectParameter* StageAddTextureObject(UMaterial* Material, FName Name, UTexture* Texture,
 		EMaterialSamplerType SamplerType = SAMPLERTYPE_LinearColor)
 	{
-		UMaterialExpressionTextureObjectParameter* Parameter = AddExpression<UMaterialExpressionTextureObjectParameter>(Material);
+		UMaterialExpressionTextureObjectParameter* Parameter = StageAddExpression<UMaterialExpressionTextureObjectParameter>(Material);
 		Parameter->ParameterName = Name;
 		Parameter->ExpressionGUID = FGuid::NewGuid();
 		Parameter->Group = TEXT("Optional textures");
@@ -122,7 +122,7 @@ namespace
 		return Parameter;
 	}
 
-	void AddCustomInput(UMaterialExpressionCustom* Custom, FName Name, UMaterialExpression* Expression, int32 OutputIndex = 0)
+	void StageAddCustomInput(UMaterialExpressionCustom* Custom, FName Name, UMaterialExpression* Expression, int32 OutputIndex = 0)
 	{
 		FCustomInput& Input = Custom->Inputs.AddDefaulted_GetRef();
 		Input.InputName = Name;
@@ -138,13 +138,13 @@ namespace
 		if (!Shader->Inputs.ContainsByPredicate([](const FCustomInput& Input) { return Input.InputName == TEXT("backdrop_tex"); }))
 		{
 			Material->Modify();
-			AddCustomInput(Shader, TEXT("backdrop_tex"), AddTextureObject(Material, TEXT("BackdropTexture"), BackdropTexture, SAMPLERTYPE_Color));
+			StageAddCustomInput(Shader, TEXT("backdrop_tex"), StageAddTextureObject(Material, TEXT("BackdropTexture"), BackdropTexture, SAMPLERTYPE_Color));
 			bChanged = true;
 		}
 		if (!Shader->Inputs.ContainsByPredicate([](const FCustomInput& Input) { return Input.InputName == TEXT("backdrop_texture_strength"); }))
 		{
 			Material->Modify();
-			AddCustomInput(Shader, TEXT("backdrop_texture_strength"), AddScalar(Material, TEXT("BackdropTextureStrength"),
+			StageAddCustomInput(Shader, TEXT("backdrop_texture_strength"), StageAddScalar(Material, TEXT("BackdropTextureStrength"),
 				BackdropTexture != BlackTexture ? 1.0f : 0.0f, TEXT("Stage")));
 			bChanged = true;
 		}
@@ -166,49 +166,49 @@ namespace
 		Material->OpacityMaskClipValue = 0.01f;
 		Material->bCastDynamicShadowAsMasked = BlendMode == BLEND_Translucent;
 
-		UMaterialExpressionTextureSampleParameter2D* BaseTexture = AddExpression<UMaterialExpressionTextureSampleParameter2D>(Material);
+		UMaterialExpressionTextureSampleParameter2D* BaseTexture = StageAddExpression<UMaterialExpressionTextureSampleParameter2D>(Material);
 		BaseTexture->ParameterName = TEXT("base_color_tex");
 		BaseTexture->ExpressionGUID = FGuid::NewGuid();
 		BaseTexture->Group = TEXT("Imported material");
 		BaseTexture->Texture = WhiteTexture;
 		BaseTexture->SamplerType = SAMPLERTYPE_Color;
-		UMaterialExpressionVectorParameter* BaseColor = AddVector(Material, TEXT("BaseColor"), FLinearColor::White, TEXT("Imported material"));
-		UMaterialExpressionMultiply* TintedBase = AddExpression<UMaterialExpressionMultiply>(Material);
+		UMaterialExpressionVectorParameter* BaseColor = StageAddVector(Material, TEXT("BaseColor"), FLinearColor::White, TEXT("Imported material"));
+		UMaterialExpressionMultiply* TintedBase = StageAddExpression<UMaterialExpressionMultiply>(Material);
 		TintedBase->A.Connect(0, BaseTexture);
 		TintedBase->B.Connect(0, BaseColor);
-		UMaterialExpressionScalarParameter* Opacity = AddScalar(Material, TEXT("Opacity"), 1.0f, TEXT("Imported material"));
-		UMaterialExpressionMultiply* FinalOpacity = AddExpression<UMaterialExpressionMultiply>(Material);
+		UMaterialExpressionScalarParameter* Opacity = StageAddScalar(Material, TEXT("Opacity"), 1.0f, TEXT("Imported material"));
+		UMaterialExpressionMultiply* FinalOpacity = StageAddExpression<UMaterialExpressionMultiply>(Material);
 		FinalOpacity->A.Connect(4, BaseTexture);
 		FinalOpacity->B.Connect(0, Opacity);
 
-		UMaterialExpressionCustom* Shader = AddExpression<UMaterialExpressionCustom>(Material);
+		UMaterialExpressionCustom* Shader = StageAddExpression<UMaterialExpressionCustom>(Material);
 		Shader->OutputType = CMOT_Float3;
 		Shader->Description = TEXT("MMD stage character lighting");
 		Shader->Code = TEXT("#include \"/Plugin/Ue5MMDTools/TMMDShader/TMMDStageToon.usf\"\nreturn 0;");
 		Shader->Inputs.Reset();
-		AddCustomInput(Shader, TEXT("base_color"), TintedBase);
-		AddCustomInput(Shader, TEXT("light_data_tex"), AddTextureObject(Material, TEXT("light_data_tex"), LightData));
-		AddCustomInput(Shader, TEXT("mmd_shadow_map"), AddTextureObject(Material, TEXT("mmd_shadow_map"), ShadowMap));
-		AddCustomInput(Shader, TEXT("mat_cap"), AddTextureObject(Material, TEXT("mat_cap"), BlackTexture, SAMPLERTYPE_Color));
-		AddCustomInput(Shader, TEXT("shadow_threshold"), AddScalar(Material, TEXT("ShadowThreshold"), 0.45f));
-		AddCustomInput(Shader, TEXT("shadow_softness"), AddScalar(Material, TEXT("ShadowSoftness"), 0.12f));
-		AddCustomInput(Shader, TEXT("shadow_tint"), AddVector(Material, TEXT("ShadowTint"), FLinearColor(0.58f, 0.62f, 0.74f)));
-		AddCustomInput(Shader, TEXT("ambient_strength"), AddScalar(Material, TEXT("AmbientStrength"), 0.35f, TEXT("Rendering"), 0.0f, 2.0f));
-		AddCustomInput(Shader, TEXT("light_scale"), AddScalar(Material, TEXT("LightScale"), 0.85f, TEXT("Rendering"), 0.0f, 2.0f));
-		AddCustomInput(Shader, TEXT("specular_strength"), AddScalar(Material, TEXT("SpecularStrength"), 0.08f));
-		AddCustomInput(Shader, TEXT("specular_power"), AddScalar(Material, TEXT("SpecularPower"), 48.0f, TEXT("Rendering"), 1.0f, 128.0f));
-		AddCustomInput(Shader, TEXT("rim_strength"), AddScalar(Material, TEXT("RimStrength"), 0.10f));
-		AddCustomInput(Shader, TEXT("rim_power"), AddScalar(Material, TEXT("RimPower"), 3.0f, TEXT("Rendering"), 1.0f, 8.0f));
-		AddCustomInput(Shader, TEXT("toon_amount"), AddScalar(Material, TEXT("ToonAmount"), 1.0f));
-		AddCustomInput(Shader, TEXT("diffuse_wrap"), AddScalar(Material, TEXT("DiffuseWrap"), 0.10f, TEXT("Rendering"), 0.0f, 0.8f));
-		AddCustomInput(Shader, TEXT("color_saturation"), AddScalar(Material, TEXT("ColorSaturation"), 1.0f, TEXT("Rendering"), 0.0f, 2.0f));
-		AddCustomInput(Shader, TEXT("shadow_saturation"), AddScalar(Material, TEXT("ShadowSaturation"), 1.0f, TEXT("Rendering"), 0.0f, 2.0f));
-		AddCustomInput(Shader, TEXT("roughness"), AddScalar(Material, TEXT("Roughness"), 0.65f));
-		AddCustomInput(Shader, TEXT("specular_tint"), AddVector(Material, TEXT("SpecularTint"), FLinearColor(0.9f, 0.95f, 1.0f)));
-		AddCustomInput(Shader, TEXT("sphere_mode"), AddScalar(Material, TEXT("sphere_mode"), 0.0f, TEXT("Imported material"), 0.0f, 3.0f));
-		AddCustomInput(Shader, TEXT("sphere_strength"), AddScalar(Material, TEXT("SphereStrength"), 0.10f, TEXT("Imported material")));
-		AddCustomInput(Shader, TEXT("black_lift"), AddScalar(Material, TEXT("BlackLift"), 0.018f, TEXT("Rendering"), 0.0f, 0.08f));
-		AddCustomInput(Shader, TEXT("soft_specular_strength"), AddScalar(Material, TEXT("SoftSpecularStrength"), 0.16f));
+		StageAddCustomInput(Shader, TEXT("base_color"), TintedBase);
+		StageAddCustomInput(Shader, TEXT("light_data_tex"), StageAddTextureObject(Material, TEXT("light_data_tex"), LightData));
+		StageAddCustomInput(Shader, TEXT("mmd_shadow_map"), StageAddTextureObject(Material, TEXT("mmd_shadow_map"), ShadowMap));
+		StageAddCustomInput(Shader, TEXT("mat_cap"), StageAddTextureObject(Material, TEXT("mat_cap"), BlackTexture, SAMPLERTYPE_Color));
+		StageAddCustomInput(Shader, TEXT("shadow_threshold"), StageAddScalar(Material, TEXT("ShadowThreshold"), 0.45f));
+		StageAddCustomInput(Shader, TEXT("shadow_softness"), StageAddScalar(Material, TEXT("ShadowSoftness"), 0.12f));
+		StageAddCustomInput(Shader, TEXT("shadow_tint"), StageAddVector(Material, TEXT("ShadowTint"), FLinearColor(0.58f, 0.62f, 0.74f)));
+		StageAddCustomInput(Shader, TEXT("ambient_strength"), StageAddScalar(Material, TEXT("AmbientStrength"), 0.35f, TEXT("Rendering"), 0.0f, 2.0f));
+		StageAddCustomInput(Shader, TEXT("light_scale"), StageAddScalar(Material, TEXT("LightScale"), 0.85f, TEXT("Rendering"), 0.0f, 2.0f));
+		StageAddCustomInput(Shader, TEXT("specular_strength"), StageAddScalar(Material, TEXT("SpecularStrength"), 0.08f));
+		StageAddCustomInput(Shader, TEXT("specular_power"), StageAddScalar(Material, TEXT("SpecularPower"), 48.0f, TEXT("Rendering"), 1.0f, 128.0f));
+		StageAddCustomInput(Shader, TEXT("rim_strength"), StageAddScalar(Material, TEXT("RimStrength"), 0.10f));
+		StageAddCustomInput(Shader, TEXT("rim_power"), StageAddScalar(Material, TEXT("RimPower"), 3.0f, TEXT("Rendering"), 1.0f, 8.0f));
+		StageAddCustomInput(Shader, TEXT("toon_amount"), StageAddScalar(Material, TEXT("ToonAmount"), 1.0f));
+		StageAddCustomInput(Shader, TEXT("diffuse_wrap"), StageAddScalar(Material, TEXT("DiffuseWrap"), 0.10f, TEXT("Rendering"), 0.0f, 0.8f));
+		StageAddCustomInput(Shader, TEXT("color_saturation"), StageAddScalar(Material, TEXT("ColorSaturation"), 1.0f, TEXT("Rendering"), 0.0f, 2.0f));
+		StageAddCustomInput(Shader, TEXT("shadow_saturation"), StageAddScalar(Material, TEXT("ShadowSaturation"), 1.0f, TEXT("Rendering"), 0.0f, 2.0f));
+		StageAddCustomInput(Shader, TEXT("roughness"), StageAddScalar(Material, TEXT("Roughness"), 0.65f));
+		StageAddCustomInput(Shader, TEXT("specular_tint"), StageAddVector(Material, TEXT("SpecularTint"), FLinearColor(0.9f, 0.95f, 1.0f)));
+		StageAddCustomInput(Shader, TEXT("sphere_mode"), StageAddScalar(Material, TEXT("sphere_mode"), 0.0f, TEXT("Imported material"), 0.0f, 3.0f));
+		StageAddCustomInput(Shader, TEXT("sphere_strength"), StageAddScalar(Material, TEXT("SphereStrength"), 0.10f, TEXT("Imported material")));
+		StageAddCustomInput(Shader, TEXT("black_lift"), StageAddScalar(Material, TEXT("BlackLift"), 0.018f, TEXT("Rendering"), 0.0f, 0.08f));
+		StageAddCustomInput(Shader, TEXT("soft_specular_strength"), StageAddScalar(Material, TEXT("SoftSpecularStrength"), 0.16f));
 
 		UMaterialEditorOnlyData* Data = Material->GetEditorOnlyData();
 		Data->EmissiveColor.Connect(0, Shader);
@@ -227,7 +227,7 @@ namespace
 		Material->SetShadingModel(MSM_Unlit);
 		Material->TwoSided = true;
 		Material->SetUsageByFlag(MATUSAGE_InstancedStaticMeshes, true);
-		UMaterialExpressionCustom* Shader = AddExpression<UMaterialExpressionCustom>(Material);
+		UMaterialExpressionCustom* Shader = StageAddExpression<UMaterialExpressionCustom>(Material);
 		Shader->OutputType = CMOT_Float4;
 		Shader->Description = TEXT("Geometric stage beam");
 		Shader->Code = TEXT("struct TMMDStageBeam\n{\n"
@@ -241,20 +241,20 @@ namespace
 			"return float4(max(stage_color, 0.0) * max(emissive_strength, 0.0), saturate(opacity) * edge_fade * 0.65);\n"
 			"}\n};\nTMMDStageBeam shader;\nreturn shader.OutputColor(Parameters, stage_color, emissive_strength, opacity);");
 		Shader->Inputs.Reset();
-		AddCustomInput(Shader, TEXT("stage_color"), AddVector(Material, TEXT("StageColor"), FLinearColor(0.22f, 0.60f, 1.0f), TEXT("Stage")));
-		AddCustomInput(Shader, TEXT("emissive_strength"), AddScalar(Material, TEXT("EmissiveStrength"), 3.0f, TEXT("Stage"), 0.0f, 16.0f));
-		AddCustomInput(Shader, TEXT("opacity"), AddScalar(Material, TEXT("Opacity"), 0.06f, TEXT("Stage"), 0.0f, 0.3f));
-		UMaterialExpressionComponentMask* Color = AddExpression<UMaterialExpressionComponentMask>(Material);
+		StageAddCustomInput(Shader, TEXT("stage_color"), StageAddVector(Material, TEXT("StageColor"), FLinearColor(0.22f, 0.60f, 1.0f), TEXT("Stage")));
+		StageAddCustomInput(Shader, TEXT("emissive_strength"), StageAddScalar(Material, TEXT("EmissiveStrength"), 3.0f, TEXT("Stage"), 0.0f, 16.0f));
+		StageAddCustomInput(Shader, TEXT("opacity"), StageAddScalar(Material, TEXT("Opacity"), 0.06f, TEXT("Stage"), 0.0f, 0.3f));
+		UMaterialExpressionComponentMask* Color = StageAddExpression<UMaterialExpressionComponentMask>(Material);
 		Color->Input.Connect(0, Shader);
 		Color->R = Color->G = Color->B = true;
 		Color->A = false;
-		UMaterialExpressionComponentMask* Alpha = AddExpression<UMaterialExpressionComponentMask>(Material);
+		UMaterialExpressionComponentMask* Alpha = StageAddExpression<UMaterialExpressionComponentMask>(Material);
 		Alpha->Input.Connect(0, Shader);
 		Alpha->R = Alpha->G = Alpha->B = false;
 		Alpha->A = true;
-		UMaterialExpressionDepthFade* DepthFade = AddExpression<UMaterialExpressionDepthFade>(Material);
+		UMaterialExpressionDepthFade* DepthFade = StageAddExpression<UMaterialExpressionDepthFade>(Material);
 		DepthFade->InOpacity.Connect(0, Alpha);
-		DepthFade->FadeDistance.Connect(0, AddScalar(Material, TEXT("DepthFadeDistance"), 80.0f, TEXT("Stage"), 1.0f, 200.0f));
+		DepthFade->FadeDistance.Connect(0, StageAddScalar(Material, TEXT("DepthFadeDistance"), 80.0f, TEXT("Stage"), 1.0f, 200.0f));
 		UMaterialEditorOnlyData* Data = Material->GetEditorOnlyData();
 		Data->EmissiveColor.Connect(0, Color);
 		Data->Opacity.Connect(0, DepthFade);
@@ -271,20 +271,20 @@ namespace
 		Material->SetShadingModel(MSM_Unlit);
 		Material->TwoSided = true;
 		Material->SetUsageByFlag(MATUSAGE_InstancedStaticMeshes, true);
-		UMaterialExpressionCustom* Shader = AddExpression<UMaterialExpressionCustom>(Material);
+		UMaterialExpressionCustom* Shader = StageAddExpression<UMaterialExpressionCustom>(Material);
 		Shader->OutputType = CMOT_Float3;
 		Shader->Description = TEXT("Procedural stage atmosphere");
 		Shader->Code = TEXT("#include \"/Plugin/Ue5MMDTools/TMMDShader/TMMDStageBackdrop.usf\"\nreturn 0;");
 		Shader->Inputs.Reset();
-		AddCustomInput(Shader, TEXT("stage_color"), AddVector(Material, TEXT("StageColor"), FLinearColor(0.04f, 0.08f, 0.18f), TEXT("Stage")));
-		AddCustomInput(Shader, TEXT("horizon_color"), AddVector(Material, TEXT("HorizonColor"), FLinearColor(0.13f, 0.20f, 0.28f), TEXT("Stage")));
-		AddCustomInput(Shader, TEXT("backdrop_theme"), AddScalar(Material, TEXT("BackdropTheme"), 0.0f, TEXT("Stage"), 0.0f, 2.0f));
-		AddCustomInput(Shader, TEXT("stage_time"), AddScalar(Material, TEXT("StageTime"), 0.0f, TEXT("Stage"), 0.0f, 0.0f));
-		AddCustomInput(Shader, TEXT("emissive_strength"), AddScalar(Material, TEXT("EmissiveStrength"), 1.0f, TEXT("Stage"), 0.0f, 4.0f));
-		AddCustomInput(Shader, TEXT("stage_origin"), AddVector(Material, TEXT("StageOrigin"), FLinearColor(0.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
-		AddCustomInput(Shader, TEXT("stage_right"), AddVector(Material, TEXT("StageRight"), FLinearColor(1.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
-		AddCustomInput(Shader, TEXT("stage_forward"), AddVector(Material, TEXT("StageForward"), FLinearColor(0.0f, 1.0f, 0.0f, 0.0f), TEXT("Stage transform")));
-		AddCustomInput(Shader, TEXT("stage_up"), AddVector(Material, TEXT("StageUp"), FLinearColor(0.0f, 0.0f, 1.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_color"), StageAddVector(Material, TEXT("StageColor"), FLinearColor(0.04f, 0.08f, 0.18f), TEXT("Stage")));
+		StageAddCustomInput(Shader, TEXT("horizon_color"), StageAddVector(Material, TEXT("HorizonColor"), FLinearColor(0.13f, 0.20f, 0.28f), TEXT("Stage")));
+		StageAddCustomInput(Shader, TEXT("backdrop_theme"), StageAddScalar(Material, TEXT("BackdropTheme"), 0.0f, TEXT("Stage"), 0.0f, 2.0f));
+		StageAddCustomInput(Shader, TEXT("stage_time"), StageAddScalar(Material, TEXT("StageTime"), 0.0f, TEXT("Stage"), 0.0f, 0.0f));
+		StageAddCustomInput(Shader, TEXT("emissive_strength"), StageAddScalar(Material, TEXT("EmissiveStrength"), 1.0f, TEXT("Stage"), 0.0f, 4.0f));
+		StageAddCustomInput(Shader, TEXT("stage_origin"), StageAddVector(Material, TEXT("StageOrigin"), FLinearColor(0.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_right"), StageAddVector(Material, TEXT("StageRight"), FLinearColor(1.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_forward"), StageAddVector(Material, TEXT("StageForward"), FLinearColor(0.0f, 1.0f, 0.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_up"), StageAddVector(Material, TEXT("StageUp"), FLinearColor(0.0f, 0.0f, 1.0f, 0.0f), TEXT("Stage transform")));
 		Material->GetEditorOnlyData()->EmissiveColor.Connect(0, Shader);
 		return Material;
 	}
@@ -305,8 +305,8 @@ namespace
 				UMaterialExpressionScalarParameter* Candidate = Cast<UMaterialExpressionScalarParameter>(Expression);
 				if (Candidate && Candidate->ParameterName == ParameterName) { Parameter = Candidate; break; }
 			}
-			if (!Parameter) Parameter = AddScalar(Material, ParameterName, DefaultValue, TEXT("Rendering"), 0.0f, Max);
-			AddCustomInput(Shader, InputName, Parameter);
+			if (!Parameter) Parameter = StageAddScalar(Material, ParameterName, DefaultValue, TEXT("Rendering"), 0.0f, Max);
+			StageAddCustomInput(Shader, InputName, Parameter);
 			bChanged = true;
 		};
 		EnsureScalarInput(TEXT("black_lift"), TEXT("BlackLift"), 0.018f, 0.08f);
@@ -326,26 +326,26 @@ namespace
 		Material->SetUsageByFlag(MATUSAGE_InstancedStaticMeshes, true);
 		const FLinearColor DefaultColor = Kind == 0 ? FLinearColor(0.025f, 0.038f, 0.060f)
 			: Kind == 1 ? FLinearColor(0.035f, 0.12f, 0.20f) : FLinearColor(0.015f, 0.65f, 1.0f);
-		UMaterialExpressionVectorParameter* StageColor = AddVector(Material, TEXT("StageColor"), DefaultColor, TEXT("Stage"));
-		UMaterialExpressionScalarParameter* Roughness = AddScalar(Material, TEXT("Roughness"), Kind == 0 ? 0.36f : 0.32f, TEXT("Stage"));
-		UMaterialExpressionScalarParameter* Metallic = AddScalar(Material, TEXT("Metallic"), Kind == 0 ? 0.65f : 0.4f, TEXT("Stage"));
-		UMaterialExpressionCustom* Shader = AddExpression<UMaterialExpressionCustom>(Material);
+		UMaterialExpressionVectorParameter* StageColor = StageAddVector(Material, TEXT("StageColor"), DefaultColor, TEXT("Stage"));
+		UMaterialExpressionScalarParameter* Roughness = StageAddScalar(Material, TEXT("Roughness"), Kind == 0 ? 0.36f : 0.32f, TEXT("Stage"));
+		UMaterialExpressionScalarParameter* Metallic = StageAddScalar(Material, TEXT("Metallic"), Kind == 0 ? 0.65f : 0.4f, TEXT("Stage"));
+		UMaterialExpressionCustom* Shader = StageAddExpression<UMaterialExpressionCustom>(Material);
 		Shader->OutputType = CMOT_Float3;
 		Shader->Description = TEXT("Animated geometric stage light");
 		Shader->Code = TEXT("#include \"/Plugin/Ue5MMDTools/TMMDShader/TMMDStageSurface.usf\"\nreturn 0;");
 		Shader->Inputs.Reset();
-		AddCustomInput(Shader, TEXT("stage_color"), StageColor);
-		AddCustomInput(Shader, TEXT("emissive_strength"), AddScalar(Material, TEXT("EmissiveStrength"), Kind == 0 ? 0.08f : Kind == 1 ? 0.4f : 4.0f, TEXT("Stage"), 0.0f, 16.0f));
-		AddCustomInput(Shader, TEXT("pulse_speed"), AddScalar(Material, TEXT("PulseSpeed"), 0.8f, TEXT("Stage"), 0.0f, 4.0f));
-		AddCustomInput(Shader, TEXT("pulse_amount"), AddScalar(Material, TEXT("PulseAmount"), Kind == 0 ? 0.0f : 0.45f, TEXT("Stage")));
-		AddCustomInput(Shader, TEXT("pattern_scale"), AddScalar(Material, TEXT("PatternScale"), 0.02f, TEXT("Stage"), 0.0f, 0.1f));
-		AddCustomInput(Shader, TEXT("time_seconds"), AddExpression<UMaterialExpressionTime>(Material));
-		AddCustomInput(Shader, TEXT("stage_time"), AddScalar(Material, TEXT("StageTime"), 0.0f, TEXT("Stage"), 0.0f, 0.0f));
-		AddCustomInput(Shader, TEXT("use_stage_time"), AddScalar(Material, TEXT("UseStageTime"), 0.0f, TEXT("Stage")));
-		AddCustomInput(Shader, TEXT("stage_origin"), AddVector(Material, TEXT("StageOrigin"), FLinearColor(0.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
-		AddCustomInput(Shader, TEXT("stage_right"), AddVector(Material, TEXT("StageRight"), FLinearColor(1.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
-		AddCustomInput(Shader, TEXT("stage_forward"), AddVector(Material, TEXT("StageForward"), FLinearColor(0.0f, 1.0f, 0.0f, 0.0f), TEXT("Stage transform")));
-		AddCustomInput(Shader, TEXT("stage_up"), AddVector(Material, TEXT("StageUp"), FLinearColor(0.0f, 0.0f, 1.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_color"), StageColor);
+		StageAddCustomInput(Shader, TEXT("emissive_strength"), StageAddScalar(Material, TEXT("EmissiveStrength"), Kind == 0 ? 0.08f : Kind == 1 ? 0.4f : 4.0f, TEXT("Stage"), 0.0f, 16.0f));
+		StageAddCustomInput(Shader, TEXT("pulse_speed"), StageAddScalar(Material, TEXT("PulseSpeed"), 0.8f, TEXT("Stage"), 0.0f, 4.0f));
+		StageAddCustomInput(Shader, TEXT("pulse_amount"), StageAddScalar(Material, TEXT("PulseAmount"), Kind == 0 ? 0.0f : 0.45f, TEXT("Stage")));
+		StageAddCustomInput(Shader, TEXT("pattern_scale"), StageAddScalar(Material, TEXT("PatternScale"), 0.02f, TEXT("Stage"), 0.0f, 0.1f));
+		StageAddCustomInput(Shader, TEXT("time_seconds"), StageAddExpression<UMaterialExpressionTime>(Material));
+		StageAddCustomInput(Shader, TEXT("stage_time"), StageAddScalar(Material, TEXT("StageTime"), 0.0f, TEXT("Stage"), 0.0f, 0.0f));
+		StageAddCustomInput(Shader, TEXT("use_stage_time"), StageAddScalar(Material, TEXT("UseStageTime"), 0.0f, TEXT("Stage")));
+		StageAddCustomInput(Shader, TEXT("stage_origin"), StageAddVector(Material, TEXT("StageOrigin"), FLinearColor(0.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_right"), StageAddVector(Material, TEXT("StageRight"), FLinearColor(1.0f, 0.0f, 0.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_forward"), StageAddVector(Material, TEXT("StageForward"), FLinearColor(0.0f, 1.0f, 0.0f, 0.0f), TEXT("Stage transform")));
+		StageAddCustomInput(Shader, TEXT("stage_up"), StageAddVector(Material, TEXT("StageUp"), FLinearColor(0.0f, 0.0f, 1.0f, 0.0f), TEXT("Stage transform")));
 		UMaterialEditorOnlyData* Data = Material->GetEditorOnlyData();
 		Data->BaseColor.Connect(0, StageColor);
 		Data->Roughness.Connect(0, Roughness);

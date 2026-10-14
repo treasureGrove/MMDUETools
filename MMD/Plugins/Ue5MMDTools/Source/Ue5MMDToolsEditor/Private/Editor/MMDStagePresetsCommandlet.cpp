@@ -94,12 +94,24 @@ namespace
 		{ TEXT("CinematicAnime"), TEXT("cinematic_anime"), TEXT("电影冷暖"), EMMDStageTheme::MoonMirror, false }
 	};
 
+	// 终末地预设走独立路径：包位于 Presets/Endfield/ 子目录，父材质是 M_MMD_Endfield_*，
+	// 与上面七套（扁平路径 + References.Families）不同源，故不进 Definitions[]，只由 -EndfieldCapture 驱动。
+	const FStageDefinition EndfieldCaptureDefinition =
+		{ TEXT("Endfield"), TEXT("endfield"), TEXT("终末地"), EMMDStageTheme::SakuraTheater, false };
+	const TCHAR* EndfieldCaptureParentPaths[] =
+	{
+		TEXT("/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_Opaque"),
+		TEXT("/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_Masked"),
+		TEXT("/Ue5MMDTools/Stages/Materials/Endfield/M_MMD_Endfield_Translucent")
+	};
+	constexpr const TCHAR* EndfieldCapturePresetPath = TEXT("/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield");
+
 	FString AssetPackage(const TCHAR* Directory, const TCHAR* Prefix, const TCHAR* Name)
 	{
 		return FString::Printf(TEXT("%s%s/%s%s"), StageRoot, Directory, Prefix, Name);
 	}
 
-	FString ObjectPath(const FString& PackageName)
+	FString StagePresetsObjectPath(const FString& PackageName)
 	{
 		return PackageName + TEXT(".") + FPackageName::GetLongPackageAssetName(PackageName);
 	}
@@ -143,7 +155,7 @@ namespace
 		return 0;
 	}
 
-	void ConfigurePreset(UMMDStageRenderPreset* Preset, const FStageDefinition& Definition,
+	void StagePresetsConfigurePreset(UMMDStageRenderPreset* Preset, const FStageDefinition& Definition,
 		const FMMDStageMaterialSet& Materials, const FMMDReferenceMaterialSet& References)
 	{
 		const int32 Family = ReferenceFamilyFor(Definition);
@@ -285,7 +297,7 @@ namespace
 		const FMMDReferenceMaterialSet& References, bool bGenerate, FString& Error)
 	{
 		const FString PackageName = AssetPackage(TEXT("Presets"), TEXT("DA_Render_"), Definition.Name);
-		UMMDStageRenderPreset* Preset = LoadObject<UMMDStageRenderPreset>(nullptr, *ObjectPath(PackageName));
+		UMMDStageRenderPreset* Preset = LoadObject<UMMDStageRenderPreset>(nullptr, *StagePresetsObjectPath(PackageName));
 		if (bGenerate)
 		{
 			if (!Preset)
@@ -294,7 +306,7 @@ namespace
 					*FPackageName::GetLongPackageAssetName(PackageName), RF_Public | RF_Standalone);
 				FAssetRegistryModule::AssetCreated(Preset);
 			}
-			ConfigurePreset(Preset, Definition, Materials, References);
+			StagePresetsConfigurePreset(Preset, Definition, Materials, References);
 			if (!SaveStageAsset(Preset, false, Error))
 			{
 				return nullptr;
@@ -307,11 +319,39 @@ namespace
 		return Preset;
 	}
 
+	// 只读加载终末地父材质与预设，并校验预设确实绑定了这三套新材质；不改动任何资产。
+	bool EndfieldCaptureLoadBundle(UMMDStageRenderPreset*& OutPreset, TArray<UMaterialInterface*>& OutParents, FString& Error)
+	{
+		OutPreset = LoadObject<UMMDStageRenderPreset>(nullptr, *StagePresetsObjectPath(EndfieldCapturePresetPath));
+		OutParents.Reset();
+		for (const TCHAR* Path : EndfieldCaptureParentPaths)
+		{
+			OutParents.Add(LoadObject<UMaterialInterface>(nullptr, *StagePresetsObjectPath(Path)));
+		}
+		if (!OutPreset)
+		{
+			Error = FString::Printf(TEXT("Endfield preset is missing: %s. Run -run=MMDEndfieldPresets first."), EndfieldCapturePresetPath);
+			return false;
+		}
+		if (!OutParents[0] || !OutParents[1] || !OutParents[2])
+		{
+			Error = TEXT("The M_MMD_Endfield_* character material family is incomplete");
+			return false;
+		}
+		if (OutPreset->CharacterMaterialOpaque != OutParents[0] || OutPreset->CharacterMaterialMasked != OutParents[1]
+			|| OutPreset->CharacterMaterialTranslucent != OutParents[2])
+		{
+			Error = TEXT("DA_Render_Endfield does not bind the M_MMD_Endfield_* material family");
+			return false;
+		}
+		return true;
+	}
+
 	UBlueprint* MakeStageBlueprint(const FStageDefinition& Definition, UMMDStageRenderPreset* Preset,
 		bool bGenerate, FString& Error)
 	{
 		const FString PackageName = AssetPackage(TEXT("Blueprints"), TEXT("BP_MMDStage_"), Definition.Name);
-		UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, *ObjectPath(PackageName));
+		UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, *StagePresetsObjectPath(PackageName));
 		if (!bGenerate)
 		{
 			return Blueprint;
@@ -351,7 +391,7 @@ namespace
 	UWorld* MakeStageMap(const FStageDefinition& Definition, UBlueprint* Blueprint, bool bGenerate, FString& Error)
 	{
 		const FString PackageName = AssetPackage(TEXT("Maps"), TEXT("MMDStage_"), Definition.Name);
-		UWorld* World = LoadObject<UWorld>(nullptr, *ObjectPath(PackageName));
+		UWorld* World = LoadObject<UWorld>(nullptr, *StagePresetsObjectPath(PackageName));
 		if (!bGenerate)
 		{
 			return World;
@@ -517,7 +557,7 @@ namespace
 				&& FPaths::FileExists(CachedFilename)
 				&& IFileManager::Get().GetTimeStamp(*CachedFilename) >= IFileManager::Get().GetTimeStamp(*Sample.SourceVMDPath))
 			{
-				TStrongObjectPtr<UAnimSequence> Cached(LoadObject<UAnimSequence>(nullptr, *ObjectPath(CachedPackage)));
+				TStrongObjectPtr<UAnimSequence> Cached(LoadObject<UAnimSequence>(nullptr, *StagePresetsObjectPath(CachedPackage)));
 				if (Cached.IsValid())
 				{
 					Cached->WaitOnExistingCompression();
@@ -1579,7 +1619,9 @@ UMMDStagePresetsCommandlet::UMMDStagePresetsCommandlet()
 int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 {
 	const bool bGenerate = FParse::Param(*Params, TEXT("Generate"));
-	const bool bScreenshots = FParse::Param(*Params, TEXT("Screenshots"));
+	// 独立开关：只截终末地一套，完全不进入上面七套预设与对比流程。
+	const bool bEndfieldCapture = FParse::Param(*Params, TEXT("EndfieldCapture"));
+	const bool bScreenshots = FParse::Param(*Params, TEXT("Screenshots")) || bEndfieldCapture;
 	FString CapturePresetFilter;
 	FParse::Value(*Params, TEXT("CapturePreset="), CapturePresetFilter);
 	if (!CapturePresetFilter.IsEmpty())
@@ -1651,7 +1693,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 	{
 		for (const TCHAR* Name : { TEXT("T_MMD_GenericHairNormalV2"), TEXT("T_MMD_GenericClothNormalV2"), TEXT("T_MMD_GenericClothDataV2") })
 		{
-			const FString Path = ObjectPath(FString(StageRoot) + TEXT("Textures/") + Name);
+			const FString Path = StagePresetsObjectPath(FString(StageRoot) + TEXT("Textures/") + Name);
 			UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *Path);
 			const bool bNormal = FString(Name).Contains(TEXT("Normal"));
 			const bool bValid = Texture && !Texture->SRGB && Texture->Source.GetSizeX() == 512 && Texture->Source.GetSizeY() == 512
@@ -1664,7 +1706,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 			Item->SetBoolField(TEXT("passed"), bValid);
 			Assets.Add(MakeShared<FJsonValueObject>(Item));
 		}
-		const FString BackdropPath = ObjectPath(FString(StageRoot) + TEXT("Textures/T_Garden_SakuraBackdropV3"));
+		const FString BackdropPath = StagePresetsObjectPath(FString(StageRoot) + TEXT("Textures/T_Garden_SakuraBackdropV3"));
 		UTexture2D* Backdrop = LoadObject<UTexture2D>(nullptr, *BackdropPath);
 		const bool bBackdropValid = Backdrop && Backdrop->SRGB && Backdrop->AddressX == TA_Clamp && Backdrop->AddressY == TA_Clamp
 			&& Backdrop->Source.GetSizeX() >= 2048 && Backdrop->Source.GetSizeY() >= 512;
@@ -1679,7 +1721,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 		FAssetCompilingManager::Get().FinishAllCompilation();
 		for (const TCHAR* Name : { TEXT("SM_GardenTreeTrunkV2"), TEXT("SM_GardenBranchV2"), TEXT("SM_GardenBlossomClusterV2"), TEXT("SM_GardenReedClumpV2") })
 		{
-			const FString Path = ObjectPath(FString(StageRoot) + TEXT("Meshes/") + Name);
+			const FString Path = StagePresetsObjectPath(FString(StageRoot) + TEXT("Meshes/") + Name);
 			UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *Path);
 			TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
 			Item->SetStringField(TEXT("asset"), Path);
@@ -1724,13 +1766,15 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 		if (!RepeatError.IsEmpty()) Errors.Add(RepeatError);
 	}
 	TArray<TStrongObjectPtr<UMMDStageRenderPreset>> Presets;
+	UMMDStageRenderPreset* EndfieldCapturePreset = nullptr;
+	TArray<UMaterialInterface*> EndfieldCaptureParents;
 	for (const FStageDefinition& Definition : Definitions)
 	{
 		Error.Reset();
 		UMMDStageRenderPreset* Preset = bMaterialsReady ? MakePreset(Definition, Materials, References, bGenerate, Error) : nullptr;
 		Presets.Emplace(Preset);
 		TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
-		Item->SetStringField(TEXT("asset"), ObjectPath(AssetPackage(TEXT("Presets"), TEXT("DA_Render_"), Definition.Name)));
+		Item->SetStringField(TEXT("asset"), StagePresetsObjectPath(AssetPackage(TEXT("Presets"), TEXT("DA_Render_"), Definition.Name)));
 		Item->SetStringField(TEXT("type"), TEXT("RenderPreset"));
 		const FMMDReferenceMaterialFamily& Family = References.Families[ReferenceFamilyFor(Definition)];
 		const bool bPresetBindingsValid = Preset && Preset->CharacterMaterialOpaque == Family.Opaque
@@ -1747,7 +1791,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 			UBlueprint* Blueprint = MakeStageBlueprint(Definition, Preset, bGenerate, Error);
 			UWorld* World = MakeStageMap(Definition, Blueprint, bGenerate, Error);
 			TSharedRef<FJsonObject> BlueprintItem = MakeShared<FJsonObject>();
-			BlueprintItem->SetStringField(TEXT("asset"), ObjectPath(AssetPackage(TEXT("Blueprints"), TEXT("BP_MMDStage_"), Definition.Name)));
+			BlueprintItem->SetStringField(TEXT("asset"), StagePresetsObjectPath(AssetPackage(TEXT("Blueprints"), TEXT("BP_MMDStage_"), Definition.Name)));
 			BlueprintItem->SetStringField(TEXT("type"), TEXT("Blueprint"));
 			BlueprintItem->SetBoolField(TEXT("passed"), Blueprint && Blueprint->GeneratedClass && Blueprint->Status != BS_Error);
 			Assets.Add(MakeShared<FJsonValueObject>(BlueprintItem));
@@ -1768,7 +1812,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 				}
 			}
 			TSharedRef<FJsonObject> MapItem = MakeShared<FJsonObject>();
-			MapItem->SetStringField(TEXT("asset"), ObjectPath(AssetPackage(TEXT("Maps"), TEXT("MMDStage_"), Definition.Name)));
+			MapItem->SetStringField(TEXT("asset"), StagePresetsObjectPath(AssetPackage(TEXT("Maps"), TEXT("MMDStage_"), Definition.Name)));
 			MapItem->SetStringField(TEXT("type"), TEXT("Map"));
 			MapItem->SetNumberField(TEXT("stage_count"), StageCount);
 			MapItem->SetNumberField(TEXT("camera_count"), CameraCount);
@@ -1786,6 +1830,13 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 	OutlineValidation->SetStringField(TEXT("type"), TEXT("OutlinePresetValidation"));
 	OutlineValidation->SetBoolField(TEXT("passed"), OutlineParent.IsValid() && OutlineValidation->GetBoolField(TEXT("success")));
 	Assets.Add(MakeShared<FJsonValueObject>(OutlineValidation));
+	// 终末地包不在上面的预设循环里，单独加载并把它和父材质一起纳入编译等待，
+	// 否则首次截图会拿到尚未完成的 shader map。
+	const bool bEndfieldReady = !bEndfieldCapture || EndfieldCaptureLoadBundle(EndfieldCapturePreset, EndfieldCaptureParents, Error);
+	if (bEndfieldCapture && !bEndfieldReady)
+	{
+		Errors.Add(Error);
+	}
 	if (FApp::CanEverRender() && GShaderCompilingManager && !GUsingNullRHI)
 	{
 		TArray<UMaterialInterface*> Parents = { Materials.CharacterOpaque, Materials.CharacterMasked,
@@ -1798,6 +1849,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 			Parents.Add(Family.Masked);
 			Parents.Add(Family.Translucent);
 		}
+		Parents.Append(EndfieldCaptureParents);
 		for (UMaterialInterface* Parent : Parents)
 		{
 			if (UMaterial* Material = Parent ? Parent->GetMaterial() : nullptr)
@@ -1895,10 +1947,24 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 			Lights->SetShadowCameraData(EmptyShadowData);
 			for (int32 Index = 0; Index < UE_ARRAY_COUNT(Definitions); ++Index)
 			{
+				if (bEndfieldCapture) break;
 				if (Presets[Index].IsValid() && (CapturePresetFilter.IsEmpty() || CapturePresetFilter == Definitions[Index].Name))
 				{
 					CaptureResults.Add(MakeShared<FJsonValueObject>(CapturePreset(
 						Definitions[Index], Presets[Index].Get(), Sample, ScreenshotDirectory)));
+				}
+			}
+			if (bEndfieldCapture)
+			{
+				// 复用七套完全相同的截图流程（全身 / 细节 / 脸部特写），只是换成新入库的终末地预设。
+				if (!bEndfieldReady)
+				{
+					Errors.Add(TEXT("Endfield capture skipped: the preset or its character materials could not be loaded"));
+				}
+				else
+				{
+					CaptureResults.Add(MakeShared<FJsonValueObject>(CapturePreset(
+						EndfieldCaptureDefinition, EndfieldCapturePreset, Sample, ScreenshotDirectory)));
 				}
 			}
 			const FStageDefinition Comparisons[] =
@@ -1911,7 +1977,7 @@ int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 			const int32 SourcePresetIndices[] = { 4, 6, 5, 3 };
 			for (int32 Index = 0; Index < UE_ARRAY_COUNT(Comparisons); ++Index)
 			{
-				if (!CapturePresetFilter.IsEmpty()) continue;
+				if (!CapturePresetFilter.IsEmpty() || bEndfieldCapture) continue;
 				UMMDStageRenderPreset* Source = Presets[SourcePresetIndices[Index]].Get();
 				if (!Source || !Presets[0].IsValid())
 				{

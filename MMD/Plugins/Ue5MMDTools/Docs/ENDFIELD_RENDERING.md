@@ -1,7 +1,59 @@
 # 终末地角色渲染复刻
 
 本文记录终末地角色渲染在本插件的落地实现、依据来源、与真实实现的差异，以及尚未验证的部分。
-日期：2026-10-12，时区 Asia/Singapore。
+更新日期：2026-10-14，时区 Asia/Singapore。
+
+## 当前原生后端
+
+V2 已进一步接入插件自己的逐灯光 BSDF 与 GI／反射合成入口，安装引擎文件保持不变。读者先看[图解入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，具体接口与同日已完成的 Cook／打包验证见[原生后端记录](ENDFIELD_NATIVE_BACKEND.md)。下方 2026-10-13 批次和旧 Unlit 章节是各阶段的实现历史，不能用其旧限制替代最新状态；完整终末地画质仍未验收。
+
+## 当前目标与既定方案
+
+目标是本机真实终末地的完整角色渲染复刻。已重新读取 Claude Code 的原会话完整考虑项，并按用户本聊天的再次确认恢复 **球面法线 + 自动烘焙 SDF** 作为脸部方案。自动派生 SDF 已获许可，保留 base_color 单输入兜底；不能把“通用性”解释成关闭这一方案。真实 ramp、头发高光环/暗体积/刘海阴影、各材质分路、眼部细节、深度 rim、底色驱动描边、角色打光和后处理都属于待完成范围，详见 [完整清单](ENDFIELD_V2_FOR_GPT.md)。
+
+V2 已接通自动 SDF 与球面法线，公共计算集中在 ush；真实 ramp 与其余完整特征仍在清单内。原生节点不能表达的部分须寻找插件内补充实现，不因节点限制删掉目标；不能以编译与截图数量作为复刻完成证据。
+
+## 最新批次：自动 SDF 与接触阴影（2026-10-13）
+
+`Core/TMMDEndfieldNative.ush` 用一个 struct Custom 节点输出法线、PatternUV、有效脸部 mask 与可选 shadow coverage。Skin Profile 使用共享线性 offset gradient，逐灯明暗、场景/普通自阴影依然由原生 Toon 计算；无需主光材质连线或每模型 Profile。默认关闭角色接触阴影，已在同姿态对照中消除鼻灰点；脸面 ShadowPassSwitch 抑制默认 0，保留普通投影。
+
+PMX 同步/异步导入自动生成按皮肤槽的 SDF，并以 `UMMDEndfieldFaceData` 随网格保存和 Cook 引用。已有网格可用 `-run=MMDEndfieldBindSdf -Mesh=<对象路径> -Report=<json>` 只读校验，加 `-Generate` 生成并保存绑定；可指定 `-Slots=0,1 -Size=512 -OutputFolder=<资产目录>`。不要求用户手工接贴图。
+
+Version3：R/G 为头部右/左角阈值除以 π；B=1 表示已确认镜像共 UV，需要依据当前几何侧解码，B=0 直接使用；A 是有效区域。普通 UV 不翻转，超出 0–1 的 tile 使用 frac。复杂重叠、缺头骨/UV/派生数据安全回退。阈值法线默认混合 75% 球面和 25% 几何；仅表示固定俯角下包含正前方的连续亮区，不是遮挡射线烘焙。原生 Toon 漫反射和高光共用法线，独立球面高光仍需补充。
+
+实际验证、因果对照与来源见[本批归档](Screenshots/2026-10-13-endfield-sdf-contact/README.md)。p17 保存 Version3，p18 非 Substrate 与 p19 原生独立回读，三组均零失败；verify3 只读校验通过且不写包。实际 Cook/打包尚未验证。完整终末地画质未验收；后续真实 RD 不能直接复制 RGB 到 Profile，客户端使用 A 混合与色度 tint，RS 还乘波瓣，二维 RS 的纵轴与粗糙度相关。已在 Saved 的 `native_role_ramp_plan.json` 留下代表材料与字节码证据，继续从这里对齐真实响应。
+
+## V2 最新接入：引擎原生 Toon（2026-10-13）
+
+旧 Unlit 画面已被用户否决。V2 改用 UE5.8 原生 Substrate Toon BSDF 与 `UToonProfile`，从引擎接收光照、阴影与环境响应；没有修改引擎。**本批完成基础接入与回退，尚未达到终末地画质目标。** 实际图和限制见 [V2 归档](Screenshots/2026-10-13-endfield-native-v2/README.md)，接手入口见 [最新交接状态](ENDFIELD_V2_FOR_GPT.md)。
+
+预设位于 `/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2`。将它传给 `ApplyCharacterRenderPreset`，舞台可继续使用原来的预设应用接口。启用 Substrate 后优先选择三种 `CharacterToonMaterial*`；关闭或缺少对应父材质时选旧 `CharacterMaterial*`。本批没有修改项目默认开关，代表原生图使用后台进程的 `r.Substrate=True`，多灯统一漫反射保留默认 0。
+
+原生参数通过 `CharacterToonRoles` 与对应 Profile 的曲线调整；旧 `ShadowThreshold` 等 Unlit 参数不会改写原生 Profile。部位缺省时使用 Generic，Profile 缺省时使用父材质。只需要源底色贴图；透明度取其 alpha 与源 Opacity，三种材质均支持骨骼网格、Morph 与双面。没有 SDF、脸部 UV 阈值图、法线贴图或 ramp 贴图的必需输入；球面法线默认关闭并限制在头部附近。
+
+新增 `-run=MMDEndfieldToonPresets`：显式 `-Generate` 才保存，白名单为三材质、六 Profile、一个预设，共十包；省略该参数只读回资产、核对图/曲线/引用并验证绘制 shader。默认工程关闭 Substrate 时，该生成器会明确拒绝原生编译验证；运行时回退另由探针检查。启动原生验证的参数示例：
+
+```text
+-run=MMDEndfieldToonPresets -Report=<报告路径>
+-AllowCommandletRendering -RenderOffscreen -d3d12 -unattended
+-ini:Engine:[/Script/Engine.RendererSettings]:r.Substrate=True
+```
+
+新增探针入口验证保存后的实际消费链：
+
+```text
+-run=MMDEndfieldToonProbe -Exp=ab,runtime,shadow,lighting
+-NativePreset=/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.DA_Render_EndfieldV2
+-OutDir=<输出目录> -Tag=<批次名> -LumenTracking
+```
+
+`p12` 原生路径 53 图 / 0 失败，`p11` 非 Substrate 回退 9 图 / 0 失败；角色切换、源贴图/其他槽保留、清除分类与恢复均通过。生成与最后磁盘回读通过，三种材质为 21/40/29 个真实绘制 shader。图签名覆盖所有根输入，包括 WPO/PDO/Displacement；曲线回读排除 transient key handles，逐项比较实际序列化数据，避免把随机句柄误判为曲线改动。
+
+当前限制：鼻部灰点和发片高光仍待改善；本机 Toon 节点不消费自定义切线，没有可控天使环。多灯统一漫反射开关 1 在同资产对照中过暗，未采用。天空、场景阴影和自阴影有明确响应，GI 对照差异很小，尚不能证明 Lumen GI 已完整生效；主视图、Cook、打包、移动端未验证。Profile 数值为候选，不宣称原作真实方程或视觉等价。
+
+## 以下为旧 Unlit 版本的实现记录
+
+旧资产作为非 Substrate 回退保留。以下自算光照路线不是 V2 的整体架构，但自动 SDF、头发与 rim 等已有实现仍需审查、修复并接入既定方案；不得再次整体排除自动 SDF。用户不需要手工制作专属配套贴图。
 
 ## 依据来源（重要）
 
@@ -207,10 +259,17 @@ pwsh -File MMD\Plugins\Ue5MMDTools\Scripts\Invoke-EndfieldPresets.ps1 -NoGenerat
 
 诚实列出，不把"验证链通过"当成画质成果：
 
-1. **未在本机编译或运行过。** 沙箱是 Linux，UE 二进制是 Windows `.exe`（`Exec format error`，无 wine）。
-   所有 C++ 与 HLSL 只经过静态检查，**可能存在静态检查无法发现的编译错误**。
-2. **画面未经验收。** 没有截图，没有与终末地的视觉对比。能否达到目标必须人工看图判断。
-3. **SDF 烘焙未实跑。** 算法与入口已实现，但未经真实模型运行，
+1. **编译与生成已在 Windows 主机实跑通过（2026-10-13）。**
+   `MMDEditor` 编译 `Result: Succeeded`；`-run=MMDEndfieldPresets -Generate` 报告
+   `success: true, failed: 0`，三套父材质 SM6 shader map 真实编译通过并写入插件 Content。
+   本批修复了上一轮遗留的四类真实错误：`u8` 类型名、`Engine/Skeleton.h` 头文件路径、
+   匿名命名空间 helper 在 unity build 下撞名、以及材质图把纹理对象当数值相乘
+   （`base_color` 改用 `TextureSampleParameter2D`，opacity 接 alpha 通道）。
+   另修正签名缺陷：原签名只哈希 shader 源码，改材质图接线不会触发重建、
+   会静默复用旧图，现加入 `EndfieldMaterialGraphVersion` 参与哈希。
+2. **画面未经验收。** 截图见 `Screenshots/2026-10-13-endfield-preset/`，
+   但**尚无与终末地的逐项视觉对比**，能否达标必须人工看图判断。
+3. **SDF 烘焙未实跑。** 算法与入口已实现（`-run=MMDEndfieldBakeSdf`），但未经真实模型运行，
    头部基推导与脸部 texel 判定是否覆盖插件测试夹具尚未验证；
    包围盒兜底路径的角度偏差也未实测。
 4. **面部与头发的最终形状未经调参。** 发丝高光阈值、SDF 锐度、各向异性强度等参数

@@ -245,6 +245,19 @@ struct TMMDEndfieldCharacter
                         ? ComputeFaceMask(world_pos, world_normal, head_position_radius.xyz,
                                           head_position_radius.w, head_forward, head_right, head_up)
                         : 0.0;
+        bool sdf_enabled = role == 1 && head_valid && use_sdf_map > 0.5;
+        float4 face_sdf = 0.0;
+        float sdf_head_mask = 0.0;
+        if (sdf_enabled)
+        {
+            face_sdf = Texture2DSample(sdf_map, sdf_mapSampler, frac(Parameters.TexCoords[0]));
+            if (face_sdf.b > 0.5 && dot(world_pos - head_position_radius.xyz, head_right) < 0.0)
+                face_sdf.rg = face_sdf.gr;
+            // 烘焙 A 定义脸部区域；头部范围防止身体复用 UV 时误套脸部效果。
+            float head_distance = length(world_pos - head_position_radius.xyz) / head_position_radius.w;
+            sdf_head_mask = 1.0 - smoothstep(1.55, 1.75, head_distance);
+            face_mask = saturate(face_sdf.a) * sdf_head_mask;
+        }
 
         float metallic = role == 4 ? 1.0 : 0.0;
         float3 f0;
@@ -308,17 +321,13 @@ struct TMMDEndfieldCharacter
         float scene_shadow_hardened = endfield.SigmoidSharp(scene_shadow, 0.0, max(scene_shadow_sharpness, 0.01));
         float shadow = saturate(min(scene_shadow_hardened, lambert_shadow));
 
-        // 脸部 SDF：需要头部基 + SDF 图 + 显式开关三者齐备，否则回退半兰伯特。
-        bool sdf_active = role == 1 && head_valid && use_sdf_map > 0.5;
+        // 只有烘焙的有效脸部区域启用 SDF；缺图、A=0 或缺头部基均回退半兰伯特。
+        bool sdf_active = sdf_enabled && face_mask > 1e-3;
         if (sdf_active)
         {
-            float sdf_shadow = endfield.FaceSdfShadow(key_direction, head_forward, head_right,
-                                                     Parameters.TexCoords[0], sdf_map, sdf_mapSampler,
-                                                     true, flip_sdf_threshold, sdf_shadow_center, sdf_sharpness);
-            if (sdf_shadow >= 0.0)
-                shadow = min(shadow, sdf_shadow);
-            else
-                sdf_active = false;
+            float sdf_shadow = endfield.FaceSdfShadowSample(key_direction, head_forward, head_right,
+                                                          face_sdf, sdf_shadow_center, sdf_sharpness);
+            shadow = min(shadow, lerp(1.0, sdf_shadow, sdf_head_mask));
         }
 
         bool ramp_active = use_ramp_map > 0.5;

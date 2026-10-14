@@ -34,7 +34,7 @@
 
 namespace
 {
-	const TCHAR* AllowedPackages[] = {
+	const TCHAR* Phase2AllowedPackages[] = {
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldPhase2/M_MMD_EndfieldPhase2_Opaque"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldPhase2/M_MMD_EndfieldPhase2_Masked"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldPhase2/M_MMD_EndfieldPhase2_Translucent"),
@@ -57,7 +57,7 @@ namespace
 		TEXT("surface_diffuse_normal"), TEXT("surface_specular_normal_roughness"),
 		TEXT("surface_hair_tangent_strand"), TEXT("surface_detail_response") };
 
-	FString ObjectPath(const FString& Package)
+	FString Phase2ObjectPath(const FString& Package)
 	{
 		return Package + TEXT(".") + FPackageName::GetLongPackageAssetName(Package);
 	}
@@ -66,7 +66,7 @@ namespace
 	{
 		const FString Package = Asset ? Asset->GetOutermost()->GetName() : FString();
 		bool bAllowed = false;
-		for (const TCHAR* Allowed : AllowedPackages) bAllowed |= Package == Allowed;
+		for (const TCHAR* Allowed : Phase2AllowedPackages) bAllowed |= Package == Allowed;
 		if (!bAllowed) { Error = TEXT("Refused a save outside the exact four-package EndfieldPhase2 whitelist"); return false; }
 		const FString Filename = FPackageName::LongPackageNameToFilename(Package, FPackageName::GetAssetPackageExtension());
 		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Filename), true);
@@ -82,7 +82,7 @@ namespace
 		return true;
 	}
 
-	bool BuildSignature(FString& Signature, FString& Error)
+	bool Phase2BuildSignature(FString& Signature, FString& Error)
 	{
 		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
 		if (!Plugin) { Error = TEXT("Ue5MMDTools plugin is unavailable"); return false; }
@@ -282,19 +282,19 @@ int32 UMMDEndfieldPhase2Commandlet::Main(const FString& Params)
 	FString Signature, Error;
 	const TCHAR* Blends[] = { TEXT("Opaque"), TEXT("Masked"), TEXT("Translucent") };
 	const EBlendMode Modes[] = { BLEND_Opaque, BLEND_Masked, BLEND_Translucent };
-	if (!BuildSignature(Signature, Error)) Errors.Add(Error);
+	if (!Phase2BuildSignature(Signature, Error)) Errors.Add(Error);
 	for (int32 Index = 0; Index < 3 && Errors.IsEmpty(); ++Index)
 	{
-		const FString Package = AllowedPackages[Index];
+		const FString Package = Phase2AllowedPackages[Index];
 		const bool bExists = FPackageName::DoesPackageExist(Package);
-		UMaterial* Material = bExists ? LoadObject<UMaterial>(nullptr, *ObjectPath(Package)) : nullptr;
+		UMaterial* Material = bExists ? LoadObject<UMaterial>(nullptr, *Phase2ObjectPath(Package)) : nullptr;
 		if (bExists && (!Material || !CheckGraph(Material, Modes[Index], true, Error)))
 		{ Errors.Add(TEXT("Existing dedicated asset is invalid; refusing replacement: ") + Package + TEXT(" ") + Error); break; }
 		if (!Material)
 		{
 			if (!bGenerate) { Errors.Add(TEXT("Dedicated asset is missing: ") + Package); break; }
 			const FString Template = FString(TEXT("/Ue5MMDTools/Stages/Materials/M_MMD_Reference_Endfield_")) + Blends[Index];
-			UMaterial* Source = LoadObject<UMaterial>(nullptr, *ObjectPath(Template));
+			UMaterial* Source = LoadObject<UMaterial>(nullptr, *Phase2ObjectPath(Template));
 			if (!CheckGraph(Source, Modes[Index], false, Error)) { Errors.Add(Template + TEXT(" ") + Error); break; }
 			Material = DuplicateObject<UMaterial>(Source, CreatePackage(*Package), *FPackageName::GetLongPackageAssetName(Package));
 			if (!Material) { Errors.Add(TEXT("Cannot duplicate dedicated material: ") + Package); break; }
@@ -314,9 +314,9 @@ int32 UMMDEndfieldPhase2Commandlet::Main(const FString& Params)
 	TStrongObjectPtr<UMMDStageRenderPreset> Preset;
 	if (Errors.IsEmpty() && Parents.Num() == 3)
 	{
-		const FString Package = AllowedPackages[3];
+		const FString Package = Phase2AllowedPackages[3];
 		const bool bExists = FPackageName::DoesPackageExist(Package);
-		Preset.Reset(bExists ? LoadObject<UMMDStageRenderPreset>(nullptr, *ObjectPath(Package)) : nullptr);
+		Preset.Reset(bExists ? LoadObject<UMMDStageRenderPreset>(nullptr, *Phase2ObjectPath(Package)) : nullptr);
 		if (bExists && (!Preset.IsValid() || Preset->CharacterMaterialOpaque != Parents[0].Get()
 			|| Preset->CharacterMaterialMasked != Parents[1].Get() || Preset->CharacterMaterialTranslucent != Parents[2].Get()))
 			Errors.Add(TEXT("Existing dedicated preset has different bindings; refusing replacement"));

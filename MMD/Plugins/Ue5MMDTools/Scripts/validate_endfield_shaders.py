@@ -19,6 +19,7 @@ from pathlib import Path
 
 # 需要检查的入口文件（相对插件根目录）
 TARGETS = [
+    "Shaders/Core/TMMDEndfieldNative.ush",
     "Shaders/Core/TMMDEndfieldLighting.ush",
     "Shaders/TMMDShader/TMMDEndfieldCharacter.usf",
 ]

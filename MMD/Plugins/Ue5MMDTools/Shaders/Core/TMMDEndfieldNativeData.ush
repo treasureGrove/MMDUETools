@@ -1,0 +1,66 @@
+#pragma once
+
+// 仅放在 BSDFContext 的本地临时成员中；不写入材质缓冲，不依赖其它引擎类型。
+// 构造 Context 时整体清零；只有原生逐灯入口填完这些字段后才设置 valid。
+struct TMMDEndfieldNativeLightData
+{
+    bool valid;
+
+    // FDeferredLightData；颜色已包含光强，位置与接收点使用同一平移世界空间。
+    float3 light_color;
+    float3 light_direction;
+    float3 light_tangent;
+    float3 light_translated_position;
+    float inv_radius;
+    float falloff_exponent;
+    float2 spot_angles;
+    float source_radius;
+    float soft_source_radius;
+    float source_length;
+    float diffuse_scale;
+    float specular_scale;
+    bool radial_light;
+    bool spot_light;
+    bool rect_light;
+    bool inverse_squared;
+    uint shadowed_bits;
+    uint affects_translucent_lighting;
+
+    float contact_shadow_length;
+    float contact_shadow_casting_intensity;
+    float contact_shadow_non_casting_intensity;
+    bool contact_shadow_length_in_world_space;
+    float2 distance_fade_mad;
+    float4 shadow_map_channel_mask;
+    float ies_atlas_index;
+    uint light_function_atlas_light_index;
+
+    // 矩形灯与头发透光参数扁平化，避免引入嵌套引擎 struct。
+    float rect_barn_cos_angle;
+    float rect_barn_length;
+    float2 rect_atlas_uv_offset;
+    float2 rect_atlas_uv_scale;
+    float rect_atlas_max_level;
+    bool hair_use_legacy_absorption;
+    bool hair_use_separable_r;
+    bool hair_use_backlit;
+    bool hair_clamp_bsdf_value;
+    float hair_opaque_visibility;
+    float3 hair_local_scattering;
+    float3 hair_global_scattering;
+    uint hair_scattering_component;
+
+    // 此灯在接收点的方向与衰减；light_direction 保留灯描述自身的方向。
+    float3 light_vector;
+    float3 to_light;
+    float light_mask;
+
+    // 原生合并前的阴影输入；合并后的 ShadowTerms 仍由 BSDF 调用链单独传递。
+    bool evaluate_shadow_terms;
+    bool use_shadow_terms_hair_transmittance;
+    float4 shadow_attenuation;
+    float4 precomputed_shadow_factors;
+    float3 receiver_translated_position;
+    float scene_depth;
+    float dither;
+};

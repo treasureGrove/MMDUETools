@@ -1,0 +1,189 @@
+#pragma once
+
+// 仅由原生 BSDF 后端 include；需在 FSubstrateBSDFContext 与原生 Toon 函数定义之后。
+// Profile alpha 控制模式：0 保真透传，1 阴影诊断，2 三档响应原型；2 不是最终终末地参数。
+struct TMMDEndfieldNativeBSDF
+{
+    bool IsEndfieldProfile(float profile_id, out uint role)
+    {
+        role = 0u;
+        if (!(profile_id >= 0.0 && profile_id <= 255.0)) return false;
+        float profile_index = round(profile_id);
+        if (abs(profile_id - profile_index) >= 0.01) return false;
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        if (width == 0u) return false;
+
+        // 自有 Profile 的 alpha 首尾平台保存双签名；普通 Toon 颜色只消费 RGB。
+        float first_alpha = View.ToonProfileTexture.Load(
+            int4(0, TOON_PROFILE_DIFFUSE_RAMP_Y, int(profile_index), 0)).a;
+        float last_alpha = View.ToonProfileTexture.Load(
+            int4(int(width - 1u), TOON_PROFILE_DIFFUSE_RAMP_Y, int(profile_index), 0)).a;
+        float decoded_role = round(-first_alpha - 32.0);
+        if (!(decoded_role >= 0.0 && decoded_role <= 5.0)) return false;
+        if (!(abs(first_alpha + 32.0 + decoded_role) < 0.01
+            && abs(last_alpha + 64.0 + decoded_role) < 0.01)) return false;
+        role = uint(decoded_role);
+        return true;
+    }
+
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 0.000001 ? value * rsqrt(length_squared) : fallback;
+    }
+
+    float3 ReadProfileControls(float profile_id)
+    {
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        float3 controls = float3(0.0, 1.0, 1.0);
+        if (width < 16u) return controls;
+        uint3 indices = uint3(round(float(width - 1u) * float3(0.25, 0.40625, 0.5625)));
+        controls.x = View.ToonProfileTexture.Load(int4(int(indices.x), TOON_PROFILE_DIFFUSE_RAMP_Y, int(round(profile_id)), 0)).a;
+        controls.y = View.ToonProfileTexture.Load(int4(int(indices.y), TOON_PROFILE_DIFFUSE_RAMP_Y, int(round(profile_id)), 0)).a;
+        controls.z = View.ToonProfileTexture.Load(int4(int(indices.z), TOON_PROFILE_DIFFUSE_RAMP_Y, int(round(profile_id)), 0)).a;
+        return float3(clamp(round(controls.x), 0.0, 2.0), clamp(controls.yz, 0.0, 8.0));
+    }
+
+    FSubstrateEvaluateToonResult EvaluateNative(FSubstrateBSDFContext bsdf_context,
+        FShadowTerms shadow_terms, FAreaLight area_light, bool is_rect_light, bool apply_diffuse_ramp)
+    {
+        float3 base_color = TOON_BASECOLOR(bsdf_context.BSDF);
+        float metallic = TOON_METALLIC(bsdf_context.BSDF);
+        float3 diffuse_color = ComputeDiffuseAlbedo(base_color, metallic);
+        float3 specular_color = ComputeF0(TOON_SPECULAR(bsdf_context.BSDF), base_color, metallic);
+        float anisotropy = TOON_ANISOTROPY(bsdf_context.BSDF);
+        bool has_anisotropy = BSDF_GETHASANISOTROPY(bsdf_context.BSDF) && anisotropy != 0.0;
+
+        return SubstrateToonEvaluateCommon(diffuse_color, specular_color,
+            TOON_ROUGHNESS(bsdf_context.BSDF), TOON_PROFILEID(bsdf_context.BSDF),
+            TOON_PATTERNUVS(bsdf_context.BSDF), anisotropy, BSDF_GETEMISSIVE(bsdf_context.BSDF),
+            bsdf_context.Context, has_anisotropy, is_rect_light, apply_diffuse_ramp,
+            bsdf_context.N, bsdf_context.V, area_light,
+            shadow_terms.SurfaceShadow, shadow_terms.TransmittanceOrOpticalThickness);
+    }
+
+    FSubstrateBSDFContext BuildSpecularContext(FSubstrateBSDFContext bsdf_context, float3 specular_normal)
+    {
+        float3 normal = SafeNormalize(specular_normal, bsdf_context.N);
+        float3 tangent = bsdf_context.X - normal * dot(bsdf_context.X, normal);
+        float3x3 fallback_basis = GetTangentBasis(normal);
+        tangent = SafeNormalize(tangent, fallback_basis[0]);
+        float3 bitangent = cross(normal, tangent);
+        float3x3 tangent_basis = float3x3(tangent, bitangent, normal);
+
+        FSubstrateBSDFContext result = SubstrateCreateBSDFContext(tangent_basis, bsdf_context.BSDF,
+            bsdf_context.V, bsdf_context.L, true, bsdf_context.PixelCoord);
+        result.mmd_light_data = bsdf_context.mmd_light_data;
+        return result;
+    }
+
+    FSubstrateEvaluateToonResult DiagnoseShadow(FSubstrateEvaluateToonResult native_result,
+        FShadowTerms shadow_terms, FAreaLight area_light)
+    {
+        // RGB 分别为不透明表面、透射、Toon 透光率；外层灯颜色、强度与 GI 仍会参与合成。
+        float3 shadow_channels = saturate(float3(shadow_terms.SurfaceShadow,
+            shadow_terms.TransmissionShadow, shadow_terms.TransmittanceOrOpticalThickness));
+        native_result.DiffuseColor = shadow_channels;
+        native_result.DiffusePathValue = Diffuse_Lambert(shadow_channels);
+        native_result.IntegratedDiffuseValue = area_light.Falloff * area_light.FalloffColor
+            * native_result.DiffusePathValue;
+        native_result.SpecularPathValue = 0.0;
+        native_result.IntegratedSpecularValue = 0.0;
+        native_result.ToonDataWeight = area_light.Falloff;
+        native_result.ToonDataShadowNoL = shadow_terms.TransmittanceOrOpticalThickness;
+        return native_result;
+    }
+
+    float QuantizeToonCoordinate(float coordinate)
+    {
+        coordinate = saturate(coordinate);
+        return coordinate < 0.35 ? 0.175 : (coordinate < 0.65 ? 0.5 : 0.825);
+    }
+
+    FSubstrateEvaluateToonResult EvaluateToonResponse(FSubstrateBSDFContext bsdf_context,
+        FShadowTerms shadow_terms, FAreaLight diffuse_area_light, FAreaLight specular_area_light,
+        bool is_rect_light, bool apply_diffuse_ramp, float3 diffuse_normal, float3 specular_normal)
+    {
+        FSubstrateBSDFContext specular_context = BuildSpecularContext(bsdf_context, specular_normal);
+        FSubstrateEvaluateToonResult result = EvaluateNative(specular_context, shadow_terms,
+            specular_area_light, is_rect_light, apply_diffuse_ramp);
+
+        float profile_id = TOON_PROFILEID(bsdf_context.BSDF);
+        float2 pattern_uv = TOON_PATTERNUVS(bsdf_context.BSDF);
+        FToonProfileEvaluateSettings profile_settings = GetToonProfileEvaluateSettings(profile_id);
+        float shadow = shadow_terms.TransmittanceOrOpticalThickness;
+        float diffuse_offset = 0.0;
+        #if TOON_CAN_USE_PATTERNS_UVS
+            FToonProfileShadowSettings shadow_settings = GetToonProfileShadowSettings(profile_id);
+            shadow = EvaluateToonProfileShadowHatching(profile_id, pattern_uv, shadow_settings, shadow);
+            diffuse_offset = EvaluateToonProfileDiffuseDither(profile_id, pattern_uv, profile_settings);
+        #endif
+
+        float3 normal = SafeNormalize(diffuse_normal, bsdf_context.N);
+        float n_dot_l = dot(normal, bsdf_context.L);
+        float ramp_coordinate = saturate(n_dot_l * 0.5 + 0.5);
+        if (profile_settings.bDiffuseRampIncludeShadow)
+            ramp_coordinate *= shadow;
+        ramp_coordinate = QuantizeToonCoordinate(ramp_coordinate);
+
+        // 保留原生 Profile 颜色、SDF 编码的 offset 与真实遮挡；只替换明暗响应曲线。
+        float3 diffuse_ramp = apply_diffuse_ramp
+            ? EvaluateToonProfileDiffuseRamp(profile_id, ramp_coordinate + diffuse_offset) : 1.0;
+        float3 diffuse_color = ComputeDiffuseAlbedo(TOON_BASECOLOR(bsdf_context.BSDF),
+            TOON_METALLIC(bsdf_context.BSDF));
+        result.DiffuseColor = diffuse_color * diffuse_ramp;
+        result.DiffusePathValue = Diffuse_Lambert(result.DiffuseColor);
+        result.IntegratedDiffuseValue = (profile_settings.bDiffuseRampIncludeShadow ? 1.0 : shadow)
+            * diffuse_area_light.Falloff * diffuse_area_light.FalloffColor * result.DiffusePathValue;
+        result.DiffusePDF = saturate(n_dot_l) / PI;
+        result.ToonDataWeight = shadow * diffuse_area_light.Falloff;
+        result.ToonDataShadowNoL = ramp_coordinate;
+        return result;
+    }
+
+    FSubstrateEvaluateToonResult EvaluatePerLightWithNormals(FSubstrateBSDFContext bsdf_context,
+        FShadowTerms shadow_terms, FAreaLight area_light, bool is_rect_light, bool apply_diffuse_ramp,
+        uint response_mode, float3 diffuse_normal, float3 specular_normal, FAreaLight specular_area_light)
+    {
+        uint role;
+        if (!IsEndfieldProfile(TOON_PROFILEID(bsdf_context.BSDF), role))
+            return EvaluateNative(bsdf_context, shadow_terms, area_light, is_rect_light, apply_diffuse_ramp);
+        response_mode = uint(ReadProfileControls(TOON_PROFILEID(bsdf_context.BSDF)).x);
+        if (response_mode == 0u)
+            return EvaluateNative(bsdf_context, shadow_terms, area_light, is_rect_light, apply_diffuse_ramp);
+
+        if (response_mode == 2u)
+            return EvaluateToonResponse(bsdf_context, shadow_terms, area_light, specular_area_light,
+                is_rect_light, apply_diffuse_ramp, diffuse_normal, specular_normal);
+
+        // 诊断只对带双签名的自有 Profile 生效。
+        FSubstrateEvaluateToonResult native_result = EvaluateNative(bsdf_context, shadow_terms,
+            area_light, is_rect_light, apply_diffuse_ramp);
+        if (response_mode == 1u)
+            return DiagnoseShadow(native_result, shadow_terms, area_light);
+        return native_result;
+    }
+
+    FSubstrateEvaluateToonResult EvaluatePerLight(FSubstrateBSDFContext bsdf_context,
+        FShadowTerms shadow_terms, FAreaLight area_light, bool is_rect_light, bool apply_diffuse_ramp,
+        uint response_mode)
+    {
+        return EvaluatePerLightWithNormals(bsdf_context, shadow_terms, area_light, is_rect_light,
+            apply_diffuse_ramp, response_mode, bsdf_context.N, bsdf_context.N, area_light);
+    }
+
+    void ApplyEnvironment(float profile_id, inout float3 diffuse_weight, inout float3 specular_weight,
+        float diffuse_scale, float specular_scale)
+    {
+        uint role;
+        if (!IsEndfieldProfile(profile_id, role)) return;
+        float3 controls = ReadProfileControls(profile_id);
+        diffuse_scale = controls.y;
+        specular_scale = controls.z;
+        // 单位倍率不写回，保持引擎 GI 与反射的原始权重。
+        if (diffuse_scale != 1.0)
+            diffuse_weight *= max(diffuse_scale, 0.0);
+        if (specular_scale != 1.0)
+            specular_weight *= max(specular_scale, 0.0);
+    }
+};

@@ -3,6 +3,7 @@
 #include "Misc/CoreDelegates.h"
 #include "Misc/Paths.h"
 #include "Rendering/FMMDAnimeLightViewExtension.h"
+#include "Rendering/MMDEndfieldNativeBackend.h"
 #include "SceneViewExtension.h"
 #include "ShaderCore.h"
 void FUe5MMDToolsModule::StartupModule()
@@ -11,6 +12,7 @@ void FUe5MMDToolsModule::StartupModule()
     {
         AddShaderSourceDirectoryMapping(TEXT("/Plugin/Ue5MMDTools"), FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders")));
     }
+    MMDEndfieldNativeBackend::Initialize();
     OnPostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(this, &FUe5MMDToolsModule::OnPostEngineInit);
 }
 void FUe5MMDToolsModule::OnPostEngineInit()
