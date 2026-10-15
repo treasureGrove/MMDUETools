@@ -1,0 +1,780 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-10-15",
+  "timezone": "Asia/Singapore (UTC+08:00)",
+  "batch_root_relative": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15",
+  "engine": "UE 5.8.3-58210709+++UE5+Release-5.8",
+  "evidence_type": "Unmodified cooked UE screenshots plus CPU/runtime/global-shader protocol provenance; limited paired GPU path smoke evidence.",
+  "archive_images": [
+    {
+      "file": "cooked-payload-valid.png",
+      "source": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean/native_backend_runtime.png",
+      "source_sha256": "87ae1edf0680770f4ab37e4e6beeb6ccb8a243d3561b242adaf56ad33361c777",
+      "archive_sha256": "87ae1edf0680770f4ab37e4e6beeb6ccb8a243d3561b242adaf56ad33361c777",
+      "bytes": 969158,
+      "source_mtime_utc_plus_08": "2026-10-15T16:31:18+08:00",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "expected_dominance": "green",
+      "roi_smoke_check": {
+        "roi_xyxy_exclusive": [
+          615,
+          320,
+          960,
+          700
+        ],
+        "roi_pixel_count": 131100,
+        "green_dominant_count": 17447,
+        "red_dominant_count": 0
+      }
+    },
+    {
+      "file": "cooked-payload-invalid.png",
+      "source": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean/native_backend_runtime.png",
+      "source_sha256": "f1793995f8690b4bda914a7ef06ca81cc8eb4ecae66b82cb9240f49e62181b1d",
+      "archive_sha256": "f1793995f8690b4bda914a7ef06ca81cc8eb4ecae66b82cb9240f49e62181b1d",
+      "bytes": 973032,
+      "source_mtime_utc_plus_08": "2026-10-15T16:31:52+08:00",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "expected_dominance": "red",
+      "roi_smoke_check": {
+        "roi_xyxy_exclusive": [
+          615,
+          320,
+          960,
+          700
+        ],
+        "roi_pixel_count": 131100,
+        "green_dominant_count": 0,
+        "red_dominant_count": 16749
+      }
+    }
+  ],
+  "roi_smoke_definition": {
+    "roi": [
+      615,
+      320,
+      960,
+      700
+    ],
+    "coordinates": "left/top inclusive, right/bottom exclusive; original 1280x720 PNG pixels",
+    "green": "G >= 64 and 2*G >= 3*R and 2*G >= 3*B",
+    "red": "R >= 64 and 2*R >= 3*G and 2*R >= 3*B",
+    "purpose": "Read-only Pillow count of diagnostic red/green dominance; not a perceptual or Endfield quality score.",
+    "image_processing": "None. Original PNG files copied byte for byte; ROI only read in memory, no crop or transformed image saved."
+  },
+  "paired_camera_environment": {
+    "equal_report_keys": [
+      "camera_location",
+      "camera_look_at",
+      "external_camera_view_target",
+      "screenshot_width",
+      "screenshot_height",
+      "shader_format",
+      "console_variables"
+    ],
+    "all_equal": true,
+    "camera_location": "X=450.000 Y=-650.000 Z=400.000",
+    "camera_look_at": "X=0.000 Y=0.000 Z=100.000",
+    "diagnostic_gi_profile_scales": [
+      0,
+      0
+    ],
+    "note": "Lumen CVars remain enabled; only native-backend indirect diffuse/specular Profile contribution scales are zero."
+  },
+  "cook_runs": {
+    "package-v8b": {
+      "script": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b.ps1",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b.log",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b.exit.txt",
+      "process_exit_code": 0,
+      "cook_executed": true,
+      "skipcook": false,
+      "completed_stage_log_markers": {
+        "COOK": true,
+        "STAGE": true,
+        "ARCHIVE": true
+      },
+      "pak_and_iostore_commands_completed": true,
+      "cooker_backend_requested": true,
+      "target": "MMD / Win64 / Development",
+      "shader_formats": [
+        "PCD3D_SM6"
+      ],
+      "build_skipped": true,
+      "cook_maps_only": true,
+      "map": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation"
+    },
+    "package-vanilla-v8": {
+      "script": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8.ps1",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8.log",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8.exit.txt",
+      "process_exit_code": 0,
+      "cook_executed": true,
+      "skipcook": false,
+      "completed_stage_log_markers": {
+        "COOK": true,
+        "STAGE": true,
+        "ARCHIVE": true
+      },
+      "pak_and_iostore_commands_completed": true,
+      "cooker_backend_requested": false,
+      "target": "MMD / Win64 / Development",
+      "shader_formats": [
+        "PCD3D_SM6"
+      ],
+      "build_skipped": true,
+      "cook_maps_only": true,
+      "map": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation"
+    }
+  },
+  "runtime_runs": {
+    "game-normal-clean": {
+      "package": "package-v8b",
+      "report": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean/native_backend_runtime.json",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean.log",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean.exit.txt",
+      "source_png": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean/native_backend_runtime.png",
+      "backend_manifest": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-92492.json",
+      "process_exit_code": 0,
+      "command_line_from_log": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation -MMDEndfieldBackendValidation -MMDEndfieldNativeBackend -MMDEndfieldNativeBackendMode=2 -MMDEndfieldNativeIndirectDiffuseScale=1 -MMDEndfieldNativeIndirectSpecularScale=1 -MMDEndfieldValidationOut=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean -RenderOffscreen -d3d12 -sm6 -unattended -nosound -DisablePlugins=RenderDocPlugin,AndroidFileServer -NoCrashDialog -nosplash -windowed -ResX=1280 -ResY=720 -ForceRes -stdout -UTF8Output -abslog=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean.log -ini:Engine:[/Script/Engine.RendererSettings]:r.Substrate=True,[/Script/Engine.RendererSettings]:r.Substrate.ProjectGBufferFormat=1,[/Script/Engine.RendererSettings]:r.Substrate.Experimental.ToonUnifiedDiffuse=0,[/Script/Engine.RendererSettings]:r.Shadow.Virtual.Enable=1",
+      "report_summary": {
+        "success": true,
+        "CookedData": true,
+        "IsEngineBackendRequested": true,
+        "profile_marker_allowed": true,
+        "source_mapping_active": false,
+        "mode": 2,
+        "indirect_diffuse_scale": 1.0,
+        "indirect_specular_scale": 1.0,
+        "stable_frames": 160,
+        "screenshot_requested": true,
+        "screenshot_request_frame": 120,
+        "screenshot_pixel_callback_received": true,
+        "screenshot_saved": true,
+        "screenshot_captured_frame": 120,
+        "screenshot_width": 1280,
+        "screenshot_height": 720,
+        "camera_applied": true,
+        "shader_platform": 49,
+        "shader_format": "PCD3D_SM6",
+        "camera_location": "X=450.000 Y=-650.000 Z=400.000",
+        "camera_look_at": "X=0.000 Y=0.000 Z=100.000",
+        "external_camera_view_target": false,
+        "profile_rebind_eligible_materials": 12,
+        "profile_rebound_materials": 12,
+        "profile_rebind_skipped_materials": 0,
+        "profile_metadata_matching_materials": 12,
+        "profile_metadata_controls_verified": true,
+        "compiled_kernel_verified_by_this_report": false,
+        "payload_requested": null,
+        "payload_diagnostic_eligible_skin_materials": 0,
+        "payload_cpu_bound_materials": 0,
+        "payload_gpu_verified_by_this_report": false,
+        "payload_expected_screenshot_color": "not_active",
+        "payload_validation_reason": "",
+        "payload_cpu_parameters": [],
+        "failure_reason": "",
+        "console_variables": {
+          "r.DynamicGlobalIlluminationMethod": "1",
+          "r.ReflectionMethod": "1",
+          "r.Lumen.DiffuseIndirect.Allow": "1",
+          "r.Lumen.Reflections.Allow": "1",
+          "r.Lumen.HardwareRayTracing": "1",
+          "r.GenerateMeshDistanceFields": "0",
+          "r.ShadowQuality": "5",
+          "r.Shadow.Virtual.Enable": "1",
+          "r.Shadow.Virtual.SMRT.RayCountDirectional": "8",
+          "r.Shadow.Virtual.SMRT.RayCountLocal": "8",
+          "r.RayTracing": "1",
+          "r.ScreenshotDelegate": "1"
+        }
+      },
+      "backend_manifest_summary": {
+        "patch_version": "endfield-native-bsdf-v8-cooked-global-protocol",
+        "requested": true,
+        "active": false,
+        "cooked_data": true,
+        "profile_marker_allowed": true,
+        "compiled_payload_protocol": "endfield-skin-payload-v4:GetMMDEndfieldNativePayload:direction4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:oct16-mask8-quat32",
+        "payload_protocol_source": "compiled_module",
+        "expected_cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol_verified": true,
+        "all_material_kernel_verified": false,
+        "global_shader_protocol_scope": "Serialized compile reflection of the loaded protocol global shader only; not a GPU dispatch/readback and not proof of every cooked material or lighting shader.",
+        "reason": "Cooked profile routing allowed by the loaded protocol global shader's serialized compile reflection. Source mapping remains inactive. This proves that one global shader used the expected overlay protocol; every material/lighting kernel and GPU behavior remain independently unverified."
+      }
+    },
+    "game-valid-direct-clean": {
+      "package": "package-v8b",
+      "report": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean/native_backend_runtime.json",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean.log",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean.exit.txt",
+      "source_png": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean/native_backend_runtime.png",
+      "backend_manifest": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-29604.json",
+      "process_exit_code": 0,
+      "command_line_from_log": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation -MMDEndfieldBackendValidation -MMDEndfieldNativeBackend -MMDEndfieldNativeBackendMode=2 -MMDEndfieldNativeIndirectDiffuseScale=0 -MMDEndfieldNativeIndirectSpecularScale=0 -MMDEndfieldValidationOut=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean -RenderOffscreen -d3d12 -sm6 -unattended -nosound -DisablePlugins=RenderDocPlugin,AndroidFileServer -NoCrashDialog -nosplash -windowed -ResX=1280 -ResY=720 -ForceRes -stdout -UTF8Output -abslog=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean.log -ini:Engine:[/Script/Engine.RendererSettings]:r.Substrate=True,[/Script/Engine.RendererSettings]:r.Substrate.ProjectGBufferFormat=1,[/Script/Engine.RendererSettings]:r.Substrate.Experimental.ToonUnifiedDiffuse=0,[/Script/Engine.RendererSettings]:r.Shadow.Virtual.Enable=1 -MMDEndfieldValidationPayload=1",
+      "report_summary": {
+        "success": true,
+        "CookedData": true,
+        "IsEngineBackendRequested": true,
+        "profile_marker_allowed": true,
+        "source_mapping_active": false,
+        "mode": 2,
+        "indirect_diffuse_scale": 0.0,
+        "indirect_specular_scale": 0.0,
+        "stable_frames": 160,
+        "screenshot_requested": true,
+        "screenshot_request_frame": 120,
+        "screenshot_pixel_callback_received": true,
+        "screenshot_saved": true,
+        "screenshot_captured_frame": 120,
+        "screenshot_width": 1280,
+        "screenshot_height": 720,
+        "camera_applied": true,
+        "shader_platform": 49,
+        "shader_format": "PCD3D_SM6",
+        "camera_location": "X=450.000 Y=-650.000 Z=400.000",
+        "camera_look_at": "X=0.000 Y=0.000 Z=100.000",
+        "external_camera_view_target": false,
+        "profile_rebind_eligible_materials": 12,
+        "profile_rebound_materials": 12,
+        "profile_rebind_skipped_materials": 0,
+        "profile_metadata_matching_materials": 12,
+        "profile_metadata_controls_verified": true,
+        "compiled_kernel_verified_by_this_report": false,
+        "payload_requested": 1,
+        "payload_diagnostic_eligible_skin_materials": 2,
+        "payload_cpu_bound_materials": 2,
+        "payload_gpu_verified_by_this_report": false,
+        "payload_expected_screenshot_color": "green",
+        "payload_validation_reason": "Dedicated Skin primitives have explicit CPU head frames and transient diagnostic Profiles; inspect paired green/red screenshots to verify the cooked packed write/read.",
+        "payload_cpu_parameters": [
+          {
+            "component": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation.M_EndfieldNativeBackendValidation:PersistentLevel.StaticMeshActor_2.StaticMeshComponent0",
+            "slot": 0,
+            "cpu_parameters_bound": true,
+            "payload_enabled": 1,
+            "head_position_radius": [
+              0.0,
+              -130.0,
+              110.0,
+              50.000003815
+            ],
+            "head_forward": [
+              0,
+              1,
+              0
+            ],
+            "head_right": [
+              1,
+              0,
+              0
+            ],
+            "sphere_blend": 0.75,
+            "anisotropy": 0,
+            "direction_texture_enabled": false,
+            "diagnostic_alpha_at_075": 17.0,
+            "gpu_payload_verified": false
+          },
+          {
+            "component": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation.M_EndfieldNativeBackendValidation:PersistentLevel.StaticMeshActor_3.StaticMeshComponent0",
+            "slot": 0,
+            "cpu_parameters_bound": true,
+            "payload_enabled": 1,
+            "head_position_radius": [
+              0.0,
+              -130.0,
+              30.0,
+              93.340774536
+            ],
+            "head_forward": [
+              0,
+              1,
+              0
+            ],
+            "head_right": [
+              1,
+              0,
+              0
+            ],
+            "sphere_blend": 0.75,
+            "anisotropy": 0,
+            "direction_texture_enabled": false,
+            "diagnostic_alpha_at_075": 17.0,
+            "gpu_payload_verified": false
+          }
+        ],
+        "failure_reason": "",
+        "console_variables": {
+          "r.DynamicGlobalIlluminationMethod": "1",
+          "r.ReflectionMethod": "1",
+          "r.Lumen.DiffuseIndirect.Allow": "1",
+          "r.Lumen.Reflections.Allow": "1",
+          "r.Lumen.HardwareRayTracing": "1",
+          "r.GenerateMeshDistanceFields": "0",
+          "r.ShadowQuality": "5",
+          "r.Shadow.Virtual.Enable": "1",
+          "r.Shadow.Virtual.SMRT.RayCountDirectional": "8",
+          "r.Shadow.Virtual.SMRT.RayCountLocal": "8",
+          "r.RayTracing": "1",
+          "r.ScreenshotDelegate": "1"
+        }
+      },
+      "backend_manifest_summary": {
+        "patch_version": "endfield-native-bsdf-v8-cooked-global-protocol",
+        "requested": true,
+        "active": false,
+        "cooked_data": true,
+        "profile_marker_allowed": true,
+        "compiled_payload_protocol": "endfield-skin-payload-v4:GetMMDEndfieldNativePayload:direction4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:oct16-mask8-quat32",
+        "payload_protocol_source": "compiled_module",
+        "expected_cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol_verified": true,
+        "all_material_kernel_verified": false,
+        "global_shader_protocol_scope": "Serialized compile reflection of the loaded protocol global shader only; not a GPU dispatch/readback and not proof of every cooked material or lighting shader.",
+        "reason": "Cooked profile routing allowed by the loaded protocol global shader's serialized compile reflection. Source mapping remains inactive. This proves that one global shader used the expected overlay protocol; every material/lighting kernel and GPU behavior remain independently unverified."
+      }
+    },
+    "game-invalid-direct-clean": {
+      "package": "package-v8b",
+      "report": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean/native_backend_runtime.json",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean.log",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean.exit.txt",
+      "source_png": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean/native_backend_runtime.png",
+      "backend_manifest": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-8440.json",
+      "process_exit_code": 0,
+      "command_line_from_log": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation -MMDEndfieldBackendValidation -MMDEndfieldNativeBackend -MMDEndfieldNativeBackendMode=2 -MMDEndfieldNativeIndirectDiffuseScale=0 -MMDEndfieldNativeIndirectSpecularScale=0 -MMDEndfieldValidationOut=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean -RenderOffscreen -d3d12 -sm6 -unattended -nosound -DisablePlugins=RenderDocPlugin,AndroidFileServer -NoCrashDialog -nosplash -windowed -ResX=1280 -ResY=720 -ForceRes -stdout -UTF8Output -abslog=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean.log -ini:Engine:[/Script/Engine.RendererSettings]:r.Substrate=True,[/Script/Engine.RendererSettings]:r.Substrate.ProjectGBufferFormat=1,[/Script/Engine.RendererSettings]:r.Substrate.Experimental.ToonUnifiedDiffuse=0,[/Script/Engine.RendererSettings]:r.Shadow.Virtual.Enable=1 -MMDEndfieldValidationPayload=0",
+      "report_summary": {
+        "success": true,
+        "CookedData": true,
+        "IsEngineBackendRequested": true,
+        "profile_marker_allowed": true,
+        "source_mapping_active": false,
+        "mode": 2,
+        "indirect_diffuse_scale": 0.0,
+        "indirect_specular_scale": 0.0,
+        "stable_frames": 160,
+        "screenshot_requested": true,
+        "screenshot_request_frame": 120,
+        "screenshot_pixel_callback_received": true,
+        "screenshot_saved": true,
+        "screenshot_captured_frame": 120,
+        "screenshot_width": 1280,
+        "screenshot_height": 720,
+        "camera_applied": true,
+        "shader_platform": 49,
+        "shader_format": "PCD3D_SM6",
+        "camera_location": "X=450.000 Y=-650.000 Z=400.000",
+        "camera_look_at": "X=0.000 Y=0.000 Z=100.000",
+        "external_camera_view_target": false,
+        "profile_rebind_eligible_materials": 12,
+        "profile_rebound_materials": 12,
+        "profile_rebind_skipped_materials": 0,
+        "profile_metadata_matching_materials": 12,
+        "profile_metadata_controls_verified": true,
+        "compiled_kernel_verified_by_this_report": false,
+        "payload_requested": 0,
+        "payload_diagnostic_eligible_skin_materials": 2,
+        "payload_cpu_bound_materials": 2,
+        "payload_gpu_verified_by_this_report": false,
+        "payload_expected_screenshot_color": "red",
+        "payload_validation_reason": "Dedicated Skin primitives have explicit CPU head frames and transient diagnostic Profiles; inspect paired green/red screenshots to verify the cooked packed write/read.",
+        "payload_cpu_parameters": [
+          {
+            "component": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation.M_EndfieldNativeBackendValidation:PersistentLevel.StaticMeshActor_2.StaticMeshComponent0",
+            "slot": 0,
+            "cpu_parameters_bound": true,
+            "payload_enabled": 0,
+            "head_position_radius": [
+              0.0,
+              -130.0,
+              110.0,
+              50.000003815
+            ],
+            "head_forward": [
+              0,
+              1,
+              0
+            ],
+            "head_right": [
+              1,
+              0,
+              0
+            ],
+            "sphere_blend": 0.75,
+            "anisotropy": 0,
+            "direction_texture_enabled": false,
+            "diagnostic_alpha_at_075": 17.0,
+            "gpu_payload_verified": false
+          },
+          {
+            "component": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation.M_EndfieldNativeBackendValidation:PersistentLevel.StaticMeshActor_3.StaticMeshComponent0",
+            "slot": 0,
+            "cpu_parameters_bound": true,
+            "payload_enabled": 0,
+            "head_position_radius": [
+              0.0,
+              -130.0,
+              30.0,
+              93.340774536
+            ],
+            "head_forward": [
+              0,
+              1,
+              0
+            ],
+            "head_right": [
+              1,
+              0,
+              0
+            ],
+            "sphere_blend": 0.75,
+            "anisotropy": 0,
+            "direction_texture_enabled": false,
+            "diagnostic_alpha_at_075": 17.0,
+            "gpu_payload_verified": false
+          }
+        ],
+        "failure_reason": "",
+        "console_variables": {
+          "r.DynamicGlobalIlluminationMethod": "1",
+          "r.ReflectionMethod": "1",
+          "r.Lumen.DiffuseIndirect.Allow": "1",
+          "r.Lumen.Reflections.Allow": "1",
+          "r.Lumen.HardwareRayTracing": "1",
+          "r.GenerateMeshDistanceFields": "0",
+          "r.ShadowQuality": "5",
+          "r.Shadow.Virtual.Enable": "1",
+          "r.Shadow.Virtual.SMRT.RayCountDirectional": "8",
+          "r.Shadow.Virtual.SMRT.RayCountLocal": "8",
+          "r.RayTracing": "1",
+          "r.ScreenshotDelegate": "1"
+        }
+      },
+      "backend_manifest_summary": {
+        "patch_version": "endfield-native-bsdf-v8-cooked-global-protocol",
+        "requested": true,
+        "active": false,
+        "cooked_data": true,
+        "profile_marker_allowed": true,
+        "compiled_payload_protocol": "endfield-skin-payload-v4:GetMMDEndfieldNativePayload:direction4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:oct16-mask8-quat32",
+        "payload_protocol_source": "compiled_module",
+        "expected_cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol_verified": true,
+        "all_material_kernel_verified": false,
+        "global_shader_protocol_scope": "Serialized compile reflection of the loaded protocol global shader only; not a GPU dispatch/readback and not proof of every cooked material or lighting shader.",
+        "reason": "Cooked profile routing allowed by the loaded protocol global shader's serialized compile reflection. Source mapping remains inactive. This proves that one global shader used the expected overlay protocol; every material/lighting kernel and GPU behavior remain independently unverified."
+      }
+    },
+    "game-vanilla-rejected": {
+      "package": "package-vanilla-v8",
+      "report": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected/native_backend_runtime.json",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected.log",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected.exit.txt",
+      "source_png": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected/native_backend_runtime.png",
+      "backend_manifest": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-59188.json",
+      "process_exit_code": 0,
+      "command_line_from_log": "/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation -MMDEndfieldBackendValidation -MMDEndfieldNativeBackend -MMDEndfieldNativeBackendMode=2 -MMDEndfieldNativeIndirectDiffuseScale=1 -MMDEndfieldNativeIndirectSpecularScale=1 -MMDEndfieldValidationOut=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected -RenderOffscreen -d3d12 -sm6 -unattended -nosound -DisablePlugins=RenderDocPlugin,AndroidFileServer -NoCrashDialog -nosplash -windowed -ResX=1280 -ResY=720 -ForceRes -stdout -UTF8Output -abslog=D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected.log -ini:Engine:[/Script/Engine.RendererSettings]:r.Substrate=True,[/Script/Engine.RendererSettings]:r.Substrate.ProjectGBufferFormat=1,[/Script/Engine.RendererSettings]:r.Substrate.Experimental.ToonUnifiedDiffuse=0,[/Script/Engine.RendererSettings]:r.Shadow.Virtual.Enable=1",
+      "report_summary": {
+        "success": true,
+        "CookedData": true,
+        "IsEngineBackendRequested": true,
+        "profile_marker_allowed": false,
+        "source_mapping_active": false,
+        "mode": 2,
+        "indirect_diffuse_scale": 1.0,
+        "indirect_specular_scale": 1.0,
+        "stable_frames": 160,
+        "screenshot_requested": true,
+        "screenshot_request_frame": 120,
+        "screenshot_pixel_callback_received": true,
+        "screenshot_saved": true,
+        "screenshot_captured_frame": 120,
+        "screenshot_width": 1280,
+        "screenshot_height": 720,
+        "camera_applied": true,
+        "shader_platform": 49,
+        "shader_format": "PCD3D_SM6",
+        "camera_location": "X=450.000 Y=-650.000 Z=400.000",
+        "camera_look_at": "X=0.000 Y=0.000 Z=100.000",
+        "external_camera_view_target": false,
+        "profile_rebind_eligible_materials": 0,
+        "profile_rebound_materials": 0,
+        "profile_rebind_skipped_materials": 0,
+        "profile_metadata_matching_materials": 0,
+        "profile_metadata_controls_verified": false,
+        "compiled_kernel_verified_by_this_report": false,
+        "payload_requested": null,
+        "payload_diagnostic_eligible_skin_materials": 0,
+        "payload_cpu_bound_materials": 0,
+        "payload_gpu_verified_by_this_report": false,
+        "payload_expected_screenshot_color": "not_active",
+        "payload_validation_reason": "",
+        "payload_cpu_parameters": [],
+        "failure_reason": "",
+        "console_variables": {
+          "r.DynamicGlobalIlluminationMethod": "1",
+          "r.ReflectionMethod": "1",
+          "r.Lumen.DiffuseIndirect.Allow": "1",
+          "r.Lumen.Reflections.Allow": "1",
+          "r.Lumen.HardwareRayTracing": "1",
+          "r.GenerateMeshDistanceFields": "0",
+          "r.ShadowQuality": "5",
+          "r.Shadow.Virtual.Enable": "1",
+          "r.Shadow.Virtual.SMRT.RayCountDirectional": "8",
+          "r.Shadow.Virtual.SMRT.RayCountLocal": "8",
+          "r.RayTracing": "1",
+          "r.ScreenshotDelegate": "1"
+        }
+      },
+      "backend_manifest_summary": {
+        "patch_version": "endfield-native-bsdf-v8-cooked-global-protocol",
+        "requested": true,
+        "active": false,
+        "cooked_data": true,
+        "profile_marker_allowed": false,
+        "compiled_payload_protocol": "endfield-skin-payload-v4:GetMMDEndfieldNativePayload:direction4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:oct16-mask8-quat32",
+        "payload_protocol_source": "compiled_module",
+        "expected_cooked_global_shader_protocol": 8,
+        "cooked_global_shader_protocol": 0,
+        "cooked_global_shader_protocol_verified": false,
+        "all_material_kernel_verified": false,
+        "global_shader_protocol_scope": "Serialized compile reflection of the loaded protocol global shader only; not a GPU dispatch/readback and not proof of every cooked material or lighting shader.",
+        "reason": "Cooked profile routing rejected: Loaded global shader reflection recorded protocol 0; expected 8. This does not verify all material kernels or GPU execution."
+      }
+    }
+  },
+  "executable_comparison": [
+    {
+      "relative_package_path": "Windows/MMD.exe",
+      "positive": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD.exe",
+      "negative": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8/Windows/MMD.exe",
+      "sha256_equal": true,
+      "sha256": "5e2ebe51d8af26b926be6ea48a86e3eb69f106921712014e5ba39b4b137ecb6f"
+    },
+    {
+      "relative_package_path": "Windows/MMD/Binaries/Win64/MMD.exe",
+      "positive": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Binaries/Win64/MMD.exe",
+      "negative": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8/Windows/MMD/Binaries/Win64/MMD.exe",
+      "sha256_equal": true,
+      "sha256": "64cf0db29a474348555eb434e96dbe227430d2b88a371087a8cba3c110f87d47"
+    }
+  ],
+  "earlier_failed_runs_retained_in_saved": [
+    {
+      "run": "game-valid-direct",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct.exit.txt",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct.log",
+      "process_exit_code": -1073740940,
+      "process_exit_hex": "0xc0000374",
+      "last_logged_frame": 1,
+      "renderdoc_auto_attach_1_logged": true,
+      "renderdoc_capture_all_activity_1_logged": true,
+      "renderdoc_dll_loaded": true
+    },
+    {
+      "run": "game-normal",
+      "exit_file": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal.exit.txt",
+      "log": "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal.log",
+      "process_exit_code": 3,
+      "process_exit_hex": "0x00000003",
+      "last_logged_frame": 1,
+      "renderdoc_auto_attach_1_logged": true,
+      "renderdoc_capture_all_activity_1_logged": true,
+      "renderdoc_dll_loaded": true,
+      "reported_crashed_thread": "RHIThread",
+      "exception": "EXCEPTION_ACCESS_VIOLATION reading address 0x458",
+      "first_error_callstack_module": "renderdoc.dll"
+    }
+  ],
+  "limits": [
+    "Runtime reports continue to state payload_gpu_verified_by_this_report=false and compiled_kernel_verified_by_this_report=false.",
+    "Protocol 8 is serialized compile reflection of one loaded global shader; it does not attest every material kernel or perform GPU readback.",
+    "Paired green/red pictures only support the tested cooked Skin packed payload write/read and per-light diagnostic branch.",
+    "Vanilla protocol-0 rejection is a successful native fallback with process exit 0, not a game failure. Startup Mode2 did not authorize the vanilla Cook.",
+    "RenderDoc was disabled by CLI for the four successful runs; user Config files were not changed. This does not establish a complete RenderDoc fix or general stability.",
+    "Clean-host material compilation is outside the completed evidence in this archive; final independent distribution acceptance remains pending.",
+    "Primitive fixture evidence does not validate the YYB character animation/Morph, all material roles, all GI/shadow permutations, or Endfield visual quality."
+  ],
+  "source_files": {
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean/native_backend_runtime.json": {
+      "sha256": "c9411559b1b0fb6d17c15d46bb794bce6c79e89f3a56b8e976c3e1f0cfe72011",
+      "bytes": 7717,
+      "modified_at_utc_plus_08": "2026-10-15T16:29:24+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean.log": {
+      "sha256": "cec04745eda595396657134d99adc501da50d9f6ed149a3c14ec24bb325ea275",
+      "bytes": 93025,
+      "modified_at_utc_plus_08": "2026-10-15T16:30:21+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean.exit.txt": {
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:30:22+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal-clean/native_backend_runtime.png": {
+      "sha256": "ffc02e3a374d2fbd71d0c3182961c7c10e769834741d8893656d5f769a2f1318",
+      "bytes": 1138459,
+      "modified_at_utc_plus_08": "2026-10-15T16:29:24+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-92492.json": {
+      "sha256": "17785626fa31934cd52b9dbd951d4b3226d40a85610d1d4978966a1716413297",
+      "bytes": 5034,
+      "modified_at_utc_plus_08": "2026-10-15T16:29:16+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean/native_backend_runtime.json": {
+      "sha256": "8ff7cdc7b96b62b33f6d5b54c83a23ee4ad52a4203559188f9d9ca7be72eaa31",
+      "bytes": 8962,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:18+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean.log": {
+      "sha256": "e7629ea4823a983f578299581c0549c55ff3cd92e9d380a4e0682d6fffebd213",
+      "bytes": 92246,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:19+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean.exit.txt": {
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:19+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct-clean/native_backend_runtime.png": {
+      "sha256": "87ae1edf0680770f4ab37e4e6beeb6ccb8a243d3561b242adaf56ad33361c777",
+      "bytes": 969158,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:18+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-29604.json": {
+      "sha256": "7d4524857c2ef015bbf576e2364a705bcb8d4deeded2d25a9a06881eeada919f",
+      "bytes": 5034,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:16+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean/native_backend_runtime.json": {
+      "sha256": "9c8aa475d0df508a7765a32262342ab0d44a94492252db925e5c4ebb24c06fae",
+      "bytes": 8962,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:52+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean.log": {
+      "sha256": "36999ac99d03c22283a058639f8c419edaf699f174b1d5adacdf70817c153742",
+      "bytes": 92193,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:53+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean.exit.txt": {
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:53+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-invalid-direct-clean/native_backend_runtime.png": {
+      "sha256": "f1793995f8690b4bda914a7ef06ca81cc8eb4ecae66b82cb9240f49e62181b1d",
+      "bytes": 973032,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:52+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-8440.json": {
+      "sha256": "7d4524857c2ef015bbf576e2364a705bcb8d4deeded2d25a9a06881eeada919f",
+      "bytes": 5034,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:50+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected/native_backend_runtime.json": {
+      "sha256": "bdf1fbc4e80007f2de52807c20ff5f2723a5dd73e49cfc7601489316eb93536d",
+      "bytes": 2963,
+      "modified_at_utc_plus_08": "2026-10-15T16:30:55+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected.log": {
+      "sha256": "e938f274201c0b28822ec1c6492c400710d69db3884d55d5c4f268a68d849d56",
+      "bytes": 92779,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:13+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected.exit.txt": {
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:31:14+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-vanilla-rejected/native_backend_runtime.png": {
+      "sha256": "29d094d86aa77d63e5719a86da089ff98d5c2ccbe6707b81cff54847e59e98b1",
+      "bytes": 1136079,
+      "modified_at_utc_plus_08": "2026-10-15T16:30:55+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8/Windows/MMD/Saved/MMDEndfieldNativeBackend/Reports/backend-59188.json": {
+      "sha256": "381119719cf2649b3fc278b878064f5477ab4a8a93721f7533a7d410dff94cf9",
+      "bytes": 4908,
+      "modified_at_utc_plus_08": "2026-10-15T16:30:44+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b.ps1": {
+      "sha256": "3b8283ddeddbf5038425496cfe72d95c0a57920541d6a0a9cfd4ec54adff22bd",
+      "bytes": 1848,
+      "modified_at_utc_plus_08": "2026-10-15T16:09:37+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b.log": {
+      "sha256": "7284893c946d8dbb3b36e5d23ce03273acddf9e663354901c327a150110fa1b6",
+      "bytes": 129421,
+      "modified_at_utc_plus_08": "2026-10-15T16:21:30+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b.exit.txt": {
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:21:30+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8.ps1": {
+      "sha256": "14fdde2ffbd218510495bdae453a8edbf9d025d69c865cc122a7779af136e25d",
+      "bytes": 1826,
+      "modified_at_utc_plus_08": "2026-10-15T16:22:49+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8.log": {
+      "sha256": "35c549977b1ab2796ae58a7fd693e6632e022732e0a342183e40059c351f3acd",
+      "bytes": 123580,
+      "modified_at_utc_plus_08": "2026-10-15T16:28:42+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8.exit.txt": {
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:28:42+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD.exe": {
+      "sha256": "5e2ebe51d8af26b926be6ea48a86e3eb69f106921712014e5ba39b4b137ecb6f",
+      "bytes": 171520,
+      "modified_at_utc_plus_08": "2026-10-15T16:21:23+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8/Windows/MMD.exe": {
+      "sha256": "5e2ebe51d8af26b926be6ea48a86e3eb69f106921712014e5ba39b4b137ecb6f",
+      "bytes": 171520,
+      "modified_at_utc_plus_08": "2026-10-15T16:28:35+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-v8b/Windows/MMD/Binaries/Win64/MMD.exe": {
+      "sha256": "64cf0db29a474348555eb434e96dbe227430d2b88a371087a8cba3c110f87d47",
+      "bytes": 337874432,
+      "modified_at_utc_plus_08": "2026-10-15T16:10:07+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/package-vanilla-v8/Windows/MMD/Binaries/Win64/MMD.exe": {
+      "sha256": "64cf0db29a474348555eb434e96dbe227430d2b88a371087a8cba3c110f87d47",
+      "bytes": 337874432,
+      "modified_at_utc_plus_08": "2026-10-15T16:10:07+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct.exit.txt": {
+      "sha256": "4c7406348105cbd95abef1d02420739f2d6a7a9d1a384b533df6db726dad6472",
+      "bytes": 13,
+      "modified_at_utc_plus_08": "2026-10-15T16:26:06+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-valid-direct.log": {
+      "sha256": "cc4b48c0aada08d09367c76549e324351c39fe617e9159ea07649f4687c5e484",
+      "bytes": 89863,
+      "modified_at_utc_plus_08": "2026-10-15T16:25:14+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal.exit.txt": {
+      "sha256": "24ba1e99dc06b19351323aae0d7370243d586475a634b7f6ff7927fbc72cfaed",
+      "bytes": 3,
+      "modified_at_utc_plus_08": "2026-10-15T16:28:27+08:00"
+    },
+    "Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-normal.log": {
+      "sha256": "2f883cb077aabb77e5922d6d8a6c07cf004a972fdfccf9baca2b861e3c6b5a4f",
+      "bytes": 94716,
+      "modified_at_utc_plus_08": "2026-10-15T16:28:10+08:00"
+    }
+  }
+}

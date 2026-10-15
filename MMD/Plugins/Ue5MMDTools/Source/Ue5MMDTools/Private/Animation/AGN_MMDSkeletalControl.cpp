@@ -2,6 +2,8 @@
 #include "AGN_MMDSkeletalControl.h"
 #include "TPMXParser.h"
 #include "Animation/AnimInstanceProxy.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "AnimationRuntime.h"     
 #include "MMDPhysicsSimulator.h"
 #include "DrawDebugHelpers.h"

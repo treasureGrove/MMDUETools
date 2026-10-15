@@ -1,0 +1,672 @@
+{
+  "schema": "mmd.endfield.render-capture-archive.v1",
+  "capture_date_local": "2026-10-15",
+  "timezone": "Asia/Singapore (UTC+08:00)",
+  "origin": "actual UnrealEditor-Cmd -RenderOffscreen output; not generated artwork",
+  "engine_version": "5.8.3-58210709+++UE5+Release-5.8",
+  "source_batch_directory": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15",
+  "source_model": {
+    "path": "D:/projectGithub/MMDUETools/MMD/Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/YYB Hatsune Miku_16th.pmx",
+    "sha256": "fcc391f66d760186081eddc8b64e7696cc9790cf4cf0f5980b5d494ff4154918",
+    "name": "YYB Hatsune Miku 16th (wing variant)",
+    "credits": "SANMUYYB / 霁行Ralker / Delta幻黑",
+    "credits_source": {
+      "path": "D:/projectGithub/MMDUETools/MMD/Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/readme.txt",
+      "sha256": "e16b90d818abce26cf35a2001ccca30515d16bd6992cebed3f44ed7d411c51c2"
+    },
+    "vertices": 610819,
+    "triangles": 997023,
+    "materials": 39,
+    "bones": 550,
+    "morph_targets_imported": 71,
+    "animation_warnings": 196,
+    "animation_tested": false,
+    "morph_deformation_tested": false,
+    "reference_pose_only": true,
+    "import_report": {
+      "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/import16th.json",
+      "sha256": "529e901746eac3d5be104c6867937c4da5e97825745e285f89722caaed3e0ad1"
+    },
+    "saved_import_manifest": {
+      "path": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+      "sha256": "23f2e43db98b33b4b05d4c1e1eea31a92b9c6afb2daebfaa82adfd640b6cffce"
+    },
+    "imported_assets_in_saved_only": true,
+    "character_assets_in_this_archive": false
+  },
+  "environment_identical_between_modes": true,
+  "environment": {
+    "can_render": true,
+    "substrate_enabled": true,
+    "substrate_blendable_gbuffer": false,
+    "toon_profile_enabled": true,
+    "shader_platform": "PCD3D_SM6",
+    "rhi": "D3D12",
+    "r.Substrate": "1",
+    "r.Substrate.ProjectGBufferFormat": "1",
+    "r.Substrate.ClosuresPerPixel": "4",
+    "r.Substrate.BytesPerPixel": "80",
+    "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+    "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+    "r.Substrate.ToonProfile.Resolution": "256",
+    "r.DynamicGlobalIlluminationMethod": "1",
+    "r.ReflectionMethod": "1",
+    "r.Shadow.Virtual.Enable": "1",
+    "r.RayTracing": "1",
+    "r.Lumen.HardwareRayTracing": "1",
+    "r.GenerateMeshDistanceFields": "0",
+    "r.AntiAliasingMethod": "5",
+    "r.DefaultFeature.AutoExposure": "1"
+  },
+  "capture_post_process_note": "Probe source sets manual exposure and applies the same preset post process to both modes. Environment CVars describe global defaults; r.DefaultFeature.AutoExposure=1 is not a readback of the per-capture manual override.",
+  "recorded_camera_comparison": {
+    "all_common_shots_match": true,
+    "compared_fields": [
+      "camera_location",
+      "camera_fov"
+    ],
+    "shots": [
+      {
+        "shot": "toon_cloth",
+        "camera_location": "X=70.000 Y=-205.000 Z=138.000",
+        "camera_fov": 35,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "toon_face",
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "toon_full",
+        "camera_location": "X=119.757 Y=-854.028 Z=240.270",
+        "camera_fov": 50,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "toon_hair",
+        "camera_location": "X=40.000 Y=-152.150 Z=194.597",
+        "camera_fov": 32,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "unlit_cloth",
+        "camera_location": "X=70.000 Y=-205.000 Z=138.000",
+        "camera_fov": 35,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "unlit_face",
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "unlit_full",
+        "camera_location": "X=119.757 Y=-854.028 Z=240.270",
+        "camera_fov": 50,
+        "recorded_camera_fields_identical": true
+      },
+      {
+        "shot": "unlit_hair",
+        "camera_location": "X=40.000 Y=-152.150 Z=194.597",
+        "camera_fov": 32,
+        "recorded_camera_fields_identical": true
+      }
+    ],
+    "same_reference_pose": true,
+    "same_manifest": true,
+    "camera_rotation_and_projection_matrix_read_back": false
+  },
+  "runs": [
+    {
+      "tag": "yyb16-final2",
+      "mode": 2,
+      "description": "current Endfield response",
+      "toon_probe_report": {
+        "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final2/yyb16-final2_report.json",
+        "sha256": "038cf37304ed0ec0c2d855af6201464e51174dd5e328cc396f17133e9f51a5e9"
+      },
+      "backend_probe_report": {
+        "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final2/report.json",
+        "sha256": "d37dd066d64b4b269aad81405eb6ffd40b8a06ac99fc2b96912d7f6f4827c071"
+      },
+      "png_count": 24,
+      "slot_check_count": 78,
+      "failures": 0,
+      "backend_success": true,
+      "visual_accepted": false,
+      "experiments": "ab,outline",
+      "frames_per_shot": 16,
+      "fit_sample_camera": true,
+      "source_mode_signature": "CA27D990FE27B831CDE81A112E9E6E738E2B8BD1",
+      "global_shader_protocol": 8,
+      "roles": [
+        {
+          "slot": 0,
+          "slot_name": "nail",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 1,
+          "slot_name": "body01",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 2,
+          "slot_name": "M_01",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 3,
+          "slot_name": "face01",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 4,
+          "slot_name": "eyes",
+          "role_reason": "eye:eyes"
+        },
+        {
+          "slot": 5,
+          "slot_name": "eyes+",
+          "role_reason": "eye:eyes"
+        },
+        {
+          "slot": 6,
+          "slot_name": "HL",
+          "role_reason": "generic:eye_oral:hl"
+        },
+        {
+          "slot": 7,
+          "slot_name": "face02",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 8,
+          "slot_name": "face00",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 9,
+          "slot_name": "face03",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 10,
+          "slot_name": "face04",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 11,
+          "slot_name": "B",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 12,
+          "slot_name": "B_L",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 13,
+          "slot_name": "clothes01",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 14,
+          "slot_name": "clothes02",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 15,
+          "slot_name": "clothes03",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 16,
+          "slot_name": "clothes04",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 17,
+          "slot_name": "clothes05",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 18,
+          "slot_name": "append",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 19,
+          "slot_name": "hair01",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 20,
+          "slot_name": "hair02+",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 21,
+          "slot_name": "hair02",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 22,
+          "slot_name": "hair03",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 23,
+          "slot_name": "hair01+",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 24,
+          "slot_name": "hair03+",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 25,
+          "slot_name": "clothes06",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 26,
+          "slot_name": "clothes07",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 27,
+          "slot_name": "hairshadow",
+          "role_reason": "generic:shadow_overlay:hairshadow"
+        },
+        {
+          "slot": 28,
+          "slot_name": "headphone",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 29,
+          "slot_name": "headphone_L",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 30,
+          "slot_name": "skirt01",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 31,
+          "slot_name": "skirt02",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 32,
+          "slot_name": "skirt03",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 33,
+          "slot_name": "skirt04",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 34,
+          "slot_name": "sleeve",
+          "role_reason": "cloth:sleeve"
+        },
+        {
+          "slot": 35,
+          "slot_name": "sleeve/boots",
+          "role_reason": "cloth:boots"
+        },
+        {
+          "slot": 36,
+          "slot_name": "Boots",
+          "role_reason": "cloth:boots"
+        },
+        {
+          "slot": 37,
+          "slot_name": "pantsu",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 38,
+          "slot_name": "wing",
+          "role_reason": "generic:unrecognized"
+        }
+      ]
+    },
+    {
+      "tag": "yyb16-final0",
+      "mode": 0,
+      "description": "native Toon response in the same V2 material; not old Unlit",
+      "toon_probe_report": {
+        "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final0/yyb16-final0_report.json",
+        "sha256": "6b8e84cbdc8adcb951e2399c447919989b230a2dde55e7585d49212b6bb27208"
+      },
+      "backend_probe_report": {
+        "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final0/report.json",
+        "sha256": "2de16b318e89f566e77db2bb3522ac2fdca863f8602f6dffbeec4e2d450018cf"
+      },
+      "png_count": 8,
+      "slot_check_count": 78,
+      "failures": 0,
+      "backend_success": true,
+      "visual_accepted": false,
+      "experiments": "ab",
+      "frames_per_shot": 16,
+      "fit_sample_camera": true,
+      "source_mode_signature": "CA27D990FE27B831CDE81A112E9E6E738E2B8BD1",
+      "global_shader_protocol": 8,
+      "roles": [
+        {
+          "slot": 0,
+          "slot_name": "nail",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 1,
+          "slot_name": "body01",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 2,
+          "slot_name": "M_01",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 3,
+          "slot_name": "face01",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 4,
+          "slot_name": "eyes",
+          "role_reason": "eye:eyes"
+        },
+        {
+          "slot": 5,
+          "slot_name": "eyes+",
+          "role_reason": "eye:eyes"
+        },
+        {
+          "slot": 6,
+          "slot_name": "HL",
+          "role_reason": "generic:eye_oral:hl"
+        },
+        {
+          "slot": 7,
+          "slot_name": "face02",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 8,
+          "slot_name": "face00",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 9,
+          "slot_name": "face03",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 10,
+          "slot_name": "face04",
+          "role_reason": "skin:face"
+        },
+        {
+          "slot": 11,
+          "slot_name": "B",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 12,
+          "slot_name": "B_L",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 13,
+          "slot_name": "clothes01",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 14,
+          "slot_name": "clothes02",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 15,
+          "slot_name": "clothes03",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 16,
+          "slot_name": "clothes04",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 17,
+          "slot_name": "clothes05",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 18,
+          "slot_name": "append",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 19,
+          "slot_name": "hair01",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 20,
+          "slot_name": "hair02+",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 21,
+          "slot_name": "hair02",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 22,
+          "slot_name": "hair03",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 23,
+          "slot_name": "hair01+",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 24,
+          "slot_name": "hair03+",
+          "role_reason": "hair:hair"
+        },
+        {
+          "slot": 25,
+          "slot_name": "clothes06",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 26,
+          "slot_name": "clothes07",
+          "role_reason": "cloth:clothes"
+        },
+        {
+          "slot": 27,
+          "slot_name": "hairshadow",
+          "role_reason": "generic:shadow_overlay:hairshadow"
+        },
+        {
+          "slot": 28,
+          "slot_name": "headphone",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 29,
+          "slot_name": "headphone_L",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 30,
+          "slot_name": "skirt01",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 31,
+          "slot_name": "skirt02",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 32,
+          "slot_name": "skirt03",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 33,
+          "slot_name": "skirt04",
+          "role_reason": "cloth:skirt"
+        },
+        {
+          "slot": 34,
+          "slot_name": "sleeve",
+          "role_reason": "cloth:sleeve"
+        },
+        {
+          "slot": 35,
+          "slot_name": "sleeve/boots",
+          "role_reason": "cloth:boots"
+        },
+        {
+          "slot": 36,
+          "slot_name": "Boots",
+          "role_reason": "cloth:boots"
+        },
+        {
+          "slot": 37,
+          "slot_name": "pantsu",
+          "role_reason": "generic:unrecognized"
+        },
+        {
+          "slot": 38,
+          "slot_name": "wing",
+          "role_reason": "generic:unrecognized"
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "archive": "yyb16-current-full.png",
+      "mode": 2,
+      "shot": "toon_full",
+      "capture_date_local": "2026-10-15",
+      "source_last_write_time_local": "2026-10-15T16:11:16.189170+08:00",
+      "source": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final2/yyb16-final2_toon_full.png",
+      "source_sha256": "d0900e20222bb5f75ecccf0c4bbe99f2c1404773a79b1334cf2b5b1fefead735",
+      "archive_sha256": "d0900e20222bb5f75ecccf0c4bbe99f2c1404773a79b1334cf2b5b1fefead735",
+      "width": 1280,
+      "height": 720,
+      "camera_location": "X=119.757 Y=-854.028 Z=240.270",
+      "camera_fov": 50,
+      "processing": "byte-identical copy; no resizing, compositing, recoloring or generative image processing"
+    },
+    {
+      "archive": "yyb16-current-face.png",
+      "mode": 2,
+      "shot": "toon_face",
+      "capture_date_local": "2026-10-15",
+      "source_last_write_time_local": "2026-10-15T16:11:16.522328+08:00",
+      "source": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final2/yyb16-final2_toon_face.png",
+      "source_sha256": "4d09311bde0be8818fc31ec249ab06e3b02c9404e6ccd9fa5f6996868403c03a",
+      "archive_sha256": "4d09311bde0be8818fc31ec249ab06e3b02c9404e6ccd9fa5f6996868403c03a",
+      "width": 1280,
+      "height": 720,
+      "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+      "camera_fov": 35,
+      "processing": "byte-identical copy; no resizing, compositing, recoloring or generative image processing"
+    },
+    {
+      "archive": "yyb16-native-face.png",
+      "mode": 0,
+      "shot": "toon_face",
+      "capture_date_local": "2026-10-15",
+      "source_last_write_time_local": "2026-10-15T16:12:07.554577+08:00",
+      "source": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final0/yyb16-final0_toon_face.png",
+      "source_sha256": "6f2d059b0aff8f8d865cc9d6b76d43b59a35c1dd0119a98fc1f1a275b9bed7f7",
+      "archive_sha256": "6f2d059b0aff8f8d865cc9d6b76d43b59a35c1dd0119a98fc1f1a275b9bed7f7",
+      "width": 1280,
+      "height": 720,
+      "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+      "camera_fov": 35,
+      "processing": "byte-identical copy; no resizing, compositing, recoloring or generative image processing"
+    },
+    {
+      "archive": "yyb16-current-cloth.png",
+      "mode": 2,
+      "shot": "toon_cloth",
+      "capture_date_local": "2026-10-15",
+      "source_last_write_time_local": "2026-10-15T16:11:16.853969+08:00",
+      "source": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final2/yyb16-final2_toon_cloth.png",
+      "source_sha256": "66306a898861820ccad99f496b425affa0bb9e9cbc58876ac3f0f62977526e47",
+      "archive_sha256": "66306a898861820ccad99f496b425affa0bb9e9cbc58876ac3f0f62977526e47",
+      "width": 1280,
+      "height": 720,
+      "camera_location": "X=70.000 Y=-205.000 Z=138.000",
+      "camera_fov": 35,
+      "processing": "byte-identical copy; no resizing, compositing, recoloring or generative image processing"
+    },
+    {
+      "archive": "yyb16-native-cloth.png",
+      "mode": 0,
+      "shot": "toon_cloth",
+      "capture_date_local": "2026-10-15",
+      "source_last_write_time_local": "2026-10-15T16:12:07.853041+08:00",
+      "source": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/yyb16-final0/yyb16-final0_toon_cloth.png",
+      "source_sha256": "fae0d21b67ce0590b94c921f69dc040717a358b0eb0bbb00099e2e0849294a3c",
+      "archive_sha256": "fae0d21b67ce0590b94c921f69dc040717a358b0eb0bbb00099e2e0849294a3c",
+      "width": 1280,
+      "height": 720,
+      "camera_location": "X=70.000 Y=-205.000 Z=138.000",
+      "camera_fov": 35,
+      "processing": "byte-identical copy; no resizing, compositing, recoloring or generative image processing"
+    }
+  ],
+  "build_evidence": {
+    "editor": {
+      "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/editor-build4.exit.txt",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    "game": {
+      "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/game-build2.exit.txt",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    "protect_report": {
+      "path": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/distribution-2026-10-15/protected-final.json",
+      "sha256": "2b47d2c0dc8638023faca8fa0e212d8b6b63d76ecb404afb81090269274e222c"
+    },
+    "protected_result": {
+      "count": 2378,
+      "unchanged": 2376,
+      "intentional": [
+        "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Presets\\EndfieldV2\\DA_Render_EndfieldV2.uasset",
+        "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\Profiles\\T_EndfieldV2_OffsetLinear.uasset"
+      ],
+      "unexpected": []
+    }
+  },
+  "limits": [
+    "Smoke and source provenance checks are not Endfield visual acceptance.",
+    "Only the reference pose was captured; imported VMD/Morph counts do not prove animation or Morph rendering.",
+    "Seven clothes01..07 slots now classify as Cloth; the model has fourteen Cloth material slots in total.",
+    "body01/headphone/headphone_L/wing remain Generic; Metal is not covered by this model.",
+    "White cloth and wing layering remains flat; full hair, SSS, eye layering, depth rim and post process remain unfinished.",
+    "This archive contains five original PNG files and provenance only; no character packages or entire Saved tree."
+  ]
+}

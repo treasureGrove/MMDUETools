@@ -5,6 +5,7 @@
 #include "MMDEndfieldNativeBackendValidationActor.generated.h"
 
 class UCameraComponent;
+class UMMDStageRenderPreset;
 
 /** 仅显式游戏运行验证使用；编辑器打开地图不会截图或退出。 */
 UCLASS()
@@ -18,6 +19,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD|Validation")
 	TObjectPtr<UCameraComponent> ValidationCamera;
+
+	/** 夹具地图保留完整预设的 Cook 依赖；不在运行时自动应用。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD|Validation")
+	TObjectPtr<UMMDStageRenderPreset> ValidationPreset;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Validation")
 	FVector CameraLocation = FVector(450.0, -650.0, 400.0);
@@ -61,6 +66,12 @@ private:
 	int32 MatchedProfileMetadataCount = 0;
 	TArray<FString> ReboundProfileReports;
 	FString ProfileRebindReason;
+	bool bPayloadOptionPresent = false;
+	int32 PayloadRequested = -1;
+	int32 EligiblePayloadMaterialCount = 0;
+	int32 BoundPayloadMaterialCount = 0;
+	TArray<FString> PayloadParameterReports;
+	FString PayloadValidationReason;
 	FDelegateHandle ScreenshotDelegateHandle;
 	FString OutputDirectory;
 	FString ScreenshotPath;

@@ -15,6 +15,9 @@
 //       -AllowCommandletRendering -RenderOffscreen -d3d12 -unattended -nopause -nosplash -nosound -stdout
 //   可选：-Frames=<每张图累计帧数> -LumenTracking（预览场景开启 Lumen 图元追踪）
 //   -NativePreset=<资产路径>：验证已保存的 V2 预设，支持 ab/runtime/shadow/lighting；关闭 Substrate 可验证回退。
+//   -SampleManifest=<Saved 导入清单>：严格使用指定样本，失败不回退；不能与旧固定 SDF fixture 混用。
+//   -PoseTime=<秒>：所有机位使用同一动作时间；-1 清除播放实例并强制参考姿势。
+//   -FitSampleCamera：仅 full 机位按当前模型包围球取安全距离，默认机位保持原基准。
 //
 // 本文件内所有新增 helper 均带 ToonProbe 前缀，避免与同模块 unity build 里的同名 helper 撞名。
 #include "MMDEndfieldToonProbeCommandlet.h"
@@ -42,8 +45,10 @@
 #include "Engine/ToonProfile.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformFileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "ImageUtils.h"
+#include "Import/MMDModelDataAsset.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionCustom.h"
@@ -69,6 +74,7 @@
 #include "PreviewScene.h"
 #include "RenderGraphBuilder.h"
 #include "Rendering/MMDOutlineLibrary.h"
+#include "Rendering/MMDOutlineState.h"
 #include "Rendering/MMDEndfieldFaceData.h"
 #include "Rendering/MMDEndfieldNativeBackend.h"
 #include "Rendering/MMDEndfieldNativeProfile.h"
@@ -406,7 +412,7 @@ namespace
 	}
 
 	// ------------------------------------------------------------------------------------------
-	// 角色夹具（与 MMDStagePresets 同一选择规则：最新且顶点数 > 5000 的 manifest）
+	// 显式 manifest 优先且失败不回退；未指定时保留最新且顶点数 > 5000 的旧规则。
 	// ------------------------------------------------------------------------------------------
 
 	struct FToonProbeSample
@@ -415,6 +421,10 @@ namespace
 		FString Directory;
 		FString MeshPath;
 		FString AnimationPath;
+		FString ManifestPath;
+		FString SourcePmx;
+		bool bExplicitManifest = false;
+		bool bReferencePose = false;
 		float BeautyTime = 0.6f;
 		TArray<float> FaceTimes;
 		TStrongObjectPtr<USkeletalMesh> Mesh;
@@ -428,36 +438,93 @@ namespace
 		}
 	};
 
-	bool ToonProbeLoadSample(FToonProbeSample& Sample, FString& Error)
+	bool ToonProbeSampleHasNoLinkedAncestor(const FString& Path)
 	{
-		const FString ImportRoot = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BackgroundValidation/ImportedAssets"));
-		TArray<FString> Manifests;
-		IFileManager::Get().FindFilesRecursive(Manifests, *ImportRoot, TEXT("manifest.json"), true, false);
-		FDateTime LatestTime = FDateTime::MinValue();
-		for (const FString& ManifestPath : Manifests)
+		FString Current = Path;
+		while (!Current.IsEmpty())
 		{
-			FString Json;
-			TSharedPtr<FJsonObject> Manifest;
-			if (!FFileHelper::LoadFileToString(Json, *ManifestPath)
-				|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Manifest) || !Manifest.IsValid())
+			if (FPlatformFileManager::Get().GetPlatformFile().IsSymlink(*Current) == ESymlinkResult::Symlink) return false;
+			const FString Parent = FPaths::GetPath(Current);
+			if (Parent.IsEmpty() || Parent == Current) break;
+			Current = Parent;
+		}
+		return true;
+	}
+
+	bool ToonProbeLoadSample(FToonProbeSample& Sample, const FString& RequestedManifest, bool bExplicitManifest, FString& Error)
+	{
+		Sample.bExplicitManifest = bExplicitManifest;
+		const FString ImportRoot = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("BackgroundValidation/ImportedAssets"));
+		if (!ToonProbeSampleHasNoLinkedAncestor(ImportRoot))
+		{
+			Error = TEXT("样本 Saved 导入目录的祖先包含链接或 junction，拒绝重定向挂载");
+			return false;
+		}
+		if (bExplicitManifest)
+		{
+			if (RequestedManifest.IsEmpty()) { Error = TEXT("SampleManifest 不能为空，不会回退到最新样本"); return false; }
+			Sample.ManifestPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), RequestedManifest);
+			FPaths::NormalizeFilename(Sample.ManifestPath);
+			if (!FPaths::CollapseRelativeDirectories(Sample.ManifestPath)
+				|| !FPaths::IsUnderDirectory(Sample.ManifestPath, ImportRoot)
+				|| !ToonProbeSampleHasNoLinkedAncestor(Sample.ManifestPath))
 			{
-				continue;
-			}
-			double Vertices = 0.0;
-			const FDateTime Timestamp = IFileManager::Get().GetTimeStamp(*ManifestPath);
-			if (Manifest->TryGetNumberField(TEXT("vertices"), Vertices) && Vertices > 5000.0 && Timestamp > LatestTime)
-			{
-				LatestTime = Timestamp;
-				Sample.Directory = FPaths::GetPath(ManifestPath) + TEXT("/");
-				const FString Name = FPaths::GetCleanFilename(FPaths::GetPath(ManifestPath));
-				Sample.Mount = FString::Printf(TEXT("/Game/MMDModels/%s/"), *Name);
-				Sample.MeshPath = Sample.Mount + TEXT("Model/") + Name + TEXT(".") + Name;
-				Manifest->TryGetStringField(TEXT("animation"), Sample.AnimationPath);
+				Error = TEXT("SampleManifest 必须位于本工程 Saved/BackgroundValidation/ImportedAssets，不会回退到最新样本");
+				return false;
 			}
 		}
-		if (Sample.Mount.IsEmpty())
+		else
+		{
+			TArray<FString> Manifests;
+			IFileManager::Get().FindFilesRecursive(Manifests, *ImportRoot, TEXT("manifest.json"), true, false);
+			FDateTime LatestTime = FDateTime::MinValue();
+			for (const FString& ManifestPath : Manifests)
+			{
+				FString Json;
+				TSharedPtr<FJsonObject> Manifest;
+				if (!FFileHelper::LoadFileToString(Json, *ManifestPath)
+					|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Manifest) || !Manifest.IsValid()) continue;
+				double Vertices = 0.0;
+				const FDateTime Timestamp = IFileManager::Get().GetTimeStamp(*ManifestPath);
+				if (Manifest->TryGetNumberField(TEXT("vertices"), Vertices) && Vertices > 5000.0 && Timestamp > LatestTime)
+				{
+					LatestTime = Timestamp;
+					Sample.ManifestPath = FPaths::ConvertRelativePathToFull(ManifestPath);
+				}
+			}
+		}
+		if (Sample.ManifestPath.IsEmpty())
 		{
 			Error = TEXT("No Saved/BackgroundValidation character import was found");
+			return false;
+		}
+		FString Json;
+		TSharedPtr<FJsonObject> Manifest;
+		if (!ToonProbeSampleHasNoLinkedAncestor(Sample.ManifestPath)
+			|| !IFileManager::Get().FileExists(*Sample.ManifestPath) || !FFileHelper::LoadFileToString(Json, *Sample.ManifestPath)
+			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Manifest) || !Manifest.IsValid())
+		{
+			Error = TEXT("所选 SampleManifest 不存在或 JSON 无效：") + Sample.ManifestPath;
+			return false;
+		}
+		Manifest->TryGetStringField(TEXT("source_pmx"), Sample.SourcePmx);
+		double Vertices = 0.0;
+		if (!Manifest->TryGetNumberField(TEXT("vertices"), Vertices) || !FMath::IsFinite(Vertices) || Vertices <= 0.0)
+		{
+			Error = TEXT("所选 SampleManifest 没有有效顶点数，不会回退：") + Sample.ManifestPath;
+			return false;
+		}
+		Sample.Directory = FPaths::GetPath(Sample.ManifestPath) + TEXT("/");
+		const FString Name = FPaths::GetCleanFilename(FPaths::GetPath(Sample.ManifestPath));
+		Sample.Mount = FString::Printf(TEXT("/Game/MMDModels/%s/"), *Name);
+		Sample.MeshPath = Sample.Mount + TEXT("Model/") + Name + TEXT(".") + Name;
+		Manifest->TryGetStringField(TEXT("mesh"), Sample.MeshPath);
+		Manifest->TryGetStringField(TEXT("animation"), Sample.AnimationPath);
+		if (!Sample.MeshPath.StartsWith(Sample.Mount)
+			|| (!Sample.AnimationPath.IsEmpty() && !Sample.AnimationPath.StartsWith(Sample.Mount)))
+		{
+			Error = TEXT("所选 manifest 的模型或动画引用超出自身 Saved 沙盒，不会回退");
+			Sample.Mount.Reset();
 			return false;
 		}
 		FPackageName::RegisterMountPoint(Sample.Mount, Sample.Directory);
@@ -469,7 +536,9 @@ namespace
 		}
 		// 八秒预览动画由现有流程缓存在夹具目录里，只读加载；缺失时退回两秒回归动画。
 		const FString CachedPackage = Sample.Mount + TEXT("Animation/MMDStagePreview8s");
-		TStrongObjectPtr<UAnimSequence> Cached(LoadObject<UAnimSequence>(nullptr, *(CachedPackage + TEXT(".MMDStagePreview8s"))));
+		TStrongObjectPtr<UAnimSequence> Cached;
+		if (!bExplicitManifest && FPackageName::DoesPackageExist(CachedPackage))
+			Cached.Reset(LoadObject<UAnimSequence>(nullptr, *(CachedPackage + TEXT(".MMDStagePreview8s"))));
 		if (Cached.IsValid())
 		{
 			Cached->WaitOnExistingCompression();
@@ -486,9 +555,9 @@ namespace
 		{
 			Sample.Animation.Reset(LoadObject<UAnimSequence>(nullptr, *Sample.AnimationPath));
 		}
-		if (!Sample.Animation.IsValid())
+		if (!Sample.Animation.IsValid() || Sample.Animation->GetSkeleton() != Sample.Mesh->GetSkeleton())
 		{
-			Error = TEXT("Sandbox character animation could not be loaded");
+			Error = TEXT("所选样本的动画无法加载或 Skeleton 不匹配，不会回退到其它样本");
 			return false;
 		}
 		Sample.BeautyTime = 0.6f;
@@ -522,7 +591,9 @@ namespace
 		TStrongObjectPtr<USceneCaptureComponent2D> Capture;
 		TStrongObjectPtr<UStaticMeshComponent> Occluder;
 		UMMDPhysicsPlaybackAnimInstance* Playback = nullptr;
+		bool bReferencePose = false;
 		FPostProcessSettings PostProcess;
+		bool bFitSampleCamera = false;
 		int32 HeadIndex = INDEX_NONE;
 		int32 Frames = 4;
 		float Intensities[3] = { 0, 0, 0 };
@@ -637,6 +708,20 @@ namespace
 			Fov = 35.0f;
 			FStop = 5.6f;
 		}
+		if (Rig.bFitSampleCamera && Shot == EToonProbeShot::Hero)
+		{
+			Rig.Character->UpdateBounds();
+			const FBoxSphereBounds Bounds = Rig.Character->Bounds;
+			const float Aspect = Rig.Target.IsValid() && Rig.Target->SizeY > 0
+				? float(Rig.Target->SizeX) / Rig.Target->SizeY : 16.0f / 9.0f;
+			const float HalfHorizontal = FMath::DegreesToRadians(Fov * 0.5f);
+			const float HalfVertical = FMath::Atan(FMath::Tan(HalfHorizontal) / FMath::Max(Aspect, 0.1f));
+			const double Distance = FMath::Max(double(Bounds.SphereRadius), 1.0)
+				/ FMath::Sin(FMath::Min(HalfHorizontal, HalfVertical)) * 1.10;
+			const FVector ViewOffset = (Location - Target).GetSafeNormal();
+			Target = Bounds.Origin;
+			Location = Target + ViewOffset * Distance;
+		}
 		Rig.PostProcess.DepthOfFieldFocalDistance = FVector::Distance(Location, Target);
 		Rig.PostProcess.DepthOfFieldFstop = FStop;
 		Rig.Capture->PostProcessSettings = Rig.PostProcess;
@@ -647,6 +732,18 @@ namespace
 
 	void ToonProbePose(FToonProbeRig& Rig, float AnimationTime)
 	{
+		if (Rig.bReferencePose)
+		{
+			Rig.Character->SetForceRefPose(true);
+			Rig.Character->TickAnimation(0.0f, false);
+			Rig.Character->RefreshBoneTransforms();
+			Rig.Character->HandleExistingParallelEvaluationTask(true, true);
+			Rig.Character->UpdateComponentToWorld();
+			Rig.Character->MarkRenderDynamicDataDirty();
+			UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+			Rig.World->SendAllEndOfFrameUpdates();
+			return;
+		}
 		if (Rig.Playback)
 		{
 			Rig.Playback->ResetPhysics();
@@ -680,7 +777,8 @@ namespace
 	};
 
 	// 多帧累计后读回；2x 超采样后线性降采样，与现有截图流程一致。
-	bool ToonProbeShoot(FToonProbeRig& Rig, const FString& Filename, FToonProbeImageStats& Stats, FString& Error, int32 Frames = -1)
+	bool ToonProbeShoot(FToonProbeRig& Rig, const FString& Filename, FToonProbeImageStats& Stats, FString& Error,
+		int32 Frames = -1, TArray<FColor>* OutPixels = nullptr)
 	{
 		const int32 FrameCount = Frames > 0 ? Frames : Rig.Frames;
 		const double Start = FPlatformTime::Seconds();
@@ -741,6 +839,7 @@ namespace
 			Error = TEXT("PNG could not be saved");
 			return false;
 		}
+		if (OutPixels) *OutPixels = MoveTemp(Down);
 		return true;
 	}
 
@@ -794,7 +893,9 @@ namespace
 		Rig.Character->SetCastShadow(true);
 		Rig.Character->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 		Rig.Scene->AddComponent(Rig.Character.Get(), FTransform(FRotator(0, 180, 0), FVector(0, -55, 2)));
-		Rig.Character->SetAnimation(Sample.Animation.Get());
+		Rig.bReferencePose = Sample.bReferencePose;
+		Rig.Character->SetForceRefPose(Sample.bReferencePose);
+		Rig.Character->SetAnimation(Sample.bReferencePose ? nullptr : Sample.Animation.Get());
 		Rig.Character->SetUpdateAnimationInEditor(true);
 
 		// 遮挡物：不进主 pass，只投影。位置在运行时按主光方向放到角色与主光之间。
@@ -857,7 +958,15 @@ namespace
 		Rig.Character->MarkRenderStateDirty();
 		Rig.World->SendAllEndOfFrameUpdates();
 		FlushRenderingCommands();
-		Rig.Playback = UMMDPhysicsPlaybackAnimInstance::PlayMMDAnimation(Rig.Character.Get(), Sample.Animation.Get(), false, true);
+		if (Sample.bReferencePose)
+		{
+			// 不能仅把时间设为零：旧播放实例仍可能持有上一段物理和 Morph 姿态。
+			Rig.Playback = nullptr;
+			Rig.Character->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			Rig.Character->SetAnimation(nullptr);
+			Rig.Character->SetForceRefPose(true);
+		}
+		else Rig.Playback = UMMDPhysicsPlaybackAnimInstance::PlayMMDAnimation(Rig.Character.Get(), Sample.Animation.Get(), false, true);
 		Rig.Character->SetUpdateAnimationInEditor(true);
 		return WaitSeconds;
 	}
@@ -1081,12 +1190,13 @@ namespace
 		}
 	}
 
-	void ToonProbeCapture(FToonProbeRig& Rig, FToonProbeLog& Log, const FString& Name, int32 Frames = -1)
+	void ToonProbeCapture(FToonProbeRig& Rig, FToonProbeLog& Log, const FString& Name,
+		int32 Frames = -1, TArray<FColor>* OutPixels = nullptr)
 	{
 		FToonProbeImageStats Stats;
 		FString Error;
 		const FString Filename = Log.File(Name);
-		const bool bOk = ToonProbeShoot(Rig, Filename, Stats, Error, Frames);
+		const bool bOk = ToonProbeShoot(Rig, Filename, Stats, Error, Frames, OutPixels);
 		TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
 		Item->SetStringField(TEXT("name"), Name);
 		Item->SetStringField(TEXT("file"), Filename);
@@ -1096,6 +1206,8 @@ namespace
 		Item->SetNumberField(TEXT("min_luma"), Stats.MinLuma);
 		Item->SetNumberField(TEXT("max_luma"), Stats.MaxLuma);
 		Item->SetNumberField(TEXT("seconds"), Stats.Seconds);
+		Item->SetStringField(TEXT("camera_location"), Rig.Capture->GetComponentLocation().ToString());
+		Item->SetNumberField(TEXT("camera_fov"), Rig.Capture->FOVAngle);
 		if (!Error.IsEmpty()) Item->SetStringField(TEXT("error"), Error);
 		Log.Images.Add(MakeShared<FJsonValueObject>(Item));
 		Log.Failures += bOk ? 0 : 1;
@@ -1103,7 +1215,8 @@ namespace
 	}
 
 	// 一次性拍某个机位：切姿态、切机位、截图。
-	void ToonProbeCaptureShot(FToonProbeRig& Rig, FToonProbeSample& Sample, FToonProbeLog& Log, const FString& Prefix, EToonProbeShot Shot, int32 Frames = -1)
+	void ToonProbeCaptureShot(FToonProbeRig& Rig, FToonProbeSample& Sample, FToonProbeLog& Log,
+		const FString& Prefix, EToonProbeShot Shot, int32 Frames = -1, TArray<FColor>* OutPixels = nullptr)
 	{
 		float AnimationTime = Sample.BeautyTime;
 		if (Shot == EToonProbeShot::Face || Shot == EToonProbeShot::Hair)
@@ -1112,7 +1225,7 @@ namespace
 		}
 		ToonProbePose(Rig, AnimationTime);
 		ToonProbeSetShot(Rig, Shot);
-		ToonProbeCapture(Rig, Log, FString::Printf(TEXT("%s_%s"), *Prefix, ToonProbeShotName(Shot)), Frames);
+		ToonProbeCapture(Rig, Log, FString::Printf(TEXT("%s_%s"), *Prefix, ToonProbeShotName(Shot)), Frames, OutPixels);
 	}
 
 	bool ToonProbeApplyPreset(FToonProbeRig& Rig, UMMDStageRenderPreset* Preset)
@@ -1156,7 +1269,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	TArray<FString> Exps;
 	ExpText.ParseIntoArray(Exps, TEXT(","), true);
 	const TArray<FString> AllowedExps = { TEXT("ab"), TEXT("shadow"), TEXT("ramp"), TEXT("lighting"), TEXT("face"),
-		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("all") };
+		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("all") };
 	for (const FString& Exp : Exps)
 	{
 		if (!AllowedExps.Contains(Exp))
@@ -1217,16 +1330,16 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		Report->SetStringField(TEXT("native_preset"), NativePresetPath);
 		for (const FString& Exp : Exps)
 		{
-			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity"))
+			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline"))
 			{
-					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity, received %s"), *Exp);
+					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline, received %s"), *Exp);
 				return 1;
 			}
 		}
 	}
-	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf"))) && !NativePreset.IsValid())
+	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline"))) && !NativePreset.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime checks require -NativePreset"));
+		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline checks require -NativePreset"));
 		return 1;
 	}
 	if (!bSubstrate && !NativePreset.IsValid())
@@ -1278,11 +1391,42 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 
 	FToonProbeSample Sample;
 	FString Error;
-	if (!ToonProbeLoadSample(Sample, Error))
+	FString RequestedSampleManifest;
+	const bool bExplicitSample = FParse::Value(*Params, TEXT("SampleManifest="), RequestedSampleManifest)
+		|| Params.Contains(TEXT("-SampleManifest="), ESearchCase::IgnoreCase);
+	if (!ToonProbeLoadSample(Sample, RequestedSampleManifest, bExplicitSample, Error))
 	{
+		Report->SetStringField(TEXT("sample_manifest"), Sample.ManifestPath);
+		Report->SetStringField(TEXT("source_pmx"), Sample.SourcePmx);
+		Report->SetBoolField(TEXT("sample_manifest_explicit"), bExplicitSample);
+		Report->SetBoolField(TEXT("sample_selection_success"), false);
+		Report->SetStringField(TEXT("error"), Error);
+		Report->SetNumberField(TEXT("failures"), 1);
+		const FString FailureReport = Log.OutDir / (Log.Tag + TEXT("_report.json"));
+		FFileHelper::SaveStringToFile(ToonProbeJsonToString(Report), *FailureReport, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] %s"), *Error);
 		return 1;
 	}
+	Report->SetStringField(TEXT("sample_manifest"), Sample.ManifestPath);
+	Report->SetStringField(TEXT("source_pmx"), Sample.SourcePmx);
+	Report->SetBoolField(TEXT("sample_manifest_explicit"), bExplicitSample);
+	Report->SetBoolField(TEXT("sample_selection_success"), true);
+	FString PoseTimeText;
+	if (FParse::Value(*Params, TEXT("PoseTime="), PoseTimeText))
+	{
+		float PoseTime = 0.0f;
+		if (!LexTryParseString(PoseTime, *PoseTimeText) || !FMath::IsFinite(PoseTime) || (PoseTime < 0.0f && PoseTime != -1.0f))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[ToonProbe] PoseTime 必须为非负秒数或 -1（参考姿势）"));
+			return 1;
+		}
+		Sample.bReferencePose = PoseTime == -1.0f;
+		Sample.BeautyTime = Sample.bReferencePose ? 0.0f : FMath::Clamp(PoseTime, 0.0f, static_cast<float>(Sample.Animation->GetPlayLength()));
+		Sample.FaceTimes = { Sample.BeautyTime };
+		Report->SetNumberField(TEXT("pose_time_requested"), PoseTime);
+	}
+	Report->SetBoolField(TEXT("reference_pose"), Sample.bReferencePose);
+	Report->SetNumberField(TEXT("pose_time_seconds"), Sample.BeautyTime);
 	Report->SetStringField(TEXT("character"), Sample.MeshPath);
 	Report->SetStringField(TEXT("animation"), Sample.AnimationPath);
 	const FString SdfMount = TEXT("/MMDSdfValidation/");
@@ -1291,6 +1435,11 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	ON_SCOPE_EXIT { FPackageName::UnRegisterMountPoint(SdfMount, SdfDirectory); };
 	const bool bSaveSdfFixture = FParse::Param(*Params, TEXT("SaveSdfFixture"));
 	const bool bLoadSdfFixture = FParse::Param(*Params, TEXT("LoadSdfFixture"));
+	if (bExplicitSample && (bLoadSdfFixture || bSaveSdfFixture))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] 显式 SampleManifest 不能使用旧固定 SDF fixture；请用 -BakeSdf 在所选模型上临时烘焙"));
+		return 1;
+	}
 	if (bLoadSdfFixture && (bSaveSdfFixture || FParse::Param(*Params, TEXT("BakeSdf")))) return 1;
 	if (bLoadSdfFixture)
 	{
@@ -1470,6 +1619,8 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	// ---- 场景 ----
 	FToonProbeRig Rig;
 	Rig.Frames = Frames;
+	Rig.bFitSampleCamera = FParse::Param(*Params, TEXT("FitSampleCamera"));
+	Report->SetBoolField(TEXT("fit_sample_camera"), Rig.bFitSampleCamera);
 	if (!ToonProbeBuildRig(Rig, EndfieldPreset, Sample, bLumenTracking, Error))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] %s"), *Error);
@@ -1756,6 +1907,231 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 			UseToonBaseline();
 			ToonProbeSetLights(Rig, true, true, true);
 		}
+	}
+	if (ToonProbeHasExp(Exps, TEXT("outline")) && NativePreset.IsValid())
+	{
+		UseToonBaseline();
+		auto CheckOutline = [&](const TCHAR* Name, bool bOk)
+		{
+			Log.Note(Name, bOk ? TEXT("passed") : TEXT("failed"));
+			Log.Failures += bOk ? 0 : 1;
+		};
+		CheckOutline(TEXT("outline_dedicated_parent_present"), IsValid(NativePreset->CharacterOutlineMaterial.Get()));
+		TStrongObjectPtr<UMMDStageRenderPreset> OutlinePreset(DuplicateObject<UMMDStageRenderPreset>(ToonPreset.Get(), GetTransientPackage()));
+		TArray<TArray<FColor>> OutlineOffPixels, OutlineOnPixels;
+		OutlineOffPixels.SetNum(UE_ARRAY_COUNT(AllShots));
+		OutlineOnPixels.SetNum(UE_ARRAY_COUNT(AllShots));
+		OutlinePreset->bCharacterOutline = false;
+		CheckOutline(TEXT("outline_off_applied"), ToonProbeApplyPreset(Rig, OutlinePreset.Get()));
+		ToonProbeFinishMaterialSwap(Rig, Sample);
+		bool bOff = Rig.Character->GetOverlayMaterial() == nullptr;
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+			bOff &= Rig.Character->GetOverlayMaterial(true, Slot) == nullptr;
+		CheckOutline(TEXT("outline_off_has_no_overlay"), bOff);
+		for (int32 Shot = 0; Shot < UE_ARRAY_COUNT(AllShots); ++Shot)
+			ToonProbeCaptureShot(Rig, Sample, Log, TEXT("outline_off"), AllShots[Shot], -1, &OutlineOffPixels[Shot]);
+
+		OutlinePreset->bCharacterOutline = true;
+		CheckOutline(TEXT("outline_on_applied"), ToonProbeApplyPreset(Rig, OutlinePreset.Get()));
+		ToonProbeFinishMaterialSwap(Rig, Sample);
+		const UMMDSkeletalMeshUserData* UserData = Sample.Mesh->GetAssetUserData<UMMDSkeletalMeshUserData>();
+		int32 BoundCount = 0;
+		TArray<TSharedPtr<FJsonValue>> OutlineSlots;
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+		{
+			UMaterialInterface* Imported = UserData && UserData->OutlineMaterials.IsValidIndex(Slot)
+				? UserData->OutlineMaterials[Slot].Get() : nullptr;
+			UMaterialInstanceDynamic* Outline = Cast<UMaterialInstanceDynamic>(Rig.Character->GetOverlayMaterial(true, Slot));
+			if (!Imported)
+			{
+				CheckOutline(TEXT("outline_pmx_disabled_slot_empty"), Outline == nullptr);
+				continue;
+			}
+			++BoundCount;
+			const EMMDMaterialRole Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Slot);
+			const FMMDStageOutlineRoleSettings DefaultSettings;
+			const FMMDStageOutlineRoleSettings* Settings = OutlinePreset->CharacterOutlineRoles.Find(Role);
+			if (!Settings) Settings = OutlinePreset->CharacterOutlineRoles.Find(EMMDMaterialRole::Generic);
+			if (!Settings) Settings = &DefaultSettings;
+			UTexture* SurfaceTexture = nullptr;
+			UTexture* OutlineTexture = nullptr;
+			FLinearColor SurfaceBase = FLinearColor::White;
+			FLinearColor OutlineBase = FLinearColor::Black;
+			UMaterialInterface* Surface = Rig.Character->GetMaterial(Slot);
+			if (Surface)
+			{
+				Surface->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("base_color_tex")), SurfaceTexture);
+				Surface->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), SurfaceBase);
+			}
+			float Brightness = -1.0f, Saturation = -1.0f, SourceBlend = -1.0f;
+			float AlphaMode = -1.0f, Opacity = -1.0f, Cutoff = -1.0f;
+			const EBlendMode SurfaceBlend = Surface ? Surface->GetBlendMode() : BLEND_Opaque;
+			const float ExpectedAlphaMode = SurfaceBlend == BLEND_Opaque ? 0.0f : SurfaceBlend == BLEND_Masked ? 1.0f : 2.0f;
+			const float ExpectedCutoff = SurfaceBlend == BLEND_Masked ? Surface->GetOpacityMaskClipValue() : 0.01f;
+			float ExpectedOpacity = SurfaceBase.A;
+			if (Surface) Surface->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), ExpectedOpacity);
+			float ImportedEdgeSize = 1.0f, BoundEdgeSize = -1.0f;
+			FLinearColor ImportedEdge = FLinearColor::Black, BoundEdge = FLinearColor::Transparent;
+			Imported->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("EdgeSize")), ImportedEdgeSize);
+			Imported->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("EdgeColor")), ImportedEdge);
+			if (Outline)
+			{
+				Outline->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("base_color_tex")), OutlineTexture);
+				Outline->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), OutlineBase);
+				Outline->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("EdgeColor")), BoundEdge);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("EdgeSize")), BoundEdgeSize);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::SourceBrightness), Brightness);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::SourceSaturation), Saturation);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::SourceBlend), SourceBlend);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::AlphaMode), AlphaMode);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::Opacity), Opacity);
+				Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::Cutoff), Cutoff);
+			}
+			bool bOverlayFallback = true;
+			if (const FMaterialRenderProxy* Proxy = Outline ? Outline->GetRenderProxy() : nullptr)
+			{
+				ENQUEUE_RENDER_COMMAND(ToonProbeCheckOutlineProxy)(
+					[Proxy, &bOverlayFallback](FRHICommandListImmediate& RHICmdList)
+					{
+						const FMaterialRenderProxy* Actual = Proxy;
+						const FMaterial& Material = Proxy->GetMaterialWithFallback(GMaxRHIFeatureLevel, Actual);
+						bOverlayFallback = Actual != Proxy || Material.IsDefaultMaterial();
+					});
+				FlushRenderingCommands();
+			}
+			const bool bPassed = Outline && Outline->Parent == OutlinePreset->CharacterOutlineMaterial && !bOverlayFallback
+				&& (!SurfaceTexture || SurfaceTexture == OutlineTexture) && SurfaceBase.Equals(OutlineBase, 0.0001f)
+				&& FMath::IsNearlyEqual(Brightness, Settings->SourceBrightness) && FMath::IsNearlyEqual(Saturation, Settings->SourceSaturation)
+				&& FMath::IsNearlyEqual(SourceBlend, OutlinePreset->OutlineSourceColorBlend)
+				&& FMath::IsNearlyEqual(AlphaMode, ExpectedAlphaMode) && FMath::IsNearlyEqual(Opacity, ExpectedOpacity)
+				&& FMath::IsNearlyEqual(Cutoff, ExpectedCutoff)
+				&& FMath::IsNearlyEqual(ImportedEdgeSize, BoundEdgeSize) && FMath::IsNearlyEqual(ImportedEdge.A, BoundEdge.A);
+			Log.Failures += bPassed ? 0 : 1;
+			TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
+			Item->SetNumberField(TEXT("slot"), Slot);
+			Item->SetNumberField(TEXT("role"), static_cast<uint8>(Role));
+			Item->SetStringField(TEXT("parent"), Outline ? Outline->Parent->GetPathName() : TEXT("none"));
+			Item->SetStringField(TEXT("surface_texture"), SurfaceTexture ? SurfaceTexture->GetPathName() : TEXT("none"));
+			Item->SetStringField(TEXT("outline_texture"), OutlineTexture ? OutlineTexture->GetPathName() : TEXT("none"));
+			Item->SetNumberField(TEXT("brightness"), Brightness);
+			Item->SetNumberField(TEXT("saturation"), Saturation);
+			Item->SetNumberField(TEXT("source_blend"), SourceBlend);
+			Item->SetNumberField(TEXT("source_alpha_mode"), AlphaMode);
+			Item->SetNumberField(TEXT("source_opacity"), Opacity);
+			Item->SetNumberField(TEXT("source_cutoff"), Cutoff);
+			Item->SetBoolField(TEXT("render_proxy_fallback"), bOverlayFallback);
+			Item->SetBoolField(TEXT("passed"), bPassed);
+			OutlineSlots.Add(MakeShared<FJsonValueObject>(Item));
+		}
+		CheckOutline(TEXT("outline_at_least_one_pmx_slot"), BoundCount > 0);
+		Report->SetArrayField(TEXT("outline_slots"), OutlineSlots);
+		Report->SetStringField(TEXT("outline_diagnostic_contract"), TEXT("off/on/source/alpha_hidden 每组均为当前角色的 full/face/hair/cloth 原图；source 只将外扩壳改为未压暗底色；alpha_hidden 强制描边 cutout mode 与 Opacity=0，主体和灯光不变。槽报告另校验父材质、底图、底色、角色亮度/饱和度、PMX 尺寸/alpha、表面覆盖语义与真实渲染代理。"));
+		for (int32 Shot = 0; Shot < UE_ARRAY_COUNT(AllShots); ++Shot)
+			ToonProbeCaptureShot(Rig, Sample, Log, TEXT("outline_on"), AllShots[Shot], -1, &OutlineOnPixels[Shot]);
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+			if (UMaterialInstanceDynamic* Outline = Cast<UMaterialInstanceDynamic>(Rig.Character->GetOverlayMaterial(true, Slot)))
+				Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::Diagnostic, 1.0f);
+		int64 ChangedOffOn = 0, ChangedOnSource = 0;
+		TArray<TSharedPtr<FJsonValue>> PixelChecks;
+		for (int32 Shot = 0; Shot < UE_ARRAY_COUNT(AllShots); ++Shot)
+		{
+			TArray<FColor> SourcePixels;
+			ToonProbeCaptureShot(Rig, Sample, Log, TEXT("outline_source"), AllShots[Shot], -1, &SourcePixels);
+			for (const bool bSourceComparison : { false, true })
+			{
+				const TArray<FColor>& First = bSourceComparison ? OutlineOnPixels[Shot] : OutlineOffPixels[Shot];
+				const TArray<FColor>& Last = bSourceComparison ? SourcePixels : OutlineOnPixels[Shot];
+				const bool bComparable = First.Num() > 0 && First.Num() == Last.Num();
+				int64 Changed = 0, SumDifference = 0;
+				if (bComparable)
+					for (int32 Pixel = 0; Pixel < First.Num(); ++Pixel)
+					{
+						const int32 R = FMath::Abs(int32(First[Pixel].R) - Last[Pixel].R);
+						const int32 G = FMath::Abs(int32(First[Pixel].G) - Last[Pixel].G);
+						const int32 B = FMath::Abs(int32(First[Pixel].B) - Last[Pixel].B);
+						Changed += FMath::Max3(R, G, B) > 8 ? 1 : 0;
+						SumDifference += R + G + B;
+					}
+				(bSourceComparison ? ChangedOnSource : ChangedOffOn) += Changed;
+				CheckOutline(TEXT("outline_images_comparable"), bComparable);
+				TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
+				Item->SetStringField(TEXT("shot"), ToonProbeShotName(AllShots[Shot]));
+				Item->SetStringField(TEXT("comparison"), bSourceComparison ? TEXT("on_to_source") : TEXT("off_to_on"));
+				Item->SetNumberField(TEXT("changed_pixels_over_8"), Changed);
+				Item->SetNumberField(TEXT("mean_rgb_difference_255"), bComparable ? double(SumDifference) / (3.0 * First.Num()) : 0.0);
+				PixelChecks.Add(MakeShared<FJsonValueObject>(Item));
+			}
+		}
+		// 仅拒绝完全无可见变化；时序噪声与具体染色正确性仍须结合实际原图复核。
+		CheckOutline(TEXT("outline_off_on_visible_difference"), ChangedOffOn >= 16);
+		CheckOutline(TEXT("outline_on_source_visible_difference"), ChangedOnSource >= 16);
+		Report->SetArrayField(TEXT("outline_pixel_checks"), PixelChecks);
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+		{
+			UMaterialInstanceDynamic* Surface = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot));
+			UMaterialInstanceDynamic* Outline = Cast<UMaterialInstanceDynamic>(Rig.Character->GetOverlayMaterial(true, Slot));
+			if (!Surface || !Outline) continue;
+			FLinearColor OriginalBase = FLinearColor::White;
+			Surface->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), OriginalBase);
+			const FLinearColor EditedBase(0.27f, 0.61f, 0.43f, OriginalBase.A);
+			Surface->SetVectorParameterValue(TEXT("BaseColor"), EditedBase);
+			UMMDOutlineLibrary::RefreshMMDOutlinePreset(Rig.Character.Get());
+			FLinearColor BoundBase = FLinearColor::Black;
+			Outline->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), BoundBase);
+			CheckOutline(TEXT("outline_current_basecolor_edit_rebound"), BoundBase.Equals(EditedBase, 0.0001f));
+			Surface->SetVectorParameterValue(TEXT("BaseColor"), OriginalBase);
+			UMMDOutlineLibrary::RefreshMMDOutlinePreset(Rig.Character.Get());
+			break;
+		}
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+			if (UMaterialInstanceDynamic* Outline = Cast<UMaterialInstanceDynamic>(Rig.Character->GetOverlayMaterial(true, Slot)))
+			{
+				Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::AlphaMode, 1.0f);
+				Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::Opacity, 0.0f);
+			}
+		int64 AlphaChanged = 0;
+		TArray<TSharedPtr<FJsonValue>> AlphaPixelChecks;
+		for (int32 Shot = 0; Shot < UE_ARRAY_COUNT(AllShots); ++Shot)
+		{
+			TArray<FColor> HiddenPixels;
+			ToonProbeCaptureShot(Rig, Sample, Log, TEXT("outline_alpha_hidden"), AllShots[Shot], -1, &HiddenPixels);
+			const TArray<FColor>& Off = OutlineOffPixels[Shot];
+			const TArray<FColor>& On = OutlineOnPixels[Shot];
+			const bool bComparable = !HiddenPixels.IsEmpty() && Off.Num() == HiddenPixels.Num() && On.Num() == HiddenPixels.Num();
+			CheckOutline(TEXT("outline_alpha_images_comparable"), bComparable);
+			int64 Changed = 0, HiddenToOff = 0, HiddenToOn = 0;
+			if (bComparable)
+				for (int32 Pixel = 0; Pixel < HiddenPixels.Num(); ++Pixel)
+				{
+					const int32 R = FMath::Abs(int32(HiddenPixels[Pixel].R) - On[Pixel].R);
+					const int32 G = FMath::Abs(int32(HiddenPixels[Pixel].G) - On[Pixel].G);
+					const int32 B = FMath::Abs(int32(HiddenPixels[Pixel].B) - On[Pixel].B);
+					Changed += FMath::Max3(R, G, B) > 8 ? 1 : 0;
+					HiddenToOn += R + G + B;
+					HiddenToOff += FMath::Abs(int32(HiddenPixels[Pixel].R) - Off[Pixel].R)
+						+ FMath::Abs(int32(HiddenPixels[Pixel].G) - Off[Pixel].G)
+						+ FMath::Abs(int32(HiddenPixels[Pixel].B) - Off[Pixel].B);
+				}
+			AlphaChanged += Changed;
+			TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
+			Item->SetStringField(TEXT("shot"), ToonProbeShotName(AllShots[Shot]));
+			Item->SetNumberField(TEXT("on_to_alpha_hidden_changed_pixels_over_8"), Changed);
+			Item->SetNumberField(TEXT("hidden_to_off_mean_rgb_difference_255"), bComparable ? double(HiddenToOff) / (3.0 * Off.Num()) : 0.0);
+			Item->SetNumberField(TEXT("hidden_to_on_mean_rgb_difference_255"), bComparable ? double(HiddenToOn) / (3.0 * On.Num()) : 0.0);
+			AlphaPixelChecks.Add(MakeShared<FJsonValueObject>(Item));
+		}
+		CheckOutline(TEXT("outline_zero_opacity_visible_difference"), AlphaChanged >= 16);
+		Report->SetArrayField(TEXT("outline_alpha_pixel_checks"), AlphaPixelChecks);
+
+		const UMMDOutlineState* OutlineState = Cast<UMMDOutlineState>(Rig.Character->GetAssetUserDataOfClass(UMMDOutlineState::StaticClass()));
+		UMaterialInterface* SourceGlobal = OutlineState ? OutlineState->SourceGlobalOverlay.Get() : nullptr;
+		const TArray<TObjectPtr<UMaterialInterface>> SourceSlots = OutlineState ? OutlineState->SourceSlotOverlays : TArray<TObjectPtr<UMaterialInterface>>();
+		const float SourceBounds = OutlineState ? OutlineState->SourceBoundsScale : Rig.Character->BoundsScale;
+		CheckOutline(TEXT("outline_restore_applied"), UMMDStageLibrary::RestoreCharacterMaterials(Rig.Character.Get()));
+		CheckOutline(TEXT("outline_global_overlay_restored"), Rig.Character->GetOverlayMaterial() == SourceGlobal);
+		CheckOutline(TEXT("outline_slot_overlays_restored"), Rig.Character->MaterialSlotsOverlayMaterial == SourceSlots);
+		CheckOutline(TEXT("outline_bounds_restored"), FMath::IsNearlyEqual(Rig.Character->BoundsScale, SourceBounds));
+		UseToonBaseline();
 	}
 	if (ToonProbeHasExp(Exps, TEXT("runtime")) && NativePreset.IsValid())
 	{

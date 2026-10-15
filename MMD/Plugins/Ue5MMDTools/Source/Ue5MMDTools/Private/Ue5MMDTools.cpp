@@ -17,6 +17,7 @@ void FUe5MMDToolsModule::StartupModule()
 }
 void FUe5MMDToolsModule::OnPostEngineInit()
 {
+    MMDEndfieldNativeBackend::VerifyCookedShaderProtocol();
     if (!IsRunningCommandlet()) { LightViewExtension = FSceneViewExtensions::NewExtension<FMMDAnimeLightViewExtension>(); }
 }
 void FUe5MMDToolsModule::ShutdownModule()

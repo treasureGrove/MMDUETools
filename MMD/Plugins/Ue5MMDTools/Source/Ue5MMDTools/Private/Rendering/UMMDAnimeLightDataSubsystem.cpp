@@ -1,6 +1,7 @@
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
 
 #include "RenderGraphUtils.h"
+#include "TextureResource.h"
 #include "EngineUtils.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"

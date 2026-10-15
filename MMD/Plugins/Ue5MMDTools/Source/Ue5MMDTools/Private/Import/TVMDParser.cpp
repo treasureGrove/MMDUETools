@@ -1,6 +1,7 @@
 #include "TVMDParser.h"
 
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Serialization/MemoryReader.h"
 
 #if PLATFORM_WINDOWS

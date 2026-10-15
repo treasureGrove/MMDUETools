@@ -1,6 +1,7 @@
 ﻿#include "MMDPhysicsSimulator.h"
 #include <btBulletDynamicsCommon.h>
 #include "Animation/AnimInstanceProxy.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 
 

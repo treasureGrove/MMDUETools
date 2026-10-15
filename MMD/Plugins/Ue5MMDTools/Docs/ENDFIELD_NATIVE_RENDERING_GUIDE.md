@@ -1,10 +1,14 @@
 # 终末地插件着色入门与维护
 
-更新日期：2026-10-14。适用版本：UE 5.8.3 / CL58210709。
+更新日期：2026-10-15。适用版本：UE 5.8.3 / CL58210709。
 
 **UE 负责准备真实灯光、阴影和环境光，插件负责决定角色被照亮后是什么样子。** 这就是目前的方案。材质仍使用原生 Substrate Toon 的数据格式，光照计算入口已经接到插件自己的 `.ush`。
 
 shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
+
+本批也核对了别人公开复刻的完整分工：[参考源码对照](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。材质和逐灯入口保持，另补底色描边与[插件分发检查](ENDFIELD_PLUGIN_DISTRIBUTION.md)；完整眼睛、头发与屏幕效果仍逐项推进。
+
+2026-10-15已改用更复杂的YYB16th带翼款，按同一机位对比原生Toon与当前响应：[脸、头发、衣料实拍](Screenshots/2026-10-15-endfield-distribution/README.md)。独立插件构建、空白宿主四材质编译、正/普通Cook及指定Skin载荷绿红对照均已有实证；这些是基础验证，白布、翅膀与完整材质响应仍未达到终末地画质目标。
 
 先看下面两张示意图，再看实拍。需要改代码时，直接跳到[维护入口](#维护入口)。
 
@@ -168,6 +172,8 @@ Editor／Cook 编译 shader
 - [MMDEndfieldNativeProfile.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp)：`MarkTransient()` 和 `GetOrCreate()`，负责 Profile 标记、真实 RD／RS 曲线、控制值和瞬态副本；同目录 `MMDEndfieldNativeRampData.inl` 保存样本数据及来源。
 - [MMDStageLibrary.cpp](../Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp)：把对应 Profile 应用到角色材质。
 - [MMDEndfieldNativeBackend.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp)：版本保护、源码校验、缓存、光照入口及新增的 BasePass／Substrate packed export/read 适配。
+- [MMDEndfieldNativeBackendProtocol.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp)：从 Cooked 全局 shader 的序列化编译反射检查协议。只读记录，不 dispatch，不新增光照 pass；不能代替实际画面验证。
+- [MMDOutlineLibrary.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDOutlineLibrary.cpp)及[TMMDEndfieldOutline.ush](../Shaders/Core/TMMDEndfieldOutline.ush)：终末地专属底色描边、源 alpha 裁剪、绑定与恢复。
 - [MMDEndfieldNativeIndirectPatch.inl](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeIndirectPatch.inl)：GI／反射合成位置。
 - [TMMDEndfieldNativeLightCapture.ush](../Shaders/Core/TMMDEndfieldNativeLightCapture.ush)：复制原生灯光输入；只有 `mmd_light_data.valid=true` 时这些额外字段才有效。
 - [TMMDEndfieldNativeLegacy.ush](../Shaders/Core/TMMDEndfieldNativeLegacy.ush)：传统 GBuffer 的聚簇灯光兼容路径。

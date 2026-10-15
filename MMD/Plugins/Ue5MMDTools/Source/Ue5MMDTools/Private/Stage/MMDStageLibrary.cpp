@@ -206,7 +206,7 @@ namespace
 			return EMMDMaterialRole::Skin;
 		}
 		Match = MatchRoleTerms(Names,
-			{ TEXT("cloth"), TEXT("fabric"), TEXT("shirt"), TEXT("jacket"), TEXT("pants"), TEXT("skirt"), TEXT("gloves"),
+			{ TEXT("cloth"), TEXT("clothes"), TEXT("clothing"), TEXT("fabric"), TEXT("shirt"), TEXT("jacket"), TEXT("pants"), TEXT("skirt"), TEXT("gloves"),
 			  TEXT("boots"), TEXT("pocket"), TEXT("collar"), TEXT("bow"), TEXT("garters"), TEXT("ribbon"), TEXT("lace"), TEXT("sleeve") },
 			{ TEXT("布"), TEXT("衣"), TEXT("服"), TEXT("スカート"), TEXT("靴"), TEXT("手袋"), TEXT("リボン") });
 		if (!Match.IsEmpty())

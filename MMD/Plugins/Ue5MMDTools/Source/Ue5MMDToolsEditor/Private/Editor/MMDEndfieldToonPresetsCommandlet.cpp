@@ -22,7 +22,9 @@
 #include "Materials/MaterialExpressionTextureObjectParameter.h"
 #include "Materials/MaterialExpressionTextureSampleParameter2D.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
+#include "Materials/MaterialExpressionVertexColor.h"
 #include "Materials/MaterialExpressionVertexNormalWS.h"
+#include "Materials/MaterialExpressionTwoSidedSign.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
 #include "MaterialShared.h"
 #include "Misc/App.h"
@@ -32,6 +34,7 @@
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "Rendering/UMMDHeadBoneSubsystem.h"
+#include "Rendering/MMDOutlineLibrary.h"
 #include "Materials/MaterialExpressionMMDEndfieldNativePayload.h"
 #include "RenderingThread.h"
 #include "RenderUtils.h"
@@ -62,9 +65,11 @@ namespace
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Metal"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Eye"),
 		TEXT("/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2"),
-		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear") };
+		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear"),
+		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline") };
 	constexpr const TCHAR* EndfieldToonTemplatePath = TEXT("/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield.DA_Render_Endfield");
 	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=4");
+	constexpr const TCHAR* EndfieldToonOutlineGraphVersion = TEXT("EndfieldV2SourceOutlineGraph=2");
 	constexpr int32 EndfieldToonMaterialCount = 3;
 	constexpr int32 EndfieldToonProfileCount = 6;
 	constexpr int32 EndfieldToonGradientWidth = 256;
@@ -519,6 +524,78 @@ namespace
 		}
 	}
 
+	void EndfieldToonConfigureOutline(UMaterial* Material, UTexture2D* White)
+	{
+		Material->GetExpressionCollection().Empty();
+		EndfieldToonResetRootInputs(Material);
+		Material->MaterialDomain = MD_Surface;
+		Material->BlendMode = BLEND_Masked;
+		Material->SetShadingModel(MSM_Unlit);
+		Material->TwoSided = true;
+		Material->bTangentSpaceNormal = false;
+		Material->bUseMaterialAttributes = false;
+		Material->SetUsageByFlag(MATUSAGE_SkeletalMesh, true);
+		Material->SetUsageByFlag(MATUSAGE_MorphTargets, true);
+		Material->OpacityMaskClipValue = 0.001f;
+		Material->MaxWorldPositionOffsetDisplacement = 10.0f;
+		Material->bCastDynamicShadowAsMasked = false;
+
+		UMaterialExpressionVectorParameter* Edge = EndfieldToonVector(Material, TEXT("EdgeColor"), FLinearColor::Black);
+		UMaterialExpressionScalarParameter* ScreenSpace = EndfieldToonScalar(Material, TEXT("OutlineScreenSpace"), 0.0f);
+		UMaterialExpressionCustom* Offset = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
+		Offset->OutputType = CMOT_Float3;
+		Offset->Description = TEXT("复用 PMX 外扩、顶点边线权重与屏幕宽度");
+		Offset->Desc = EndfieldToonOutlineGraphVersion;
+		Offset->Code = TEXT("#include \"/Plugin/Ue5MMDTools/TMMDShader/TMMDOutline.usf\"\nreturn 0;");
+		EndfieldToonCustomInput(Offset, TEXT("vertex_normal"), EndfieldToonAdd<UMaterialExpressionVertexNormalWS>(Material));
+		EndfieldToonCustomInput(Offset, TEXT("edge_scale_encoded"), EndfieldToonAdd<UMaterialExpressionVertexColor>(Material), 4);
+		EndfieldToonCustomInput(Offset, TEXT("edge_size"), EndfieldToonScalar(Material, TEXT("EdgeSize"), 1.0f, 0.0f, 10.0f));
+		EndfieldToonCustomInput(Offset, TEXT("outline_width"), EndfieldToonScalar(Material, TEXT("OutlineWidth"), 0.1f));
+		EndfieldToonCustomInput(Offset, TEXT("max_offset"), EndfieldToonScalar(Material, TEXT("OutlineMaxOffset"), 10.0f, 0.0f, 10.0f));
+		EndfieldToonCustomInput(Offset, TEXT("screen_space"), ScreenSpace);
+		EndfieldToonCustomInput(Offset, TEXT("pixel_width"), EndfieldToonScalar(Material, TEXT("OutlinePixelWidth"), 1.20f, 0.0f, 4.0f));
+		EndfieldToonCustomInput(Offset, TEXT("reference_height"), EndfieldToonScalar(Material, TEXT("OutlineReferenceHeight"), 1080.0f, 1.0f, 4320.0f));
+
+		UMaterialExpressionTextureSampleParameter2D* Texture = EndfieldToonAdd<UMaterialExpressionTextureSampleParameter2D>(Material);
+		Texture->ParameterName = TEXT("base_color_tex");
+		Texture->ExpressionGUID = FGuid::NewGuid();
+		Texture->Texture = White;
+		Texture->SamplerType = SAMPLERTYPE_Color;
+		UMaterialExpressionMultiply* Base = EndfieldToonAdd<UMaterialExpressionMultiply>(Material);
+		Base->A.Connect(0, Texture);
+		Base->B.Connect(0, EndfieldToonVector(Material, TEXT("BaseColor"), FLinearColor::White));
+		UMaterialExpressionCustom* Color = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
+		Color->OutputType = CMOT_Float3;
+		Color->Description = TEXT("底色派生的部位描边；诊断仅作用于外扩壳");
+		Color->Desc = EndfieldToonOutlineGraphVersion;
+		Color->Code = TEXT("#include \"/Plugin/Ue5MMDTools/Core/TMMDEndfieldOutline.ush\"\n"
+			"TMMDEndfieldOutline outline;\nreturn outline.Color(source_color, palette, source_blend, source_brightness, source_saturation, diagnostic);");
+		EndfieldToonCustomInput(Color, TEXT("source_color"), Base);
+		EndfieldToonCustomInput(Color, TEXT("palette"), Edge);
+		EndfieldToonCustomInput(Color, TEXT("source_blend"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::SourceBlend, 1.0f));
+		EndfieldToonCustomInput(Color, TEXT("source_brightness"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::SourceBrightness, 0.5f));
+		EndfieldToonCustomInput(Color, TEXT("source_saturation"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::SourceSaturation, 1.0f, 0.0f, 2.0f));
+		EndfieldToonCustomInput(Color, TEXT("diagnostic"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::Diagnostic, 0.0f, 0.0f, 2.0f));
+
+		UMaterialExpressionCustom* Visibility = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
+		Visibility->OutputType = CMOT_Float1;
+		Visibility->Description = TEXT("PMX 边线透明度、背面壳与正交隔离");
+		Visibility->Desc = EndfieldToonOutlineGraphVersion;
+		Visibility->Code = TEXT("#include \"/Plugin/Ue5MMDTools/Core/TMMDEndfieldOutline.ush\"\n"
+			"TMMDEndfieldOutline outline;\nreturn outline.Visibility(edge_alpha, two_sided_sign, screen_space, texture_alpha, opacity, alpha_mode, cutoff);");
+		EndfieldToonCustomInput(Visibility, TEXT("edge_alpha"), Edge, 4);
+		EndfieldToonCustomInput(Visibility, TEXT("two_sided_sign"), EndfieldToonAdd<UMaterialExpressionTwoSidedSign>(Material));
+		EndfieldToonCustomInput(Visibility, TEXT("screen_space"), ScreenSpace);
+		EndfieldToonCustomInput(Visibility, TEXT("texture_alpha"), Texture, 4);
+		EndfieldToonCustomInput(Visibility, TEXT("opacity"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::Opacity, 1.0f));
+		EndfieldToonCustomInput(Visibility, TEXT("alpha_mode"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::AlphaMode, 0.0f, 0.0f, 2.0f));
+		EndfieldToonCustomInput(Visibility, TEXT("cutoff"), EndfieldToonScalar(Material, MMDEndfieldOutlineParameters::Cutoff, 0.1f));
+		UMaterialEditorOnlyData* Data = Material->GetEditorOnlyData();
+		Data->WorldPositionOffset.Connect(0, Offset);
+		Data->EmissiveColor.Connect(0, Color);
+		Data->OpacityMask.Connect(0, Visibility);
+	}
+
 	// 指纹包含所有表达式、参数默认值、纹理/Profile 引用与连线；不依赖对象随机名称或 Guid。
 	FString EndfieldToonGraphSignature(UMaterial* Material)
 	{
@@ -618,6 +695,7 @@ namespace
 			&& !Actual->bTangentSpaceNormal && !Actual->bUseMaterialAttributes && Actual->GetUsageByFlag(MATUSAGE_SkeletalMesh)
 			&& Actual->GetUsageByFlag(MATUSAGE_MorphTargets)
 			&& FMath::IsNearlyEqual(Actual->OpacityMaskClipValue, Expected->OpacityMaskClipValue)
+			&& FMath::IsNearlyEqual(Actual->MaxWorldPositionOffsetDisplacement, Expected->MaxWorldPositionOffsetDisplacement)
 			&& Actual->bCastDynamicShadowAsMasked == Expected->bCastDynamicShadowAsMasked
 			&& Actual->TranslucencyLightingMode == Expected->TranslucencyLightingMode
 			&& !ActualSignature.IsEmpty() && ActualSignature == ExpectedSignature;
@@ -637,12 +715,29 @@ namespace
 	}
 
 	void EndfieldToonConfigurePreset(UMMDStageRenderPreset* Preset, const TArray<TStrongObjectPtr<UMaterial>>& Materials,
-		const TArray<TStrongObjectPtr<UToonProfile>>& Profiles)
+		const TArray<TStrongObjectPtr<UToonProfile>>& Profiles, UMaterial* Outline)
 	{
 		Preset->DisplayName = FText::FromString(TEXT("终末地 V2 原生 Toon（实验）"));
 		Preset->CharacterToonMaterialOpaque = Materials[0].Get();
 		Preset->CharacterToonMaterialMasked = Materials[1].Get();
 		Preset->CharacterToonMaterialTranslucent = Materials[2].Get();
+		Preset->CharacterOutlineMaterial = Outline;
+		Preset->bCharacterOutline = true;
+		Preset->OutlineSourceColorBlend = 1.0f;
+		Preset->CharacterOutlineRoles.Reset();
+		// 已核对的客户端面部/头发/衣料值；Skin 暂合并 face 与 body（body 饱和度为 1.5）。
+		FMMDStageOutlineRoleSettings SkinOutline;
+		SkinOutline.SourceBrightness = 0.5f;
+		SkinOutline.SourceSaturation = 1.54f;
+		Preset->CharacterOutlineRoles.Add(EMMDMaterialRole::Skin, SkinOutline);
+		FMMDStageOutlineRoleSettings HairOutline;
+		HairOutline.SourceBrightness = 0.5f;
+		HairOutline.SourceSaturation = 1.4f;
+		Preset->CharacterOutlineRoles.Add(EMMDMaterialRole::Hair, HairOutline);
+		FMMDStageOutlineRoleSettings ClothOutline;
+		ClothOutline.SourceBrightness = 0.3f;
+		ClothOutline.SourceSaturation = 1.5f;
+		Preset->CharacterOutlineRoles.Add(EMMDMaterialRole::Cloth, ClothOutline);
 		Preset->CharacterToonRoles.Reset();
 		Preset->bCharacterContactShadow = false;
 		const float Roughness[] = { 0.696f, 0.742f, 0.35f, 0.696f, 0.25f, 0.25f };
@@ -740,6 +835,7 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	TArray<TSharedPtr<FJsonValue>> MaterialReports;
 	TArray<TStrongObjectPtr<UToonProfile>> Profiles;
 	TArray<TStrongObjectPtr<UMaterial>> Materials;
+	TStrongObjectPtr<UMaterial> OutlineMaterial;
 	TStrongObjectPtr<UMMDStageRenderPreset> Preset;
 	TStrongObjectPtr<UTexture2D> Gradient;
 	FString GradientSourceHash;
@@ -850,7 +946,36 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 		}
 	}
 
-	if (bInspect && Template.IsValid() && Materials.Num() == EndfieldToonMaterialCount && Profiles.Num() == EndfieldToonProfileCount)
+	if (bInspect && White.IsValid())
+	{
+		OutlineMaterial.Reset(EndfieldToonLoadOrCreate<UMaterial>(EndfieldToonAllowedPackages[11], bGenerate, Error));
+		if (!OutlineMaterial.IsValid()) Errors.Add(Error);
+		else
+		{
+			TStrongObjectPtr<UMaterial> Expected(NewObject<UMaterial>(GetTransientPackage(), NAME_None, RF_Transient));
+			FArchiveUObject InitialArchive;
+			Expected->Serialize(InitialArchive);
+			EndfieldToonConfigureOutline(Expected.Get(), White.Get());
+			const bool bMatches = EndfieldToonMaterialMatches(OutlineMaterial.Get(), Expected.Get());
+			if (!bMatches && bGenerate)
+			{
+				EndfieldToonConfigureOutline(OutlineMaterial.Get(), White.Get());
+				OutlineMaterial->StateId = FGuid::NewGuid();
+				OutlineMaterial->PostEditChange();
+			}
+			else if (!bMatches) Errors.Add(TEXT("V2 专用底色描边图或属性过期：") + OutlineMaterial->GetPathName());
+			TSharedRef<FJsonObject> Item = MakeShared<FJsonObject>();
+			Item->SetStringField(TEXT("asset"), OutlineMaterial->GetPathName());
+			Item->SetStringField(TEXT("type"), TEXT("SourceTintedOutlineMaterial"));
+			Item->SetStringField(TEXT("graph_signature"), EndfieldToonGraphSignature(OutlineMaterial.Get()));
+			Item->SetStringField(TEXT("expected_graph_signature"), EndfieldToonGraphSignature(Expected.Get()));
+			Item->SetBoolField(TEXT("structure_passed"), EndfieldToonMaterialMatches(OutlineMaterial.Get(), Expected.Get()));
+			AssetReports.Add(MakeShared<FJsonValueObject>(Item));
+		}
+	}
+
+	if (bInspect && Template.IsValid() && Materials.Num() == EndfieldToonMaterialCount
+		&& Profiles.Num() == EndfieldToonProfileCount && OutlineMaterial.IsValid())
 	{
 		Preset.Reset(EndfieldToonLoadOrCreate<UMMDStageRenderPreset>(EndfieldToonAllowedPackages[9], bGenerate, Error));
 		if (!Preset.IsValid()) Errors.Add(Error);
@@ -858,7 +983,7 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 		{
 			TStrongObjectPtr<UMMDStageRenderPreset> Expected(NewObject<UMMDStageRenderPreset>(GetTransientPackage()));
 			EndfieldToonCopyPreset(Expected.Get(), Template.Get());
-			EndfieldToonConfigurePreset(Expected.Get(), Materials, Profiles);
+			EndfieldToonConfigurePreset(Expected.Get(), Materials, Profiles, OutlineMaterial.Get());
 			if (bGenerate) EndfieldToonCopyPreset(Preset.Get(), Expected.Get());
 			const bool bMatches = EndfieldToonPresetMatches(Preset.Get(), Expected.Get());
 			if (!bMatches) Errors.Add(TEXT("V2 预设设置过期或没有保留旧父材质回退：") + Preset->GetPathName());
@@ -870,15 +995,18 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 		}
 	}
 
-	if (Errors.IsEmpty() && bCanCompile && Materials.Num() == EndfieldToonMaterialCount)
+	if (Errors.IsEmpty() && bCanCompile && Materials.Num() == EndfieldToonMaterialCount && OutlineMaterial.IsValid())
 	{
+		TArray<UMaterial*> DrawMaterials;
+		for (const TStrongObjectPtr<UMaterial>& Material : Materials) DrawMaterials.Add(Material.Get());
+		DrawMaterials.Add(OutlineMaterial.Get());
 		// UE5.8 PostEditChange 的 None 模式只建图；必须主动编译真实绘制 shader。
-		for (const TStrongObjectPtr<UMaterial>& Material : Materials)
+		for (UMaterial* Material : DrawMaterials)
 			Material->ForceRecompileForRendering(EMaterialShaderPrecompileMode::Default);
 		FAssetCompilingManager::Get().FinishAllCompilation();
 		GShaderCompilingManager->FinishAllCompilation();
 		FlushRenderingCommands();
-		for (const TStrongObjectPtr<UMaterial>& Material : Materials)
+		for (UMaterial* Material : DrawMaterials)
 		{
 			const FMaterialResource* Resource = Material->GetMaterialResource(GMaxRHIShaderPlatform);
 			const FMaterialShaderMap* Map = Resource ? Resource->GetGameThreadShaderMap() : nullptr;
@@ -909,12 +1037,13 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 		}
 	}
 
-	if (bGenerate && Errors.IsEmpty() && MaterialReports.Num() == EndfieldToonMaterialCount && Preset.IsValid())
+	if (bGenerate && Errors.IsEmpty() && MaterialReports.Num() == EndfieldToonMaterialCount + 1 && Preset.IsValid())
 	{
 		TArray<UObject*> Assets;
 		Assets.Add(Gradient.Get());
 		for (const TStrongObjectPtr<UToonProfile>& Profile : Profiles) Assets.Add(Profile.Get());
 		for (const TStrongObjectPtr<UMaterial>& Material : Materials) Assets.Add(Material.Get());
+		Assets.Add(OutlineMaterial.Get());
 		Assets.Add(Preset.Get());
 		for (UObject* Asset : Assets)
 		{
@@ -924,8 +1053,8 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	}
 
 	const bool bSuccess = Errors.IsEmpty() && bGradientMatches && Profiles.Num() == EndfieldToonProfileCount
-		&& Materials.Num() == EndfieldToonMaterialCount && Preset.IsValid()
-		&& MaterialReports.Num() == EndfieldToonMaterialCount && (!bGenerate || Written.Num() == UE_ARRAY_COUNT(EndfieldToonAllowedPackages));
+		&& Materials.Num() == EndfieldToonMaterialCount && OutlineMaterial.IsValid() && Preset.IsValid()
+		&& MaterialReports.Num() == EndfieldToonMaterialCount + 1 && (!bGenerate || Written.Num() == UE_ARRAY_COUNT(EndfieldToonAllowedPackages));
 	TSharedRef<FJsonObject> Report = MakeShared<FJsonObject>();
 	Report->SetBoolField(TEXT("success"), bSuccess);
 	Report->SetBoolField(TEXT("generate_requested"), bGenerate);
@@ -936,6 +1065,10 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("graph_version"), EndfieldToonGraphVersion);
 	Report->SetNumberField(TEXT("expected_package_count"), UE_ARRAY_COUNT(EndfieldToonAllowedPackages));
 	Report->SetStringField(TEXT("offset_gradient_source_hash"), GradientSourceHash);
+	Report->SetStringField(TEXT("outline_material"), OutlineMaterial.IsValid() ? OutlineMaterial->GetPathName() : TEXT("missing"));
+	Report->SetStringField(TEXT("outline_graph_version"), EndfieldToonOutlineGraphVersion);
+	Report->SetStringField(TEXT("outline_contract"), TEXT("V2 独立父材质从当前槽 base_color_tex*BaseColor 派生描边，Skin=.5/1.54、Hair=.5/1.4、Cloth=.3/1.5；Skin 暂合并 face/body。复用原 PMX EdgeSize/EdgeScale/EdgeColor.A、外扩和恢复。白图/白底色兜底，不修改用户 M_MMD_Outline；旧预设未配置专用父材质时保持原行为。OutlineColorDiagnostic:0 正常、1 源底色、2 固定配色。"));
+	Report->SetStringField(TEXT("outline_alpha_contract"), TEXT("按当前表面 blend mode 绑定：Opaque 忽略 texture.A/Opacity，Masked 用当前槽 GetOpacityMaskClipValue 裁剪 texture.A*Opacity，透明槽以 .01 阈值近似可见范围，不能复现柔和覆盖率过渡。BaseColor.A 仅作为缺 Opacity 时兜底，不重复乘；完全透明和 cutout 孔洞不会生成完整矩形壳。"));
 	FString NativeSource;
 	const FString NativeSourcePath = GetShaderSourceFilePath(TEXT("/Plugin/Ue5MMDTools/Core/TMMDEndfieldNative.ush"));
 	Report->SetStringField(TEXT("native_ush_source_hash"), FFileHelper::LoadFileToString(NativeSource, *NativeSourcePath)

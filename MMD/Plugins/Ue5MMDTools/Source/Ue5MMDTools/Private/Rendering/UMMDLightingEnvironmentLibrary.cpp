@@ -27,6 +27,7 @@
 #include "HAL/IConsoleManager.h"
 #include "PreviewScene.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/Package.h"
 
 #if WITH_EDITOR
 #include "Camera/CameraActor.h"
@@ -36,7 +37,6 @@
 #include "FileHelpers.h"
 #include "LevelEditorViewport.h"
 #include "Misc/PackageName.h"
-#include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 #endif
 

@@ -5,6 +5,7 @@
 #include "Misc/SecureHash.h"
 #include "Serialization/ObjectWriter.h"
 #include "UObject/StrongObjectPtr.h"
+#include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 #include "MMDEndfieldNativeRampData.inl"
 

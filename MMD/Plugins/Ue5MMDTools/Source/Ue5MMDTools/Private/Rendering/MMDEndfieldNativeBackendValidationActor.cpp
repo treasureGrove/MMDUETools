@@ -21,9 +21,11 @@
 #include "Misc/Paths.h"
 #include "Rendering/MMDEndfieldNativeBackend.h"
 #include "Rendering/MMDEndfieldNativeProfile.h"
+#include "Rendering/UMMDHeadBoneSubsystem.h"
 #include "RHI.h"
 #include "RHIStrings.h"
 #include "UnrealClient.h"
+#include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMMDEndfieldBackendValidation, Log, All);
 
@@ -115,6 +117,13 @@ void AMMDEndfieldNativeBackendValidationActor::BeginPlay()
 	if (!GetWorld() || !GetWorld()->IsGameWorld() || !FParse::Param(FCommandLine::Get(), TEXT("MMDEndfieldBackendValidation"))) return;
 	bValidationEnabled = true;
 	SetActorTickEnabled(true);
+	FString PayloadOption;
+	bPayloadOptionPresent = FParse::Value(FCommandLine::Get(), TEXT("MMDEndfieldValidationPayload="), PayloadOption);
+	if (bPayloadOptionPresent)
+	{
+		if (PayloadOption == TEXT("0") || PayloadOption == TEXT("1")) PayloadRequested = PayloadOption == TEXT("1") ? 1 : 0;
+		else FailureReason = TEXT("MMDEndfieldValidationPayload requires exactly 0 or 1.");
+	}
 	RebindValidationProfiles();
 	const FString DefaultOutput = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("MMDEndfieldNativeBackend/RuntimeValidation"));
 	OutputDirectory = DefaultOutput;
@@ -161,6 +170,14 @@ bool AMMDEndfieldNativeBackendValidationActor::ApplyValidationCamera()
 void AMMDEndfieldNativeBackendValidationActor::RebindValidationProfiles()
 {
 	const auto& Backend = MMDEndfieldNativeBackend::GetStatus();
+	const IConsoleVariable* GBufferFormat = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Substrate.ProjectGBufferFormat"));
+	const bool bPayloadDiagnostic = bPayloadOptionPresent && PayloadRequested >= 0 && FailureReason.IsEmpty()
+		&& Backend.bRequested && Backend.bProfileMarkerAllowed && Backend.Mode == 2 && GBufferFormat && GBufferFormat->GetInt() == 1;
+	if (bPayloadOptionPresent && !bPayloadDiagnostic)
+	{
+		PayloadValidationReason = TEXT("Payload diagnostics require explicit validation, backend Mode 2, native Profile routing and GBuffer format 1.");
+		if (FailureReason.IsEmpty()) FailureReason = PayloadValidationReason;
+	}
 	if (!Backend.bRequested || !Backend.bProfileMarkerAllowed)
 	{
 		ProfileRebindReason = TEXT("Backend was not requested or Profile marker routing is unavailable; fixture materials retain their existing profiles.");
@@ -184,14 +201,64 @@ void AMMDEndfieldNativeBackendValidationActor::RebindValidationProfiles()
 				if (!SourceProfile) SourceProfile = SourceInstance->ToonProfileOverride.Get();
 				EMMDMaterialRole MaterialRole = EMMDMaterialRole::Generic;
 				if (!MMDEndfieldRuntimeValidationProfileRole(SourceProfile, MaterialRole)) continue;
+				const bool bSkinPayloadDiagnostic = bPayloadDiagnostic && MaterialRole == EMMDMaterialRole::Skin;
+				if (bSkinPayloadDiagnostic) ++EligiblePayloadMaterialCount;
 				UToonProfile* Profile = MMDEndfieldNativeProfile::GetOrCreate(SourceProfile, MaterialRole);
 				if (!IsValid(Profile) || Profile == SourceProfile || !Profile->HasAnyFlags(RF_Transient)) continue;
+				if (bSkinPayloadDiagnostic)
+				{
+					// 只在显式验证中改独立瞬态副本；不污染 GetOrCreate 缓存、Cook 资产或生产 Profile。
+					if (Profile->Settings.DiffuseRamp.ExternalCurve) continue;
+					Profile = DuplicateObject<UToonProfile>(Profile, GetTransientPackage());
+					if (!Profile) continue;
+					Profile->SetFlags(RF_Transient);
+					Profile->ClearFlags(RF_Public | RF_Standalone);
+					Profile->Guid = FGuid::NewGuid();
+					FRichCurve& Alpha = Profile->Settings.DiffuseRamp.ColorCurves[3];
+					for (float Position : { 0.71875f, 0.78125f })
+						Alpha.SetKeyInterpMode(Alpha.UpdateOrAddKey(Position, 17.0f), RCIM_Linear);
+				}
 				// 新 MID 以原 MIC 为父，原参数保持继承；仅瞬态 Profile 覆盖送入渲染代理。
 				UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(SourceMaterial, Component);
 				if (!Material) continue;
 				Material->ToonProfileOverride = Profile;
 				Material->bOverrideToonProfile = true;
 				Material->ClearParameterValues();
+				if (bSkinPayloadDiagnostic)
+				{
+					Component->UpdateBounds();
+					const FVector Center = Component->Bounds.Origin;
+					const float Radius = FMath::Max(static_cast<float>(Component->Bounds.SphereRadius), 1.0f);
+					const FLinearColor Head(Center.X, Center.Y, Center.Z, Radius);
+					const FLinearColor Forward(0.0f, 1.0f, 0.0f, 0.0f);
+					const FLinearColor Right(1.0f, 0.0f, 0.0f, 0.0f);
+					Material->SetVectorParameterValue(UMMDHeadBoneSubsystem::ParamHeadPositionRadius, Head);
+					Material->SetVectorParameterValue(UMMDHeadBoneSubsystem::ParamHeadForward, Forward);
+					Material->SetVectorParameterValue(UMMDHeadBoneSubsystem::ParamHeadRight, Right);
+					Material->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), static_cast<float>(PayloadRequested));
+					Material->SetScalarParameterValue(TEXT("ToonFaceDirectionEnabled"), 0.0f);
+					Material->SetScalarParameterValue(TEXT("ToonFaceSdfEnabled"), 0.0f);
+					Material->SetScalarParameterValue(TEXT("ToonSphereBlend"), 0.75f);
+					Material->SetScalarParameterValue(TEXT("ToonAnisotropy"), 0.0f);
+					float Enabled = -1.0f;
+					FLinearColor BoundHead = FLinearColor::Transparent;
+					FLinearColor BoundForward = FLinearColor::Transparent, BoundRight = FLinearColor::Transparent;
+					const bool bCpuBound = Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonNativePayloadEnabled")), Enabled)
+						&& FMath::IsNearlyEqual(Enabled, static_cast<float>(PayloadRequested))
+						&& Material->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadPositionRadius), BoundHead)
+						&& BoundHead.Equals(Head, 0.0001f)
+						&& Material->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadForward), BoundForward)
+						&& BoundForward.Equals(Forward, 0.0001f)
+						&& Material->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadRight), BoundRight)
+						&& BoundRight.Equals(Right, 0.0001f)
+						&& FMath::IsNearlyEqual(Profile->Settings.DiffuseRamp.GetLinearColorValue(0.75f).A, 17.0f);
+					if (bCpuBound) ++BoundPayloadMaterialCount;
+					FString PayloadEntry = TEXT("{\"component\": ") + MMDEndfieldRuntimeValidationQuote(Component->GetPathName());
+					PayloadEntry += FString::Printf(TEXT(", \"slot\": %d, \"cpu_parameters_bound\": %s, \"payload_enabled\": %d, \"head_position_radius\": [%.9f, %.9f, %.9f, %.9f], \"head_forward\": [0, 1, 0], \"head_right\": [1, 0, 0], \"sphere_blend\": 0.75, \"anisotropy\": 0, \"direction_texture_enabled\": false, \"diagnostic_alpha_at_075\": %.9f, \"gpu_payload_verified\": false}"),
+						Slot, bCpuBound ? TEXT("true") : TEXT("false"), PayloadRequested, Head.R, Head.G, Head.B, Head.A,
+						Profile->Settings.DiffuseRamp.GetLinearColorValue(0.75f).A);
+					PayloadParameterReports.Add(MoveTemp(PayloadEntry));
+				}
 				Component->SetMaterial(Slot, Material);
 				if (Component->GetMaterial(Slot) != Material || Material->GetToonProfileOverride_Internal() != Profile) continue;
 				++ReboundProfileMaterialCount;
@@ -219,12 +286,22 @@ void AMMDEndfieldNativeBackendValidationActor::RebindValidationProfiles()
 		: ReboundProfileMaterialCount == EligibleProfileMaterialCount && MatchedProfileMetadataCount == ReboundProfileMaterialCount
 		? TEXT("Dedicated fixture slots use transient Profiles whose CPU alpha metadata matches the requested controls.")
 		: TEXT("Some dedicated fixture slots could not be rebound or their CPU metadata did not match the requested controls.");
+	if (bPayloadDiagnostic)
+	{
+		const bool bComplete = EligiblePayloadMaterialCount > 0 && BoundPayloadMaterialCount == EligiblePayloadMaterialCount
+			&& ReboundProfileMaterialCount == EligibleProfileMaterialCount && MatchedProfileMetadataCount == ReboundProfileMaterialCount;
+		PayloadValidationReason = bComplete
+			? TEXT("Dedicated Skin primitives have explicit CPU head frames and transient diagnostic Profiles; inspect paired green/red screenshots to verify the cooked packed write/read.")
+			: TEXT("Payload diagnostic requested but no eligible Skin material was found or its CPU binding failed.");
+		if (!bComplete && FailureReason.IsEmpty()) FailureReason = PayloadValidationReason;
+	}
 }
 
 void AMMDEndfieldNativeBackendValidationActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (!bValidationEnabled || bValidationFinished) return;
+	if (bPayloadOptionPresent && !FailureReason.IsEmpty()) { FinishValidation(false); return; }
 	++StableFrameCount;
 	if (!bCameraApplied) bCameraApplied = ApplyValidationCamera();
 	if (StableFrameCount >= 120 && !bScreenshotRequested && bCameraApplied && FailureReason.IsEmpty()
@@ -288,6 +365,18 @@ bool AMMDEndfieldNativeBackendValidationActor::WriteValidationReport(bool bSucce
 		EligibleProfileMaterialCount, ReboundProfileMaterialCount, EligibleProfileMaterialCount - ReboundProfileMaterialCount, MatchedProfileMetadataCount,
 		Boolean(ReboundProfileMaterialCount > 0 && ReboundProfileMaterialCount == EligibleProfileMaterialCount && MatchedProfileMetadataCount == ReboundProfileMaterialCount));
 	Json += TEXT(",\n  \"profile_rebind_reason\": ") + MMDEndfieldRuntimeValidationQuote(ProfileRebindReason);
+	Json += TEXT(",\n  \"payload_requested\": ") + (bPayloadOptionPresent ? FString::FromInt(PayloadRequested) : FString(TEXT("null")));
+	Json += FString::Printf(TEXT(",\n  \"payload_diagnostic_eligible_skin_materials\": %d,\n  \"payload_cpu_bound_materials\": %d,\n  \"payload_gpu_verified_by_this_report\": false"), EligiblePayloadMaterialCount, BoundPayloadMaterialCount);
+	Json += TEXT(",\n  \"payload_validation_reason\": ") + MMDEndfieldRuntimeValidationQuote(PayloadValidationReason);
+	Json += TEXT(",\n  \"payload_expected_screenshot_color\": ") + MMDEndfieldRuntimeValidationQuote(
+		bPayloadOptionPresent && Backend.Mode == 2 && BoundPayloadMaterialCount > 0 ? PayloadRequested == 1 ? TEXT("green") : TEXT("red") : TEXT("not_active"));
+	Json += TEXT(",\n  \"payload_cpu_parameters\": [");
+	for (int32 Index = 0; Index < PayloadParameterReports.Num(); ++Index)
+	{
+		Json += Index == 0 ? TEXT("\n    ") : TEXT(",\n    ");
+		Json += PayloadParameterReports[Index];
+	}
+	Json += TEXT("\n  ]");
 	Json += TEXT(",\n  \"runtime_profile_metadata\": [");
 	for (int32 Index = 0; Index < ReboundProfileReports.Num(); ++Index)
 	{

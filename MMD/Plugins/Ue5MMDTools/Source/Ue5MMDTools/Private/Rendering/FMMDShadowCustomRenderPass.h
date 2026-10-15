@@ -13,6 +13,7 @@
 #include "Rendering/CustomRenderPass.h"
 
 class UTextureRenderTarget2D;
+class FRenderTarget;
 
 // 与引擎私有头 CustomRenderPassSceneCapture.h 里 FSceneCaptureCustomRenderPassUserData
 // 的字段布局完全一致的最小 user data。

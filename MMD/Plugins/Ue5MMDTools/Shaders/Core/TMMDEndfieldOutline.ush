@@ -1,0 +1,30 @@
+// 材质 Custom 内 include；仅改变颜色，外扩与 PMX 边线规则继续使用 TMMDOutline.usf。
+struct TMMDEndfieldOutline
+{
+    float3 Color(float3 source_color, float3 palette, float source_blend,
+        float source_brightness, float source_saturation, float diagnostic)
+    {
+        source_color = max(source_color, 0.0);
+        float luminance = dot(source_color, float3(0.212673, 0.715152, 0.072175));
+        float3 tinted = max(lerp(luminance.xxx, source_color, clamp(source_saturation, 0.0, 2.0)), 0.0)
+            * saturate(source_brightness);
+        // 诊断只改变描边壳：1 显示源底色，2 显示固定配色，正常模式为 0。
+        if (diagnostic > 1.5) return max(palette, 0.0);
+        if (diagnostic > 0.5) return source_color;
+        return lerp(max(palette, 0.0), tinted, saturate(source_blend));
+    }
+
+    float Visibility(float edge_alpha, float two_sided_sign, float screen_space,
+        float texture_alpha, float opacity, float alpha_mode, float cutoff)
+    {
+        if (screen_space > 0.5 && IsOrthoProjection(ResolvedView)) return 0.0;
+        float source_mask = 1.0;
+        // Opaque 不消费贴图 A；Masked 沿用当前槽 cutoff，透明槽用保守阈值近似可见区域。
+        if (alpha_mode > 0.5)
+        {
+            float coverage = saturate(texture_alpha) * saturate(opacity);
+            source_mask = coverage > 0.0 && coverage >= max(cutoff, 0.000001) ? 1.0 : 0.0;
+        }
+        return saturate(edge_alpha) * saturate((1.0 - two_sided_sign) * 0.5) * source_mask;
+    }
+};

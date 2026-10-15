@@ -54,6 +54,7 @@ namespace
 	constexpr const TCHAR* FixtureMap = TEXT("/Game/MMDEndfieldNativeBackendValidation/Maps/M_EndfieldNativeBackendValidation");
 	constexpr const TCHAR* FixtureParent = TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque");
 	constexpr const TCHAR* FixturePreset = TEXT("/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2");
+	constexpr const TCHAR* FixtureOutline = TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline");
 	const TCHAR* FixtureRoleNames[] = { TEXT("Generic"), TEXT("Skin"), TEXT("Hair"), TEXT("Cloth"), TEXT("Metal"), TEXT("Eye") };
 	const FLinearColor FixtureColors[] = {
 		FLinearColor(0.08f, 0.65f, 0.72f), FLinearColor(0.90f, 0.38f, 0.18f),
@@ -263,6 +264,9 @@ namespace
 		Material->SetScalarParameterValueEditorOnly(FMaterialParameterInfo(TEXT("ToonSphereBlend")), 0.0f);
 		Material->SetScalarParameterValueEditorOnly(FMaterialParameterInfo(TEXT("ToonFaceSdfEnabled")), 0.0f);
 		Material->SetScalarParameterValueEditorOnly(FMaterialParameterInfo(TEXT("ToonFaceShadowSuppress")), 0.0f);
+		// 常规 fixture 不写 payload；显式运行时诊断使用独立 MID 和瞬态 Profile，便于同 Cook 正负对照。
+		Material->SetScalarParameterValueEditorOnly(FMaterialParameterInfo(TEXT("ToonNativePayloadEnabled")), 0.0f);
+		Material->SetScalarParameterValueEditorOnly(FMaterialParameterInfo(TEXT("ToonFaceDirectionEnabled")), 0.0f);
 		Material->ToonProfileOverride = Profile;
 		Material->bOverrideToonProfile = true;
 		// 公开编辑器更新入口会在引擎内部调用受保护的 InitResources。
@@ -310,8 +314,16 @@ namespace
 	}
 
 	bool FixturePopulateWorld(UWorld* World, UStaticMesh* Cube, UStaticMesh* Sphere, UMaterialInterface* Environment,
-		UTextureCube* SkyCubemap, const TArray<TStrongObjectPtr<UMaterialInstanceConstant>>& Materials, FString& Error)
+		UTextureCube* SkyCubemap, const TArray<TStrongObjectPtr<UMaterialInstanceConstant>>& Materials,
+		UMMDStageRenderPreset* Preset, FString& Error)
 	{
+		if (!IsValid(Preset) || !IsValid(Preset->CharacterOutlineMaterial.Get())
+			|| Preset->GetPathName() != FixtureObjectPath(FixturePreset)
+			|| Preset->CharacterOutlineMaterial->GetPathName() != FixtureObjectPath(FixtureOutline))
+		{
+			Error = TEXT("验证地图要求当前 EndfieldV2 预设与专用 Outline 硬引用，拒绝遗漏 Cook 依赖");
+			return false;
+		}
 		for (int32 Role = 0; Role < Materials.Num(); ++Role)
 		{
 			const FVector Position(-220.0 + (Role % 3) * 220.0, Role < 3 ? -130.0 : 150.0, 110.0);
@@ -387,6 +399,12 @@ namespace
 		PP.bOverride_DepthOfFieldScale = true;
 		PP.DepthOfFieldScale = 0.0f;
 		Validation->SetActorLabel(TEXT("EndfieldNativeBackend_RuntimeValidation"));
+		Validation->ValidationPreset = Preset;
+		if (Validation->ValidationPreset != Preset)
+		{
+			Error = TEXT("验证 Actor 未保留 EndfieldV2 预设硬引用");
+			return false;
+		}
 		Validation->CameraLocation = FVector(450, -650, 400);
 		Validation->CameraLookAt = FVector(0, 0, 100);
 		Validation->CameraViewTarget = nullptr;
@@ -428,6 +446,7 @@ int32 UMMDEndfieldNativeBackendFixtureCommandlet::Main(const FString& Params)
 	Report->SetBoolField(TEXT("visual_accepted"), false);
 	Report->SetBoolField(TEXT("cook_verified"), false);
 	Report->SetBoolField(TEXT("packaged_runtime_verified"), false);
+	Report->SetStringField(TEXT("runtime_payload_diagnostic"), TEXT("Only explicit -MMDEndfieldBackendValidation -MMDEndfieldNativeBackendMode=2 -MMDEndfieldValidationPayload=0|1 enables paired Skin primitive diagnostics. Runtime-only transient alpha=17 and explicit head frames test the cooked packed write/read; this setup report does not verify their GPU output."));
 	Report->SetStringField(TEXT("scope"), TEXT("Cook setup only: six role-marker profiles preserving source diffuse RGB, six native Toon MICs, one primitive map; no copied character or Engine/BasicShapes assets."));
 	Report->SetStringField(TEXT("limits"), TEXT("MaterialCompileReady and SourceSignature validate fixture preparation only. Lumen, reflection, shadow response and cooked backend routing require actual cook/game screenshots and controls. Fixture colors are diagnostic colors, not client reproduction evidence. Project default map is unchanged."));
 	TArray<FString> Errors, Written;
@@ -465,7 +484,7 @@ int32 UMMDEndfieldNativeBackendFixtureCommandlet::Main(const FString& Params)
 		}
 		TArray<TStrongObjectPtr<UToonProfile>> Sources, Profiles;
 		TArray<TStrongObjectPtr<UMaterialInstanceConstant>> Materials;
-		TArray<FString> SourcePackages = { FString(FixtureParent), FString(FixturePreset) };
+		TArray<FString> SourcePackages = { FString(FixtureParent), FString(FixturePreset), FString(FixtureOutline) };
 		for (int32 Role = 0; Role < UE_ARRAY_COUNT(FixtureRoleNames); ++Role)
 		{
 			const FString SourcePackage = FString::Printf(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_%s"), FixtureRoleNames[Role]);
@@ -548,7 +567,10 @@ int32 UMMDEndfieldNativeBackendFixtureCommandlet::Main(const FString& Params)
 		World = UWorld::CreateWorld(EWorldType::Editor, false, *FPackageName::GetLongPackageAssetName(FixtureMap), MapPackage, false, GMaxRHIFeatureLevel, &Values);
 		if (!World) { Errors.Add(TEXT("验证世界创建失败")); break; }
 		GEngine->CreateNewWorldContext(EWorldType::Editor).SetCurrentWorld(World);
-		if (!FixturePopulateWorld(World, Cube.Get(), Sphere.Get(), Environment.Get(), SkyCubemap.Get(), Materials, Error)) { Errors.Add(Error); break; }
+		if (!FixturePopulateWorld(World, Cube.Get(), Sphere.Get(), Environment.Get(), SkyCubemap.Get(), Materials, Preset.Get(), Error)) { Errors.Add(Error); break; }
+		Report->SetStringField(TEXT("map_validation_preset"), Preset->GetPathName());
+		Report->SetStringField(TEXT("map_validation_outline_material"), Preset->CharacterOutlineMaterial->GetPathName());
+		Report->SetBoolField(TEXT("map_validation_preset_hard_reference_verified"), true);
 		for (int32 Role = 0; Role < Profiles.Num(); ++Role)
 		{
 			if (!FixtureSaveAsset(Profiles[Role].Get(), Packages, Error)) { Errors.Add(Error); break; }

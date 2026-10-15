@@ -1,5 +1,25 @@
 # 终末地原生着色后端
 
+当前版本：`endfield-native-bsdf-v8-cooked-global-protocol`，2026-10-15。引擎范围仍为 UE 5.8.3 / CL58210709。**先读本节；下方折叠内容是 v4/v6 历史，不能当作本版行为或测试结果。**
+
+## 当前架构与维护入口
+
+逐灯 BSDF、GI／反射和 BasePass／packed payload 的位置沿用[图解指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)。本批没有把光照移到 BasePass 后的新前向 pass，新增的协议 shader 也不 dispatch。
+
+- **9 个生成副本适配点**：SubstrateEvaluation、SubstrateDeferredLighting、DiffuseIndirectComposite、ReflectionEnvironment、ClusteredDeferredShading、Substrate、SubstrateExport、BasePassPixelShader、ToonProfileCommon。最后一个只附加 Cook 协议标记。安装引擎文件不改，副本只写工程 Intermediate。
+- **材质数据**：v6 的单 Toon Skin / fmt1 方向与 quaternion 通道继续使用；Pattern24 + 预留 anisotropy32，24-byte 预算、真实各向异性、共享 basis、简化、透明与 fmt0 门控保持。没有新增独立 GBuffer RT，实际多写/读的 word 成本仍存在。方向场不是真正遮挡 SDF，局部 Morph 修正仍未完成。
+- **直射响应**：Skin/Hair/Cloth 使用 RD RGB tint + RD alpha 明暗权重及现有 RS 近似；Mode0 原生透传，Mode1 阴影诊断，Mode2 自定义响应。v4 的“三档原型”不再描述当前响应。
+- **分发协议**：CustomOutput 的名称、输出次序、默认值和 packed 约定由模块编译常量进入签名，不再要求用户磁盘上存在插件私有 `.cpp/.h`。USH 与引擎 hash 仍检查。[协议 shader](../Shaders/Private/MMDEndfieldNativeBackendProtocol.usf)的真实编译反射由[对应 FGlobalShader](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp)序列化。Cooked 启动初始禁止 Profile 路由，OnPostEngineInit 读取协议8才放行；未开后端 Cook 的记录为0。
+- **证据边界**：全局 shader 协议只证明它见过适配头，`all_material_kernel_verified=false` 保持；材质和实际 GPU 行为另测。新增全局 shader 后，完全没有该类型的旧包须重新 Cook，UE 可能在插件验证前拒绝旧库。
+- **专用描边**：自有 EndfieldV2 Outline 父材质，从当前 BaseColor 派生亮度/饱和度，复用原 PMX overlay、骨骼、宽度和恢复链。Opaque 忽略贴图 alpha；Masked 跟随当前实例 cutoff；透明以 .01 阈值近似。用户原 `M_MMD_Outline` 资源不改。独立光照、平滑描边法线、材质 Morph 实时同步尚未实现；动态改色可调用 Refresh。
+
+调方程看 `Shaders/Core/TMMDEndfieldNativeBSDF.ush`；数据编解码看 `TMMDEndfieldNativePayload.ush`；改材质图/协议时同时维护 `MaterialExpressionMMDEndfieldNativePayload`、生成器图版本、模块协议与协议 shader binding。描边入口是 `MMDOutlineLibrary`、`TMMDEndfieldOutline.ush` 和生成器的专用父材质。详细启用与发行检查见[插件分发说明](ENDFIELD_PLUGIN_DISTRIBUTION.md)，公开实现对照见[参考源码审计](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。
+
+2026-10-15实际验证：Editor build4/Game game-build2、12包生成、旧模型描边与新YYB16th同机位对照通过。独立BuildPlugin三配置及文件检查通过；空白SM6宿主移出私有CustomOutput cpp后协议8、四父材质30/54/48/40 shaders且0错误。正/普通两次完整Cook均过；同一程序在正Cook读8，在普通Cook读0并保持原生回退。正Cook的Skin载荷开/关绿红实拍确认指定packed逐灯路径，不代表全部内核、角色动画/Morph或画质验收。见[角色实拍](Screenshots/2026-10-15-endfield-distribution/README.md)、[Cooked证据](Screenshots/2026-10-15-endfield-distribution/COOKED_VALIDATION.md)。本批实际运行范围为Win64/D3D12 SM6；首次帧RenderDoc注入异常及CLI绕行保留记录，未改用户Config。
+
+<details>
+<summary>2026-10-14 v4 / v6 历史开发与验证记录（非当前说明）</summary>
+
 2026-10-14 开发记录。本后端用于实现用户指定的终末地复刻；下方 v4 记录是接入验证，当前新增 v6 画质迭代，不代表最终终末地画质验收。
 
 ## v6：脸部数据与真实 ramp 迭代
@@ -76,3 +96,5 @@ Cook 时必须启用后端，确保 shader 库中包含插件内核。打包运�
 继续实现时，逐灯光方程写在 `TMMDEndfieldNativeBSDF::EvaluateToonResponse`，灯光输入从 `bsdf_context.mmd_light_data` 取得，最终阴影从传入的 `shadow_terms` 取得；间接光和反射在 `TMMDEndfieldNativeIndirect::Process` 中处理。正式的脸部／高光 payload 必须另做存储与解码，不能靠这个 Context 的临时字段跨 pass 传递。未调用的旧 `ApplyEnvironment` helper 不是当前合成入口，未来接用需补模式 0 的保真门控。
 
 真实客户端 ramp、头发高光环、眼部分层、深度 rim、描边和后处理仍按 `ENDFIELD_V2_FOR_GPT.md` 的十项范围推进。本批完成原生后端与发行验证，三档原型和诊断图均不代表最终终末地画质。
+
+</details>

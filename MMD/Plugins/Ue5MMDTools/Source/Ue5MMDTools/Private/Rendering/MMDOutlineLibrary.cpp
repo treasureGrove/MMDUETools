@@ -4,9 +4,73 @@
 #include "Engine/SkeletalMesh.h"
 #include "Import/MMDModelDataAsset.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInstance.h"
 #include "Rendering/MMDOutlineState.h"
 #include "Stage/MMDStageLibrary.h"
 #include "Stage/MMDStageRenderPreset.h"
+
+namespace
+{
+	float MMDOutlineFiniteSetting(float Value, float Fallback, float Min, float Max)
+	{
+		return FMath::IsFinite(Value) ? FMath::Clamp(Value, Min, Max) : Fallback;
+	}
+
+	void MMDOutlineBindCurrentSource(UMaterialInstanceDynamic* Outline, UMaterialInterface* Surface,
+		UMaterialInterface* Parent, const UMMDStageRenderPreset* Preset, EMMDMaterialRole Role)
+	{
+		// 每次重绑先从父材质取白图，避免槽位改为无贴图后保留上一张纹理。
+		UTexture* Texture = nullptr;
+		Parent->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("base_color_tex")), Texture);
+		FLinearColor Base = FLinearColor::White;
+		if (Surface)
+		{
+			for (const TCHAR* Name : { TEXT("base_color_tex"), TEXT("BaseColorMap"), TEXT("BaseColorTexture"),
+				TEXT("BaseColor"), TEXT("DiffuseTexture"), TEXT("DiffuseTex") })
+			{
+				UTexture* Found = nullptr;
+				if (Surface->GetTextureParameterValue(FHashedMaterialParameterInfo(Name), Found) && Found)
+				{
+					Texture = Found;
+					break;
+				}
+			}
+			if (!Surface->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), Base))
+				Surface->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("DiffuseColor")), Base);
+		}
+		for (int32 Channel = 0; Channel < 4; ++Channel)
+			Base.Component(Channel) = MMDOutlineFiniteSetting(Base.Component(Channel), 1.0f, 0.0f, 16.0f);
+		if (Texture) Outline->SetTextureParameterValue(TEXT("base_color_tex"), Texture);
+		Outline->SetVectorParameterValue(TEXT("BaseColor"), Base);
+		float Opacity = Base.A;
+		float AlphaMode = 0.0f;
+		float Cutoff = 0.1f;
+		if (Surface)
+		{
+			// V2 可见覆盖率是 baseTex.A*Opacity，BaseColor.A 只用于缺参兜底，不能再乘一次。
+			Surface->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Opacity);
+			const EBlendMode Blend = Surface->GetBlendMode();
+			AlphaMode = Blend == BLEND_Opaque ? 0.0f : Blend == BLEND_Masked ? 1.0f : 2.0f;
+			Cutoff = Blend == BLEND_Masked ? Surface->GetOpacityMaskClipValue() : 0.01f;
+		}
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::AlphaMode, AlphaMode);
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::Opacity,
+			MMDOutlineFiniteSetting(Opacity, 1.0f, 0.0f, 1.0f));
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::Cutoff,
+			MMDOutlineFiniteSetting(Cutoff, 0.1f, 0.0f, 1.0f));
+		const FMMDStageOutlineRoleSettings DefaultSettings;
+		const FMMDStageOutlineRoleSettings* Settings = Preset->CharacterOutlineRoles.Find(Role);
+		if (!Settings) Settings = Preset->CharacterOutlineRoles.Find(EMMDMaterialRole::Generic);
+		if (!Settings) Settings = &DefaultSettings;
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::SourceBlend,
+			MMDOutlineFiniteSetting(Preset->OutlineSourceColorBlend, 0.0f, 0.0f, 1.0f));
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::SourceBrightness,
+			MMDOutlineFiniteSetting(Settings->SourceBrightness, 0.5f, 0.0f, 1.0f));
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::SourceSaturation,
+			MMDOutlineFiniteSetting(Settings->SourceSaturation, 1.0f, 0.0f, 2.0f));
+		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::Diagnostic, 0.0f);
+	}
+}
 
 bool UMMDOutlineLibrary::ApplyMMDOutline(USkeletalMeshComponent* Component, bool bEnabled)
 {
@@ -107,9 +171,21 @@ bool UMMDOutlineLibrary::ApplyMMDOutlinePreset(USkeletalMeshComponent* Component
 		UMaterialInstanceDynamic* Outline = Cast<UMaterialInstanceDynamic>(State->AppliedSlotOverlays[SlotIndex]);
 		if (bEnabled && Source)
 		{
-			if (!Outline || Outline->Parent != Source) Outline = UMaterialInstanceDynamic::Create(Source, Component);
+			UMaterialInterface* Parent = IsValid(Preset->CharacterOutlineMaterial.Get()) ? Preset->CharacterOutlineMaterial.Get() : Source;
+			if (!Outline || Outline->Parent != Parent) Outline = UMaterialInstanceDynamic::Create(Parent, Component);
 			if (Outline)
 			{
+				if (Parent != Source)
+				{
+					// 只读取导入实例，复制 PMX EdgeSize、EdgeColor 和 WPO 输入，不改原资产。
+					if (UMaterialInstance* Imported = Cast<UMaterialInstance>(Source)) Outline->CopyInterpParameters(Imported);
+					for (const TCHAR* Name : { TEXT("EdgeSize"), TEXT("OutlineWidth"), TEXT("OutlineMaxOffset") })
+					{
+						float Value = 0.0f;
+						if (Source->GetScalarParameterValue(FHashedMaterialParameterInfo(Name), Value) && FMath::IsFinite(Value))
+							Outline->SetScalarParameterValue(Name, FMath::Max(Value, 0.0f));
+					}
+				}
 				const EMMDMaterialRole Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Component, SlotIndex);
 				FLinearColor Palette = Preset->OutlineColor;
 				float WidthScale = 0.85f;
@@ -133,6 +209,7 @@ bool UMMDOutlineLibrary::ApplyMMDOutlinePreset(USkeletalMeshComponent* Component
 				Outline->SetScalarParameterValue(TEXT("OutlineScreenSpace"), 1.0f);
 				Outline->SetScalarParameterValue(TEXT("OutlinePixelWidth"), FMath::Clamp(Preset->OutlinePixelWidth, 0.0f, 4.0f) * WidthScale);
 				Outline->SetScalarParameterValue(TEXT("OutlineReferenceHeight"), 1080.0f);
+				if (Parent != Source) MMDOutlineBindCurrentSource(Outline, Component->GetMaterial(SlotIndex), Parent, Preset, Role);
 			}
 		}
 		else Outline = nullptr;

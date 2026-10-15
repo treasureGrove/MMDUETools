@@ -8,6 +8,18 @@
 class UMaterialInterface;
 class UToonProfile;
 
+/** 从当前槽底色派生描边；角色细分可继续扩展，未配置时使用通用默认值。 */
+USTRUCT(BlueprintType)
+struct UE5MMDTOOLS_API FMMDStageOutlineRoleSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline", meta = (ClampMin = "0", ClampMax = "1"))
+	float SourceBrightness = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline", meta = (ClampMin = "0", ClampMax = "2"))
+	float SourceSaturation = 1.0f;
+};
+
 /** 原生 Toon 材质的部位参数；未指定 Profile 时沿用父材质。 */
 USTRUCT(BlueprintType)
 struct UE5MMDTOOLS_API FMMDStageToonRoleSettings
@@ -76,6 +88,12 @@ public:
 	bool bCharacterContactShadow = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline")
 	bool bCharacterOutline = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline", meta = (ToolTip = "可选专用描边父材质；为空时完整沿用导入的 PMX 描边材质。"))
+	TObjectPtr<UMaterialInterface> CharacterOutlineMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "专用父材质的底色染色权重；0 使用原描边配色，1 从当前槽底色派生。"))
+	float OutlineSourceColorBlend = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline")
+	TMap<EMMDMaterialRole, FMMDStageOutlineRoleSettings> CharacterOutlineRoles;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline", meta = (ClampMin = "0", ClampMax = "4", ToolTip = "1080p 参考像素宽度，随透视镜头距离和 FOV 换算；继续乘 PMX EdgeSize 与顶点 EdgeScale。为隔离正交 CSM 深度，正交视角不绘制此细描边。"))
 	float OutlinePixelWidth = 1.20f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Outline", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "0 保留 PMX 边线色，1 使用部位配色；始终保留 PMX 边线透明度。"))

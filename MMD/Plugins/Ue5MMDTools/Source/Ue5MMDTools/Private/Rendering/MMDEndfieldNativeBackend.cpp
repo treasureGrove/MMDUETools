@@ -23,9 +23,12 @@ namespace
 {
 	constexpr TCHAR MMDEndfieldBackendSection[] = TEXT("Ue5MMDTools.EndfieldNativeBackend");
 	constexpr TCHAR MMDEndfieldBackendVirtualRoot[] = TEXT("/Engine/Private");
-	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v6-skin-direction-payload");
+	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v8-cooked-global-protocol");
+	// 修改 CustomOutput 名称、输出次序/类型/默认值或打包协议时同步此版本。
+	constexpr TCHAR MMDEndfieldBackendPayloadProtocol[] = TEXT("endfield-skin-payload-v4:GetMMDEndfieldNativePayload:direction4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:oct16-mask8-quat32");
 	MMDEndfieldNativeBackend::FStatus MMDEndfieldBackendStatus;
 	bool MMDEndfieldBackendInitialized = false;
+	bool MMDEndfieldBackendAwaitingCookedProtocol = false;
 
 	struct FMMDEndfieldBackendGuard
 	{
@@ -137,6 +140,12 @@ namespace
 		Json += TEXT(",\n  \"overlay_directory\": ") + MMDEndfieldBackendQuote(Status.OverlayDirectory);
 		Json += TEXT(",\n  \"virtual_directory\": ") + MMDEndfieldBackendQuote(Status.VirtualDirectory);
 		Json += TEXT(",\n  \"plugin_shader_hash\": ") + MMDEndfieldBackendQuote(Status.PluginShaderHash);
+		Json += TEXT(",\n  \"compiled_payload_protocol\": ") + MMDEndfieldBackendQuote(Status.CompiledPayloadProtocol);
+		Json += TEXT(",\n  \"payload_protocol_source\": \"compiled_module\"");
+		Json += FString::Printf(TEXT(",\n  \"expected_cooked_global_shader_protocol\": %u,\n  \"cooked_global_shader_protocol\": %u,\n  \"cooked_global_shader_protocol_verified\": %s,\n  \"all_material_kernel_verified\": false"),
+			MMDEndfieldNativeBackend::CookedGlobalShaderProtocolVersion, Status.CookedGlobalShaderProtocol,
+			Boolean(Status.bCookedGlobalShaderProtocolVerified));
+		Json += TEXT(",\n  \"global_shader_protocol_scope\": \"Serialized compile reflection of the loaded protocol global shader only; not a GPU dispatch/readback and not proof of every cooked material or lighting shader.\"");
 		Json += TEXT(",\n  \"patched_evaluation_hash\": ") + MMDEndfieldBackendQuote(Status.PatchedEvaluationHash);
 		Json += TEXT(",\n  \"patched_indirect_hash\": ") + MMDEndfieldBackendQuote(Status.PatchedIndirectHash);
 		for (const auto& Map : { TPair<FString, const TMap<FString, FString>*>(TEXT("patched_source_hashes"), &Status.PatchedSourceHashes), {TEXT("plugin_source_hashes"), &Status.PluginSourceHashes} })
@@ -153,7 +162,7 @@ namespace
 		Json += TEXT(",\n  \"profile_isolation\": \"Only plugin-marked Endfield profiles use custom response and environment scales; all other Toon profiles evaluate native formulas.\"");
 		Json += TEXT(",\n  \"control_source\": \"Mode and indirect scales are encoded in marked profile alpha; the native shader kernel is shared across those controls.\"");
 		Json += TEXT(",\n  \"skin_payload_contract\": \"Adaptive format1 only, one Toon closure and one normal basis, connected anisotropy reservation with physical value zero, neutral PatternUVs, at least 24 bytes budget. CustomOutput Enabled=1 identifies Skin; direction oct16 plus mask8 reuses Pattern24, quaternion32 reuses the reserved anisotropy word. Disabled or unsupported variants keep native packing.\"");
-		Json += TEXT(",\n  \"cook_contract\": \"Enable this plugin backend during Cook. Packaged runtime cannot install a source mapping or prove backend presence from startup flags. Runtime profile routing can update profile alpha controls; behavior requires image comparison and Cook provenance.\"");
+		Json += TEXT(",\n  \"cook_contract\": \"Enable this plugin backend during Cook. Packaged runtime keeps profile markers disabled until the loaded global shader records the expected overlay protocol. Startup flags cannot authorize an unmarked Cook. This verifies one global shader only; all material/lighting kernels and behavior still require Cook provenance and image comparison.\"");
 		Json += TEXT(",\n  \"source_hashes\": {");
 		TArray<FString> Keys;
 		Status.SourceHashes.GetKeys(Keys);
@@ -300,6 +309,19 @@ namespace
 			+ TEXT("\t\tBSDFContext.mmd_light_data = mmd_capture.Build(LightData, L, ToLight, LightMask, SubstrateShadowTermInputParameters.LightAttenuation, SubstrateShadowTermInputParameters.PrecomputedShadowFactors, SubstrateShadowTermInputParameters.TranslatedWorldPosition, SubstrateShadowTermInputParameters.SceneDepth, SubstrateShadowTermInputParameters.Dither, SubstrateShadowTermInputParameters.bEvaluateShadowTerm, SubstrateShadowTermInputParameters.bUseShadowTermHairTransmittance);") + Newline + TEXT("\t\t");
 		Text.InsertAt(CaptureIndex, Capture);
 		Text.InsertAt(FunctionIndex, TEXT("#include \"/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeLightCapture.ush\"") + Newline + Newline);
+		return true;
+	}
+
+	bool MMDEndfieldBackendPatchProtocolMarker(FString& Text)
+	{
+		int32 AnchorIndex = INDEX_NONE;
+		if (!MMDEndfieldBackendSingleAnchor(Text, TEXT("#pragma once"), AnchorIndex)
+			|| Text.Contains(TEXT("TMMD_ENDFIELD_COOKED_BACKEND_PROTOCOL"))) return false;
+		const FString Newline = Text.Contains(TEXT("\r\n")) ? TEXT("\r\n") : TEXT("\n");
+		// 只写插件生成的副本；协议 shader 的参数反射据此记录此 Cook 是否使用 overlay。
+		Text.InsertAt(AnchorIndex + FCString::Strlen(TEXT("#pragma once")), Newline
+			+ FString::Printf(TEXT("#define TMMD_ENDFIELD_COOKED_BACKEND_PROTOCOL %u"),
+				MMDEndfieldNativeBackend::CookedGlobalShaderProtocolVersion));
 		return true;
 	}
 
@@ -502,23 +524,12 @@ namespace
 		const FString PluginShaderRoot = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
         const TCHAR* PluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"), TEXT("Core/TMMDEndfieldNativeData.ush"),
             TEXT("Core/TMMDEndfieldNativeLightCapture.ush"), TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
-            TEXT("Core/TMMDEndfieldNativePayload.ush") };
-        FString PluginSignature;
+            TEXT("Core/TMMDEndfieldNativePayload.ush"), TEXT("Private/MMDEndfieldNativeBackendProtocol.usf") };
+        FString PluginSignature = TEXT("compiled_payload_protocol=") + Status.CompiledPayloadProtocol + TEXT("\n");
         for (const TCHAR* Relative : PluginSources)
         {
             FString Hash;
             if (!MMDEndfieldNativeBackend::ComputeFileHash(FPaths::Combine(PluginShaderRoot, Relative), Hash)) return MMDEndfieldBackendFail(TEXT("Plugin native shader could not be read."));
-            Status.PluginSourceHashes.Add(Relative, Hash);
-            PluginSignature += FString(Relative) + TEXT("=") + Hash + TEXT("\n");
-        }
-        const TCHAR* PluginDefinitionSources[] = {
-            TEXT("Source/Ue5MMDTools/Public/Materials/MaterialExpressionMMDEndfieldNativePayload.h"),
-            TEXT("Source/Ue5MMDTools/Private/Materials/MaterialExpressionMMDEndfieldNativePayload.cpp") };
-        for (const TCHAR* Relative : PluginDefinitionSources)
-        {
-            FString Hash;
-            if (!MMDEndfieldNativeBackend::ComputeFileHash(FPaths::Combine(Plugin->GetBaseDir(), Relative), Hash))
-                return MMDEndfieldBackendFail(TEXT("Plugin native payload expression source could not be read."));
             Status.PluginSourceHashes.Add(Relative, Hash);
             PluginSignature += FString(Relative) + TEXT("=") + Hash + TEXT("\n");
         }
@@ -563,7 +574,8 @@ namespace
             || !PreparePatch(TEXT("ClusteredDeferredShadingPixelShader.usf"), MMDEndfieldBackendPatchClustered)
             || !PreparePatch(TEXT("Substrate/Substrate.ush"), MMDEndfieldBackendPatchPayloadRead)
             || !PreparePatch(TEXT("Substrate/SubstrateExport.ush"), MMDEndfieldBackendPatchPayloadExport)
-            || !PreparePatch(TEXT("BasePassPixelShader.usf"), MMDEndfieldBackendPatchPayloadBasePass))
+            || !PreparePatch(TEXT("BasePassPixelShader.usf"), MMDEndfieldBackendPatchPayloadBasePass)
+            || !PreparePatch(TEXT("ToonProfileCommon.ush"), MMDEndfieldBackendPatchProtocolMarker))
             return MMDEndfieldBackendFail(TEXT("Exact native direct/indirect patch anchor was not found once."));
         Status.PatchedEvaluationHash = Status.PatchedSourceHashes[TEXT("Substrate/SubstrateEvaluation.ush")];
         Status.PatchedIndirectHash = Status.PatchedSourceHashes[TEXT("DiffuseIndirectComposite.usf")];
@@ -612,7 +624,7 @@ namespace
         for (const auto& Source : Status.PluginSourceHashes)
         {
             FString Hash;
-            const FString PluginSourcePath = FPaths::Combine(Source.Key.StartsWith(TEXT("Source/")) ? Plugin->GetBaseDir() : PluginShaderRoot, Source.Key);
+            const FString PluginSourcePath = FPaths::Combine(PluginShaderRoot, Source.Key);
             if (!MMDEndfieldNativeBackend::ComputeFileHash(PluginSourcePath, Hash) || Hash != Source.Value)
                 return MMDEndfieldBackendFail(TEXT("Plugin shader changed during adapter generation; retry in a fresh process."));
         }
@@ -631,6 +643,11 @@ namespace
 
 namespace MMDEndfieldNativeBackend
 {
+	const TCHAR* GetCompiledPayloadProtocol()
+	{
+		return MMDEndfieldBackendPayloadProtocol;
+	}
+
 	bool ComputeFileHash(const FString& Path, FString& OutHash)
 	{
 		OutHash.Reset();
@@ -646,11 +663,32 @@ namespace MMDEndfieldNativeBackend
 		return MMDEndfieldBackendStatus;
 	}
 
+	void VerifyCookedShaderProtocol()
+	{
+		if (!MMDEndfieldBackendAwaitingCookedProtocol) return;
+		MMDEndfieldBackendAwaitingCookedProtocol = false;
+		auto& Status = MMDEndfieldBackendStatus;
+		FString ReadReason;
+		const bool bShaderFound = ReadGlobalShaderProtocol(Status.CookedGlobalShaderProtocol, ReadReason);
+		Status.bCookedGlobalShaderProtocolVerified = bShaderFound
+			&& Status.CookedGlobalShaderProtocol == CookedGlobalShaderProtocolVersion;
+		if (!Status.bCookedGlobalShaderProtocolVerified)
+		{
+			MMDEndfieldBackendFail(TEXT("Cooked profile routing rejected: ") + ReadReason);
+			return;
+		}
+		Status.bProfileMarkerAllowed = true;
+		Status.Reason = TEXT("Cooked profile routing allowed by the loaded protocol global shader's serialized compile reflection. Source mapping remains inactive. This proves that one global shader used the expected overlay protocol; every material/lighting kernel and GPU behavior remain independently unverified.");
+		UE_LOG(LogMMDEndfieldNativeBackend, Display, TEXT("%s"), *Status.Reason);
+		MMDEndfieldBackendWriteManifest();
+	}
+
 	void Initialize()
 	{
 		if (MMDEndfieldBackendInitialized) return;
 		MMDEndfieldBackendInitialized = true;
 		auto& Status = MMDEndfieldBackendStatus;
+		Status.CompiledPayloadProtocol = GetCompiledPayloadProtocol();
 		Status.bCookedData = FPlatformProperties::RequiresCookedData();
 		Status.bCookedRuntime = Status.bCookedData;
 		const FEngineVersion& Version = FEngineVersion::Current();
@@ -676,9 +714,10 @@ namespace MMDEndfieldNativeBackend
 		}
 		if (Status.bCookedData)
 		{
-			// 这里只许可 Profile 路由；Cook 产物是否含适配内核需要发行验证，不能在运行时证实。
-			Status.bProfileMarkerAllowed = true;
-			Status.Reason = TEXT("Cooked runtime requested Endfield profile routing. Source mapping is inactive; mode and GI scales come from marked profile alpha. Backend presence in cooked bytecode remains unverified here.");
+			// 全局 shader 库在 PostConfigInit 尚未就绪；只有之后读到已 Cook 的反射协议才能开启。
+			Status.bProfileMarkerAllowed = false;
+			MMDEndfieldBackendAwaitingCookedProtocol = true;
+			Status.Reason = TEXT("Cooked profile routing is disabled pending the loaded global shader protocol check at OnPostEngineInit. Startup options alone cannot authorize a vanilla or older Cook.");
 			UE_LOG(LogMMDEndfieldNativeBackend, Display, TEXT("%s"), *Status.Reason);
 			MMDEndfieldBackendWriteManifest();
 			return;

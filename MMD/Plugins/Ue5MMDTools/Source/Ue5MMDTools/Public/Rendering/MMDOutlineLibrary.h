@@ -7,6 +7,18 @@
 class USkeletalMeshComponent;
 class UMMDStageRenderPreset;
 
+// 专用父材质和只读探针共用的参数名；诊断 0=正常、1=源底色、2=固定配色。
+namespace MMDEndfieldOutlineParameters
+{
+	inline constexpr const TCHAR* SourceBlend = TEXT("OutlineSourceColorBlend");
+	inline constexpr const TCHAR* SourceBrightness = TEXT("OutlineSourceBrightness");
+	inline constexpr const TCHAR* SourceSaturation = TEXT("OutlineSourceSaturation");
+	inline constexpr const TCHAR* Diagnostic = TEXT("OutlineColorDiagnostic");
+	inline constexpr const TCHAR* AlphaMode = TEXT("OutlineSourceAlphaMode");
+	inline constexpr const TCHAR* Opacity = TEXT("OutlineSourceOpacity");
+	inline constexpr const TCHAR* Cutoff = TEXT("OutlineSourceCutoff");
+}
+
 UCLASS()
 class UE5MMDTOOLS_API UMMDOutlineLibrary : public UBlueprintFunctionLibrary
 {

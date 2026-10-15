@@ -1,0 +1,88 @@
+{
+  "schema": "mmd.endfield.distribution-evidence.v1",
+  "captured_at": "2026-10-15T17:01:10.292629+08:00",
+  "scope": "Win64 UE5.8.3 CL58210709; BuildPlugin Editor Development/Game Development/Shipping and blank D3D12 SM6 AdapterOnly host",
+  "latest_complete_script_run": "EF8f",
+  "build_plugin_verified": true,
+  "payload_files_verified": true,
+  "clean_host_adapter_verified": true,
+  "private_expression_cpp_absent_in_clean_host": true,
+  "test_models_and_motions_excluded": true,
+  "global_shader_protocol": 8,
+  "published_materials": [
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.M_MMD_EndfieldV2_Opaque",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 30,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.M_MMD_EndfieldV2_Masked",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 54,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 48,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 40,
+      "compile_errors": []
+    }
+  ],
+  "draw_verified_by_adapter": false,
+  "all_material_kernel_verified": false,
+  "cooked_game_evidence": "cooked-sources.json",
+  "character_draw_evidence": "sources.json",
+  "sources": {
+    "distribution_report": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\EF8f\\distribution.json",
+      "sha256": "a4b0feda35ede8e6f9d963dda345909bd7249d18b4f93d55ab2e66efb68d1e42"
+    },
+    "adapter_report": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\EF8f\\adapter\\report.json",
+      "sha256": "70afbec2b8e4e088724a54428a002aefe5dc080e1f4c9921bd2e51fcd4323029"
+    },
+    "build_log": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\EF8f\\build-plugin.log",
+      "sha256": "a1bc9dbd6103623d07b9fd06b32b1665f1bc00fd962d58af343d5e4028f40be4"
+    },
+    "clean_host_log": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\EF8f\\clean-host.log",
+      "sha256": "abd2cf7b213762c8ccc20af056104ebf2ba032d3150db70bacd689af379160b8"
+    },
+    "validation_script": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Scripts\\Test-EndfieldPluginDistribution.ps1",
+      "sha256": "736f69bc95f6873f2c461024399346f545b402ce9498362d2a8a225795d34c44"
+    },
+    "filter_rules": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Config\\FilterPlugin.ini",
+      "sha256": "2828f4e210aabcb8513aed1d93df0d9e5ee498a66017440d9ff1d8494f0bb50d"
+    }
+  }
+}

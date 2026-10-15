@@ -1,25 +1,32 @@
 // 启动时请求后端；模式与环境倍率写入自有 Profile alpha，shader 从 Profile 读取，无需按模式重编译。
 // 用法：-run=MMDEndfieldNativeBackendProbe -OutDir=<Saved目录> -Tag=<前缀> [-Exp=backend,lighting]
 // -AllowInactiveBackend 只允许没有请求适配器的原生负对照，其 backend_success 始终为 false。
+// -AdapterOnly 在空白宿主中验证映射、协议和三份发布父材质编译，不创建角色或绘制装置。
 // 仅写测试报告/截图；沿用 ToonProbe 的只读资产加载和 Transient 场景，不复制测试装置。
 #include "MMDEndfieldNativeBackendProbeCommandlet.h"
 
 #include "MMDEndfieldToonProbeCommandlet.h"
+#include "AssetCompilingManager.h"
 #include "Dom/JsonObject.h"
+#include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
-#include "Interfaces/IPluginManager.h"
 #include "Misc/DateTime.h"
 #include "Misc/EngineVersion.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
+#include "Materials/Material.h"
+#include "MaterialShared.h"
 #include "Rendering/MMDEndfieldNativeBackend.h"
 #include "RenderUtils.h"
+#include "RenderingThread.h"
+#include "RHI.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "ShaderCompilerCore.h"
+#include "ShaderCompiler.h"
 #include "ShaderCore.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -62,25 +69,23 @@ namespace
 
 	FString EndfieldBackendProbePluginSourcePath(const FString& Key)
 	{
-		if (Key.StartsWith(TEXT("Source/")))
-		{
-			const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
-			return Plugin.IsValid() ? FPaths::ConvertRelativePathToFull(FPaths::Combine(Plugin->GetBaseDir(), Key)) : FString();
-		}
 		return FPaths::ConvertRelativePathToFull(GetShaderSourceFilePath(TEXT("/Plugin/Ue5MMDTools/") + Key));
 	}
 
 	const TCHAR* EndfieldBackendProbePluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"),
 		TEXT("Core/TMMDEndfieldNativeData.ush"), TEXT("Core/TMMDEndfieldNativeLightCapture.ush"),
 		TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
-		TEXT("Core/TMMDEndfieldNativePayload.ush"),
-		TEXT("Source/Ue5MMDTools/Public/Materials/MaterialExpressionMMDEndfieldNativePayload.h"),
-		TEXT("Source/Ue5MMDTools/Private/Materials/MaterialExpressionMMDEndfieldNativePayload.cpp") };
+		TEXT("Core/TMMDEndfieldNativePayload.ush"), TEXT("Private/MMDEndfieldNativeBackendProtocol.usf") };
 
 	bool EndfieldBackendProbeVerifyPluginSources(const MMDEndfieldNativeBackend::FStatus& Status,
 		TArray<FString>& Errors, const TCHAR* Stage)
 	{
 		bool bUnchanged = !Status.PluginSourceHashes.IsEmpty();
+		if (Status.CompiledPayloadProtocol != MMDEndfieldNativeBackend::GetCompiledPayloadProtocol())
+		{
+			Errors.Add(FString::Printf(TEXT("%s：payload 协议与当前模块编译版本不匹配"), Stage));
+			bUnchanged = false;
+		}
 		for (const TCHAR* Key : EndfieldBackendProbePluginSources)
 		{
 			if (!Status.PluginSourceHashes.Contains(Key))
@@ -110,6 +115,11 @@ namespace
 		Json->SetBoolField(TEXT("cooked_runtime"), Status.bCookedRuntime);
 		Json->SetBoolField(TEXT("cooked_data"), Status.bCookedData);
 		Json->SetBoolField(TEXT("profile_marker_allowed"), Status.bProfileMarkerAllowed);
+		Json->SetNumberField(TEXT("expected_cooked_global_shader_protocol"), MMDEndfieldNativeBackend::CookedGlobalShaderProtocolVersion);
+		Json->SetNumberField(TEXT("cooked_global_shader_protocol"), Status.CookedGlobalShaderProtocol);
+		Json->SetBoolField(TEXT("cooked_global_shader_protocol_verified"), Status.bCookedGlobalShaderProtocolVerified);
+		Json->SetBoolField(TEXT("all_material_kernel_verified"), false);
+		Json->SetStringField(TEXT("global_shader_protocol_scope"), TEXT("Cooked status is set from serialized compile reflection of the active RHI protocol global shader; not a GPU dispatch/readback or proof of every material/lighting kernel."));
 		Json->SetBoolField(TEXT("engine_sources_verified_at_startup"), Status.bEngineSourcesVerified);
 		Json->SetBoolField(TEXT("engine_sources_unchanged_at_startup"), Status.bEngineSourcesUnchanged);
 		Json->SetNumberField(TEXT("mode"), Status.Mode);
@@ -126,6 +136,10 @@ namespace
 		Json->SetStringField(TEXT("overlay_directory"), Status.OverlayDirectory);
 		Json->SetStringField(TEXT("manifest"), Status.ManifestPath);
 		Json->SetStringField(TEXT("plugin_shader_hash"), Status.PluginShaderHash);
+		Json->SetStringField(TEXT("compiled_payload_protocol"), Status.CompiledPayloadProtocol);
+		Json->SetBoolField(TEXT("compiled_payload_protocol_matches_module"),
+			Status.CompiledPayloadProtocol == MMDEndfieldNativeBackend::GetCompiledPayloadProtocol());
+		Json->SetStringField(TEXT("payload_protocol_scope"), TEXT("compiled module ABI declaration; private CustomOutput C++ files are not required; this field alone does not verify cooked shader bytecode"));
 		Json->SetStringField(TEXT("patched_evaluation_hash"), Status.PatchedEvaluationHash);
 		Json->SetStringField(TEXT("patched_indirect_hash"), Status.PatchedIndirectHash);
 		Json->SetStringField(TEXT("reason"), Status.Reason);
@@ -159,7 +173,8 @@ namespace
 		if (bInactiveControl && Keys.IsEmpty())
 		{
 			Keys = { TEXT("Substrate/SubstrateEvaluation.ush"), TEXT("Substrate/SubstrateDeferredLighting.ush"),
-				TEXT("DiffuseIndirectComposite.usf"), TEXT("ReflectionEnvironmentPixelShader.usf"), TEXT("ClusteredDeferredShadingPixelShader.usf") };
+				TEXT("DiffuseIndirectComposite.usf"), TEXT("ReflectionEnvironmentPixelShader.usf"), TEXT("ClusteredDeferredShadingPixelShader.usf"),
+				TEXT("ToonProfileCommon.ush") };
 		}
 		Keys.AddUnique(TEXT("Substrate/SubstrateToonBSDF.ush"));
 		Keys.Sort();
@@ -198,6 +213,68 @@ namespace
 				Errors.Add(TEXT("原生 shader 映射或磁盘源码 hash 不符合适配器状态：") + VirtualSource);
 		}
 		Report->SetArrayField(TEXT("resolved_sources"), Sources);
+	}
+
+	void EndfieldBackendProbeCheckPublishedMaterials(TSharedRef<FJsonObject> Report, TArray<FString>& Errors)
+	{
+		const IConsoleVariable* Substrate = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Substrate"));
+		if (!Substrate || Substrate->GetInt() == 0)
+		{
+			Errors.Add(TEXT("AdapterOnly 的发布 Toon 父材质编译验证要求启动时启用 r.Substrate=True"));
+			Report->SetBoolField(TEXT("published_materials_compile_verified"), false);
+			return;
+		}
+		const TCHAR* Paths[] = {
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.M_MMD_EndfieldV2_Opaque"),
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.M_MMD_EndfieldV2_Masked"),
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent"),
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline") };
+		TArray<TStrongObjectPtr<UMaterial>> Materials;
+		for (const TCHAR* Path : Paths)
+		{
+			UMaterial* Material = LoadObject<UMaterial>(nullptr, Path);
+			Materials.Emplace(Material);
+			// 仅更新内存 shader 资源，不改 StateId、不保存资产。
+			if (Material) Material->ForceRecompileForRendering(EMaterialShaderPrecompileMode::Default);
+			else Errors.Add(TEXT("发布父材质缺失：") + FString(Path));
+		}
+		FAssetCompilingManager::Get().FinishAllCompilation();
+		if (GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+		FlushRenderingCommands();
+		TArray<TSharedPtr<FJsonValue>> States;
+		bool bAllReady = true;
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(Paths); ++Index)
+		{
+			UMaterial* Material = Materials[Index].Get();
+			const FMaterialResource* Resource = Material ? Material->GetMaterialResource(GMaxRHIShaderPlatform) : nullptr;
+			const FMaterialShaderMap* Map = Resource ? Resource->GetGameThreadShaderMap() : nullptr;
+			TArray<TSharedPtr<FJsonValue>> CompileErrors;
+			if (Resource) for (const FString& Error : Resource->GetCompileErrors()) CompileErrors.Add(MakeShared<FJsonValueString>(Error));
+			const bool bFinished = Resource && Resource->IsCompilationFinished();
+			const bool bSucceeded = Map && Map->CompiledSuccessfully();
+			const bool bFinalized = Map && Map->IsCompilationFinalized();
+			const bool bRenderingValid = Map && Map->IsValidForRendering(false);
+			const int32 ShaderCount = Map ? Map->GetShaderNum() : 0;
+			const bool bReady = bFinished && bSucceeded && bFinalized && bRenderingValid && ShaderCount > 0 && CompileErrors.IsEmpty();
+			TSharedRef<FJsonObject> State = MakeShared<FJsonObject>();
+			State->SetStringField(TEXT("asset"), Paths[Index]);
+			State->SetBoolField(TEXT("loaded"), Material != nullptr);
+			State->SetBoolField(TEXT("shader_map_ready"), bReady);
+			State->SetBoolField(TEXT("compilation_finished"), bFinished);
+			State->SetBoolField(TEXT("compiled_successfully"), bSucceeded);
+			State->SetBoolField(TEXT("compilation_finalized"), bFinalized);
+			State->SetBoolField(TEXT("rendering_valid"), bRenderingValid);
+			State->SetNumberField(TEXT("shader_count"), ShaderCount);
+			State->SetArrayField(TEXT("compile_errors"), CompileErrors);
+			States.Add(MakeShared<FJsonValueObject>(State));
+			bAllReady &= bReady;
+			if (!bReady) Errors.Add(TEXT("发布父材质的 shader map 未完整编译：") + FString(Paths[Index]));
+		}
+		Report->SetArrayField(TEXT("published_materials"), States);
+		Report->SetBoolField(TEXT("published_materials_compile_verified"), bAllReady);
+		Report->SetNumberField(TEXT("material_count"), States.Num());
+		Report->SetNumberField(TEXT("image_count"), 0);
+		Report->SetNumberField(TEXT("slot_check_count"), 0);
 	}
 
 	void EndfieldBackendProbeCheckDelegate(TSharedPtr<FJsonObject> Probe, TSharedRef<FJsonObject> Report,
@@ -286,14 +363,25 @@ int32 UMMDEndfieldNativeBackendProbeCommandlet::Main(const FString& Params)
 {
 	const MMDEndfieldNativeBackend::FStatus& Status = MMDEndfieldNativeBackend::GetStatus();
 	const bool bInactiveControl = FParse::Param(*Params, TEXT("AllowInactiveBackend")) && !Status.bRequested && !Status.bActive;
+	const bool bAdapterOnly = FParse::Param(*Params, TEXT("AdapterOnly"));
 	TSharedRef<FJsonObject> Report = MakeShared<FJsonObject>();
 	TArray<FString> Errors;
 	Report->SetStringField(TEXT("schema"), TEXT("mmd.endfield.native-backend-probe.v1"));
 	Report->SetStringField(TEXT("engine_version"), FEngineVersion::Current().ToString());
 	Report->SetObjectField(TEXT("adapter"), EndfieldBackendProbeStatusJson(Status));
 	Report->SetBoolField(TEXT("inactive_control"), bInactiveControl);
+	Report->SetBoolField(TEXT("adapter_only"), bAdapterOnly);
+	if (bAdapterOnly)
+	{
+		Report->SetBoolField(TEXT("published_materials_compile_verified"), false);
+		Report->SetArrayField(TEXT("published_materials"), TArray<TSharedPtr<FJsonValue>>());
+		Report->SetNumberField(TEXT("material_count"), 0);
+		Report->SetNumberField(TEXT("image_count"), 0);
+		Report->SetNumberField(TEXT("slot_check_count"), 0);
+	}
 	Report->SetStringField(TEXT("hash_algorithm"), TEXT("sha1"));
 	Report->SetStringField(TEXT("hash_scope"), TEXT("raw-file-bytes/integrity-guard"));
+	Report->SetBoolField(TEXT("all_material_kernel_verified"), false);
 	FString OutDir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Phase2Reference/Endfield2/native-backend-probe"));
 	FParse::Value(*Params, TEXT("OutDir="), OutDir);
 	OutDir = FPaths::ConvertRelativePathToFull(OutDir);
@@ -305,6 +393,10 @@ int32 UMMDEndfieldNativeBackendProbeCommandlet::Main(const FString& Params)
 		Tag = TEXT("native_backend_invalid_tag");
 	}
 	IFileManager::Get().MakeDirectory(*OutDir, true);
+	FString ReportPath = FPaths::Combine(OutDir, Tag + TEXT("_backend_report.json"));
+	FParse::Value(*Params, TEXT("Report="), ReportPath);
+	ReportPath = FPaths::ConvertRelativePathToFull(ReportPath);
+	Report->SetStringField(TEXT("report_file"), ReportPath);
 	Report->SetStringField(TEXT("tag"), Tag);
 	if (!bInactiveControl && !Status.bRequested) Errors.Add(TEXT("没有在进程启动时请求原生后端；此探针不把普通 Toon 回退当作后端成功"));
 	if (!bInactiveControl && !Status.bActive) Errors.Add(TEXT("原生后端没有激活：") + Status.Reason);
@@ -349,10 +441,12 @@ int32 UMMDEndfieldNativeBackendProbeCommandlet::Main(const FString& Params)
 	if (!FParse::Value(*Params, TEXT("Frames="), Existing)) ProbeParams += TEXT(" -Frames=10");
 	if (!FParse::Param(*Params, TEXT("LumenTracking"))) ProbeParams += TEXT(" -LumenTracking");
 	const FString ProbeReportPath = FPaths::Combine(OutDir, Tag + TEXT("_report.json"));
-	Report->SetStringField(TEXT("delegate_report"), ProbeReportPath);
+	Report->SetStringField(TEXT("delegate_report"), bAdapterOnly ? FString() : ProbeReportPath);
 	int32 ProbeExit = -1;
 	bool bDelegateAttempted = false;
-	if (Errors.IsEmpty())
+	bool bDrawVerified = false;
+	if (Errors.IsEmpty() && bAdapterOnly) EndfieldBackendProbeCheckPublishedMaterials(Report, Errors);
+	if (Errors.IsEmpty() && !bAdapterOnly)
 	{
 		bDelegateAttempted = true;
 		const FDateTime Started = FDateTime::UtcNow();
@@ -368,21 +462,40 @@ int32 UMMDEndfieldNativeBackendProbeCommandlet::Main(const FString& Params)
 		else
 		{
 			Report->SetObjectField(TEXT("toon_probe"), ProbeJson);
+			const int32 PreviousErrorCount = Errors.Num();
 			EndfieldBackendProbeCheckDelegate(ProbeJson, Report, Errors, Status.bProfileMarkerAllowed);
+			bDrawVerified = ProbeExit == 0 && PreviousErrorCount == Errors.Num();
 			FString Hash;
 			EndfieldBackendProbeHashFile(ProbeReportPath, Hash);
 			Report->SetStringField(TEXT("delegate_report_hash"), Hash);
 		}
 	}
 	Report->SetBoolField(TEXT("delegate_attempted"), bDelegateAttempted);
+	Report->SetBoolField(TEXT("draw_verified"), bDrawVerified);
 	Report->SetNumberField(TEXT("delegate_exit_code"), ProbeExit);
+	uint32 GlobalShaderProtocol = 0u;
+	FString GlobalShaderProtocolReason;
+	const bool bGlobalShaderFound = MMDEndfieldNativeBackend::ReadGlobalShaderProtocol(GlobalShaderProtocol, GlobalShaderProtocolReason);
+	const uint32 ExpectedGlobalShaderProtocol = bInactiveControl ? 0u : MMDEndfieldNativeBackend::CookedGlobalShaderProtocolVersion;
+	const bool bGlobalShaderProtocolVerified = bGlobalShaderFound && GlobalShaderProtocol == ExpectedGlobalShaderProtocol;
+	Report->SetNumberField(TEXT("expected_global_shader_protocol"), ExpectedGlobalShaderProtocol);
+	Report->SetNumberField(TEXT("global_shader_protocol"), GlobalShaderProtocol);
+	Report->SetBoolField(TEXT("global_shader_found"), bGlobalShaderFound);
+	Report->SetBoolField(TEXT("global_shader_protocol_verified"), bGlobalShaderProtocolVerified);
+	Report->SetStringField(TEXT("global_shader_protocol_reason"), GlobalShaderProtocolReason);
+	Report->SetStringField(TEXT("global_shader_protocol_scope"), TEXT("Active RHI global shader object's serialized compile-reflection field only. Editor results describe the Editor shader map, not a separately cooked library. No GPU dispatch/readback; all_material_kernel_verified=false."));
+	if (!bGlobalShaderProtocolVerified) Errors.Add(TEXT("全局 shader 编译协议验证失败：") + GlobalShaderProtocolReason);
 	Report->SetBoolField(TEXT("engine_sources_unchanged_after"), EndfieldBackendProbeVerifyEngineSources(VerificationStatus, Errors, TEXT("绘制后")));
 	Report->SetBoolField(TEXT("plugin_sources_unchanged_after"), EndfieldBackendProbeVerifyPluginSources(VerificationStatus, Errors, TEXT("绘制后")));
 	Report->SetBoolField(TEXT("success"), Errors.IsEmpty());
 	Report->SetBoolField(TEXT("backend_success"), Errors.IsEmpty() && Status.bRequested && Status.bActive);
 	Report->SetBoolField(TEXT("visual_accepted"), false);
-	Report->SetStringField(TEXT("validation_scope"), TEXT("验证启动映射、patched 磁盘源码 hash、引擎/插件源文件前后完整性、真实绘制 shader、非默认/fallback 材质和截图产出；不读取或更改 shader 源码缓存。success 表示测试装置验证通过，backend_success 另要求后端请求且激活。显式 AllowInactiveBackend 只允许完全未请求的原生引擎负对照，绝不接受请求后激活失败。成功不等于画面复刻验收。kernel 模式/环境倍率来自自有 Profile alpha metadata，不因模式改变而重编译；报告配置是请求默认值，实际每个 Profile 的 GPU 响应由实拍对照判定。"));
-	Report->SetStringField(TEXT("experimental_limits"), TEXT("backend 实验提供独立光源/遮挡及无直射环境对照，lighting 实验提供 GI/反射/AO/天空开关；仅执行相应 Exp 的项目才受测。VSM/CSM 的启动配置与实际 GPU 路径需分别验证；Lumen/反射开关的像素差必须超过历史噪声才能判有贡献，接近噪声时结论为未定。Cook/Shipping 尚需独立验证。"));
+	Report->SetStringField(TEXT("validation_scope"), bAdapterOnly
+		? TEXT("AdapterOnly：验证启动映射、patched 磁盘源码 hash、引擎/插件 shader 前后完整性、模块 payload 协议、当前 Editor 全局 shader 的编译反射协议和四份发布父材质的真实 shader map 编译；不创建角色或测试绘制。draw_verified=false，image_count=0，all_material_kernel_verified=false，成功不代表 GPU 绘制、独立 Cook 库或最终画质通过。")
+		: TEXT("验证启动映射、patched 磁盘源码 hash、引擎/插件源文件前后完整性、真实绘制 shader、非默认/fallback 材质和截图产出；不读取或更改 shader 源码缓存。success 表示测试装置验证通过，backend_success 另要求后端请求且激活。显式 AllowInactiveBackend 只允许完全未请求的原生引擎负对照，绝不接受请求后激活失败。成功不等于画面复刻验收。kernel 模式/环境倍率来自自有 Profile alpha metadata，不因模式改变而重编译；报告配置是请求默认值，实际每个 Profile 的 GPU 响应由实拍对照判定。"));
+	Report->SetStringField(TEXT("experimental_limits"), bAdapterOnly
+		? TEXT("仅验证空白宿主适配器与材质编译，不执行 backend/lighting 实验、材质槽 fallback 核对或截图。Cook/Shipping 仍需独立运行与图像对照。")
+		: TEXT("backend 实验提供独立光源/遮挡及无直射环境对照，lighting 实验提供 GI/反射/AO/天空开关；仅执行相应 Exp 的项目才受测。VSM/CSM 的启动配置与实际 GPU 路径需分别验证；Lumen/反射开关的像素差必须超过历史噪声才能判有贡献，接近噪声时结论为未定。Cook/Shipping 尚需独立验证。"));
 	TArray<TSharedPtr<FJsonValue>> JsonErrors;
 	for (const FString& Error : Errors)
 	{
@@ -393,8 +506,8 @@ int32 UMMDEndfieldNativeBackendProbeCommandlet::Main(const FString& Params)
 	Report->SetNumberField(TEXT("failures"), Errors.Num());
 	FString Text;
 	FJsonSerializer::Serialize(Report, TJsonWriterFactory<>::Create(&Text));
-	const FString ReportPath = FPaths::Combine(OutDir, Tag + TEXT("_backend_report.json"));
-	if (!FFileHelper::SaveStringToFile(Text, *ReportPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+	if (!IFileManager::Get().MakeDirectory(*FPaths::GetPath(ReportPath), true)
+		|| !FFileHelper::SaveStringToFile(Text, *ReportPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[EndfieldNativeBackendProbe] 无法保存报告：%s"), *ReportPath);
 		return 1;

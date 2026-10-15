@@ -2,6 +2,18 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-15 — 公开复刻核对、v8 分发门控、底色描边与新角色验证
+
+- 核查四个公开复刻仓库，固定 90 个源码／配置文件快照。MyZmdShaders `6507457` 与 Morgana `40c9229` 未发现明确源码许可证，congyu `2634c57` 为 MIT，blurfeng UE 工程 `c5be997` 为 GPL-3.0；没有将这些仓库的代码、模型或贴图直接搬入发行包。源码核对确认各方案都有范围与依赖限制，不能把展示视频或单个 shader 当作完整复刻。新增[流程与来源审计](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)，按材质、逐灯、单次屏幕效果、几何分层和后处理继续对应本插件架构；完整十项目标不变。
+- 原生后端推进到 v8：生成副本写入协议 8，专用 GlobalShader 从实际编译参数反射记录协议，并通过 `LAYOUT_FIELD` 保存。Cooked 启动在 `OnPostEngineInit` 检查已加载 shader 的序列化协议后才允许 Profile 标记；同 v8 普通 Cook 应记录 0，启动参数不能单独授权。模块编译协议代替启动时读取私有 CustomOutput C++ 文件，支持移除该源码后的独立宿主验证。该字段只说明一份 GlobalShader 的编译来源，不代表全部材质内核或 GPU 已验证；完全缺少新增 shader 的旧 Cook 可能被 UE 提前拒绝，必须重新 Cook。引擎版本仍限定 UE 5.8.3 CL58210709，安装引擎文件不写入。
+- 新增专用 `M_MMD_EndfieldV2_Outline`：从当前槽底图与 BaseColor 派生边线颜色，按部位控制亮度、饱和度；复用 PMX 边线开关、EdgeSize、顶点 EdgeScale、EdgeColor.A、骨骼 Overlay／WPO 和恢复链路。遮罩／透明槽读取表面 alpha 覆盖，避免透明区域留下实心边，Opacity 只乘一次。保留白图／白色兜底，旧预设未配置新父材质时保持原行为，不覆盖用户修改中的旧 Outline。生成白名单增至 12 个自有资产，四份父材质均参与真实 shader map 编译。
+- 探针新增 `-SampleManifest` 严格指定 Saved 导入样本，失败不回退旧角色；`-PoseTime=-1` 强制参考姿势；`-FitSampleCamera` 让 full 机位按当前模型包围球取安全距离。换用仓库已有 YYB Hatsune Miku 16th 带翼款，导入 610,819 顶点、997,023 三角形、39 材质、550 骨骼、71 Morph，角色资产仅放 Saved。通用词表补 `clothes`，`clothes01..07` 七槽正确进入 Cloth；全模型 Cloth 共 14 槽。body、耳机和 wing 保留 Generic，不凭名称判定金属，本模型未覆盖 Metal 分路。
+- 最终 Editor `build4`、Game `game-build2` 通过；`generate1` 完成自有资产生成与编译。旧 Librarian 样本 `outline2` 为 24 图／70 次槽检查、0 失败。新 16th 样本 `yyb16-final2` 为 24 图／78 次槽检查、0 失败，`yyb16-final0` 为 8 图／78 次槽检查、0 失败；八个共有机位的相机位置与 FOV、环境设置记录全部一致。Mode0 是同一 V2 材质中的原生 Toon 对照，不是旧 Unlit。归档五张[2026-10-15 角色原图及来源](Screenshots/2026-10-15-endfield-distribution/README.md)和两张Cooked诊断原图，PNG原字节不改；报告、输入PMX、清单与原图SHA256随归档记录。
+- 独立 `BuildPlugin` 暴露此前被间接 include 掩盖的依赖，已对9个文件补最小头文件声明／包含，未改对应算法。`EF8e` 的Editor Development、Game Development、Shipping和发行文件检查通过；过滤测试角色／动作，收录Bullet头/四库、文档和脚本，声明当前仅Win64。修正空RHI格式覆写后，SM6空白宿主移出私有CustomOutput cpp仍实际编译四父材质30/54/48/40 shaders，协议8、0错误；不将AdapterOnly称为模型绘制或额外C++消费者工程验证。详见[插件分发验证](ENDFIELD_PLUGIN_DISTRIBUTION.md)。
+- `package-v8b`与`package-vanilla-v8`均完成完整SM6-only Cook/Stage/Pak/Archive，实际程序SHA相同。正Cook在运行时读协议8；普通Cook即使请求Mode2仍协议0、禁止标记、0重绑并成功回退原生。正Cook正常响应与Skin packed开/关绿红实拍通过，12/12 Profile、2/2 Skin，外部像素检查仅证指定路径，CPU报告GPU字段保持false；[Cooked来源](Screenshots/2026-10-15-endfield-distribution/COOKED_VALIDATION.md)。带RenderDoc自动附加的两次首帧失败留档，其中RHIThread栈首为renderdoc.dll；仅CLI禁用捕获插件后正常/两诊断/普通Cook四次成功，用户Config不改，不宣称一般稳定性已验收。13个工具测试包与清单移回Saved，不提交测试Content。
+- 最后以修正后的完整脚本重跑`EF8f`，三配置BuildPlugin、文件过滤、私有cpp缺失宿主、四父材质编译和协议严格检查全部通过；[最终报告来源](Screenshots/2026-10-15-endfield-distribution/distribution-sources.json)。源码、shader和资源未因文档整理再次变更，没有扩大为全角色或一般稳定性验收。
+- 2,378 项保护基线中仅两个自有 V2 包按计划变化，其余 2,376 项不变，意外变化为 0；新 Outline 为另加的自有资产。保留既有用户工作，不提交 Saved、构建产物或测试角色。此次新角色只验证参考姿势，VMD 有 196 条不匹配轨道警告，导入数量不证明动画／Morph 已运行。白布和翅膀层次仍偏平，头发完整响应、皮肤 SSS、眼睛分层、深度 Rim、后处理与动态材质颜色同步仍待迭代。**运行检查和图片数量不代替终末地画质验收。**
+
 ## 2026-10-14 — 脸部独立方向、真实 RD／RS 与材质响应迭代
 
 - 沿用用户认可的原生后端推进画质：图版本4、适配器v6新增专用材质CustomOutput和真实packed export/read。单Toon Skin的Mode2/adaptive fmt1把完整头空间漫反射方向及头部旋转传到逐灯BSDF；原生Normal独立用于高光/GI。复用Pattern24和预留anisotropy32，ProfileID/底色/粗糙度保持；单basis、24 bytes实际/请求预算、简化、格式、真实anisotropy及非中性UV均有门控。原生零anisotropy可跳过extra word，新通道实际会写／读此word，未测性能。

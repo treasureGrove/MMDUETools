@@ -1,5 +1,6 @@
 #pragma once
 #include "CoreMinimal.h"
+#include "PrimitiveComponentId.h"
 #include "Subsystems/EngineSubsystem.h"
 #include "UObject/WeakObjectPtr.h"
 #include "UMMDShadowMapSubsystem.generated.h"
