@@ -4,7 +4,19 @@
 
 读者入门入口：[终末地插件着色入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，含三版方案对比、数据流图、实际 GI 对照和代码入口。
 
-## 最新进度：公开复刻核对、v8 分发门控与底色描边（2026-10-15）
+## 最新进度：v9 暗部体积与二维高光（2026-10-15）
+
+用户明确指出上一版仍然偏平，不能用原生接入或分发通过代替画质。v9恢复Cloth/Hair的双暗层、RD(NoF)、背光项及Cloth/Skin日间主光高光方向偏置，Skin补视角染色；真实Cloth04/Hair09 RS改为32×8二维重采样，保留RGB/A分工。AO仍为1兜底，Skin LUT和完整头发方程尚未恢复。
+
+每盏灯重复暗底会洗平体积：现在从当前View的ForwardLightStruct识别主平行光，主光保留完整NPR，附加灯用Lambert受光面、原生阴影和分类高光。Generic改连续ramp，解决未分类翅膀NoL约.1便封顶。没有改GI入口/曝光或增加RT；同向平行光有识别歧义，其他未捕获入口不能假定正确分灯。传统聚簇接口同步、Rect保留GGX/LTC，但本批未重新GPU实测fmt0聚簇。
+
+后端 `endfield-native-bsdf-v9-volume-rs2d`，Cooked协议9，Skin payload仍v4。**Mode2应用预设前设 `r.Substrate.ToonProfile.Resolution=256`；默认64会打印提示并整份回退原曲线/Mode0。** atlas内存和采样增加，未测性能。v8 Cook不能冒称v9已验证，需重新Cook。
+
+本批Editor build3、Game game-build2、generate9b白名单12包/四父材质编译成功。YYB16th同清单/参考姿势/机位：volume9b的34图/156槽及atlas64两模式各8图/78槽通过，共50图/312槽/0失败。四机位Unlit对照逐像素一致；实际变化、来源、重试和边界见[前后实拍](Screenshots/2026-10-15-endfield-volume/README.md)。保护2,378项中2,375保持，只改三个自有V2包；既有dirty资产、Face、Config和引擎未改。v9没有重跑完整BuildPlugin/Cook。
+
+**下一步优先恢复独立球面Hair高光法线，再柱面压平和与原法线混合。** 当前只把网格法线压平，竖直发片在固定主光/顶视机位的200次波瓣可小于1e-10，法线仰30–55度的区域才明显，不能只靠调大强度解决。MyZmd的ViewDirYOffset属于艺术控制，不是已提取客户端参数，不能冒称默认值。随后继续Skin LUT、P/flow可选增强、双波瓣、Eye/刘海分层、深度Rim和后处理；完整十项目标及画质验收未完成。
+
+## 同日较早历史：公开复刻核对、v8 分发门控与底色描边（2026-10-15）
 
 **完整十项目标没有缩减，当前仍未通过终末地画质验收。** 本节记录本轮实际验证；下方 v6、v4 和旧 SDF 内容继续保留为历史，不能混作本轮新验证。
 

@@ -1,6 +1,6 @@
 # 终末地原生着色后端
 
-当前版本：`endfield-native-bsdf-v8-cooked-global-protocol`，2026-10-15。引擎范围仍为 UE 5.8.3 / CL58210709。**先读本节；下方折叠内容是 v4/v6 历史，不能当作本版行为或测试结果。**
+当前版本：`endfield-native-bsdf-v9-volume-rs2d`，2026-10-15。引擎范围仍为 UE 5.8.3 / CL58210709。**先读本节；v8 及下方折叠的 v4/v6 验证不能当作 v9 的验证结果。**
 
 ## 当前架构与维护入口
 
@@ -8,12 +8,19 @@
 
 - **9 个生成副本适配点**：SubstrateEvaluation、SubstrateDeferredLighting、DiffuseIndirectComposite、ReflectionEnvironment、ClusteredDeferredShading、Substrate、SubstrateExport、BasePassPixelShader、ToonProfileCommon。最后一个只附加 Cook 协议标记。安装引擎文件不改，副本只写工程 Intermediate。
 - **材质数据**：v6 的单 Toon Skin / fmt1 方向与 quaternion 通道继续使用；Pattern24 + 预留 anisotropy32，24-byte 预算、真实各向异性、共享 basis、简化、透明与 fmt0 门控保持。没有新增独立 GBuffer RT，实际多写/读的 word 成本仍存在。方向场不是真正遮挡 SDF，局部 Morph 修正仍未完成。
-- **直射响应**：Skin/Hair/Cloth 使用 RD RGB tint + RD alpha 明暗权重及现有 RS 近似；Mode0 原生透传，Mode1 阴影诊断，Mode2 自定义响应。v4 的“三档原型”不再描述当前响应。
-- **分发协议**：CustomOutput 的名称、输出次序、默认值和 packed 约定由模块编译常量进入签名，不再要求用户磁盘上存在插件私有 `.cpp/.h`。USH 与引擎 hash 仍检查。[协议 shader](../Shaders/Private/MMDEndfieldNativeBackendProtocol.usf)的真实编译反射由[对应 FGlobalShader](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp)序列化。Cooked 启动初始禁止 Profile 路由，OnPostEngineInit 读取协议8才放行；未开后端 Cook 的记录为0。
+- **直射响应**：主平行光的 Skin/Hair/Cloth 使用 RD 的两层暗部，Cloth/Hair 再读取观察方向 RD；Hair 使用独立柱面高光法线。RS 从固定切片改成 32×8 二维重采样。Skin 增加视角染色，但暗部 LUT、材质 AO 与 Hair 第二波瓣尚未恢复。Mode0 原生透传，Mode1 阴影诊断，Mode2 自定义响应。
+- **多灯适配**：当前 View 的 `ForwardLightStruct` 按优先级、同级亮度选主平行光；普通桌面逐灯入口按方向识别。完整 NPR 暗底只由主光提供，附加灯用无暗底的 Lambert 漫反射和分类高光。传统聚簇局部灯同步更新。矩形灯高光暂用 UE GGX/LTC；GI 仍在原有合成点处理一次。没有新增 RT、pass 或插件跨帧缓存；原生 Lumen/TAA 历史处理仍保留。同向重叠平行光可能一起匹配为主光；RT/Furnace/MegaLights 不保证这套主辅规则。
+- **分发协议**：CustomOutput 的名称、输出次序、默认值和 packed 约定由模块编译常量进入签名，不再要求用户磁盘上存在插件私有 `.cpp/.h`。USH 与引擎 hash 仍检查。[协议 shader](../Shaders/Private/MMDEndfieldNativeBackendProtocol.usf)的真实编译反射由[对应 FGlobalShader](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp)序列化。Cooked 启动初始禁止 Profile 路由，OnPostEngineInit 读取协议9才放行；未开后端 Cook 的记录为0。v8 库需要重新 Cook，不能配 v9 模块冒充已验证。
 - **证据边界**：全局 shader 协议只证明它见过适配头，`all_material_kernel_verified=false` 保持；材质和实际 GPU 行为另测。新增全局 shader 后，完全没有该类型的旧包须重新 Cook，UE 可能在插件验证前拒绝旧库。
 - **专用描边**：自有 EndfieldV2 Outline 父材质，从当前 BaseColor 派生亮度/饱和度，复用原 PMX overlay、骨骼、宽度和恢复链。Opaque 忽略贴图 alpha；Masked 跟随当前实例 cutoff；透明以 .01 阈值近似。用户原 `M_MMD_Outline` 资源不改。独立光照、平滑描边法线、材质 Morph 实时同步尚未实现；动态改色可调用 Refresh。
 
 调方程看 `Shaders/Core/TMMDEndfieldNativeBSDF.ush`；数据编解码看 `TMMDEndfieldNativePayload.ush`；改材质图/协议时同时维护 `MaterialExpressionMMDEndfieldNativePayload`、生成器图版本、模块协议与协议 shader binding。描边入口是 `MMDOutlineLibrary`、`TMMDEndfieldOutline.ush` 和生成器的专用父材质。详细启用与发行检查见[插件分发说明](ENDFIELD_PLUGIN_DISTRIBUTION.md)，公开实现对照见[参考源码审计](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。
+
+v9 的 Mode2 需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`（引擎默认64）。不足256会打印提示并把整个瞬态 Profile 恢复原曲线、Mode0；不会默默采残缺的二维表。支持更高分辨率，但64→256会增加整个原生 Profile atlas 的内存，二维查询也增加采样；尚未测性能，不称零成本。没有修改用户默认配置。
+
+v9实际验证：Editor build3、Game game-build2与generate9b的12包/四父材质编译通过；常规SM6延迟实拍34图/156槽，atlas64的Mode2回退与Mode0各8图/78槽，合计50图/312槽/0失败。[前后原图与来源](Screenshots/2026-10-15-endfield-volume/README.md)包含四类灯遮挡及光照隔离；新旧Unlit控制逐像素一致。传统聚簇已同步编译，本批未重新GPU实测fmt0；v9完整Cook/BuildPlugin尚未重跑，不能把以下历史测试移记为v9结果。
+
+以下段落是 **v8 历史验证**，并非 v9 重新 Cook／发行的结果：
 
 2026-10-15实际验证：Editor build4/Game game-build2、12包生成、旧模型描边与新YYB16th同机位对照通过。独立BuildPlugin三配置及文件检查通过；空白SM6宿主移出私有CustomOutput cpp后协议8、四父材质30/54/48/40 shaders且0错误。正/普通两次完整Cook均过；同一程序在正Cook读8，在普通Cook读0并保持原生回退。正Cook的Skin载荷开/关绿红实拍确认指定packed逐灯路径，不代表全部内核、角色动画/Morph或画质验收。见[角色实拍](Screenshots/2026-10-15-endfield-distribution/README.md)、[Cooked证据](Screenshots/2026-10-15-endfield-distribution/COOKED_VALIDATION.md)。本批实际运行范围为Win64/D3D12 SM6；首次帧RenderDoc注入异常及CLI绕行保留记录，未改用户Config。
 

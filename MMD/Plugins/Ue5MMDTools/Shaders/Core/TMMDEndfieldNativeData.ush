@@ -23,6 +23,8 @@ struct TMMDEndfieldNativeLightData
     bool spot_light;
     bool rect_light;
     bool inverse_squared;
+    // 引擎为当前 View 选定的主平行光；未绑定该查询的入口与局部灯均为 false。
+    bool key_directional_light;
     uint shadowed_bits;
     uint affects_translucent_lighting;
 

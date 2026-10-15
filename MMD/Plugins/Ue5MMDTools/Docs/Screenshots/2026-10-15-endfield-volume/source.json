@@ -1,0 +1,272 @@
+{
+  "capture_date_local": "2026-10-15",
+  "timezone": "Asia/Singapore",
+  "archive_date_local": "2026-10-15",
+  "kind": "actual UE engine captures; copied byte-for-byte",
+  "image_size": [
+    1280,
+    720
+  ],
+  "engine_version": "5.8.3-58210709+++UE5+Release-5.8",
+  "model": "YYB Hatsune Miku 16th wing variant; reference pose, 39 material slots",
+  "capture": "UnrealEditor-Cmd -AllowCommandletRendering -RenderOffscreen -d3d12; RenderDoc disabled on CLI",
+  "backend_patch": "endfield-native-bsdf-v9-volume-rs2d",
+  "backend_signature": "6BA57CE68050FF673DFB19DF0072D14BC6AF3B64",
+  "engine_sources_unchanged": true,
+  "plugin_sources_unchanged_during_capture": true,
+  "compiled_global_protocol": 9,
+  "global_protocol_scope": "Active RHI global shader object's serialized compile-reflection field only. Editor results describe the Editor shader map, not a separately cooked library. No GPU dispatch/readback; all_material_kernel_verified=false.",
+  "all_material_kernel_verified": false,
+  "full_visual_acceptance": false,
+  "cooked_runtime_retested_for_v9": false,
+  "fmt0_clustered_gpu_retested_for_v9": false,
+  "engine_source_hash_scope": "Nine overlay targets; complete hash report remains in local Saved.",
+  "engine_source_hashes": {
+    "Private/Substrate/SubstrateEvaluation.ush": "7D6CF09DDE26622376826A4D8D48FDDE6C8A1586",
+    "Private/Substrate/Substrate.ush": "4565C2E6522189E3BE54DDB9A4D4AD04BE9D8CD0",
+    "Private/ToonProfileCommon.ush": "90FD17EC9C70A5A34321CE1A3F9D1BE36FE031E9",
+    "Private/DiffuseIndirectComposite.usf": "69B39A99AF6AFDA56A4CA10439A865D4EA4DDAC2",
+    "Private/Substrate/SubstrateDeferredLighting.ush": "E4F804515B8BF01EBDBD23D9F2195361D33CC066",
+    "Private/ReflectionEnvironmentPixelShader.usf": "991181D55BBC50A4DE0169934210159EC1DCCDC2",
+    "Private/ClusteredDeferredShadingPixelShader.usf": "2D2DCA949116D453ECBEE7138E43F2A8AE8305D1",
+    "Private/Substrate/SubstrateExport.ush": "B3113DC6071E9CA010505517CA299C8FC7C6FF9B",
+    "Private/BasePassPixelShader.usf": "938DAE7F895A35382C0FB75902909E35E6ED9B21"
+  },
+  "plugin_source_hashes": {
+    "Core/TMMDEndfieldNativeBSDF.ush": "269B2293A5455FDF2673937F23E29F4B0CC892A1",
+    "Core/TMMDEndfieldNativeData.ush": "9054814DA601150934F879FA01A0A9FCB51DBB1C",
+    "Core/TMMDEndfieldNativeLightCapture.ush": "76760BB97E402032C0FBCB6C426B80239FF80C55",
+    "Core/TMMDEndfieldNativeIndirect.ush": "2BF92C33ECE006D263C4BADCDB64D140B0750137",
+    "Core/TMMDEndfieldNativeLegacy.ush": "B12355787ADBDC9C9507111D2F6246035B090FE7",
+    "Core/TMMDEndfieldNativePayload.ush": "06466564718F4BEDFA5CDB3B9329E9ACB507C53B",
+    "Private/MMDEndfieldNativeBackendProtocol.usf": "4510BA8EF50EAE2C60A3B3C2536FBF792F59C3B8"
+  },
+  "report_files": {
+    "volume9b": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\volume9b\\report.json",
+    "low64mode2": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\low64mode2\\report.json",
+    "low64mode0": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\low64mode0\\report.json"
+  },
+  "images": [
+    {
+      "archived_file": "before-cloth.png",
+      "source_file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\distribution-2026-10-15\\yyb16-final2\\yyb16-final2_toon_cloth.png",
+      "sha256": "66306a898861820ccad99f496b425affa0bb9e9cbc58876ac3f0f62977526e47",
+      "capture_batch": "v8 earlier same day"
+    },
+    {
+      "archived_file": "before-hair.png",
+      "source_file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\distribution-2026-10-15\\yyb16-final2\\yyb16-final2_toon_hair.png",
+      "sha256": "b201e0f2e0d6e0a66df79f93986c8f88cc6bc02277da348e0049e0fb18eb6a89",
+      "capture_batch": "v8 earlier same day"
+    },
+    {
+      "archived_file": "after-cloth.png",
+      "source_file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\volume9b\\volume9b_toon_cloth.png",
+      "sha256": "6142997f1bbe8c3f9f4e59f9d5c44e3550fc3395d8e7a7746713b0a6699880d4",
+      "capture_batch": "v9 current batch"
+    },
+    {
+      "archived_file": "after-hair.png",
+      "source_file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\volume9b\\volume9b_toon_hair.png",
+      "sha256": "51792622aa8727c53c0651ec0bc2a216102c5e9eda7b10807f308f5d855e28cd",
+      "capture_batch": "v9 current batch"
+    },
+    {
+      "archived_file": "after-face.png",
+      "source_file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\volume9b\\volume9b_toon_face.png",
+      "sha256": "a4cc549ccd7c8757de278fda36f394e451ec5e4435b5c515325c31b7ee618c81",
+      "capture_batch": "v9 current batch"
+    },
+    {
+      "archived_file": "key-direct-cloth.png",
+      "source_file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\volume-2026-10-15\\volume9b\\volume9b_volume_key_direct_cloth.png",
+      "sha256": "aea4b6ff440f1edcb2edac4f3073f8f89892220db104fd5d9fd9fa055afb51c5",
+      "capture_batch": "v9 current batch"
+    }
+  ],
+  "validation": {
+    "success": true,
+    "image_count": 34,
+    "slot_check_count": 156,
+    "failures": 0,
+    "draw_verified": true
+  },
+  "low_resolution_fallback": {
+    "mode0": {
+      "success": true,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "failures": 0
+    },
+    "mode2": {
+      "success": true,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "failures": 0
+    },
+    "per_shot": {
+      "full": 0.0006282552083333333,
+      "face": 0.05469581886574074,
+      "cloth": 0.03530707465277778,
+      "hair": 0.056103515625
+    }
+  },
+  "protected_files": {
+    "count": 2378,
+    "unchanged": 2375,
+    "intentional": [
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Presets\\EndfieldV2\\DA_Render_EndfieldV2.uasset",
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\Profiles\\TP_EndfieldV2_Generic.uasset",
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\Profiles\\T_EndfieldV2_OffsetLinear.uasset"
+    ],
+    "unexpected": []
+  },
+  "rs_compression": {
+    "schema": "mmd.endfield.rs-tile-32x8.v1",
+    "algorithm_version": 3,
+    "width": 32,
+    "height": 8,
+    "tile_nodes": "u=x/31, v=y/7",
+    "source_sampling": "linear RGB, source texture bilinear/clamp at u*256-.5,v*256-.5; no V flip",
+    "flatten": "idx=y*32+x",
+    "curve_storage": "Specular RGB constant keys idx/256; Diffuse RGB and Specular A RD remain continuous",
+    "error_scope": "RGB normalized [0,1] versus source bilinear samples; no lighting/tone mapping or UE run",
+    "sources": [
+      {
+        "name": "T_actor_common_cloth_04_RS",
+        "json": "Saved\\Phase2Reference\\Endfield2\\material-values\\ramps\\T_actor_common_cloth_04_RS.json",
+        "json_sha256": "f7af2ee56fc4ee6f9ffa5d3e653a5748bc4b7f0d2a43306de798fc2117dc3b20",
+        "asset_path": "assets/beyond/arts/entity/actor/common/textures/t_actor_common_cloth_04_rs.tga",
+        "source_dimensions": [
+          256,
+          256
+        ],
+        "source_rgba_sha256": "538181418de6d5f0f9529923b74966d080ffeb8f85e08a0c07ebce2cdd9cd607",
+        "tile_float32_sha256": "b49b092749a58cea0c6a8c63afbe4f6a19abbbbcfda7fd3813c1b75e791adf5d",
+        "float32_node_max_error": 2.9775931942310763e-08,
+        "atlas_float16_node_max_error": 0.0002431832107843146,
+        "corners": [
+          [
+            0.9725490212440491,
+            0.8588235378265381,
+            1.0
+          ],
+          [
+            0.8039215803146362,
+            0.9411764740943909,
+            1.0
+          ],
+          [
+            1.0,
+            0.4745098054409027,
+            0.40392157435417175
+          ],
+          [
+            1.0,
+            0.8509804010391235,
+            0.5333333611488342
+          ]
+        ],
+        "source_texel_centers_256x256_float32": {
+          "mae": 0.002886400643409979,
+          "rmse": 0.005771771009374351,
+          "max_abs": 0.03187316074036062,
+          "p99_abs": 0.024964441757859196
+        },
+        "source_texel_centers_256x256_atlas_float16": {
+          "mae": 0.0028841921484452737,
+          "rmse": 0.005755811344179177,
+          "max_abs": 0.03169536590576172,
+          "p99_abs": 0.024886131286621094
+        },
+        "dense_uv_513x513_float32": {
+          "mae": 0.002779597731148771,
+          "rmse": 0.005736125890312284,
+          "max_abs": 0.03187316074036062,
+          "p99_abs": 0.024956800043582916
+        },
+        "dense_uv_513x513_atlas_float16": {
+          "mae": 0.002777546725195107,
+          "rmse": 0.005720093196708574,
+          "max_abs": 0.03169536590576172,
+          "p99_abs": 0.024884212273592995
+        },
+        "atlas_width_slot_mismatches": {
+          "256": 0,
+          "257": 0,
+          "300": 0,
+          "512": 0,
+          "1024": 0
+        }
+      },
+      {
+        "name": "T_actor_common_hair_09_RS",
+        "json": "Saved\\Phase2Reference\\Endfield2\\material-values\\ramps\\T_actor_common_hair_09_RS.json",
+        "json_sha256": "a75cfbf2a5a79acb8b645342b77f9265dd2529e6e703583b59c705560f2badad",
+        "asset_path": "assets/beyond/arts/entity/actor/common/textures/t_actor_common_hair_09_rs.tga",
+        "source_dimensions": [
+          256,
+          256
+        ],
+        "source_rgba_sha256": "6d6dc9dfd5bf580cd3870c609814ff14e4846dd8b1185cb0353f44bd24d29de8",
+        "tile_float32_sha256": "64c901d6dd1ae991434ec468627e74a239851873d40d515ba4343677b6890877",
+        "float32_node_max_error": 2.979532098823512e-08,
+        "atlas_float16_node_max_error": 0.00024371265643341467,
+        "corners": [
+          [
+            0.0117647061124444,
+            0.0117647061124444,
+            0.01568627543747425
+          ],
+          [
+            0.6980392336845398,
+            0.5843137502670288,
+            0.4941176474094391
+          ],
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.7843137383460999,
+            0.40392157435417175,
+            0.46666666865348816
+          ]
+        ],
+        "source_texel_centers_256x256_float32": {
+          "mae": 0.001233230397844668,
+          "rmse": 0.0019093791003414234,
+          "max_abs": 0.025896826837146447,
+          "p99_abs": 0.007675354072094301
+        },
+        "source_texel_centers_256x256_atlas_float16": {
+          "mae": 0.0012347591332455582,
+          "rmse": 0.0019158739714674698,
+          "max_abs": 0.02601034792468826,
+          "p99_abs": 0.007729429285461966
+        },
+        "dense_uv_513x513_float32": {
+          "mae": 0.0010470152267440978,
+          "rmse": 0.001772705924373116,
+          "max_abs": 0.025896826837146447,
+          "p99_abs": 0.007513158559599079
+        },
+        "dense_uv_513x513_atlas_float16": {
+          "mae": 0.0010486521828449414,
+          "rmse": 0.001779654908405967,
+          "max_abs": 0.02601034792468826,
+          "p99_abs": 0.007557498634226754
+        },
+        "atlas_width_slot_mismatches": {
+          "256": 0,
+          "257": 0,
+          "300": 0,
+          "512": 0,
+          "1024": 0
+        }
+      }
+    ],
+    "output_inl_sha256": "a4f2c1565d4260089eefd7e66658aa6a4fe0fc9d5c1480768a33aafc6a583a0f"
+  }
+}

@@ -6,6 +6,8 @@
 
 shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
 
+最新 v9 补了“为什么画面仍平”的方程问题：主光保留两层暗部，补光只补受光面；衣料/头发加入视角响应，高光表恢复二维，未分类翅膀改连续明暗过渡。GI与曝光配置没有降低，新旧Unlit控制图逐像素一致。[同机位前后实拍](Screenshots/2026-10-15-endfield-volume/README.md)记录了实际变化与剩余缺口，完整复刻仍未验收。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`，不足256将整体回退原生；v9完整Cook尚未重测。
+
 本批也核对了别人公开复刻的完整分工：[参考源码对照](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。材质和逐灯入口保持，另补底色描边与[插件分发检查](ENDFIELD_PLUGIN_DISTRIBUTION.md)；完整眼睛、头发与屏幕效果仍逐项推进。
 
 2026-10-15已改用更复杂的YYB16th带翼款，按同一机位对比原生Toon与当前响应：[脸、头发、衣料实拍](Screenshots/2026-10-15-endfield-distribution/README.md)。独立插件构建、空白宿主四材质编译、正/普通Cook及指定Skin载荷绿红对照均已有实证；这些是基础验证，白布、翅膀与完整材质响应仍未达到终末地画质目标。

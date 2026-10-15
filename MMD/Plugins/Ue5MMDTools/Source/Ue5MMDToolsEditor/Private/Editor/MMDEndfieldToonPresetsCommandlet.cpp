@@ -305,6 +305,20 @@ namespace
 			EndfieldToonSetRamp(Settings.DiffuseRamp, {
 				{ 0.0f, FLinearColor(0.80f, 0.80f, 0.80f) }, { 0.5f, Lit } }, 0.012f);
 		}
+		else if (Role == EMMDMaterialRole::Generic)
+		{
+			// 未分类的翅膀/饰件使用通用连续 ramp；旧占位在 NoL=.1 已封顶，几何转折被压平。
+			const FLinearColor Colors[] = { FLinearColor(0.26f, 0.29f, 0.46f), FLinearColor(0.58f, 0.63f, 0.80f), Lit };
+			const float Coordinates[] = { 0.0f, 0.5f, 0.95f };
+			Settings.DiffuseRamp.ExternalCurve = nullptr;
+			for (int32 Channel = 0; Channel < 4; ++Channel)
+			{
+				FRichCurve& Curve = Settings.DiffuseRamp.ColorCurves[Channel];
+				Curve.Reset();
+				for (int32 Key = 0; Key < 3; ++Key)
+					Curve.SetKeyInterpMode(Curve.AddKey(Coordinates[Key], Channel < 3 ? Colors[Key].Component(Channel) : 1.0f), RCIM_Linear);
+			}
+		}
 		else
 		{
 			EndfieldToonSetRamp(Settings.DiffuseRamp, {

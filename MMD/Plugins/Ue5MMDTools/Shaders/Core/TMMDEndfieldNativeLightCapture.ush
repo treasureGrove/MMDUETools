@@ -30,6 +30,23 @@ struct TMMDEndfieldNativeLightCapture
         data.spot_light = light_data.bSpotLight;
         data.rect_light = light_data.bRectLight;
         data.inverse_squared = light_data.bInverseSquared;
+
+#if PIXELSHADER && !SHADING_PATH_MOBILE && defined(LIGHT_SOURCE_SHAPE)
+        // 桌面 DeferredLightPS 已绑定 ForwardLightStruct；Clustered 只有局部灯，保持 false。
+        // 不使用有通用默认定义的 VISUALIZE_LIGHT_CULLING；RT / Furnace 等入口不增加资源读取。
+        // 引擎按 ForwardShadingPriority、同优先级光强选灯；两处 Direction 均直接来自 LightParameters。
+        if (!light_data.bRadialLight && !light_data.bRectLight && ForwardLightStruct.HasDirectionalLight != 0u)
+        {
+            float3 key_direction = ForwardLightStruct.DirectionalLightDirection;
+            float direction_length_sq = dot(light_data.Direction, light_data.Direction);
+            float key_direction_length_sq = dot(key_direction, key_direction);
+            if (direction_length_sq > 1e-8 && key_direction_length_sq > 1e-8)
+                data.key_directional_light = dot(light_data.Direction, key_direction)
+                    * rsqrt(direction_length_sq * key_direction_length_sq) > 0.99999;
+        }
+        // 无公开逐灯唯一 ID；同向重叠平行光无法区分，不能用可能带大气透射的颜色硬匹配。
+#endif
+
         data.shadowed_bits = light_data.ShadowedBits;
         data.affects_translucent_lighting = light_data.bAffectsTranslucentLighting;
 

@@ -1269,7 +1269,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	TArray<FString> Exps;
 	ExpText.ParseIntoArray(Exps, TEXT(","), true);
 	const TArray<FString> AllowedExps = { TEXT("ab"), TEXT("shadow"), TEXT("ramp"), TEXT("lighting"), TEXT("face"),
-		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("all") };
+		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("volume"), TEXT("all") };
 	for (const FString& Exp : Exps)
 	{
 		if (!AllowedExps.Contains(Exp))
@@ -1330,16 +1330,16 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		Report->SetStringField(TEXT("native_preset"), NativePresetPath);
 		for (const FString& Exp : Exps)
 		{
-			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline"))
+			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline") && Exp != TEXT("volume"))
 			{
-					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline, received %s"), *Exp);
+					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline/volume, received %s"), *Exp);
 				return 1;
 			}
 		}
 	}
-	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline"))) && !NativePreset.IsValid())
+	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline")) || Exps.Contains(TEXT("volume"))) && !NativePreset.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline checks require -NativePreset"));
+		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline/volume checks require -NativePreset"));
 		return 1;
 	}
 	if (!bSubstrate && !NativePreset.IsValid())
@@ -1690,6 +1690,40 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		ToonProbeFinishMaterialSwap(Rig, Sample);
 	};
 	const bool bCanToon = bSubstrate && ToonOpaque && ToonMasked;
+	// volume：固定材质、机位与曝光，分别检查主光、完整灯组、GI 和高光。
+	if (ToonProbeHasExp(Exps, TEXT("volume")) && NativePreset.IsValid() && bCanToon)
+	{
+		UseToonBaseline();
+		ToonProbeValidateSlots(Rig, Log, TEXT("volume_baseline"));
+		TInlineComponentArray<UPointLightComponent*> AccentLights;
+		Rig.Stage->GetComponents(AccentLights);
+		TArray<float> AccentIntensities;
+		for (UPointLightComponent* Accent : AccentLights)
+		{
+			AccentIntensities.Add(Accent ? Accent->Intensity : 0.0f);
+			if (Accent) Accent->SetIntensity(0.0f);
+		}
+		const TArray<FString> IndirectFlags = { TEXT("GlobalIllumination"), TEXT("SkyLighting"),
+			TEXT("ReflectionEnvironment"), TEXT("LumenReflections"), TEXT("ScreenSpaceReflections") };
+		for (int32 Variant = 0; Variant < 5; ++Variant)
+		{
+			const bool bKeyOnly = Variant == 0 || Variant == 1;
+			const bool bIndirectOnly = Variant == 4;
+			ToonProbeSetLights(Rig, !bIndirectOnly, !bKeyOnly && !bIndirectOnly, !bKeyOnly && !bIndirectOnly);
+			TArray<FString> Disabled = Variant == 0 || Variant == 2 ? IndirectFlags : TArray<FString>();
+			if (Variant == 3) Disabled.Add(TEXT("Specular"));
+			ToonProbeSetShowFlags(Rig, Disabled);
+			const TCHAR* Names[] = { TEXT("volume_key_direct"), TEXT("volume_key_gi"), TEXT("volume_three_direct"),
+				TEXT("volume_three_nospec"), TEXT("volume_indirect") };
+			for (EToonProbeShot Shot : { EToonProbeShot::Face, EToonProbeShot::Cloth, EToonProbeShot::Hair })
+				ToonProbeCaptureShot(Rig, Sample, Log, Names[Variant], Shot, FMath::Max(Frames, 24));
+		}
+		ToonProbeSetShowFlags(Rig, {});
+		ToonProbeSetLights(Rig, true, true, true);
+		for (int32 Index = 0; Index < AccentLights.Num(); ++Index)
+			if (AccentLights[Index]) AccentLights[Index]->SetIntensity(AccentIntensities[Index]);
+		Log.Note(TEXT("volume_scope"), TEXT("Fixed camera/exposure/materials; accent points disabled during isolation; GI show flags isolate contributions, not a cooked-runtime or AO payload proof."));
+	}
 	if (ToonProbeHasExp(Exps, TEXT("sdf")) && NativePreset.IsValid() && (bCanToon || !bSubstrate))
 	{
 		UseToonBaseline();

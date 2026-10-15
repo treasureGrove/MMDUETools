@@ -1,0 +1,153 @@
+{
+  "scope": "Raw UE captures; RGB differences are descriptive, not a visual acceptance metric.",
+  "previous_capture_date": "2026-10-15",
+  "current_capture_date": "2026-10-15",
+  "backend": {
+    "image_count": 34,
+    "slot_check_count": 156,
+    "failures": 0,
+    "global_shader_protocol": 9,
+    "success": true
+  },
+  "sample": {
+    "sample_manifest": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+    "source_pmx": "D:/projectGithub/MMDUETools/MMD/Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/YYB Hatsune Miku_16th.pmx",
+    "reference_pose": true,
+    "sdf_bake_success": true,
+    "sdf_bound_slots": 5
+  },
+  "comparisons": {
+    "full": {
+      "camera_location": "X=119.757 Y=-854.028 Z=240.270",
+      "camera_fov": 50,
+      "before_sha256": "d0900e20222bb5f75ecccf0c4bbe99f2c1404773a79b1334cf2b5b1fefead735",
+      "after_sha256": "2dd238b7216766861eb24e5723412f37911d4318dd2acb2490dac5b18f2f55ea",
+      "rgb_mae_255": 0.4825904369354248,
+      "rgb_max_255": 83.0,
+      "unlit_control": {
+        "rgb_mae_255": 0.0,
+        "rgb_max_255": 0.0
+      }
+    },
+    "face": {
+      "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+      "camera_fov": 35,
+      "before_sha256": "4d09311bde0be8818fc31ec249ab06e3b02c9404e6ccd9fa5f6996868403c03a",
+      "after_sha256": "a4cc549ccd7c8757de278fda36f394e451ec5e4435b5c515325c31b7ee618c81",
+      "rgb_mae_255": 7.957208633422852,
+      "rgb_max_255": 88.0,
+      "unlit_control": {
+        "rgb_mae_255": 0.0,
+        "rgb_max_255": 0.0
+      }
+    },
+    "cloth": {
+      "camera_location": "X=70.000 Y=-205.000 Z=138.000",
+      "camera_fov": 35,
+      "before_sha256": "66306a898861820ccad99f496b425affa0bb9e9cbc58876ac3f0f62977526e47",
+      "after_sha256": "6142997f1bbe8c3f9f4e59f9d5c44e3550fc3395d8e7a7746713b0a6699880d4",
+      "rgb_mae_255": 8.925809860229492,
+      "rgb_max_255": 89.0,
+      "unlit_control": {
+        "rgb_mae_255": 0.0,
+        "rgb_max_255": 0.0
+      }
+    },
+    "hair": {
+      "camera_location": "X=40.000 Y=-152.150 Z=194.597",
+      "camera_fov": 32,
+      "before_sha256": "b201e0f2e0d6e0a66df79f93986c8f88cc6bc02277da348e0049e0fb18eb6a89",
+      "after_sha256": "51792622aa8727c53c0651ec0bc2a216102c5e9eda7b10807f308f5d855e28cd",
+      "rgb_mae_255": 8.704207420349121,
+      "rgb_max_255": 50.0,
+      "unlit_control": {
+        "rgb_mae_255": 0.0,
+        "rgb_max_255": 0.0
+      }
+    }
+  },
+  "isolation": {
+    "face": {
+      "key_gi_vs_key_direct": {
+        "rgb_mae_255": 9.797638893127441,
+        "rgb_max_255": 151.0
+      },
+      "three_direct_vs_key_direct": {
+        "rgb_mae_255": 6.951947212219238,
+        "rgb_max_255": 155.0
+      },
+      "all_vs_nospec": {
+        "rgb_mae_255": 2.134658098220825,
+        "rgb_max_255": 97.0
+      }
+    },
+    "cloth": {
+      "key_gi_vs_key_direct": {
+        "rgb_mae_255": 8.818303108215332,
+        "rgb_max_255": 156.0
+      },
+      "three_direct_vs_key_direct": {
+        "rgb_mae_255": 4.938775539398193,
+        "rgb_max_255": 166.0
+      },
+      "all_vs_nospec": {
+        "rgb_mae_255": 2.3419711589813232,
+        "rgb_max_255": 103.0
+      }
+    },
+    "hair": {
+      "key_gi_vs_key_direct": {
+        "rgb_mae_255": 10.488237380981445,
+        "rgb_max_255": 98.0
+      },
+      "three_direct_vs_key_direct": {
+        "rgb_mae_255": 3.990947961807251,
+        "rgb_max_255": 99.0
+      },
+      "all_vs_nospec": {
+        "rgb_mae_255": 2.074474811553955,
+        "rgb_max_255": 89.0
+      }
+    }
+  },
+  "manual_rectangles": {
+    "cloth": {
+      "rect_xyxy": [
+        590,
+        300,
+        640,
+        510
+      ],
+      "scope": "Manual fixed rectangle; not a segmentation mask or perceptual score.",
+      "before": {
+        "mean_255": 209.28668693333333,
+        "std_255": 3.9081572941207545,
+        "p95_minus_p05_255": 12.999999999999972
+      },
+      "after": {
+        "mean_255": 190.41935413333334,
+        "std_255": 10.242380176079008,
+        "p95_minus_p05_255": 32.50260000000003
+      }
+    },
+    "hair": {
+      "rect_xyxy": [
+        260,
+        245,
+        360,
+        430
+      ],
+      "scope": "Manual fixed rectangle; not a segmentation mask or perceptual score.",
+      "before": {
+        "mean_255": 180.50533605405406,
+        "std_255": 4.333065754322421,
+        "p95_minus_p05_255": 10.706000000000046
+      },
+      "after": {
+        "mean_255": 164.41859434594593,
+        "std_255": 8.498467612435014,
+        "p95_minus_p05_255": 25.909400000000005
+      }
+    }
+  }
+}

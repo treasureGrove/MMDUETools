@@ -110,6 +110,56 @@ struct TMMDEndfieldNativeBSDF
         return float4(tint, saturate(blend));
     }
 
+    float3 ReadSpecularRamp2D(float profile_id, float2 uv)
+    {
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        if (width == 0u) return 1.0;
+        // RGB 是按行展平的 32x8 端点网格；A 仍按原 diffuse u 保存 RD.A。
+        float2 grid = saturate(uv) * float2(31.0, 7.0);
+        uint2 first = uint2(floor(grid));
+        uint2 last = min(first + 1u, uint2(31u, 7u));
+        float2 fraction = frac(grid);
+        uint4 indices = uint4(first.y * 32u + first.x, first.y * 32u + last.x,
+            last.y * 32u + first.x, last.y * 32u + last.x);
+        float4 atlas_indices = round((float4(indices) + 0.5) * (float(width) / 256.0) - 0.5);
+        uint4 atlas_x = uint4(clamp(atlas_indices, 0.0, float(width - 1u)));
+        int layer = int(round(profile_id));
+        float3 first_first = View.ToonProfileTexture.Load(int4(int(atlas_x.x), TOON_PROFILE_SPECULAR_RAMP_Y, layer, 0)).rgb;
+        float3 last_first = View.ToonProfileTexture.Load(int4(int(atlas_x.y), TOON_PROFILE_SPECULAR_RAMP_Y, layer, 0)).rgb;
+        float3 first_last = View.ToonProfileTexture.Load(int4(int(atlas_x.z), TOON_PROFILE_SPECULAR_RAMP_Y, layer, 0)).rgb;
+        float3 last_last = View.ToonProfileTexture.Load(int4(int(atlas_x.w), TOON_PROFILE_SPECULAR_RAMP_Y, layer, 0)).rgb;
+        return lerp(lerp(first_first, last_first, fraction.x),
+            lerp(first_last, last_last, fraction.x), fraction.y);
+    }
+
+    float3 CameraFacingDirection(float3 fallback)
+    {
+        // UE ViewForward 指向相机前方；NoF 使用从表面朝向相机的基轴。
+        return SafeNormalize(-View.ViewForward, fallback);
+    }
+
+    float BacklightWeight(float3 L, float3 camera_forward)
+    {
+        float3 light_horizontal = float3(L.xy, 0.0);
+        float3 camera_horizontal = float3(camera_forward.xy, 0.0);
+        float light_length_squared = dot(light_horizontal, light_horizontal);
+        float camera_length_squared = dot(camera_horizontal, camera_horizontal);
+        if (light_length_squared < 0.000001 || camera_length_squared < 0.000001) return 0.0;
+        float backlight = saturate(-dot(light_horizontal, camera_horizontal)
+            * rsqrt(light_length_squared * camera_length_squared));
+        float elevation = saturate(0.75 - abs(camera_forward.z));
+        return backlight * elevation * elevation * (3.0 - 2.0 * elevation);
+    }
+
+    float3 HairSpecularNormal(float3 normal, float3 view_direction)
+    {
+        // 几何兜底沿相机右轴压成柱面；不改漫反射/GI 法线，也不伪造条纹或 flow 图。
+        float3 camera_forward = CameraFacingDirection(view_direction);
+        float3 camera_right = SafeNormalize(cross(float3(0.0, 0.0, 1.0), camera_forward), View.ViewRight);
+        float3 cylinder_normal = normal - camera_right * dot(normal, camera_right);
+        return SafeNormalize(cylinder_normal, normal);
+    }
+
     float3 ShadowColor(float3 base_color, uint role)
     {
         float brightness = role == 1u ? 0.55 : (role == 2u ? 0.6 : 0.5);
@@ -118,19 +168,35 @@ struct TMMDEndfieldNativeBSDF
         return max(lerp(Luminance(color).xxx, color, saturation), 0.0);
     }
 
-    float3 ApplyDiffuseRamp(float3 base_color, float4 ramp, float shadow, uint role)
+    float3 ApplyDiffuseRamp(float3 base_color, float3 lit_color, float4 ramp,
+        float view_alpha, float shadow, uint role)
     {
-        float blend = saturate(ramp.a * shadow);
-        float3 color = lerp(ShadowColor(base_color, role), base_color, blend);
+        // 没有独立材质 AO 输入，明确取 1；不把阴影冒充 AO，也不重复读场景捕获。
+        float ao = 1.0;
+        float visibility = ao * saturate(shadow);
+        float blend = min(saturate(ramp.a), min(ao, saturate(shadow)));
+        float view_visibility = visibility * saturate(view_alpha);
+        float3 dark_color = ShadowColor(base_color, role);
+        float3 deep_color = dark_color * 0.65;
+        deep_color = max(lerp(Luminance(deep_color).xxx, deep_color, 1.2), 0.0);
+        float3 inner_color = lerp(deep_color, dark_color, saturate(view_visibility + ramp.a));
+        float3 color = lerp(inner_color, lit_color, blend);
         float chroma = max(ramp.r, max(ramp.g, ramp.b)) - min(ramp.r, min(ramp.g, ramp.b));
         float3 tinted = color * lerp(1.0, ramp.rgb, chroma);
         float compensation = clamp(Luminance(color) / max(Luminance(tinted), 0.001), 0.0, 1.5);
         return tinted * compensation;
     }
 
-    float3 EvaluateSpecular(FSubstrateBSDFContext bsdf_context, float3 normal, uint role)
+    float3 EvaluateSpecular(FSubstrateBSDFContext bsdf_context, float3 normal, uint role, float3 source_normal)
     {
         float3 H = SafeNormalize(bsdf_context.L + bsdf_context.V, normal);
+        if (role != 2u && bsdf_context.mmd_light_data.key_directional_light)
+        {
+            // 参考日间主光的观察方向偏置，让布料/皮肤高光随大面转折；补光仍使用自身半程向量。
+            float3 camera_forward = CameraFacingDirection(bsdf_context.V);
+            float3 forward_light = SafeNormalize(float3(camera_forward.xy, bsdf_context.L.z), camera_forward);
+            H = SafeNormalize(bsdf_context.V * 3.0 + bsdf_context.L + forward_light * 2.0, normal);
+        }
         float n_dot_h = saturate(dot(normal, H));
         float n_dot_v = saturate(dot(normal, bsdf_context.V));
         float roughness = clamp(TOON_ROUGHNESS(bsdf_context.BSDF), 0.04, 1.0);
@@ -142,37 +208,67 @@ struct TMMDEndfieldNativeBSDF
         float amplitude = min(max(distribution * 0.5 / (2.0 * n_dot_v + alpha + 0.0001) - 0.000061, 0.0), 20.0);
         if (role == 2u)
         {
-            // 缺少原作 flow/P 图时使用几何竖向切线，保持只接 base color 的通用入口。
+            // 缺少 split normal/flow/P 时以独立柱面法线和竖向切线兜底。
             float3 tangent = SafeNormalize(float3(0.0, 0.0, 1.0) - normal * normal.z, bsdf_context.X);
             tangent = SafeNormalize(tangent + normal * (2.0 * 0.491 - 1.0), tangent);
             float t_dot_h = clamp(dot(tangent, H), -1.0, 1.0);
             float lobe = pow(max(sqrt(saturate(1.0 - t_dot_h * t_dot_h)), 0.0001), 200.0);
-            float2 normal_horizontal = normal.xy * rsqrt(max(dot(normal.xy, normal.xy), 0.000001));
+            source_normal = SafeNormalize(source_normal, normal);
+            float2 normal_horizontal = source_normal.xy * rsqrt(max(dot(source_normal.xy, source_normal.xy), 0.000001));
             float2 view_horizontal = bsdf_context.V.xy * rsqrt(max(dot(bsdf_context.V.xy, bsdf_context.V.xy), 0.000001));
             float edge = pow(saturate(dot(normal_horizontal, view_horizontal)), 3.5);
             // 无 P 图时用材质 scalar 代替 P.g；同时参与 F0 和波瓣查表坐标。
             coordinate = saturate(TOON_SPECULAR(bsdf_context.BSDF) * lobe);
-            amplitude = coordinate * edge * (0.96 * 5.0);
+            float vertical_coordinate = edge * edge * (t_dot_h > 0.0 ? 1.0 : 0.0);
+            float3 response = ReadSpecularRamp2D(TOON_PROFILEID(bsdf_context.BSDF), float2(coordinate, vertical_coordinate));
+            float3 f0 = 0.04 * TOON_SPECULAR(bsdf_context.BSDF);
+            return f0 * response * coordinate * edge * (0.96 * 5.0);
         }
         float3 f0 = lerp(0.04 * TOON_SPECULAR(bsdf_context.BSDF), TOON_BASECOLOR(bsdf_context.BSDF), TOON_METALLIC(bsdf_context.BSDF));
-        float3 response = EvaluateToonProfileSpecularRamp(TOON_PROFILEID(bsdf_context.BSDF), coordinate);
+        float3 response = ReadSpecularRamp2D(TOON_PROFILEID(bsdf_context.BSDF), float2(coordinate, roughness));
         return f0 * response * amplitude;
+    }
+
+    void ApplyAdditionalDiffuse(FSubstrateBSDFContext bsdf_context, FShadowTerms shadow_terms,
+        FAreaLight area_light, float3 normal, inout FSubstrateEvaluateToonResult result)
+    {
+        // UE 多灯适配：主光保留完整 NPR 暗部；附加灯只加受光面，避免每灯再铺一层暗底。
+        // 使用当前灯原生阴影/衰减；此扩展不是把仅主光的客户端方程冒充多灯方程。
+        normal = SafeNormalize(normal, bsdf_context.N);
+        float n_dot_l = saturate(dot(normal, bsdf_context.L));
+        // 法线与原生一致时保留面积光 horizon wrap；独立脸部方向尚未重建面积积分，退回中心方向。
+        float area_cosine = dot(normal, bsdf_context.N) > 0.9999 ? saturate(area_light.NoL) : n_dot_l;
+        result.DiffuseColor = ComputeDiffuseAlbedo(TOON_BASECOLOR(bsdf_context.BSDF),
+            TOON_METALLIC(bsdf_context.BSDF)) * 0.96;
+        result.DiffusePathValue = Diffuse_Lambert(result.DiffuseColor) * area_cosine * saturate(shadow_terms.SurfaceShadow);
+        result.IntegratedDiffuseValue = area_light.Falloff * area_light.FalloffColor * result.DiffusePathValue;
+        result.DiffusePDF = n_dot_l / PI;
     }
 
     FSubstrateEvaluateToonResult EvaluateToonResponse(FSubstrateBSDFContext bsdf_context,
         FShadowTerms shadow_terms, FAreaLight diffuse_area_light, FAreaLight specular_area_light,
         bool is_rect_light, bool apply_diffuse_ramp, float3 diffuse_normal, float3 specular_normal)
     {
-        FSubstrateBSDFContext specular_context = BuildSpecularContext(bsdf_context, specular_normal);
-        FSubstrateEvaluateToonResult result = EvaluateNative(specular_context, shadow_terms,
-            specular_area_light, is_rect_light, apply_diffuse_ramp);
-
         float profile_id = TOON_PROFILEID(bsdf_context.BSDF);
         float2 pattern_uv = TOON_PATTERNUVS(bsdf_context.BSDF);
         uint role;
         IsEndfieldProfile(profile_id, role);
+        // 32x8 独立样点至少需要 256 个 atlas texel；低分辨率由 C++ 同步拒绝 tile Profile。
+        if (uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u)
+            return EvaluateNative(bsdf_context, shadow_terms, specular_area_light, is_rect_light, apply_diffuse_ramp);
+        float3 independent_specular_normal = SafeNormalize(specular_normal, bsdf_context.N);
+        if (role == 2u) independent_specular_normal = HairSpecularNormal(independent_specular_normal, bsdf_context.V);
+        FSubstrateBSDFContext specular_context = BuildSpecularContext(bsdf_context, independent_specular_normal);
+        FSubstrateEvaluateToonResult result = EvaluateNative(specular_context, shadow_terms,
+            specular_area_light, is_rect_light, apply_diffuse_ramp);
         // 尚未取得该分类的 RD/RS 时沿用原生 Toon，避免把占位 ramp 冒充客户端数据。
-        if (role != 1u && role != 2u && role != 3u) return result;
+        bool additional_light = bsdf_context.mmd_light_data.valid && !bsdf_context.mmd_light_data.key_directional_light;
+        if (role != 1u && role != 2u && role != 3u)
+        {
+            if (additional_light)
+                ApplyAdditionalDiffuse(bsdf_context, shadow_terms, diffuse_area_light, diffuse_normal, result);
+            return result;
+        }
         FToonProfileEvaluateSettings profile_settings = GetToonProfileEvaluateSettings(profile_id);
         float shadow = shadow_terms.TransmittanceOrOpticalThickness;
         float diffuse_offset = 0.0;
@@ -190,18 +286,46 @@ struct TMMDEndfieldNativeBSDF
             normal = SafeNormalize(lerp(normal, face_normal, bsdf_context.BSDF.mmd_payload.mask), normal);
             diffuse_offset = 0.0;
         }
-        float n_dot_l = dot(normal, bsdf_context.L);
-        float ramp_coordinate = saturate(n_dot_l * 0.5 + 0.5);
+        float n_dot_l = clamp(dot(normal, bsdf_context.L), -1.0, 1.0);
+        float3 camera_forward = CameraFacingDirection(bsdf_context.V);
+        float ramp_n_dot_l = n_dot_l;
+        if (role == 2u || role == 3u)
+            ramp_n_dot_l += BacklightWeight(bsdf_context.L, camera_forward) * (0.5 - 0.5 * n_dot_l * n_dot_l);
+        float ramp_coordinate = saturate(ramp_n_dot_l * 0.5 + 0.5);
         float3 diffuse_color = ComputeDiffuseAlbedo(TOON_BASECOLOR(bsdf_context.BSDF),
             TOON_METALLIC(bsdf_context.BSDF)) * 0.96;
         float4 ramp = apply_diffuse_ramp ? ReadDiffuseRamp(profile_id, ramp_coordinate + diffuse_offset) : float4(1.0, 1.0, 1.0, 1.0);
-        result.DiffuseColor = ApplyDiffuseRamp(diffuse_color, ramp, shadow, role);
+        float view_alpha = 1.0;
+        if (apply_diffuse_ramp && (role == 2u || role == 3u))
+            view_alpha = ReadDiffuseRamp(profile_id, saturate(dot(normal, camera_forward) * 0.5 + 0.5)).a;
+        float3 lit_color = diffuse_color;
+        if (role == 1u)
+        {
+            // 代表客户端 Skin 的视角染色参数；暗部 LUT 尚未接入，仍使用通用底色派生。
+            float skin_view = saturate(dot(SafeNormalize(specular_normal, bsdf_context.N), bsdf_context.V));
+            float skin_area = saturate((1.0 - (skin_view * 0.85 + 0.15)) * 0.7);
+            lit_color *= lerp(1.0, float3(0.67, 0.60668504, 0.52930003), skin_area);
+        }
+        result.DiffuseColor = ApplyDiffuseRamp(diffuse_color, lit_color, ramp, view_alpha, shadow, role);
         result.DiffusePathValue = Diffuse_Lambert(result.DiffuseColor);
         result.IntegratedDiffuseValue = diffuse_area_light.Falloff * diffuse_area_light.FalloffColor * result.DiffusePathValue;
+        if (additional_light)
+            ApplyAdditionalDiffuse(bsdf_context, shadow_terms, diffuse_area_light, normal, result);
         if (!is_rect_light)
         {
-            result.SpecularPathValue = EvaluateSpecular(specular_context, specular_context.N, role);
-            result.IntegratedSpecularValue = saturate(shadow_terms.SurfaceShadow) * saturate(specular_area_light.NoL)
+            result.SpecularPathValue = EvaluateSpecular(specular_context, specular_context.N, role, specular_normal);
+            // Hair 的客户端波瓣自身决定角度响应；保留原生阴影，不再追加一个普通 NoL。
+            float specular_cosine = role == 2u ? 1.0 : saturate(specular_area_light.NoL);
+            result.IntegratedSpecularValue = saturate(shadow_terms.SurfaceShadow) * specular_cosine
+                * specular_area_light.Falloff * specular_area_light.FalloffColor * result.SpecularPathValue;
+        }
+        else
+        {
+            // Rect 沿用 UE 的 GGX/LTC 物理积分兜底；不能把展平的二维 RS 当作一维原生 ramp。
+            float3 f0 = ComputeF0(TOON_SPECULAR(bsdf_context.BSDF), TOON_BASECOLOR(bsdf_context.BSDF), TOON_METALLIC(bsdf_context.BSDF));
+            result.SpecularPathValue = RectGGXApproxLTC(clamp(TOON_ROUGHNESS(bsdf_context.BSDF), 0.04, 1.0),
+                f0, 1.0, specular_context.N, specular_context.V, specular_area_light.Rect, specular_area_light.Texture);
+            result.IntegratedSpecularValue = saturate(shadow_terms.SurfaceShadow)
                 * specular_area_light.Falloff * specular_area_light.FalloffColor * result.SpecularPathValue;
         }
         result.DiffusePDF = saturate(n_dot_l) / PI;

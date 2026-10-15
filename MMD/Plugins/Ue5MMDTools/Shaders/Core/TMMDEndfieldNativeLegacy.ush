@@ -3,7 +3,7 @@
 #include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeLightCapture.ush"
 
 // 在桌面 Clustered 的 DeferredLightingCommon、SubstrateEvaluation 与 SubstrateDeferredLighting 之后 include。
-// 传统 GBuffer 的桌面逐灯路径；不传新脸部 payload，RD/RS 语义与 adaptive 共享。
+// 传统 GBuffer 的 Clustered 只处理局部补光；不传新脸部 payload，也不重复叠加主光暗底。
 #if SUBSTRATE_ENABLED
 struct TMMDEndfieldNativeLegacy
 {
@@ -33,37 +33,43 @@ struct TMMDEndfieldNativeLegacy
             result.Transmission = 0.0;
             return result;
         }
-        if (role != 1u && role != 2u && role != 3u) return result;
+        // 32x8 RS tile 至少需要 256 个独立 texel；所有 Mode2 分类统一防御，Mode0/1 保持原行为。
+        if (uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u) return result;
 
-        FToonProfileEvaluateSettings profile_settings = GetToonProfileEvaluateSettings(profile_id);
-        float shadow = shadow_terms.TransmittanceOrOpticalThickness;
-        float diffuse_offset = 0.0;
-#if TOON_CAN_USE_PATTERNS_UVS
-        FToonProfileShadowSettings shadow_settings = GetToonProfileShadowSettings(profile_id);
-        shadow = EvaluateToonProfileShadowHatching(profile_id, pattern_uv, shadow_settings, shadow);
-        diffuse_offset = EvaluateToonProfileDiffuseDither(profile_id, pattern_uv, profile_settings);
-#endif
-        // 使用接收点真实 L；完整原生描述保留在 native_light_data，便于后续脸部响应扩展。
-        float n_dot_l = dot(N, native_light_data.light_vector);
-        float ramp_coordinate = saturate(n_dot_l * 0.5 + 0.5);
-        float4 diffuse_ramp = profile_control.ReadDiffuseRamp(profile_id, ramp_coordinate + diffuse_offset);
-        float3 shaded_diffuse = profile_control.ApplyDiffuseRamp(gbuffer.DiffuseColor * 0.96, diffuse_ramp, shadow, role);
-        result.Diffuse = area_light.Falloff * area_light.FalloffColor * Diffuse_Lambert(shaded_diffuse);
+        float surface_shadow = saturate(shadow_terms.SurfaceShadow);
+        // Generic 等分类也只增加受光面；阴影和大面余弦各乘一次，外层仍负责灯颜色与强度。
+        result.Diffuse = area_light.Falloff * area_light.FalloffColor
+            * Diffuse_Lambert(gbuffer.DiffuseColor * 0.96)
+            * saturate(area_light.NoL) * surface_shadow;
+        float3 source_normal = profile_control.SafeNormalize(N, float3(0.0, 0.0, 1.0));
+        float3 specular_normal = role == 2u ? profile_control.HairSpecularNormal(source_normal, V) : source_normal;
         FSubstrateBSDFContext context = (FSubstrateBSDFContext)0;
-        context.N = N;
+        context.mmd_light_data = native_light_data;
+        context.N = specular_normal;
         context.V = V;
         context.L = native_light_data.light_vector;
-        float3x3 tangent_basis = GetTangentBasis(N);
+        float3x3 tangent_basis = GetTangentBasis(specular_normal);
         context.X = tangent_basis[0];
         TOON_BASECOLOR(context.BSDF) = gbuffer.BaseColor;
         TOON_ROUGHNESS(context.BSDF) = gbuffer.Roughness;
         TOON_METALLIC(context.BSDF) = gbuffer.Metallic;
         TOON_SPECULAR(context.BSDF) = gbuffer.Specular;
         TOON_PROFILEID(context.BSDF) = profile_id;
-        if (!native_light_data.rect_light)
-            result.Specular = saturate(shadow_terms.SurfaceShadow) * saturate(area_light.NoL)
-                * area_light.Falloff * area_light.FalloffColor * profile_control.EvaluateSpecular(context, N, role);
-        // ToonBxDF 的高光已乘 SurfaceShadow；自定义分支外层不能再乘一次。
+        if (native_light_data.rect_light)
+        {
+            // 矩形光不能把二维 RS tile 当原生一维颜色 ramp；用真实面积与 F0 的 LTC 物理兜底。
+            // LTC 已积分光源余弦，不再追加 NoL；保留矩形灯原始几何法线。
+            result.Specular = surface_shadow * area_light.Falloff * area_light.FalloffColor
+                * RectGGXApproxLTC(clamp(gbuffer.Roughness, 0.04, 1.0), gbuffer.SpecularColor,
+                    1.0, source_normal, V, area_light.Rect, area_light.Texture);
+        }
+        else if (role == 1u || role == 2u || role == 3u)
+        {
+            float specular_cosine = role == 2u ? 1.0 : saturate(area_light.NoL);
+            result.Specular = surface_shadow * specular_cosine * area_light.Falloff * area_light.FalloffColor
+                * profile_control.EvaluateSpecular(context, specular_normal, role, source_normal);
+        }
+        // 其它分类保留 ToonBxDF 的原生高光；外层不再重复相乘 SurfaceShadow。
         result.Transmission = 0.0;
         return result;
     }
@@ -93,6 +99,9 @@ struct TMMDEndfieldNativeLegacy
                 light_data, light_attenuation, dither, pixel_coord, surface_shadow);
         uint response_mode = uint(profile_control.ReadProfileControls(profile_id).x);
         if (response_mode == 0u)
+            return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
+                light_data, light_attenuation, dither, pixel_coord, surface_shadow);
+        if (response_mode == 2u && uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u)
             return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
                 light_data, light_attenuation, dither, pixel_coord, surface_shadow);
 
