@@ -3,6 +3,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Import/MMDModelDataAsset.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInstance.h"
 #include "Rendering/MMDOutlineState.h"
@@ -52,6 +53,15 @@ namespace
 			const EBlendMode Blend = Surface->GetBlendMode();
 			AlphaMode = Blend == BLEND_Opaque ? 0.0f : Blend == BLEND_Masked ? 1.0f : 2.0f;
 			Cutoff = Blend == BLEND_Masked ? Surface->GetOpacityMaskClipValue() : 0.01f;
+			const UMaterial* SurfaceParent = Surface->GetMaterial();
+			float OpaqueCoverage = 0.0f, CastStrength = 1.0f;
+			// 自有 Graph7 仅为控制投影转为 Masked 时，描边也必须保持原 Opaque 覆盖率。
+			if (Blend == BLEND_Masked && IsValid(SurfaceParent)
+				&& SurfaceParent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))
+				&& Surface->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowCastStrength")), CastStrength)
+				&& Surface->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowOpaqueCoverage")), OpaqueCoverage)
+				&& FMath::IsFinite(OpaqueCoverage) && OpaqueCoverage > 0.5f)
+				AlphaMode = 0.0f;
 		}
 		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::AlphaMode, AlphaMode);
 		Outline->SetScalarParameterValue(MMDEndfieldOutlineParameters::Opacity,

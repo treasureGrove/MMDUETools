@@ -4,9 +4,21 @@
 
 读者入门入口：[终末地插件着色入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，含三版方案对比、数据流图、实际 GI 对照和代码入口。
 
-## 最新进度：v13 原创弱暖红过渡（2026-10-16）
+## 最新进度：v14 清理发片与透明层碎硬投影（2026-10-16）
 
-用户授权在现有皮肤明暗交界加弱暖红。当前后端为 **`endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**，Graph6／payload5／FaceData5／Frame1不变。生产表面两组静态校色继续关闭，生成器的新Preset设置 `RednessStrength=.18`、`RednessWidth=.22`（NoL半宽）、`RednessAngularWidth=.035`（归一π角半宽，约6.3°）、`RednessTint=(1,.4,.30)`；结构默认强度0，旧资产不被自动加红。
+当前为 **Backend `endfield-native-bsdf-v14-cast-clean`／Cooked协议14／Graph7／Profile布局42**；payload5／FaceData5／Frame1保持，v13皮肤LUT／原创泛红与静态校色默认关闭继续保留。用户授权处理头发碎硬影，本批采用生产材质ShadowReplace，没有新增hair-cap、独立刘海mask、全身骨骼影子副本或拍RT。
+
+Stage新增Role `ShadowCastStrength`，默认1并有限夹0..1；新Preset Hair=0，Skin `FaceShadowSuppress=1`但只限有效V5 coverage，Mode0脸部回退不变。Opaque只在受控自有Graph7 Masked支持两个新参数时转换，`ToonShadowOpaqueCoverage=1`保持主画面完整；原Masked保孔洞，角色分类切换／重新应用／SourceOverrides恢复继续保留。Hair控制影响所有接收面，不能称只排除Hair→Face；身体和场景的原生receive保留。
+
+第一版Graph7／Backend13发生EarlyZ优化漏裁剪黑洞。Backend14只在虚拟BasePass副本为带三项payload输出的Masked恢复clip，其他材质优化与全局配置不改。仅关Face透明父的强制masked投影不足，caster深度拆分后的cast3仍有鼻椭圆；最终**全部自有Toon Translucent父 `bCastDynamicShadowAsMasked=false`**，连续alpha保留，cast4目检椭圆消失。维护与公开研究边界见[脸部阴影说明](ENDFIELD_FACE_SHADOW_GUIDE.md)，不得称原作官方算法照搬。
+
+最终 `cast4` NativeBackendProbe为27图／156次槽检查／0失败，Editor全局shader协议14验证；mode0_final2及atlas64_final各8图／78次检查／0失败，均protocol14。52项外部像素检查通过：鼻core与同角ShadowOff逐像素一致，外部block右颊编码亮度201.892→.0689，四张Unlit与cast3相同。报告all_gpu_verified仍false；本批参考姿势不证明全部内核、多模型、LOD或动画／Morph已通过。保护2,381项仅8个自有V2包有意变化。
+
+`EFCastClean16c` BuildOnly最终三配置通过，15份冻结Source／HLSL与15个V2资产匹配；见[分发摘要](Screenshots/2026-10-16-endfield-cast-clean/distribution-summary.json)。构建后仅补录文档结果，未再改代码或资源。截图只归档本批7张原PNG，目录 `Docs/Screenshots/2026-10-16-endfield-cast-clean/`，历史修复前图明确标历史；不提交整个Saved、角色或构建产物。干净宿主、发行角色GPU、完整Cook、性能与完整终末地十项目标仍未因此验收。
+
+## 历史：v13 原创弱暖红过渡（2026-10-16）
+
+用户授权在现有皮肤明暗交界加弱暖红。该批后端为 **`endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**，Graph6／payload5／FaceData5／Frame1不变。生产表面两组静态校色继续关闭，生成器的新Preset设置 `RednessStrength=.18`、`RednessWidth=.22`（NoL半宽）、`RednessAngularWidth=.035`（归一π角半宽，约6.3°）、`RednessTint=(1,.4,.30)`；结构默认强度0，旧资产不被自动加红。
 
 新增项是**插件原创风格化泛红**，不能称提取到的原作红边、真实扩散或厚度透射。它只改Skin本灯漫反射：几何signed NoL形成局部band，主光V5用连续 `cutoff-theta` margin另算角band后按coverage与水平光可靠性混合；NoV只作弱权重，`SurfaceShadow≤.1`关闭新项。灯色和衰减只在原生外层乘一次，独立spec／GI不改，无新RT／GBuffer／空间pass。
 

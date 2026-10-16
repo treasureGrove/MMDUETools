@@ -1,0 +1,178 @@
+{
+  "schema": "mmd.endfield.cast-clean.package-evidence.v1",
+  "verified_at": "2026-10-16T21:39:37.971290+08:00",
+  "output": "Saved/EFCastClean16c",
+  "report_sha256": "11ee2923a18532e6ab02725ba92f2b5e0ef28ba543dbe2ef4effa0cc1c0f7528",
+  "build_plugin_verified": true,
+  "payload_files_verified": true,
+  "skin_response_sources_verified": true,
+  "configurations": [
+    "Editor Development",
+    "Game Development",
+    "Game Shipping"
+  ],
+  "expected_protocol": 14,
+  "clean_host_adapter_verified": false,
+  "package_rendering_verified": false,
+  "cooked_runtime_verified": false,
+  "source_freeze_matches": [
+    {
+      "path": "Shaders/Core/TMMDEndfieldNativeBSDF.ush",
+      "sha256": "5f6e82865b03b6699c07463ec98e3cd70f918f420dbc80c5184b9b08e0350de0",
+      "package_matches": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldNativeLegacy.ush",
+      "sha256": "c6752847d871eb32b270bfc9cb89e4bba94442988314dc03d71405ae3d1941d1",
+      "package_matches": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldSkinResponse.ush",
+      "sha256": "bcd430a10e2f7c78eb5b35dc7e4d59a19bb830ab45deeaa2dd007676dd722bc9",
+      "package_matches": true
+    },
+    {
+      "path": "Shaders/Private/MMDEndfieldNativeBackendProtocol.usf",
+      "sha256": "da02b95c6337cda039e2d7131cb7c061551859661ee650f2a8905eddd46a34c1",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp",
+      "sha256": "88dd6a16f56d17c67272d499c746aed53c69edc5fda8784bb91e4e7e27118926",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp",
+      "sha256": "ba060b6db367f3df19434b0eb934f9c9799ace38c085720ca3b6ad36b2992bfb",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp",
+      "sha256": "30c1645d2ded031bee999356399b431b415ea067ffa41841e70764f9db970ad4",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl",
+      "sha256": "a707247a0f0179df59db1eb337ed8f49957546ecdaec07e80e698cba2ecb02bf",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Rendering/MMDEndfieldNativeBackend.h",
+      "sha256": "7333e69df77ded7d280206408e6917cee6f41c7c16ec743394c25fe9bcce403d",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h",
+      "sha256": "a33d85ceaa1be5d496f111615efb283379c6f6020cfb61474a671da64bf9962b",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp",
+      "sha256": "5a6d2fb8b29d9527f998f4c6dc1e657862044afbee8337c99a20b016b308af79",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp",
+      "sha256": "6ca10fc8acdef6c28eb17b3d0a7c10c69da995a91c24943cad6f62799ab529d1",
+      "package_matches": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldNative.ush",
+      "sha256": "60f57d1db97b30a9e458a9a55b11a5a8a54fdbd1448b274ff2070b03764aea22",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp",
+      "sha256": "875a75bac75762a538d73cb5c8dd48e9162e8aff1051de6ab4e01fb92dcf48b9",
+      "package_matches": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDOutlineLibrary.cpp",
+      "sha256": "ff91c50bf3f21141b5fbf66597647e2ce73d6d44be0ed0505609ce4d191ebf19",
+      "package_matches": true
+    }
+  ],
+  "v2_asset_matches": [
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.uasset",
+      "sha256": "bd0b237346c38870e93df3bec1fdbd9c732183a7823fd8e4c242e87356799f73",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.uasset",
+      "sha256": "542982feebce9ad8835d729abc0f914f9fa757224eefadc9c1a5b3c9aee733d1",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.uasset",
+      "sha256": "02a3026d2c2e47b980aeb031b10957ea0c76c3196a8c603c9b1e73e94d405f73",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.uasset",
+      "sha256": "fbc204389894db73f89b38ad438177771b64988c0635a14b790406049b85d308",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.uasset",
+      "sha256": "b27c71c7ba21eae90eb42f61a9d904ab9e367621b4af138e5736f4a16037bb6d",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.uasset",
+      "sha256": "030caaab73d295aaf06479fb0b2eb2157ec95e6ff3c8f07cd9b2aefa38626e0b",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.uasset",
+      "sha256": "fc52134568ceb18b1a04c73014aabe2228f63fa681d3ce29730649bbb64ccf42",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear.uasset",
+      "sha256": "1d5fc0e258f869af9b46b8b4e30dc207c9dc71f958d2ae86c15c11786a92e260",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Cloth.uasset",
+      "sha256": "8275a938372aee8457aca0e473b656ae7cfe8cda9b05c8f5e82f0416dad246be",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Eye.uasset",
+      "sha256": "c786a325777f968371f6403126e963bcf6ba5aec4e378387036f101e2bc661f9",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Generic.uasset",
+      "sha256": "c1e74c1bd5328b8f83a16e6c4c8099487610fb22e1d7add4471beb6d52b470bf",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Hair.uasset",
+      "sha256": "e1897d6790d7ff507f7564d4b64b13e0bf48321a201c983a2a1b531437612404",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Metal.uasset",
+      "sha256": "b5ef29a3099821d1addae77a1314461afdc7989dfa487ea4648295a5b67a04d9",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Skin.uasset",
+      "sha256": "f704c5c4ccc1e1ab6dd1d1e79f9872744c4e438e17fedcf36757f0cff8fc1a06",
+      "package_matches": true
+    },
+    {
+      "path": "Content/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.uasset",
+      "sha256": "5c47b97c151c8d9edc941d14d23570d2f4bab7e754c9b37f8c84d0d609171c21",
+      "package_matches": true
+    }
+  ],
+  "protection": {
+    "count": 2381,
+    "intentional_changed": 8,
+    "unexpected_changed": 0
+  },
+  "scope": "BuildPlugin compilation/file/filter evidence only; package shaders were not rendered or freshly cooked."
+}

@@ -1,6 +1,14 @@
 // 在材质 Custom 函数体内 include；公共计算集中于成员函数，材质图只负责输入和原生 Toon 输出。
 struct TMMDEndfieldNative
 {
+    float PrepareShadow(float source_coverage, float face_shadow_coverage,
+        float opaque_coverage, float cast_strength, out float visible_coverage)
+    {
+        // 原不透明表面转Masked仅为控制投影，主画面仍忽略源alpha。
+        visible_coverage = lerp(saturate(source_coverage), 1.0, saturate(opaque_coverage));
+        return visible_coverage * saturate(face_shadow_coverage) * saturate(cast_strength);
+    }
+
     float3 SafeNormalize(float3 value, float3 fallback)
     {
         float length_squared = dot(value, value);
@@ -109,8 +117,9 @@ struct TMMDEndfieldNative
         return float4(SafeNormalize(direction, fallback), saturate(coverage));
     }
 
-    float4 ReadFaceSdf(Texture2D face_tex, float2 face_uv, float receiver_depth)
+    float4 ReadFaceSdf(Texture2D face_tex, float2 face_uv, float receiver_depth, out float caster_coverage)
     {
+        caster_coverage = 0.0;
         uint width, height;
         face_tex.GetDimensions(width, height);
         // V5 使用独立头部投影，边界外必须回退，不能 frac 到另一侧脸。
@@ -129,13 +138,22 @@ struct TMMDEndfieldNative
                 float4 texel = face_tex.Load(int3(coord, 0));
                 // 先逐 tap 匹配前层深度，不能平均 B 后制造不存在的中间层。
                 float depth_coverage = 1.0 - smoothstep(0.08, 0.12, abs(receiver_depth - (texel.b - 0.5) * 3.0));
-                float weight = (x == 0 ? 1.0 - weights.x : weights.x)
-                    * (y == 0 ? 1.0 - weights.y : weights.y) * saturate(texel.a) * depth_coverage;
+                float sample_weight = (x == 0 ? 1.0 - weights.x : weights.x)
+                    * (y == 0 ? 1.0 - weights.y : weights.y) * saturate(texel.a);
+                caster_coverage += sample_weight;
+                float weight = sample_weight * depth_coverage;
                 values += saturate(texel.rgb) * weight;
                 coverage += weight;
             }
         }
         return float4(values / max(coverage, 0.000001), saturate(coverage));
+    }
+
+    float4 ReadFaceSdf(Texture2D face_tex, float2 face_uv, float receiver_depth)
+    {
+        // 表面准备库仍只需要接收覆盖，保留原调用入口。
+        float caster_coverage;
+        return ReadFaceSdf(face_tex, face_uv, receiver_depth, caster_coverage);
     }
 
     float4 FrameQuaternion(float3 right, float3 forward, float3 up)
@@ -200,14 +218,16 @@ struct TMMDEndfieldNative
                 / head_position_radius.w;
             float2 face_uv = float2(0.5 + local_position.x / 3.0, 0.5 - local_position.z / 3.0);
             // B 的量化误差小于 .006R；逐 tap 的 .08R/.12R 门控拒绝后层几何。
-            float4 face_sdf = ReadFaceSdf(direction_tex, face_uv, local_position.y);
+            float caster_coverage;
+            float4 face_sdf = ReadFaceSdf(direction_tex, face_uv, local_position.y, caster_coverage);
+            // 接收面仍匹配前层；投射面不能用此前层筛选放过鼻侧和后层几何。
+            float caster_head_mask = 1.0 - smoothstep(1.5, 2.0, length(local_position));
+            shadow_coverage = 1.0 - saturate(caster_coverage) * caster_head_mask * saturate(shadow_suppress);
             face_mask = face_sdf.a;
             if (face_mask > 0.0)
             {
                 // w 的负号只标记阈值类型；零阈值也合法，不能当成零长度方向拒绝。
                 face_direction = float4(face_sdf.rg, 0.0, -face_mask);
-                // 原生接收不变；masked 投射只响应已有显式开关，默认 0 保持普通投影。
-                shadow_coverage = 1.0 - face_mask * saturate(shadow_suppress);
                 return specular_normal;
             }
         }
@@ -219,7 +239,8 @@ struct TMMDEndfieldNative
             local_normal = SafeNormalize(lerp(local_normal, direction.xyz, face_mask), local_normal);
         }
         face_direction = float4(local_normal, 1.0);
-        shadow_coverage = 1.0 - face_mask * saturate(shadow_suppress);
+        if (!(direction_enabled == 1.0 && direction_version == 5.0))
+            shadow_coverage = 1.0 - face_mask * saturate(shadow_suppress);
         // SDF/方向数据只交给逐灯漫反射；高光和 Lumen 读取独立的原生 Normal。
         return specular_normal;
     }

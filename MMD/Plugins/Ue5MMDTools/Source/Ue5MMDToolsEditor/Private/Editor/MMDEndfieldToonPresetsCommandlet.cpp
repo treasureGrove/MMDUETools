@@ -71,7 +71,7 @@ namespace
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent") };
 	constexpr const TCHAR* EndfieldToonTemplatePath = TEXT("/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield.DA_Render_Endfield");
-	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=6");
+	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=7");
 	constexpr const TCHAR* EndfieldToonOutlineGraphVersion = TEXT("EndfieldV2SourceOutlineGraph=2");
 	constexpr int32 EndfieldToonMaterialCount = 6;
 	constexpr int32 EndfieldToonMaterialPackages[] = { 0, 1, 2, 12, 13, 14 };
@@ -441,7 +441,8 @@ namespace
 		Material->SetUsageByFlag(MATUSAGE_SkeletalMesh, true);
 		Material->SetUsageByFlag(MATUSAGE_MorphTargets, true);
 		Material->OpacityMaskClipValue = 0.1f;
-		Material->bCastDynamicShadowAsMasked = Blend == BLEND_TranslucentGreyTransmittance;
+		// 透明附层保留连续alpha，不强制作为硬遮罩投影。
+		Material->bCastDynamicShadowAsMasked = false;
 		Material->TranslucencyLightingMode = TLM_SurfacePerPixelLighting;
 
 		UMaterialExpressionTextureSampleParameter2D* Texture = EndfieldToonAdd<UMaterialExpressionTextureSampleParameter2D>(Material);
@@ -591,11 +592,24 @@ namespace
 			Data->FrontMaterial.Connect(0, Toon);
 			if (Blend == BLEND_Masked)
 			{
-				UMaterialExpressionMultiply* ShadowOpacity = EndfieldToonAdd<UMaterialExpressionMultiply>(Material);
-				ShadowOpacity->A.Connect(0, Opacity);
-				ShadowOpacity->B.Connect(3, Normal);
+				UMaterialExpressionCustom* ShadowOpacity = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
+				ShadowOpacity->OutputType = CMOT_Float1;
+				ShadowOpacity->Description = TEXT("主表面覆盖保持原语义，仅阴影分支控制发片和有效脸面投影");
+				ShadowOpacity->Desc = EndfieldToonGraphVersion;
+				ShadowOpacity->Code = TEXT(
+					"#include \"/Plugin/Ue5MMDTools/Core/TMMDEndfieldNative.ush\"\n"
+					"TMMDEndfieldNative geometry;\n"
+					"return geometry.PrepareShadow(source_coverage, face_shadow_coverage, opaque_coverage, cast_strength, visible_coverage);\n");
+				EndfieldToonCustomInput(ShadowOpacity, TEXT("source_coverage"), Opacity);
+				EndfieldToonCustomInput(ShadowOpacity, TEXT("face_shadow_coverage"), Normal, 3);
+				EndfieldToonCustomInput(ShadowOpacity, TEXT("opaque_coverage"), EndfieldToonScalar(Material, TEXT("ToonShadowOpaqueCoverage"), 0.0f));
+				EndfieldToonCustomInput(ShadowOpacity, TEXT("cast_strength"), EndfieldToonScalar(Material, TEXT("ToonShadowCastStrength"), 1.0f));
+				FCustomOutput& VisibleCoverage = ShadowOpacity->AdditionalOutputs.AddDefaulted_GetRef();
+				VisibleCoverage.OutputName = TEXT("visible_coverage");
+				VisibleCoverage.OutputType = CMOT_Float1;
+				ShadowOpacity->RebuildOutputs();
 				UMaterialExpressionShadowReplace* ShadowSwitch = EndfieldToonAdd<UMaterialExpressionShadowReplace>(Material);
-				ShadowSwitch->Default.Connect(0, Opacity);
+				ShadowSwitch->Default.Connect(1, ShadowOpacity);
 				ShadowSwitch->Shadow.Connect(0, ShadowOpacity);
 				Data->OpacityMask.Connect(0, ShadowSwitch);
 			}
@@ -853,7 +867,8 @@ namespace
 			Settings.Metallic = Role == EMMDMaterialRole::Metal ? 0.8f : 0.0f;
 			Settings.Anisotropy = Role == EMMDMaterialRole::Hair ? -0.8f : 0.0f;
 			Settings.SphereBlend = Role == EMMDMaterialRole::Skin ? 0.75f : 0.0f;
-			Settings.FaceShadowSuppress = 0.0f;
+			Settings.FaceShadowSuppress = Role == EMMDMaterialRole::Skin ? 1.0f : 0.0f;
+			Settings.ShadowCastStrength = Role == EMMDMaterialRole::Hair ? 0.0f : 1.0f;
 			Preset->CharacterToonRoles.Add(Role, Settings);
 		}
 	}
@@ -1190,10 +1205,10 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse"), EndfieldToonCVar(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse")));
 	Report->SetStringField(TEXT("unified_diffuse_notice"), TEXT("ToonUnifiedDiffuse 是可选实验开关，引擎默认 0；设为 1 的路径尚未通过视觉验收，生成与编译校验不要求启用。"));
 	Report->SetStringField(TEXT("candidate_notice"), TEXT("后端 Mode2 的 Skin/Hair/Cloth 使用客户端 RD 数据语义。Skin roughness=.742/specular=.454、Cloth roughness=.696 来自代表样本；Metal/Eye 和无贴图头发方向仍是通用近似，不代表原作完整复刻。"));
-	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("当前 Backend13、payload5：Mode2 自有 Skin 的 V5 数据是头部投影坐标上的左右主光角阈值、前层深度和覆盖，不是真实遮挡 SDF，也不占网格 UV 通道。四tap按覆盖与深度门控；opaque/masked 使用 adaptive GBuffer packed，已验证关联的透明附脸用 forward inline 同样量化解码。独立 Normal 保留高光/GI，缺数据用几何/球面回退。Mode0/1、fmt0保持旧兼容/原生 Toon 回退。"));
-	Report->SetStringField(TEXT("skin_response_contract"), TEXT("Backend13 的 Skin 使用 schema42 Profile 参数和原创6x6x6颜色LUT；LUT只替换逐灯暗部颜色源，视角响应独立控制。颜色坐标为encoded RGB，存储和插值输出为linear RGB；使用原Skin未启用RS的Specular RGB行，RD.A和其他部位RS保留。预设启用CharacterSkinLighting并默认关闭两组静态SkinSurface校正；Body/Face尺度分别为.7/1.1，Face沿头框架稳定NoV的通用近似不等价于原作RefineMask。不是屏幕空间SSS或厚度透射，客户端LUT仅本机对照，发行不包含其像素。"));
+	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("当前 Backend14、payload5：Mode2 自有 Skin 的 V5 数据是头部投影坐标上的左右主光角阈值、前层深度和覆盖，不是真实遮挡 SDF，也不占网格 UV 通道。四tap按覆盖与深度门控；opaque/masked 使用 adaptive GBuffer packed，已验证关联的透明附脸用 forward inline 同样量化解码。独立 Normal 保留高光/GI，缺数据用几何/球面回退。Mode0/1、fmt0保持旧兼容/原生 Toon 回退。"));
+	Report->SetStringField(TEXT("skin_response_contract"), TEXT("Backend14 的 Skin 使用 schema42 Profile 参数和原创6x6x6颜色LUT；LUT只替换逐灯暗部颜色源，视角响应独立控制。颜色坐标为encoded RGB，存储和插值输出为linear RGB；使用原Skin未启用RS的Specular RGB行，RD.A和其他部位RS保留。预设启用CharacterSkinLighting并默认关闭两组静态SkinSurface校正；Body/Face尺度分别为.7/1.1，Face沿头框架稳定NoV的通用近似不等价于原作RefineMask。不是屏幕空间SSS或厚度透射，客户端LUT仅本机对照，发行不包含其像素。"));
 	Report->SetStringField(TEXT("skin_redness_contract"), TEXT("layout42尾槽216保存泛红强度/几何NoL半宽/SDF归一化角半宽，217保存线性染色RGB，默认.18/.22/.035/(1,.4,.3)。只在本灯漫反射明暗过渡内微调，原生深遮挡关闭新项；灯色和衰减仍由原生外层乘一次，高光/GI保持原路径。独立强度0保留v12，旧layout41仍识别颜色立方体且关闭泛红；不添加固定红描边或厚度透射。"));
-	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("V5 阈值只控制主光明暗分区，不改变原生阴影接收或投射。默认 FaceShadowSuppress=0、关闭角色接触阴影。头发原生投影与脸部阈值是独立来源，需用 facefix 的 Hair-only 阴影代理对照诊断；不能把总 ShadowTerms 衰减称为仅关闭头发自投影。旧兼容 masked 路径保留可选 ShadowPassSwitch。"));
+	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("V5 阈值只控制主光明暗分区，不改变原生阴影接收或投射。Graph7默认Hair ShadowCastStrength=0、有效FaceShadowSuppress=1、关闭角色接触阴影。通过原生ShadowReplace分支控制投射，保持场景阴影接收；原Opaque转换Masked时主覆盖固定1。投射抑制作用于所有接收面，并非仅Hair到Face；没有新增简化刘海遮挡层。"));
 	Report->SetStringField(TEXT("anisotropy_limit"), TEXT("本机 UE5.8 原生 Toon 不消费 Tangent 输入，各向异性方向只用引擎默认 basis，尚不能定制天使环。"));
 	Report->SetArrayField(TEXT("assets"), AssetReports);
 	Report->SetArrayField(TEXT("materials"), MaterialReports);

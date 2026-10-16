@@ -1,6 +1,10 @@
 # 皮肤与脸部材质
 
-更新：2026-10-16。当前为 **Backend `endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**；payload5／Graph6／FaceData5／Frame1保持。最终 `redness3` NativeBackendProbe完成34图／156次槽检查／0失败，Mode0及启动atlas64各8图／78次检查／0失败；Editor协议13验证通过。[本轮原图](Screenshots/2026-10-16-endfield-skin-redness/README.md)与[来源摘要](Screenshots/2026-10-16-endfield-skin-redness/sources.json)记录小幅局部暖红和阴影控制，不代表全部GPU路径或真实空间SSS通过。下方v12结果保留原版本与日期。
+当前（2026-10-16）：**Backend `endfield-native-bsdf-v14-cast-clean`／Cooked协议14／Graph7／Profile布局42**，payload5／FaceData5／Frame1保持。皮肤LUT、视角与原创泛红公式沿用v13；这批修正的是投影和覆盖，仍不是真实空间SSS。`cast4`生产实拍27图／156次槽检查／0失败，Editor协议14验证通过，本次目检鼻椭圆消失；mode0_final2和atlas64_final各8图／78次检查／0失败，均验证协议14；`EFCastClean16c` BuildOnly三配置通过。
+
+新版预设Hair投影覆盖设0，影响所有接收面；Skin的投影抑制只限有效Face coverage。原Opaque转Masked时主覆盖保持1，自有Masked在BasePass恢复必要裁剪；所有自有Toon透明父保留连续alpha，取消强制masked投影。脸部SDF明暗分区、投影覆盖和原生阴影接收分别控制，身体／场景接收路径不改；没有新RT、全身影子代理或安装引擎改动。机制、研究边界及本批来源见[脸部与头发阴影说明](ENDFIELD_FACE_SHADOW_GUIDE.md)。
+
+历史验证（2026-10-16，v13）：**Backend `endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**；payload5／Graph6／FaceData5／Frame1。最终 `redness3` NativeBackendProbe完成34图／156次槽检查／0失败，Mode0及启动atlas64各8图／78次检查／0失败；Editor协议13验证通过。[当批原图](Screenshots/2026-10-16-endfield-skin-redness/README.md)与[来源摘要](Screenshots/2026-10-16-endfield-skin-redness/sources.json)记录小幅局部暖红和阴影控制，不代表全部GPU路径或真实空间SSS通过。下方v12结果也保留原版本与日期。
 
 之前只把皮肤底色调暖，颜色虽变了，却不能补出随光照和视角变化的质感。现在主要由 `CharacterSkinLighting` 控制：暗部按源色查颜色LUT，受光区按视角产生色彩变化，再由现有RD、原生阴影和灯光混合。它不靠固定自发光，也没有降低整场景曝光。
 
@@ -85,9 +89,9 @@ FaceData被移除、版本失效、宿主身份或图不匹配时，子系统清
 - [TMMDEndfieldNativeBSDF.ush](../Shaders/Core/TMMDEndfieldNativeBSDF.ush)：将暗部和受光区接入原有逐灯混合，保留独立高光及原生阴影。
 - [TMMDEndfieldSkinMaterial.ush](../Shaders/Core/TMMDEndfieldSkinMaterial.ush)：可选静态肤色与逐像素表面准备。
 - [MMDStageRenderPreset.h](../Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h)与[MMDStageLibrary.cpp](../Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp)：预设入口、绑定和恢复。
-- [MMDEndfieldToonPresetsCommandlet.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp)：Graph6、15包及七父材质的生成检查。
+- [MMDEndfieldToonPresetsCommandlet.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp)：当前Graph7、15包及七父材质的生成检查；透明父材质的投影标志也在这里配置。
 
-**本轮验证（2026-10-16，v13）**：`Editor3`与`Game1`构建通过，`generate13`保存15包，七父材质真实shader数依次为21／40／29／21／40／29／40。最终 `redness3` 是NativeBackendProbe包装的26项泛红与8项AB，共34图／156次槽检查／0失败；Mode0、启动atlas64各8图／78次检查／0失败。三组均读到并验证Editor GlobalShader协议13；另有17项静态边界检查通过。
+**历史验证（2026-10-16，v13）**：`Editor3`与`Game1`构建通过，`generate13`保存15包，七父材质真实shader数依次为21／40／29／21／40／29／40。最终 `redness3` 是NativeBackendProbe包装的26项泛红与8项AB，共34图／156次槽检查／0失败；Mode0、启动atlas64各8图／78次检查／0失败。三组均读到并验证Editor GlobalShader协议13；另有17项静态边界检查通过。
 
 外部像素分析72／72项通过。本批独立ROI清单绑定最终报告与PNG的SHA，图像已按本次运行目检。侧光固定右颊ROI开关差异MAE为1.30296，自身关闭复拍噪声为.20222；平均RGB变化约 `(+1.0911,-1.0911,-1.5356)`，属于很小的局部暖红。**背光差异未超过复拍噪声，不计为本轮新增效果**；这些数值是控制检查，不是肤质评分。
 

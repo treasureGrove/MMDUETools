@@ -38,6 +38,8 @@ struct UE5MMDTOOLS_API FMMDStageToonRoleSettings
 	float Anisotropy = 0.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1"))
 	float SphereBlend = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "自有材质阴影分支的投影覆盖强度；0关闭该部位向所有接收者的阴影贴图投影，仍接收场景阴影。仅支持受控的 EndfieldV2 遮罩父材质，缺少支持时保留原生投影。"))
+	float ShadowCastStrength = 1.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "有效自动 SDF 脸面在阴影贴图中的投影抑制；仍接收头发和场景阴影。1 关闭这些脸面的投影，也影响它们对身体和场景的投影。"))
 	float FaceShadowSuppress = 0.0f;
 };

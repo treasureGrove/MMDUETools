@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$EngineDir,
     [Parameter(Mandatory=$true)][string]$OutputRoot,
     [string]$PluginFile = (Join-Path $PSScriptRoot '../Ue5MMDTools.uplugin'),
@@ -50,7 +50,7 @@ if ($version.MajorVersion -ne 5 -or $version.MinorVersion -ne 8 -or $version.Pat
 }
 New-Item -ItemType Directory -Path $output_root | Out-Null
 $package_dir = Join-Path $output_root 'Ue5MMDTools'
-$report = [ordered]@{ schema='mmd.endfield.plugin-distribution.v1'; captured_at=(Get-Date).ToString('o'); plugin=$plugin_file; engine=$engine_root; expected_backend_patch='endfield-native-bsdf-v13-skin-redness'; expected_global_shader_protocol=13; expected_graph_version=6; expected_face_data_version=5; expected_skin_profile_layout=42; build_plugin_verified=$false; payload_files_verified=$false; skin_response_sources_verified=$false; clean_host_adapter_verified=$false; rendering_verified=$false; cooked_runtime_verified=$false }
+$report = [ordered]@{ schema='mmd.endfield.plugin-distribution.v1'; captured_at=(Get-Date).ToString('o'); plugin=$plugin_file; engine=$engine_root; expected_backend_patch='endfield-native-bsdf-v14-cast-clean'; expected_global_shader_protocol=14; expected_graph_version=7; expected_face_data_version=5; expected_skin_profile_layout=42; build_plugin_verified=$false; payload_files_verified=$false; skin_response_sources_verified=$false; clean_host_adapter_verified=$false; rendering_verified=$false; cooked_runtime_verified=$false }
 function Save-Report { $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output_root 'distribution.json') -Encoding utf8 }
 try {
     & (Join-Path $engine_root 'Engine/Build/BatchFiles/RunUAT.bat') BuildPlugin "-Plugin=$plugin_file" "-Package=$package_dir" -TargetPlatforms=Win64 -HostPlatforms=Win64 -WaitForUATMutex -UTF8Output *> (Join-Path $output_root 'build-plugin.log')
@@ -68,6 +68,8 @@ try {
         'Shaders/Core/TMMDEndfieldSkinResponse.ush',
         'Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl',
         'Docs/ENDFIELD_SKIN_MATERIAL_GUIDE.md', 'Docs/ENDFIELD_PLUGIN_DISTRIBUTION.md',
+        'Docs/ENDFIELD_FACE_SHADOW_GUIDE.md', 'Docs/ENDFIELD_NATIVE_RENDERING_GUIDE.md',
+        'Docs/Screenshots/2026-10-16-endfield-cast-clean/README.md',
         'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.uasset',
         'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.uasset',
         'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.uasset',
@@ -121,7 +123,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "干净项目探针失败，exit=$LASTEXITCODE，见 clean-host.log。" }
         $probe = Get-Content -LiteralPath (Join-Path $probe_dir 'report.json') -Raw | ConvertFrom-Json
         if (-not $probe.backend_success -or -not $probe.adapter_only -or $probe.draw_verified -or -not $probe.published_materials_compile_verified) { throw '干净项目探针没有返回预期的适配器和已发布材质编译验证报告。' }
-        if ([int]$probe.expected_global_shader_protocol -ne 13 -or [int]$probe.global_shader_protocol -ne 13 -or -not $probe.global_shader_protocol_verified) { throw '干净项目没有读到并验证当前协议13；旧编译记录不能证明新皮肤响应已分发。' }
+        if ([int]$probe.expected_global_shader_protocol -ne 14 -or [int]$probe.global_shader_protocol -ne 14 -or -not $probe.global_shader_protocol_verified) { throw '干净项目没有读到并验证当前协议14；旧编译记录不能证明新皮肤响应已分发。' }
         $report.clean_host_global_shader_protocol = [int]$probe.global_shader_protocol
         if (@($probe.published_materials).Count -ne 7) { throw '预期校验七个父材质（含脸部三种透明模式和专用描边），报告数量不符。' }
         foreach ($material in $probe.published_materials) {

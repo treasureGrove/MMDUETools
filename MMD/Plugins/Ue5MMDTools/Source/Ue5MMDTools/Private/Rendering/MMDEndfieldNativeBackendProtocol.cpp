@@ -16,9 +16,9 @@ public:
 		: FGlobalShader(Initializer)
 	{
 		// 只在编译构造时从真实反射写入；Cooked 加载由内存镜像恢复，默认值永远是零。
-		cooked_protocol = Initializer.ParameterMap.ContainsParameterAllocation(TEXT("mmd_endfield_cooked_protocol_13"))
+		cooked_protocol = Initializer.ParameterMap.ContainsParameterAllocation(TEXT("mmd_endfield_cooked_protocol_14"))
 			? MMDEndfieldNativeBackend::CookedGlobalShaderProtocolVersion : 0u;
-		protocol_parameter.Bind(Initializer.ParameterMap, TEXT("mmd_endfield_cooked_protocol_13"), SPF_Optional);
+		protocol_parameter.Bind(Initializer.ParameterMap, TEXT("mmd_endfield_cooked_protocol_14"), SPF_Optional);
 		output_parameter.Bind(Initializer.ParameterMap, TEXT("mmd_protocol_output"), SPF_Mandatory);
 	}
 

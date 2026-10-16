@@ -307,6 +307,18 @@ namespace
 		return FMath::IsFinite(Value) ? FMath::Clamp(Value, MinValue, MaxValue) : DefaultValue;
 	}
 
+	bool MMDStageToonSupportsShadowCastControl(UMaterialInterface* Material)
+	{
+		// Opaque转Masked还依赖原生后端的逐材质裁剪修正，未激活时保留源投影。
+		if (!MMDEndfieldNativeBackend::GetStatus().bProfileMarkerAllowed
+			|| !IsValid(Material) || Material->GetBlendMode() != BLEND_Masked
+			|| !Material->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))) return false;
+		float Value = 0.0f;
+		// 两个参数共同标识保留不透明覆盖率的新图；旧父材质不能安全转换。
+		return Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowCastStrength")), Value)
+			&& Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowOpaqueCoverage")), Value);
+	}
+
 	void MMDStageToonApplyRoleParameters(UMaterialInstanceDynamic* Material, const FMMDStageToonRoleSettings& Settings)
 	{
 		Material->SetScalarParameterValue(TEXT("ToonRoughness"), MMDStageToonClampSetting(Settings.Roughness, 0.5f, 0.04f, 1.0f));
@@ -314,6 +326,7 @@ namespace
 		Material->SetScalarParameterValue(TEXT("ToonMetallic"), MMDStageToonClampSetting(Settings.Metallic, 0.0f, 0.0f, 1.0f));
 		Material->SetScalarParameterValue(TEXT("ToonAnisotropy"), MMDStageToonClampSetting(Settings.Anisotropy, 0.0f, -1.0f, 1.0f));
 		Material->SetScalarParameterValue(TEXT("ToonSphereBlend"), MMDStageToonClampSetting(Settings.SphereBlend, 0.0f, 0.0f, 1.0f));
+		Material->SetScalarParameterValue(TEXT("ToonShadowCastStrength"), MMDStageToonClampSetting(Settings.ShadowCastStrength, 1.0f, 0.0f, 1.0f));
 		Material->SetScalarParameterValue(TEXT("ToonFaceShadowSuppress"), MMDStageToonClampSetting(Settings.FaceShadowSuppress, 0.0f, 0.0f, 1.0f));
 	}
 
@@ -343,7 +356,8 @@ namespace
 		if (!Source) return false;
 		FString RoleReason;
 		EMMDMaterialRole Role = ResolveMaterialRole(Component, MaterialIndex, State, RoleReason);
-		EBlendMode Blend = Source->GetBlendMode();
+		const EBlendMode SourceBlend = Source->GetBlendMode();
+		EBlendMode Blend = SourceBlend;
 		FLinearColor SourceBase;
 		float SourceOpacity;
 		ReadSourceBaseAndOpacity(Source, SourceBase, SourceOpacity);
@@ -379,34 +393,29 @@ namespace
 		}
 		const bool bFaceSurfaceBinding = DirectionBinding && Role == EMMDMaterialRole::Skin;
 		if (bFaceSurfaceBinding && FaceConfigured) ToonConfigured = FaceConfigured;
-		const FMMDStageToonRoleSettings* FaceSettings = Preset->CharacterToonRoles.Find(Role);
+		const FMMDStageToonRoleSettings DefaultToonSettings;
+		const FMMDStageToonRoleSettings* RoleSettings = Preset->CharacterToonRoles.Find(Role);
+		if (!RoleSettings) RoleSettings = Preset->CharacterToonRoles.Find(EMMDMaterialRole::Generic);
+		const FMMDStageToonRoleSettings& ToonSettings = RoleSettings ? *RoleSettings : DefaultToonSettings;
+		const float ShadowCastStrength = MMDStageToonClampSetting(ToonSettings.ShadowCastStrength, 1.0f, 0.0f, 1.0f);
+		const float FaceShadowSuppress = MMDStageToonClampSetting(ToonSettings.FaceShadowSuppress, 0.0f, 0.0f, 1.0f);
+		const IConsoleVariable* FormatVariable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Substrate.ProjectGBufferFormat"));
+		const bool bFaceShadowBinding = bFaceSurfaceBinding && NativeBackend.bProfileMarkerAllowed && NativeBackend.Mode == 2
+			&& FormatVariable && FormatVariable->GetInt() == 1;
 		UMaterialInterface* MaskedToon = Preset->CharacterToonMaterialMasked.Get();
-		const bool bFaceMaskedAvailable = bFaceSurfaceBinding && IsValid(Preset->CharacterToonFaceMaterialMasked.Get())
-			&& Preset->CharacterToonFaceMaterialMasked->GetBlendMode() == BLEND_Masked;
+		const bool bFaceMaskedAvailable = bFaceSurfaceBinding
+			&& MMDStageToonSupportsShadowCastControl(Preset->CharacterToonFaceMaterialMasked.Get());
 		if (bFaceMaskedAvailable)
 			MaskedToon = Preset->CharacterToonFaceMaterialMasked.Get();
-		if (bCanReplaceToon && Blend == BLEND_Opaque && Role == EMMDMaterialRole::Skin && FaceSettings
-			&& FMath::IsFinite(FaceSettings->FaceShadowSuppress) && FaceSettings->FaceShadowSuppress > 0.0f && IsValid(MaskedToon)
-			&& (IsValid(ToonConfigured) || bFaceMaskedAvailable))
-		{
-			USkeletalMesh* Mesh = Component->GetSkeletalMeshAsset();
-			const UMMDEndfieldFaceData* Face = Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
-			const auto& ShadowBackend = MMDEndfieldNativeBackend::GetStatus();
-			if (Face && (Face->FindTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName)
-				|| (ShadowBackend.bProfileMarkerAllowed && ShadowBackend.Mode == 2
-					&& Face->FindDirectionTexture(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName))))
-				ToonConfigured = MaskedToon;
-		}
+		if (bCanReplaceToon && SourceBlend == BLEND_Opaque
+			&& (ShadowCastStrength < 1.0f || (bFaceShadowBinding && FaceShadowSuppress > 0.0f))
+			&& MMDStageToonSupportsShadowCastControl(MaskedToon)) ToonConfigured = MaskedToon;
 		const bool bUseToon = bCanReplaceToon && IsValid(ToonConfigured);
 		if (bUseToon) Configured = ToonConfigured;
 		UMaterialInterface* Parent = bReplaceMaterials ? ResolveParent(Configured, Blend) : Source;
 		if (!Parent) return false;
 		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, Component);
 		if (!Material) return false;
-		const FMMDStageToonRoleSettings DefaultToonSettings;
-		const FMMDStageToonRoleSettings* RoleSettings = Preset->CharacterToonRoles.Find(Role);
-		if (!RoleSettings) RoleSettings = Preset->CharacterToonRoles.Find(EMMDMaterialRole::Generic);
-		const FMMDStageToonRoleSettings& ToonSettings = RoleSettings ? *RoleSettings : DefaultToonSettings;
 		if (bUseToon && IsValid(ToonSettings.ToonProfile.Get()))
 		{
 			UToonProfile* Profile = ToonSettings.ToonProfile.Get();
@@ -422,7 +431,15 @@ namespace
 		}
 		CopyMaterialInputs(Source, Material);
 		UMMDStageLibrary::ApplyPresetParameters(Material, Preset);
-		if (bUseToon) MMDStageToonApplyRoleParameters(Material, ToonSettings);
+		if (bUseToon)
+		{
+			MMDStageToonApplyRoleParameters(Material, ToonSettings);
+			const bool bShadowCastControl = MMDStageToonSupportsShadowCastControl(Parent);
+			// 只改阴影分支；原 Opaque 不得因换 Masked 父材质而突然消费贴图 alpha。
+			Material->SetScalarParameterValue(TEXT("ToonShadowOpaqueCoverage"), bShadowCastControl && SourceBlend == BLEND_Opaque ? 1.0f : 0.0f);
+			Material->SetScalarParameterValue(TEXT("ToonShadowCastStrength"), bShadowCastControl ? ShadowCastStrength : 1.0f);
+			Material->SetScalarParameterValue(TEXT("ToonFaceShadowSuppress"), bShadowCastControl && bFaceShadowBinding ? FaceShadowSuppress : 0.0f);
+		}
 		if (Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")))
 		{
 			// 源 MID 可能带入旧开关；先中性重置，再让 shader 按脸部遮罩逐像素选择两组表面参数。
@@ -442,7 +459,6 @@ namespace
 		Material->SetScalarParameterValue(TEXT("ToonFaceDirectionVersion"), 0.0f);
 		Material->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), 0.0f);
 		Material->SetScalarParameterValue(TEXT("UseSdfMap"), 0.0f);
-		const IConsoleVariable* FormatVariable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Substrate.ProjectGBufferFormat"));
 		const MMDEndfieldNativeBackend::FStatus& Backend = MMDEndfieldNativeBackend::GetStatus();
 		const bool bNativePayload = bUseToon && Role == EMMDMaterialRole::Skin && Backend.bProfileMarkerAllowed
 			&& Backend.Mode == 2 && FormatVariable && FormatVariable->GetInt() == 1

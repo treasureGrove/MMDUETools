@@ -22,6 +22,8 @@
 //   -Exp=skin：同一 Face 父材质的表面处理关闭/三档候选/关闭复拍，以及 GI、高光、主光和方向场隔离。
 //   -Exp=skinresponse：布局41的逐灯颜色查表/视角响应，16张开关/复拍对照+2张独立柔化宽度对照。
 //   -Exp=skinredness：布局42仅切换尾槽216.R，18张核心/复拍+8张原生阴影与遮挡对照。
+//   -Exp=castclean：生产材质投影开关19图，不使用角色阴影代理；附原Opaque alpha0描边回归。
+//   -CasterDiagnosticRole=Skin/Eye/Generic：仅ab/castclean，临时预设关闭该角色的材质投影。
 //
 // 本文件内所有新增 helper 均带 ToonProbe 前缀，避免与同模块 unity build 里的同名 helper 撞名。
 #include "MMDEndfieldToonProbeCommandlet.h"
@@ -1241,6 +1243,11 @@ namespace
 				Texture = nullptr;
 				MID->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceDirectionTexture")), Texture);
 				Item->SetStringField(TEXT("face_direction_texture"), Texture ? Texture->GetPathName() : TEXT("none"));
+				for (const TCHAR* Parameter : { TEXT("ToonShadowCastStrength"), TEXT("ToonShadowOpaqueCoverage"), TEXT("ToonFaceShadowSuppress") })
+				{
+					float Value = 0.0f; const bool bFound = MID->GetScalarParameterValue(FHashedMaterialParameterInfo(Parameter), Value);
+					if (bFound) Item->SetNumberField(Parameter, Value);
+				}
 				const EMMDMaterialRole Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Slot);
 				const EBlendMode Blend = MID->GetBlendMode();
 				const FString ActualParent = MID->Parent ? MID->Parent->GetPathName() : FString();
@@ -1375,7 +1382,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	TArray<FString> Exps;
 	ExpText.ParseIntoArray(Exps, TEXT(","), true);
 	const TArray<FString> AllowedExps = { TEXT("ab"), TEXT("shadow"), TEXT("ramp"), TEXT("lighting"), TEXT("face"),
-		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("volume"), TEXT("facefix"), TEXT("skin"), TEXT("skinresponse"), TEXT("skinredness"), TEXT("all") };
+		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("volume"), TEXT("facefix"), TEXT("skin"), TEXT("skinresponse"), TEXT("skinredness"), TEXT("castclean"), TEXT("all") };
 	for (const FString& Exp : Exps)
 	{
 		if (!AllowedExps.Contains(Exp))
@@ -1436,16 +1443,39 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		Report->SetStringField(TEXT("native_preset"), NativePresetPath);
 		for (const FString& Exp : Exps)
 		{
-			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline") && Exp != TEXT("volume") && Exp != TEXT("facefix") && Exp != TEXT("skin") && Exp != TEXT("skinresponse") && Exp != TEXT("skinredness"))
+			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline") && Exp != TEXT("volume") && Exp != TEXT("facefix") && Exp != TEXT("skin") && Exp != TEXT("skinresponse") && Exp != TEXT("skinredness") && Exp != TEXT("castclean"))
 			{
-				UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline/volume/facefix/skin/skinresponse/skinredness, received %s"), *Exp);
+				UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline/volume/facefix/skin/skinresponse/skinredness/castclean, received %s"), *Exp);
 				return 1;
 			}
 		}
 	}
-	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline")) || Exps.Contains(TEXT("volume")) || Exps.Contains(TEXT("facefix")) || Exps.Contains(TEXT("skin")) || Exps.Contains(TEXT("skinresponse")) || Exps.Contains(TEXT("skinredness"))) && !NativePreset.IsValid())
+	FString CasterDiagnosticRoleName;
+	const bool bCasterDiagnostic = FParse::Value(*Params, TEXT("CasterDiagnosticRole="), CasterDiagnosticRoleName);
+	Report->SetBoolField(TEXT("caster_diagnostic_override"), bCasterDiagnostic);
+	if (bCasterDiagnostic)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline/volume/facefix/skin/skinresponse/skinredness checks require -NativePreset"));
+		if (!NativePreset.IsValid() || Exps.IsEmpty() || Exps.ContainsByPredicate([](const FString& Exp) { return Exp != TEXT("ab") && Exp != TEXT("castclean"); })
+			|| (!CasterDiagnosticRoleName.Equals(TEXT("Skin"), ESearchCase::IgnoreCase) && !CasterDiagnosticRoleName.Equals(TEXT("Eye"), ESearchCase::IgnoreCase) && !CasterDiagnosticRoleName.Equals(TEXT("Generic"), ESearchCase::IgnoreCase)))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[ToonProbe] CasterDiagnosticRole requires Skin/Eye/Generic, NativePreset, and only ab/castclean"));
+			return 1;
+		}
+		const EMMDMaterialRole CasterDiagnosticRole = CasterDiagnosticRoleName.Equals(TEXT("Skin"), ESearchCase::IgnoreCase) ? EMMDMaterialRole::Skin
+			: CasterDiagnosticRoleName.Equals(TEXT("Eye"), ESearchCase::IgnoreCase) ? EMMDMaterialRole::Eye : EMMDMaterialRole::Generic;
+		NativePreset.Reset(DuplicateObject<UMMDStageRenderPreset>(NativePreset.Get(), GetTransientPackage()));
+		FMMDStageToonRoleSettings* DiagnosticCastSettings = NativePreset.IsValid() ? NativePreset->CharacterToonRoles.Find(CasterDiagnosticRole) : nullptr;
+		if (!DiagnosticCastSettings) { UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Diagnostic role settings unavailable")); return 1; }
+		NativePreset->SetFlags(RF_Transient);
+		Report->SetStringField(TEXT("caster_diagnostic_role"), UEnum::GetValueAsString(CasterDiagnosticRole));
+		Report->SetNumberField(TEXT("caster_diagnostic_original_shadow_cast_strength"), DiagnosticCastSettings->ShadowCastStrength);
+		DiagnosticCastSettings->ShadowCastStrength = 0.0f;
+		Report->SetNumberField(TEXT("caster_diagnostic_shadow_cast_strength"), DiagnosticCastSettings->ShadowCastStrength);
+		Report->SetStringField(TEXT("caster_diagnostic_scope"), TEXT("Transient preset role override only; supported material shadow branches, no hidden geometry or saved assets."));
+	}
+	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline")) || Exps.Contains(TEXT("volume")) || Exps.Contains(TEXT("facefix")) || Exps.Contains(TEXT("skin")) || Exps.Contains(TEXT("skinresponse")) || Exps.Contains(TEXT("skinredness")) || Exps.Contains(TEXT("castclean"))) && !NativePreset.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline/volume/facefix/skin/skinresponse/skinredness/castclean checks require -NativePreset"));
 		return 1;
 	}
 	if (!bSubstrate && !NativePreset.IsValid())
@@ -1729,7 +1759,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 				ToonMaterials.Add(Variant.Name, Material);
 			}
 		}
-		if (NativePreset.IsValid() && (ToonProbeHasExp(Exps, TEXT("skin")) || ToonProbeHasExp(Exps, TEXT("skinresponse")) || ToonProbeHasExp(Exps, TEXT("skinredness"))))
+		if (NativePreset.IsValid() && (ToonProbeHasExp(Exps, TEXT("skin")) || ToonProbeHasExp(Exps, TEXT("skinresponse")) || ToonProbeHasExp(Exps, TEXT("skinredness")) || ToonProbeHasExp(Exps, TEXT("castclean"))))
 		{
 			for (const EBlendMode Blend : { BLEND_Opaque, BLEND_Masked, BLEND_Translucent })
 			{
@@ -1897,6 +1927,174 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		ToonProbeFinishMaterialSwap(Rig, Sample);
 	};
 	const bool bCanToon = bSubstrate && ToonOpaque && ToonMasked;
+	if (ToonProbeHasExp(Exps, TEXT("castclean")) && NativePreset.IsValid())
+	{
+		UseToonBaseline(); ToonProbePose(Rig, Sample.BeautyTime); ToonProbeSetShot(Rig, EToonProbeShot::Face);
+		UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+		TSharedRef<FJsonObject> Clean = ToonProbeJsonObject(); Report->SetObjectField(TEXT("castclean"), Clean);
+		auto Check = [&](const TCHAR* Name, bool bOK) { Clean->SetBoolField(Name, bOK); if (!bOK) ++Log.Failures; return bOK; };
+		Clean->SetStringField(TEXT("scope"), TEXT("Graph7 production material ShadowReplace only. No skeletal shadow proxy/RT/hidden facial geometry. Cast strength endpoints0/1. CPU placement is not proof of received shadow; compare actual clear/block images."));
+		Clean->SetNumberField(TEXT("planned_images"), 19); Clean->SetNumberField(TEXT("expected_cooked_protocol"), 14);
+		Clean->SetBoolField(TEXT("all_gpu_verified"), false); Clean->SetBoolField(TEXT("uses_character_shadow_proxy"), false);
+		const auto& Backend = MMDEndfieldNativeBackend::GetStatus();
+		const UMMDEndfieldFaceData* FaceData = Sample.Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
+		bool bReady = Check(TEXT("native_mode2_face5_frame1_ready"), bCanToon && Backend.bProfileMarkerAllowed && Backend.Mode == 2
+			&& ToonProbeCVar(TEXT("r.Substrate.ProjectGBufferFormat")) == TEXT("1") && FaceData && FaceData->Version == 5 && FaceData->FrameVersion == 1
+			&& !FaceData->Slots.IsEmpty() && Rig.HeadIndex != INDEX_NONE && Rig.Stage->KeyLight);
+		bReady &= Check(TEXT("explicit_yyb_reference_pose"), bExplicitSample && Sample.bReferencePose && Sample.MeshPath.Contains(TEXT("YYB16th")));
+		bool bGraph7 = true; int32 Graph7Parents = 0;
+		for (const auto& Pair : ToonMaterials)
+		{
+			if (!Pair.Value || Pair.Value->GetPathName().Contains(TEXT("_Outline."))) continue;
+			bool bFound = false, bCompiled = false;
+			for (UMaterialExpression* Expression : Pair.Value->GetExpressions())
+				if (const UMaterialExpressionCustom* Custom = Cast<UMaterialExpressionCustom>(Expression)) bFound |= Custom->Desc == TEXT("EndfieldV2NativeToonGraph=7");
+			bGraph7 &= bFound && ToonProbeCompileErrors(Pair.Value, bCompiled).IsEmpty() && bCompiled; ++Graph7Parents;
+		}
+		bReady &= Check(TEXT("six_surface_parents_graph7_compiled"), bGraph7 && Graph7Parents == 6);
+		const FMMDStageToonRoleSettings* HairSettings = NativePreset->CharacterToonRoles.Find(EMMDMaterialRole::Hair);
+		const FMMDStageToonRoleSettings* SkinSettings = NativePreset->CharacterToonRoles.Find(EMMDMaterialRole::Skin);
+		bReady &= Check(TEXT("production_preset_hair0_face1"), HairSettings && SkinSettings && HairSettings->ShadowCastStrength == 0.0f && SkinSettings->FaceShadowSuppress == 1.0f);
+		// 仅测试公共重应用入口；不改用户槽覆盖或预设资产。
+		bReady &= Check(TEXT("stage_reapply_success"), ToonProbeApplyPreset(Rig, NativePreset.Get()));
+		UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+		struct FToonProbeCastSlot
+		{
+			UMaterialInstanceDynamic* MID; UMaterialInterface* Parent; UToonProfile* Profile; bool bOverride; int32 Slot;
+			EMMDMaterialRole Role; bool bHair, bFace, bControl; float Cast, Suppress, Coverage, Opacity; FLinearColor Base;
+			TArray<FScalarParameterValue> Scalars; TArray<FVectorParameterValue> Vectors; TArray<FTextureParameterValue> Textures;
+		};
+		TArray<FToonProbeCastSlot> Slots; TArray<TSharedPtr<FJsonValue>> SlotReports;
+		const UMMDStageMaterialState* State = Cast<UMMDStageMaterialState>(Rig.Character->GetAssetUserDataOfClass(UMMDStageMaterialState::StaticClass()));
+		int32 HairCount = 0, FaceCount = 0, BindingCount = 0, ConvertedCount = 0; bool bSlotPolicy = State != nullptr;
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+		{
+			UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot)); if (!MID) { bSlotPolicy = false; continue; }
+			FToonProbeCastSlot& Saved = Slots.AddDefaulted_GetRef(); Saved.MID = MID; Saved.Parent = MID->Parent.Get(); Saved.Profile = MID->ToonProfileOverride;
+			Saved.Cast = 1.0f; Saved.Suppress = 0.0f; Saved.Coverage = 0.0f; Saved.Opacity = 1.0f; Saved.Base = FLinearColor::White;
+			Saved.bOverride = MID->bOverrideToonProfile; Saved.Slot = Slot; Saved.Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Slot);
+			Saved.Scalars = MID->ScalarParameterValues; Saved.Vectors = MID->VectorParameterValues; Saved.Textures = MID->TextureParameterValues; KeepAlive.Emplace(MID);
+			const FMMDGeneratedFaceSdfSlot* Binding = FaceData ? FaceData->FindDirectionSlot(Slot, Sample.Mesh->GetMaterials()[Slot].MaterialSlotName) : nullptr;
+			if (Binding && Saved.Role == EMMDMaterialRole::Skin) ++BindingCount;
+			float ParentParameter = 0.0f;
+			Saved.bControl = Saved.Parent && Saved.Parent->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowCastStrength")), ParentParameter)
+				&& Saved.Parent->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowOpaqueCoverage")), ParentParameter)
+				&& MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowCastStrength")), Saved.Cast)
+				&& MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowOpaqueCoverage")), Saved.Coverage);
+			MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceShadowSuppress")), Saved.Suppress);
+			Saved.bHair = Saved.bControl && Saved.Role == EMMDMaterialRole::Hair; Saved.bFace = Saved.bControl && Binding && Saved.Role == EMMDMaterialRole::Skin;
+			HairCount += Saved.bHair; FaceCount += Saved.bFace;
+			MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Saved.Opacity); MID->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), Saved.Base);
+			UMaterialInterface* Source = State && State->SourceMaterials.IsValidIndex(Slot) ? State->SourceMaterials[Slot].Get() : nullptr;
+			const bool bSourceOpaque = Source && Source->GetBlendMode() == BLEND_Opaque;
+			if (Saved.bControl) bSlotPolicy &= MID->GetBlendMode() == BLEND_Masked && FMath::IsNearlyEqual(Saved.Coverage, bSourceOpaque ? 1.0f : 0.0f);
+			if (Saved.bHair) bSlotPolicy &= Saved.Cast == 0.0f;
+			if (Saved.bFace) bSlotPolicy &= Saved.Suppress == 1.0f;
+			if (Saved.Role == EMMDMaterialRole::Skin && !Binding) bSlotPolicy &= Saved.Suppress == 0.0f;
+			if (Saved.bControl && Saved.Coverage == 1.0f) ++ConvertedCount;
+			TSharedRef<FJsonObject> Item = ToonProbeJsonObject(); Item->SetNumberField(TEXT("slot"), Slot); Item->SetStringField(TEXT("slot_name"), Sample.Mesh->GetMaterials()[Slot].MaterialSlotName.ToString());
+			Item->SetStringField(TEXT("role"), UEnum::GetValueAsString(Saved.Role)); Item->SetStringField(TEXT("parent"), Saved.Parent->GetPathName());
+			Item->SetStringField(TEXT("source_blend"), Source ? UEnum::GetValueAsString(Source->GetBlendMode()) : TEXT("none")); Item->SetStringField(TEXT("actual_blend"), UEnum::GetValueAsString(MID->GetBlendMode()));
+			Item->SetBoolField(TEXT("cast_control_supported"), Saved.bControl); Item->SetBoolField(TEXT("hair_target"), Saved.bHair); Item->SetBoolField(TEXT("face_target"), Saved.bFace);
+			Item->SetNumberField(TEXT("cast_strength"), Saved.Cast); Item->SetNumberField(TEXT("face_suppress"), Saved.Suppress); Item->SetNumberField(TEXT("opaque_coverage"), Saved.Coverage);
+			Item->SetNumberField(TEXT("opacity"), Saved.Opacity); Item->SetStringField(TEXT("base_color_rgba"), Saved.Base.ToString()); ToonProbeWriteFaceBindingFields(Item, Binding); SlotReports.Add(MakeShared<FJsonValueObject>(Item));
+		}
+		Clean->SetArrayField(TEXT("source_slots"), SlotReports); Clean->SetNumberField(TEXT("hair_control_targets"), HairCount); Clean->SetNumberField(TEXT("face_control_targets"), FaceCount);
+		Clean->SetNumberField(TEXT("valid_face_bindings"), BindingCount); Clean->SetNumberField(TEXT("opaque_to_masked_targets"), ConvertedCount);
+		bReady &= Check(TEXT("production_graph7_blend_coverage_policy"), bSlotPolicy && HairCount > 0 && FaceCount == 3 && BindingCount == 5 && ConvertedCount > 0);
+		ToonProbeValidateSlots(Rig, Log, TEXT("castclean_initial"));
+		if (bReady)
+		{
+			const FTransform Camera = Rig.Capture->GetComponentTransform(), Blocker = Rig.Occluder->GetComponentTransform(); const float FOV = Rig.Capture->FOVAngle;
+			const FPostProcessSettings PP = Rig.PostProcess, CapturePP = Rig.Capture->PostProcessSettings; const auto Flags = Rig.Capture->GetShowFlagSettings();
+			UDirectionalLightComponent* Key = Rig.Stage->KeyLight.Get(); const FRotator Rotation = Key->GetComponentRotation(); const float Intensity = Key->Intensity;
+			const bool bCast = Rig.Character->CastShadow, bContact = Rig.Character->bCastContactShadow, bKeyCast = Key->CastShadows, bKeyDynamic = Key->CastDynamicShadows;
+			const ECastRayTracedShadow::Type Ray = Key->CastRaytracedShadow; const bool bDF = Key->bUseRayTracedDistanceFieldShadows, bBlockDepth = Rig.Occluder->bRenderInDepthPass;
+			TArray<TPair<ULightComponent*, float>> SavedCastLights; for (TObjectIterator<ULightComponent> It; It; ++It) if (It->GetWorld() == Rig.World) SavedCastLights.Add({ *It, It->Intensity });
+			TMap<UToonProfile*, TArray<uint8>> ProfileBytes; for (const auto& Saved : Slots) if (Saved.Profile && !ProfileBytes.Contains(Saved.Profile)) { TArray<uint8>& Bytes = ProfileBytes.Add(Saved.Profile); FObjectWriter Writer(Saved.Profile, Bytes); }
+			bool bRestored = false; auto Restore = [&]()
+			{
+				if (bRestored) return; bRestored = true;
+				for (const auto& Saved : Slots)
+				{
+					Saved.MID->ToonProfileOverride = Saved.Profile; Saved.MID->bOverrideToonProfile = Saved.bOverride; Saved.MID->ClearParameterValues();
+					for (const auto& V : Saved.Scalars) Saved.MID->SetScalarParameterValue(V.ParameterInfo.Name, V.ParameterValue);
+					for (const auto& V : Saved.Vectors) Saved.MID->SetVectorParameterValue(V.ParameterInfo.Name, V.ParameterValue);
+					for (const auto& V : Saved.Textures) Saved.MID->SetTextureParameterValue(V.ParameterInfo.Name, V.ParameterValue);
+				}
+				for (const auto& Light : SavedCastLights) Light.Key->SetIntensity(Light.Value);
+				Key->SetWorldRotation(Rotation); Key->SetCastShadows(bKeyCast); Key->CastDynamicShadows = bKeyDynamic; Key->SetCastRaytracedShadows(Ray); Key->bUseRayTracedDistanceFieldShadows = bDF; Key->MarkRenderStateDirty();
+				Rig.Character->SetCastShadow(bCast); Rig.Character->SetCastContactShadow(bContact); Rig.Occluder->SetWorldTransform(Blocker); Rig.Occluder->SetRenderInDepthPass(bBlockDepth);
+				Rig.Capture->SetShowFlagSettings(Flags); Rig.PostProcess = PP; Rig.Capture->PostProcessSettings = CapturePP; Rig.Capture->SetWorldTransform(Camera); Rig.Capture->FOVAngle = FOV;
+				UMMDOutlineLibrary::RefreshMMDOutlinePreset(Rig.Character.Get()); Rig.World->SendAllEndOfFrameUpdates(); FlushRenderingCommands();
+			}; ON_SCOPE_EXIT { Restore(); };
+			for (const auto& Light : SavedCastLights) if (Light.Key != Key) Light.Key->SetIntensity(0.0f);
+			Rig.Character->SetCastShadow(true); Rig.Character->SetCastContactShadow(false); Key->SetCastShadows(true); Key->CastDynamicShadows = true; Key->SetCastRaytracedShadows(ECastRayTracedShadow::Disabled); Key->SetUseRayTracedDistanceFieldShadows(false); Key->MarkRenderStateDirty();
+			Rig.Occluder->SetRenderInDepthPass(false);
+			FLinearColor F, R; Slots[0].MID->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadForward), F);
+			const int32 FrameSlot = FaceData->Slots[0].MaterialIndex; Rig.Character->GetMaterial(FrameSlot)->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadForward), F);
+			Rig.Character->GetMaterial(FrameSlot)->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadRight), R);
+			const FVector Forward = FVector(F.R,F.G,F.B).GetSafeNormal(), Right = FVector(R.R,R.G,R.B).GetSafeNormal(), Up = FVector::CrossProduct(Right,Forward).GetSafeNormal();
+			const FVector Head = Rig.Character->GetBoneTransform(Rig.HeadIndex).GetLocation(); const int32 First = Log.Images.Num(); TArray<TSharedPtr<FJsonValue>> Captures; bool bAllCPU = true;
+			auto Capture = [&](const TCHAR* Name, float Yaw, float Elevation, bool bHair, bool bFace, bool bShadows, bool bBlock, bool bAlphaZero)
+			{
+				const float Y = FMath::DegreesToRadians(Yaw), E = FMath::DegreesToRadians(Elevation); const FVector L = ((Forward*FMath::Cos(Y)+Right*FMath::Sin(Y))*FMath::Cos(E)+Up*FMath::Sin(E)).GetSafeNormal();
+				Key->SetWorldRotation((-L).Rotation()); Key->SetIntensity(Intensity); Rig.Occluder->SetWorldTransform(bBlock ? FTransform(FRotationMatrix::MakeFromX(L).Rotator(),Head+L*120.0f,FVector(.2f,1.2f,1.2f)) : Blocker);
+				TArray<FString> Disabled = {TEXT("GlobalIllumination"),TEXT("SkyLighting"),TEXT("ReflectionEnvironment"),TEXT("LumenReflections"),TEXT("ScreenSpaceReflections"),TEXT("AmbientOcclusion"),TEXT("LumenShortRangeAmbientOcclusion"),TEXT("ContactShadows")}; if (!bShadows) Disabled.Add(TEXT("DynamicShadows")); ToonProbeSetShowFlags(Rig,Disabled);
+				bool bCPU = Rig.Capture->ShowFlags.DynamicShadows == bShadows && !Rig.Capture->ShowFlags.ContactShadows && Rig.Character->CastShadow; TArray<TSharedPtr<FJsonValue>> AlphaChecks;
+				for (const auto& Saved : Slots)
+				{
+					if (Saved.bHair) Saved.MID->SetScalarParameterValue(TEXT("ToonShadowCastStrength"),bHair?1.0f:0.0f);
+					if (Saved.bFace) Saved.MID->SetScalarParameterValue(TEXT("ToonFaceShadowSuppress"),bFace?1.0f:0.0f);
+					Saved.MID->SetScalarParameterValue(TEXT("Opacity"),bAlphaZero && Saved.bControl && Saved.Coverage==1.0f?0.0f:Saved.Opacity);
+					float Cast=Saved.Cast,Suppress=Saved.Suppress,Coverage=Saved.Coverage,Opacity=0; FLinearColor Base;
+					if (Saved.bControl) bCPU &= Saved.MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowCastStrength")),Cast) && Saved.MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowOpaqueCoverage")),Coverage) && Coverage==Saved.Coverage;
+					Saved.MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceShadowSuppress")),Suppress);
+					bCPU &= Cast==(Saved.bHair?(bHair?1.0f:0.0f):Saved.Cast) && Suppress==(Saved.bFace?(bFace?1.0f:0.0f):Saved.Suppress);
+					bCPU &= Saved.MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")),Opacity) && Opacity==(bAlphaZero && Saved.bControl && Saved.Coverage==1.0f?0.0f:Saved.Opacity)
+						&& Saved.MID->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")),Base) && Base.Equals(Saved.Base) && Saved.MID->Parent==Saved.Parent && Saved.MID->ToonProfileOverride==Saved.Profile;
+				}
+				UMMDOutlineLibrary::RefreshMMDOutlinePreset(Rig.Character.Get());
+				if (bAlphaZero) for (const auto& Saved : Slots) if (Saved.bControl && Saved.Coverage==1.0f)
+				{
+					UMaterialInterface* Outline = Rig.Character->MaterialSlotsOverlayMaterial.IsValidIndex(Saved.Slot)?Rig.Character->MaterialSlotsOverlayMaterial[Saved.Slot].Get():nullptr;
+					float Mode=-1; const bool bFound=Outline && Outline->GetScalarParameterValue(FHashedMaterialParameterInfo(MMDEndfieldOutlineParameters::AlphaMode),Mode); if (Outline) bCPU &= bFound && Mode==0.0f;
+					TSharedRef<FJsonObject> A=ToonProbeJsonObject(); A->SetNumberField(TEXT("slot"),Saved.Slot); A->SetBoolField(TEXT("outline_present"),Outline!=nullptr); if(bFound) A->SetNumberField(TEXT("outline_alpha_mode"),Mode); AlphaChecks.Add(MakeShared<FJsonValueObject>(A));
+				}
+				bAllCPU &= bCPU; if (bCPU) {Rig.Capture->bCameraCutThisFrame=true; ToonProbeCapture(Rig,Log,Name,FMath::Max(Frames,24));} else ++Log.Failures;
+				TSharedRef<FJsonObject> C=ToonProbeJsonObject(); C->SetStringField(TEXT("image"),Name); C->SetNumberField(TEXT("head_relative_yaw"),Yaw); C->SetNumberField(TEXT("head_relative_elevation"),Elevation);
+				C->SetNumberField(TEXT("hair_cast_strength"),bHair?1:0); C->SetNumberField(TEXT("face_shadow_suppress"),bFace?1:0); C->SetBoolField(TEXT("native_shadows_enabled"),bShadows); C->SetBoolField(TEXT("environment_blocker_placed"),bBlock);
+				C->SetBoolField(TEXT("converted_opaque_opacity_zero"),bAlphaZero); C->SetBoolField(TEXT("cpu_controls_verified"),bCPU); C->SetArrayField(TEXT("alpha_outline_checks"),AlphaChecks); C->SetStringField(TEXT("blocker_transform"),Rig.Occluder->GetComponentTransform().ToString());
+				C->SetBoolField(TEXT("occlusion_verified_by_cpu"),false); Captures.Add(MakeShared<FJsonValueObject>(C));
+			};
+			for (const auto& Angle : {TPair<const TCHAR*,float>(TEXT("left"),-65),{TEXT("right"),65},{TEXT("top"),0}})
+				for (const bool Hair : {true,false}) for (const bool Face : {false,true}) Capture(*FString::Printf(TEXT("castclean_%s_hair%d_face%d_face"),Angle.Key,Hair?1:0,Face?1:0),Angle.Value,FString(Angle.Key)==TEXT("top")?65:25,Hair,Face,true,false,false);
+			Capture(TEXT("castclean_top_shadowoff_before_face"),0,65,true,false,false,false,false); Capture(TEXT("castclean_top_shadowoff_production_face"),0,65,false,true,false,false,false);
+			Capture(TEXT("castclean_top_shadowoff_production_alpha0_face"),0,65,false,true,false,false,true); Capture(TEXT("castclean_top_shadowoff_production_repeat_face"),0,65,false,true,false,false,false);
+			Capture(TEXT("castclean_left_block_before_face"),-65,25,true,false,true,true,false); Capture(TEXT("castclean_left_block_production_face"),-65,25,false,true,true,true,false);
+			Capture(TEXT("castclean_left_shadowoff_production_face"),-65,25,false,true,false,false,false);
+			Clean->SetArrayField(TEXT("captures"),Captures); Clean->SetNumberField(TEXT("captured_images"),Log.Images.Num()-First); Check(TEXT("all19_images_captured"),Log.Images.Num()-First==19); Check(TEXT("all_capture_cpu_controls_verified"),bAllCPU);
+			Restore(); bool bMaterials=true,bProfiles=true,bLights=true;
+			for (const auto& Saved : Slots)
+			{
+				bMaterials &= Rig.Character->GetMaterial(Saved.Slot)==Saved.MID && Saved.MID->Parent==Saved.Parent && Saved.MID->ToonProfileOverride==Saved.Profile && Saved.MID->bOverrideToonProfile==Saved.bOverride
+					&& Saved.MID->ScalarParameterValues.Num()==Saved.Scalars.Num() && Saved.MID->VectorParameterValues.Num()==Saved.Vectors.Num() && Saved.MID->TextureParameterValues.Num()==Saved.Textures.Num();
+				for (const auto& V:Saved.Scalars) {float X=0; bMaterials &= Saved.MID->GetScalarParameterValue(FHashedMaterialParameterInfo(V.ParameterInfo.Name),X)&&FMath::IsNearlyEqual(X,V.ParameterValue);}
+				for (const auto& V:Saved.Vectors) {FLinearColor X; bMaterials &= Saved.MID->GetVectorParameterValue(FHashedMaterialParameterInfo(V.ParameterInfo.Name),X)&&X.Equals(V.ParameterValue);}
+				for (const auto& V:Saved.Textures) {UTexture* X=nullptr; bMaterials &= Saved.MID->GetTextureParameterValue(FHashedMaterialParameterInfo(V.ParameterInfo.Name),X)&&X==V.ParameterValue;}
+			}
+			for (const auto& Pair:ProfileBytes) {TArray<uint8> Bytes; FObjectWriter Writer(Pair.Key,Bytes); bProfiles &= Bytes==Pair.Value;}
+			for (const auto& Light:SavedCastLights) bLights &= Light.Key->Intensity==Light.Value;
+			Check(TEXT("all_material_parameters_parent_profile_restored"),bMaterials); Check(TEXT("profile_bytes_unchanged"),bProfiles); Check(TEXT("all_scene_lights_restored"),bLights);
+			Check(TEXT("native_shadow_flags_restored"),Rig.Character->CastShadow==bCast && Rig.Character->bCastContactShadow==bContact && Key->CastShadows==bKeyCast && Key->CastDynamicShadows==bKeyDynamic && Key->CastRaytracedShadow==Ray && Key->bUseRayTracedDistanceFieldShadows==bDF && Key->GetComponentRotation().Equals(Rotation,.001f));
+			const auto RestoredFlags = Rig.Capture->GetShowFlagSettings(); bool bFlags = RestoredFlags.Num() == Flags.Num();
+			for (int32 Index = 0; Index < FMath::Min(RestoredFlags.Num(), Flags.Num()); ++Index) bFlags &= RestoredFlags[Index].ShowFlagName == Flags[Index].ShowFlagName && RestoredFlags[Index].Enabled == Flags[Index].Enabled;
+			Check(TEXT("showflag_settings_restored"), bFlags);
+			Check(TEXT("camera_pp_blocker_restored"),Rig.Capture->GetComponentTransform().Equals(Camera) && Rig.Capture->FOVAngle==FOV && Rig.Occluder->GetComponentTransform().Equals(Blocker) && Rig.Occluder->bRenderInDepthPass==bBlockDepth
+				&& FPostProcessSettings::StaticStruct()->CompareScriptStruct(&Rig.PostProcess,&PP,0) && FPostProcessSettings::StaticStruct()->CompareScriptStruct(&Rig.Capture->PostProcessSettings,&CapturePP,0));
+			ToonProbeValidateSlots(Rig,Log,TEXT("castclean_restored"));
+		}
+	}
 	for (const bool bSkinRednessExperiment : { false, true })
 	if (ToonProbeHasExp(Exps, bSkinRednessExperiment ? TEXT("skinredness") : TEXT("skinresponse")) && NativePreset.IsValid())
 	{

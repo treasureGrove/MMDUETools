@@ -2,6 +2,16 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-16 — v14：清理头发、脸面及透明附层的错误投影
+
+- V2 预设新增角色 `ShadowCastStrength`，Hair=0，有效 Face 的 `FaceShadowSuppress=1`。使用自有 Masked 材质的 ShadowReplace 分支控制投射，仍接收原生场景阴影；原 Opaque 转 Masked 时主覆盖固定为 1，并修正描边 alpha 语义。未激活后端／缺少新父材质参数时不转换，缺有效 Face 绑定不抑制脸面。
+- V5 投射覆盖不再使用接收者前层深度筛选；接收者四 tap／深度门控与明暗阈值保持。最终取消全部自有 Toon Translucent 的强制硬遮罩投影，解决透明附层与脸部投影组合产生的鼻椭圆。caster 覆盖分离单独使用的 cast3 仍有椭圆，最终 cast4 才消失，不把单项改动冒称完整修复。
+- 默认 Early-Z 仅在预深度裁剪时，转换后的共面 Masked 附层会漏过 BasePass alpha 裁剪、写出黑块。Backend14 仅在插件虚拟源码副本中让自有三输出 payload 的 Masked 再裁剪；严格锚点失败不发布映射，不改安装引擎或全局项目设置。协议升至 14、Graph7，layout42／payload5／FaceData5 保持；未新增 RT、GBuffer 字段、GI 或光响应公式。
+- 最终 Editor8／generate17 通过：15 包、七父材质实际编译。cast4 共 27 图／156 槽／0 失败，52 项像素与控制检查通过；Mode0、atlas64 各 8 图／78 槽／0 失败，实际 Editor 协议14。鼻核心对同角 ShadowOff 逐像素一致；外部挡板仍产生原生遮挡，ShadowOff 策略／原 Opaque alpha0／重复整图一致，四张 Unlit 与 cast3 不变。48 项静态／CPU审计通过。过程中的失败与最终验证分别记录，不沿用先前版本结果。
+- 参考 ArcSys 官方 GDC 美术取舍、公开 Star Rail 非官方复刻的角色投影策略和 Unity Toon 的美术控制思路；未搬运其实现或资产。新增[投影原理、实拍与维护入口](ENDFIELD_FACE_SHADOW_GUIDE.md)，[2026-10-16 实拍归档](Screenshots/2026-10-16-endfield-cast-clean/README.md)。2,381 项保护基线仅 8 个自有 V2 包有意变化，其余保持；既有用户工作保留。
+- 最终 `EFCastClean16c` BuildOnly 的 Editor Development／Game Development／Shipping 三配置及必需文件／过滤检查通过；15 份冻结 Source／HLSL、15 个自有 V2 资产与工作区逐字节匹配。构建后只补录文档，代码和资产未再改变；[分发摘要](Screenshots/2026-10-16-endfield-cast-clean/distribution-summary.json)单列验证范围。
+- Hair 和 Face 投射抑制作用于所有接收面，包含地面；没有新增简化刘海代理层。完整 Cook14、干净宿主渲染、Forward MSAA／A2C、光追阴影与独立多模型／动态 LOD 尚未验收。终末地完整画质继续迭代，本批只验收上述投影修正。
+
 ## 2026-10-16 — v13：受光照约束的局部皮肤泛红
 
 - 在独立`TMMDEndfieldSkinResponse.ush`中增加微弱暖红过渡，仅改变本灯Skin漫反射。几何NoL与脸部阈值前连续角度分别求带状权重，再按有效覆盖混合；弱NoV权重不使用独立高光法线。原生SurfaceShadow深遮挡关闭新增响应，灯色与衰减仍由既有外层相乘，高光／GI继续原路径。主光、补光及旧聚簇入口均接入，不增加RT、GBuffer字段或空间散射pass。

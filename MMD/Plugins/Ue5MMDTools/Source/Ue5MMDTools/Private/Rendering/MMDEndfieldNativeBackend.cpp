@@ -23,7 +23,7 @@ namespace
 {
 	constexpr TCHAR MMDEndfieldBackendSection[] = TEXT("Ue5MMDTools.EndfieldNativeBackend");
 	constexpr TCHAR MMDEndfieldBackendVirtualRoot[] = TEXT("/Engine/Private");
-	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v13-skin-redness");
+	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v14-cast-clean");
 	// 修改 CustomOutput 名称、输出次序/类型/默认值或打包协议时同步此版本。
 	constexpr TCHAR MMDEndfieldBackendPayloadProtocol[] = TEXT("endfield-skin-payload-v5:GetMMDEndfieldNativePayload:direction-or-threshold4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:values16-type1-mask7-quat32");
 	MMDEndfieldNativeBackend::FStatus MMDEndfieldBackendStatus;
@@ -370,6 +370,8 @@ namespace
 
 	bool MMDEndfieldBackendPatchPayloadBasePass(FString& Text)
 	{
+		const FString MaskingAnchor = TEXT("#if !EARLY_Z_PASS_ONLY_MATERIAL_MASKING");
+		const FString MaskingPatch = TEXT("#if !EARLY_Z_PASS_ONLY_MATERIAL_MASKING || (MATERIALBLENDING_MASKED && NUM_MATERIAL_OUTPUTS_GETMMDENDFIELDNATIVEPAYLOAD == 3)");
 		const FString Anchor = TEXT("FSubstratePixelHeader SubstratePixelHeader = MaterialParameters.GetFrontSubstrateHeader();");
 		const FString Patch = Anchor + TEXT(R"TMMD(
     #if SUBSTRATE_OPAQUE_DEFERRED && SUBSTRATE_GBUFFER_FORMAT == 1 && MATERIAL_USES_ANISOTROPY && SUBSTRATE_FASTPATH == 0 && SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 0 && SUBSTRATE_MATERIAL_NUM_UINTS >= 6 && NUM_MATERIAL_OUTPUTS_GETMMDENDFIELDNATIVEPAYLOAD == 3
@@ -397,7 +399,13 @@ namespace
     }
     #endif
 )TMMD");
-		return MMDEndfieldBackendReplaceIndirectAnchor(Text, Anchor, Patch);
+		// 自有 Masked 材质在 BasePass 再裁剪，避免共面透明洞被另一层完整深度放行。
+		// 两处锚点均须唯一；失败只丢弃本次局部副本，不发布映射或改写安装引擎。
+		int32 MaskingIndex, PayloadIndex;
+		if (!MMDEndfieldBackendSingleAnchor(Text, MaskingAnchor, MaskingIndex)
+			|| !MMDEndfieldBackendSingleAnchor(Text, Anchor, PayloadIndex)) return false;
+		return MMDEndfieldBackendReplaceIndirectAnchor(Text, MaskingAnchor, MaskingPatch)
+			&& MMDEndfieldBackendReplaceIndirectAnchor(Text, Anchor, Patch);
 	}
 
 	bool MMDEndfieldBackendPatchPayloadExport(FString& Text)

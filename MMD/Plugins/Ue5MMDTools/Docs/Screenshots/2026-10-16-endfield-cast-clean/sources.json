@@ -1,0 +1,209 @@
+{
+  "schema": "mmd.endfield.cast-clean.evidence.v1",
+  "archived_at": "2026-10-16T21:36:16.933992+08:00",
+  "engine": "UE 5.8.3 CL58210709",
+  "rhi": "D3D12 SM6",
+  "backend": "endfield-native-bsdf-v14-cast-clean",
+  "graph": 7,
+  "skin_layout": 42,
+  "payload": 5,
+  "face_data": 5,
+  "base_commit": "83e61f266445259a7a7efdc16b7fbc2f8d298111",
+  "sample_manifest": "Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+  "reference_pose": true,
+  "screenshots": [
+    {
+      "file": "default-face.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/cast4_toon_face.png",
+      "sha256": "b07897de2276902cb1fb1dca821b400d89dbb8f12cb863aa645a9212b0d0b851",
+      "captured_local": "2026-10-16T21:18:45.787876+08:00",
+      "source_version": "cast4 final production",
+      "pixels_modified": false
+    },
+    {
+      "file": "left-clean.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/cast4_castclean_left_hair0_face1_face.png",
+      "sha256": "8cb22e818dbf0c5377250c056386d2ed96ad2143c9efa3b416d25d8257d828f1",
+      "captured_local": "2026-10-16T21:18:47.728364+08:00",
+      "source_version": "cast4 final production",
+      "pixels_modified": false
+    },
+    {
+      "file": "top-clean.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/cast4_castclean_top_hair0_face1_face.png",
+      "sha256": "74c0f55af908dcd66bc5fe7aa9e1bbe47e056d12a69d6ccc14bb6b477d3cd6a3",
+      "captured_local": "2026-10-16T21:18:50.186161+08:00",
+      "source_version": "cast4 final production",
+      "pixels_modified": false
+    },
+    {
+      "file": "left-shadow-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/cast4_castclean_left_shadowoff_production_face.png",
+      "sha256": "8a4b1753142c43b410cca6eba4bbd3a565d441d7459805a0e5f7366e7d0ca016",
+      "captured_local": "2026-10-16T21:18:51.997148+08:00",
+      "source_version": "cast4 final production",
+      "pixels_modified": false
+    },
+    {
+      "file": "external-block.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/cast4_castclean_left_block_production_face.png",
+      "sha256": "760e1fa6cf56eb8d3d845f514ab8bb1a6d655a22da52450a4153c05b60e12962",
+      "captured_local": "2026-10-16T21:18:51.733611+08:00",
+      "source_version": "cast4 final production",
+      "pixels_modified": false
+    },
+    {
+      "file": "opaque-alpha0.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/cast4_castclean_top_shadowoff_production_alpha0_face.png",
+      "sha256": "d23297f1ae3aeba87bd2341ec8a1f642722bd8ff43419cfa826a67840e979eef",
+      "captured_local": "2026-10-16T21:18:50.980467+08:00",
+      "source_version": "cast4 final production",
+      "pixels_modified": false
+    },
+    {
+      "file": "historical-left-before.png",
+      "source": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast3/cast3_castclean_left_hair0_face1_face.png",
+      "sha256": "65a8210b6da0a70721d6bf2adee01be4d332df61e7110911965d657d3b60837f",
+      "captured_local": "2026-10-16T20:53:41.055695+08:00",
+      "source_version": "cast3 before shared translucent cast fix",
+      "pixels_modified": false
+    }
+  ],
+  "reports": [
+    {
+      "tag": "cast4",
+      "path": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/cast4/report.json",
+      "sha256": "19932da2198a4bfaec7d080ddea030081efe6c235d61f1ee4db9c2125f35300e",
+      "success": true,
+      "failures": 0,
+      "global_shader_protocol": 14,
+      "draw_verified": true,
+      "image_count": 27,
+      "slot_checks": 156
+    },
+    {
+      "tag": "mode0_final2",
+      "path": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/mode0_final2/report.json",
+      "sha256": "3cbc65272447810c87c94de5b3eb6bc99e12e9609c7d766c0827a51cb22ff41b",
+      "success": true,
+      "failures": 0,
+      "global_shader_protocol": 14,
+      "draw_verified": true,
+      "image_count": 8,
+      "slot_checks": 78
+    },
+    {
+      "tag": "atlas64_final",
+      "path": "Saved/Phase2Reference/Endfield2/cast-clean-2026-10-16/atlas64_final/report.json",
+      "sha256": "18efa4ee2fdbcb5704f58350fe5ed3bdd633058ee5b4915a72075dfbd1baa14c",
+      "success": true,
+      "failures": 0,
+      "global_shader_protocol": 14,
+      "draw_verified": true,
+      "image_count": 8,
+      "slot_checks": 78
+    }
+  ],
+  "source_freeze": [
+    {
+      "SHA256": "5f6e82865b03b6699c07463ec98e3cd70f918f420dbc80c5184b9b08e0350de0",
+      "Path": "MMD/Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldNativeBSDF.ush"
+    },
+    {
+      "SHA256": "c6752847d871eb32b270bfc9cb89e4bba94442988314dc03d71405ae3d1941d1",
+      "Path": "MMD/Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldNativeLegacy.ush"
+    },
+    {
+      "SHA256": "bcd430a10e2f7c78eb5b35dc7e4d59a19bb830ab45deeaa2dd007676dd722bc9",
+      "Path": "MMD/Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldSkinResponse.ush"
+    },
+    {
+      "SHA256": "da02b95c6337cda039e2d7131cb7c061551859661ee650f2a8905eddd46a34c1",
+      "Path": "MMD/Plugins/Ue5MMDTools/Shaders/Private/MMDEndfieldNativeBackendProtocol.usf"
+    },
+    {
+      "SHA256": "88dd6a16f56d17c67272d499c746aed53c69edc5fda8784bb91e4e7e27118926",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp"
+    },
+    {
+      "SHA256": "ba060b6db367f3df19434b0eb934f9c9799ace38c085720ca3b6ad36b2992bfb",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp"
+    },
+    {
+      "SHA256": "30c1645d2ded031bee999356399b431b415ea067ffa41841e70764f9db970ad4",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp"
+    },
+    {
+      "SHA256": "a707247a0f0179df59db1eb337ed8f49957546ecdaec07e80e698cba2ecb02bf",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl"
+    },
+    {
+      "SHA256": "7333e69df77ded7d280206408e6917cee6f41c7c16ec743394c25fe9bcce403d",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Public/Rendering/MMDEndfieldNativeBackend.h"
+    },
+    {
+      "SHA256": "a33d85ceaa1be5d496f111615efb283379c6f6020cfb61474a671da64bf9962b",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h"
+    },
+    {
+      "SHA256": "5a6d2fb8b29d9527f998f4c6dc1e657862044afbee8337c99a20b016b308af79",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp"
+    },
+    {
+      "SHA256": "6ca10fc8acdef6c28eb17b3d0a7c10c69da995a91c24943cad6f62799ab529d1",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp"
+    },
+    {
+      "SHA256": "60f57d1db97b30a9e458a9a55b11a5a8a54fdbd1448b274ff2070b03764aea22",
+      "Path": "MMD/Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldNative.ush"
+    },
+    {
+      "SHA256": "875a75bac75762a538d73cb5c8dd48e9162e8aff1051de6ab4e01fb92dcf48b9",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp"
+    },
+    {
+      "SHA256": "ff91c50bf3f21141b5fbf66597647e2ce73d6d44be0ed0505609ce4d191ebf19",
+      "Path": "MMD/Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDOutlineLibrary.cpp"
+    }
+  ],
+  "image_and_control_checks": {
+    "count": 52,
+    "failures": 0,
+    "source": "cast4/analysis_castclean/README.md",
+    "sha256": "737deda1e35eb237bb97139fc1da32e1e9c29f08320633435ce115ef0680f8d2",
+    "nose_core_shadow_on_vs_off_mae": 0,
+    "nose_core_cast3_vs_cast4_mae": 33.611,
+    "blocked_cheek_luma_before": 201.892,
+    "blocked_cheek_luma_after": 0.0689,
+    "shadowoff_policy_alpha0_repeat_exact": true,
+    "four_unlit_vs_cast3_exact": true,
+    "all_material_kernel_verified": false,
+    "overall_reproduction_visual_goal_verified": false
+  },
+  "protection": {
+    "baseline_file_count": 2381,
+    "changed_count": 8,
+    "intentional_changes": [
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear.uasset",
+      "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.uasset"
+    ]
+  },
+  "limits": [
+    "Hair and Face cast suppression affects every receiver, including ground.",
+    "All own Toon translucent parents stop forcing hard masked dynamic shadow casting.",
+    "No new fringe proxy, RT, GBuffer field or engine installation write.",
+    "Caster coverage split alone did not fix the nose ellipse in cast3.",
+    "No fresh Cook14, clean-host render, Forward MSAA/A2C, ray-shadow or multi-model/LOD validation."
+  ],
+  "failed_attempts": [
+    "cast1: black alpha-hole artifacts; not accepted.",
+    "generate15: old three-argument ReadFaceSdf call failed; compatibility overload fixed before generate16/17.",
+    "mode0_final: explicit sample rejected old fixture; rerun mode0_final2 with bake passed."
+  ]
+}

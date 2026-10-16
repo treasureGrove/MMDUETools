@@ -2,7 +2,15 @@
 
 适配范围：**UE 5.8.3 / CL58210709，Win64 桌面延迟渲染**。实际运行验证为D3D12 SM6。最近核查日期：2026-10-16。这是一份固定引擎版本的插件适配，不是跨版本自定义 ShadingModel API。
 
-**当前源码版本**：Backend `endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42；payload5／Graph6／FaceData5／Frame1不变。v13的原创风格化泛红在Skin本灯漫反射明暗交界局部生效，不新增RT、GBuffer或空间pass，不改独立高光／GI。它不代表提取到的原作红边、真实扩散或厚度透射。新预设仍关闭两组静态肤色，发布仍七父材质／15包。
+**当前源码版本**：Backend `endfield-native-bsdf-v14-cast-clean`／Cooked协议14／Graph7／Profile布局42；payload5／FaceData5／Frame1保持。七父材质／15包范围保留，皮肤原创LUT与泛红不改；没有新RT、GBuffer字段或修改安装引擎。
+
+本批通过材质ShadowReplace控制Hair对所有接收面的投影、有效Face coverage投影，并保留原Opaque主覆盖、自有Masked BasePass裁剪及透明连续alpha；所有自有Toon透明父取消强制masked投影。生产实拍 `cast4` 为27图／156次槽检查／0失败，Editor协议14验证，本次目检鼻椭圆消失；mode0_final2及atlas64_final各8图／78次检查／0失败，均验证协议14。外部52项检查通过，场景遮挡块的右颊亮度201.892→.0689，鼻核心与同角ShadowOff一致，四张Unlit与cast3相同。机制及范围见[脸部阴影说明](ENDFIELD_FACE_SHADOW_GUIDE.md)。
+
+**最终 `EFCastClean16c` BuildOnly通过**：Editor Development／Game Development／Shipping三配置成功，必需文件和过滤检查通过；15份冻结Source／HLSL与15个自有V2资产均与工作区逐字节一致，见[本批分发摘要](Screenshots/2026-10-16-endfield-cast-clean/distribution-summary.json)。本机输出为 `Saved/EFCastClean16c/Ue5MMDTools/`，仅文档在构建后补录结果；二进制与资源未再改变。空白宿主、发行包角色GPU、完整Cook和性能仍须独立验证，Editor协议记录与实拍不等于这些步骤通过。保护2,381项仅8个自有V2包有意变化；历史验证保留如下。
+
+## 历史验证：v13（2026-10-16）
+
+**当时源码版本**：Backend `endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42；payload5／Graph6／FaceData5／Frame1不变。v13的原创风格化泛红在Skin本灯漫反射明暗交界局部生效，不新增RT、GBuffer或空间pass，不改独立高光／GI。它不代表提取到的原作红边、真实扩散或厚度透射。新预设仍关闭两组静态肤色，发布仍七父材质／15包。
 
 新预设的泛红参数为强度 `.18`、NoL半宽 `.22`、归一π的角半宽 `.035`、Tint `(1,.4,.30)`；结构默认强度0，保留旧资产行为。几何NoL和SDF连续margin使用不同宽度，结合覆盖与弱NoV，原生 `SurfaceShadow≤.1`关闭新项；灯色和衰减只走原生外层一次。
 
@@ -28,7 +36,7 @@
 
 插件包包含运行时与编辑器模块、自己的 USH、材质与预设、Bullet 依赖、维护文档及验证脚本。**不包含生成的引擎 shader 目录镜像、参考游戏角色、Saved、DDC 或本机编译缓存。**
 
-当前版本必须同时分发 `Shaders/Core/TMMDEndfieldSkinResponse.ush` 与 `Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl`。前者由后端纳入shader源签名，后者为重新编译插件所需的原创CPU配方；不能只带二进制后漏掉下游源码依赖。本轮BuildOnly已核对源SHA256，空白宿主仍须独立实际检查协议13与材质编译，不能把文件一致当作该步骤通过。
+当前版本必须同时分发 `Shaders/Core/TMMDEndfieldSkinResponse.ush` 与 `Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl`。前者由后端纳入shader源签名，后者为重新编译插件所需的原创CPU配方；不能只带二进制后漏掉下游源码依赖。v14的EFCastClean16c已核对15份冻结Source／HLSL与15个V2资产SHA256；空白宿主仍须独立检查协议14与Graph7材质编译，不能把文件一致当作该步骤通过。
 
 Skin的原创6³ LUT仍为recipe1的216点，存于既有Profile Specular.RGB固定256槽，Specular.A仍为RD.A。Diffuse.A空隙标记布局42，九个平台的位置及其余八个控制值合同保留；216槽存泛红强度／NoL宽度／角宽度，217槽存Tint RGB。shader兼容41且泛红为0；42尾槽无效仅关泛红，仍保护cube不被误当RS。这里没有新增GBuffer／RT或真实空间SSS pass，也不分发客户端SkinLUT原图／重采样数据。RefineMask缺失的脸部视角响应仍是近似。
 
@@ -50,7 +58,7 @@ flowchart LR
 1. BuildPlugin 默认不收集插件根目录的 `ThirdParty`。原包会漏掉 Bullet，而下游 C++ 工程的 Build.cs 仍引用这些头文件和库。现在由 `Config/FilterPlugin.ini` 显式收集；当前依赖只有 Windows `.lib`，descriptor 明确声明 Win64。
 2. 后端原先启动时必须读取 CustomOutput 的私有 `.cpp/.h` 来生成签名。二进制插件可以没有这些源文件。现在材质输出名称、次序、默认值与打包约定由模块内的协议版本参与签名，自己的 USH 和引擎源 hash 继续逐项校验。修改这些约定必须同步升级协议并重新 Cook。
 
-自v8起保留 **Cooked全局shader协议门控**，当前适配副本在 `ToonProfileCommon.ush` 声明协议13；指纹shader只有编译看到该版本时才保留相应命名参数。C++从编译反射记录它，并随shader内存镜像序列化。游戏初始化后检查已加载记录，匹配当前协议13才允许Profile路由；普通未开启后端的Cook记录为0，启动参数不能把0或旧协议变成13。下面v8实测仍保留当时的协议8结果，不是新版本结果。
+自v8起保留 **Cooked全局shader协议门控**，当前适配副本在 `ToonProfileCommon.ush` 声明协议14；指纹shader只有编译看到该版本时才保留相应命名参数。C++从编译反射记录它，并随shader内存镜像序列化。游戏初始化后检查已加载记录，匹配当前协议14才允许Profile路由；普通未开启后端的Cook记录为0，启动参数不能把0或旧协议变成14。下面v8实测仍保留当时的协议8结果，不是新版本结果。
 
 该 shader **只用于读取编译记录，没有 dispatch，也没有新增一帧或逐像素光照 pass**。它证明这一份全局 shader 见过正确适配头，不能证明所有材质内核都正确；仍须全新 Cook 和实际绘制。完全缺少该新 shader 的旧包可能先被 UE 全局 shader 完整性检查拒绝，必须重新 Cook，不能承诺旧包都能自动回退。
 
@@ -68,7 +76,7 @@ flowchart LR
 
 脚本运行 UE 的 BuildPlugin（Editor Development、Game Development、Shipping），核查包内所需文件，然后把发行包复制到一个空白项目。测试副本移出 CustomOutput 的私有 `.cpp`，发行原包不变；该项目没有本仓库角色和工程配置，使用 `-AdapterOnly` 实际检查目录映射、源码完整性、全局协议及七个已发布父材质编译（含Face三模式与专用描边）。结果写入 `distribution.json`；日志和宿主留在输出目录便于定位。
 
-`distribution.json` 的 `expected_*` 是待核对版本要求；`skin_response_sources_verified`只代表两个源文件完整，`clean_host_adapter_verified`须在当前协议13及材质编译检查后才能置为真。两者都不代表皮肤画质或Cooked游戏已验证；历史v12报告仍按当时协议12解释。
+`distribution.json` 的 `expected_*` 是待核对版本要求；`skin_response_sources_verified`只代表两个源文件完整，`clean_host_adapter_verified`须在当前协议14及Graph7材质编译检查后才能置为真。两者都不代表皮肤画质或Cooked游戏已验证；历史v12报告仍按当时协议12解释。
 
 `-BuildOnly` 仅做打包与文件检查。**AdapterOnly 不绘制模型，也不代表画质验收或 Cooked 游戏通过。** 渲染和打包运行须另附实拍与 Cook 来源。
 

@@ -2,11 +2,17 @@
 
 更新日期：2026-10-16。适用版本：UE 5.8.3 / CL58210709。
 
+当前为 **Backend `endfield-native-bsdf-v14-cast-clean`／Cooked协议14／Graph7／Profile布局42**；payload5／FaceData5／Frame1保持。`cast4`生产实拍27图／156次槽检查／0失败，Editor全局shader协议14验证，本次目检鼻椭圆消失。mode0_final2与atlas64_final各8图／78次检查／0失败，均验证协议14；`EFCastClean16c` BuildOnly三配置通过。
+
+新版预设Hair投影覆盖0影响所有接收面，Face抑制只限有效coverage；原Opaque转Masked后主覆盖仍为1，带自有payload的Masked在BasePass恢复clip。全部自有Toon透明父保留连续alpha，取消强制masked投影；只处理Face透明父曾不足，cast3仍有椭圆，最终cast4才消失。脸部SDF分区与caster覆盖分开，身体／场景原生阴影接收保留。没有新增RT、代理角色或修改安装引擎，具体机制、研究边界和[本批原图](ENDFIELD_FACE_SHADOW_GUIDE.md#本批验证2026-10-16)见[脸部阴影说明](ENDFIELD_FACE_SHADOW_GUIDE.md)。
+
+本批外部像素检查52项通过：鼻核心与同角度关阴影对照逐像素一致；场景遮挡块使右颊编码亮度201.892→.0689，四张Unlit与cast3相同。保护2,381项仅8个自有V2包有意变化。这不等于原厂算法或完整终末地画质验收；多模型／动画／LOD、发行包绘制、Cook与性能不能从本批参考姿势推导。下方v13及更早结果保留原版本日期。
+
 **UE 负责准备真实灯光、阴影和环境光，插件负责决定角色被照亮后是什么样子。** 这就是目前的方案。材质仍使用原生 Substrate Toon 的数据格式，光照计算入口已经接到插件自己的 `.ush`。
 
 shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
 
-当前源码为 **`endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**，payload5／Graph6／FaceData5／Frame1不变。v12的颜色LUT与视角响应继续保留，v13在Skin当前灯的漫反射明暗交界增加弱暖红窄带。它是插件原创风格化泛红，不是提取到的原作红边；没有空间扩散、厚度透射或新的RT／GBuffer／渲染pass。
+历史皮肤版本（2026-10-16，v13）为 **`endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**，payload5／Graph6／FaceData5／Frame1不变。v12的颜色LUT与视角响应继续保留，v13在Skin当前灯的漫反射明暗交界增加弱暖红窄带。它是插件原创风格化泛红，不是提取到的原作红边；没有空间扩散、厚度透射或新的RT／GBuffer／渲染pass。
 
 新版预设仍关闭两组静态肤色，`CharacterSkinLighting`新增强度 `.18`、NoL宽度 `.22`、按π归一化的角半宽 `.035`、RGB `(1,.4,.30)`。几何NoL与SDF连续角距离分别计算窄带，并受覆盖、弱NoV及原生阴影约束；`SurfaceShadow≤.1`关闭新项。灯色与衰减只在原生外层乘一次，独立高光和GI不变。强度0保留同参数v12响应，详见[皮肤说明](ENDFIELD_SKIN_MATERIAL_GUIDE.md#v13明暗交界的弱暖红)。
 
@@ -70,6 +76,7 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 ![材质直射间接与反射入口在管线中的位置](Images/EndfieldNative/pipeline-hooks.svg)
 
+- **投影覆盖，在UE原生阴影深度绘制中。** Graph7用ShadowReplace选择caster覆盖，不新建阴影pass；正常深度／主画面保留对应表面覆盖，Backend14仅为自有Masked恢复必要的BasePass裁剪。透明主画面继续在原生Translucency绘制。
 - **A 材质准备，在 BasePass 内。** 材质 Custom 调用 `TMMDEndfieldNative::PrepareSurface()`，计算独立原生法线、脸部角阈值／方向和头部旋转。专用 CustomOutput 将后两项交给 BasePass 的打包入口，再供逐灯读取。这一步还没有当前逐灯光的最终阴影。
 - **B 直射，在 RenderLights 内。** `DeferredLightPixelShaders.usf` 调用 `SubstrateDeferredLighting()`；该调用链准备原生阴影、接触阴影与 AreaLight，再在 `SubstrateEvaluation.ush` 的 Toon 分支调用我们的 `EvaluatePerLight()`。返回后，UE 外层乘灯色／LightMask 等并累加。额外灯光参数的复制在同一调用链中完成。
 - **C 间接，在 DiffuseIndirectComposite 内。** UE 已取得 GI／反射输入，算好原生材质权重和 AO，插件再调用 `Process()`；adaptive 路径处理 `OutBSDF.Diffuse/Specular`，传统路径处理 `IndirectLighting.Diffuse/Specular`，随后才累加到 SceneColor。位置在原生分离输出及后续合成之前，不在 Lumen 射线追踪或历史更新内部。
