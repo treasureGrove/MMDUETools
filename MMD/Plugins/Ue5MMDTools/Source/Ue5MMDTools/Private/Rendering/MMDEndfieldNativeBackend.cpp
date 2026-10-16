@@ -23,7 +23,7 @@ namespace
 {
 	constexpr TCHAR MMDEndfieldBackendSection[] = TEXT("Ue5MMDTools.EndfieldNativeBackend");
 	constexpr TCHAR MMDEndfieldBackendVirtualRoot[] = TEXT("/Engine/Private");
-	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v12-skin-response");
+	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v13-skin-redness");
 	// 修改 CustomOutput 名称、输出次序/类型/默认值或打包协议时同步此版本。
 	constexpr TCHAR MMDEndfieldBackendPayloadProtocol[] = TEXT("endfield-skin-payload-v5:GetMMDEndfieldNativePayload:direction-or-threshold4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:values16-type1-mask7-quat32");
 	MMDEndfieldNativeBackend::FStatus MMDEndfieldBackendStatus;

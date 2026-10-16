@@ -227,7 +227,7 @@ struct TMMDEndfieldNativeBSDF
             return f0 * response * coordinate * edge * (0.96 * 5.0);
         }
         float3 f0 = lerp(0.04 * TOON_SPECULAR(bsdf_context.BSDF), TOON_BASECOLOR(bsdf_context.BSDF), TOON_METALLIC(bsdf_context.BSDF));
-        // 仅 schema41 的 Skin RGB 是颜色立方体；旧 Profile 仍读取原 RS，Master 关闭不改变格式。
+        // schema41/42 的 Skin RGB 是颜色立方体；旧 Profile 仍读取原 RS，Master 关闭不改变格式。
         float3 response = role == 1u && skin_has_color_cube ? 1.0
             : ReadSpecularRamp2D(TOON_PROFILEID(bsdf_context.BSDF), float2(coordinate, roughness));
         return f0 * response * amplitude;
@@ -244,6 +244,15 @@ struct TMMDEndfieldNativeBSDF
         float area_cosine = dot(normal, bsdf_context.N) > 0.9999 ? saturate(area_light.NoL) : n_dot_l;
         result.DiffuseColor = ComputeDiffuseAlbedo(TOON_BASECOLOR(bsdf_context.BSDF),
             TOON_METALLIC(bsdf_context.BSDF)) * 0.96;
+        uint role;
+        if (IsEndfieldProfile(TOON_PROFILEID(bsdf_context.BSDF), role) && role == 1u)
+        {
+            TMMDEndfieldSkinResponse skin_response;
+            skin_response.Load(TOON_PROFILEID(bsdf_context.BSDF), role, 2u);
+            float band = skin_response.RednessBand(dot(bsdf_context.N, bsdf_context.L), skin_response.redness_width);
+            result.DiffuseColor = skin_response.ApplyRedness(result.DiffuseColor, result.DiffuseColor,
+                band, saturate(dot(bsdf_context.N, bsdf_context.V)), shadow_terms.SurfaceShadow);
+        }
         result.DiffusePathValue = Diffuse_Lambert(result.DiffuseColor) * area_cosine * saturate(shadow_terms.SurfaceShadow);
         result.IntegratedDiffuseValue = area_light.Falloff * area_light.FalloffColor * result.DiffusePathValue;
         result.DiffusePDF = n_dot_l / PI;
@@ -293,6 +302,7 @@ struct TMMDEndfieldNativeBSDF
             diffuse_offset = 0.0;
         }
         float n_dot_l = clamp(dot(normal, bsdf_context.L), -1.0, 1.0);
+        float redness_band = skin_response.RednessBand(dot(bsdf_context.N, bsdf_context.L), skin_response.redness_width);
         if (role == 1u && bsdf_context.BSDF.mmd_payload.valid && bsdf_context.BSDF.mmd_payload.has_face_sdf
             && bsdf_context.mmd_light_data.valid && bsdf_context.mmd_light_data.key_directional_light)
         {
@@ -312,6 +322,11 @@ struct TMMDEndfieldNativeBSDF
                     : 1.0 - 2.0 * smoothstep(cutoff - softness, cutoff + softness, theta);
                 float horizontal_weight = smoothstep(0.000001, 0.0001, horizontal_length_squared);
                 n_dot_l = lerp(n_dot_l, sdf_n_dot_l, bsdf_context.BSDF.mmd_payload.mask * horizontal_weight);
+                // 角度与NoL使用各自宽度，不能混合两个不同单位的margin。
+                float sdf_redness_band = cutoff > 0.0 && cutoff < 1.0
+                    ? skin_response.RednessBand(cutoff - theta, skin_response.redness_angular_width) : 0.0;
+                redness_band = lerp(redness_band, sdf_redness_band,
+                    bsdf_context.BSDF.mmd_payload.mask * horizontal_weight);
                 diffuse_offset = 0.0;
             }
         }
@@ -346,6 +361,9 @@ struct TMMDEndfieldNativeBSDF
                 TOON_METALLIC(bsdf_context.BSDF), dark_color);
         }
         result.DiffuseColor = ApplyDiffuseRamp(lit_color, dark_color, ramp, view_alpha, shadow);
+        if (role == 1u && !additional_light)
+            result.DiffuseColor = skin_response.ApplyRedness(result.DiffuseColor, diffuse_color,
+                redness_band, saturate(dot(bsdf_context.N, bsdf_context.V)), shadow_terms.SurfaceShadow);
         result.DiffusePathValue = Diffuse_Lambert(result.DiffuseColor);
         result.IntegratedDiffuseValue = diffuse_area_light.Falloff * diffuse_area_light.FalloffColor * result.DiffusePathValue;
         if (additional_light)

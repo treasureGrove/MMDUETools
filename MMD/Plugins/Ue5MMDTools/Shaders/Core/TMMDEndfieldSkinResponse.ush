@@ -10,6 +10,10 @@ struct TMMDEndfieldSkinResponse
     float face_view_scale;
     float3 view_tint;
     float face_angular_softness;
+    float redness_strength;
+    float redness_width;
+    float redness_angular_width;
+    float3 redness_tint;
 
     float ReadControl(float profile_id, uint tick)
     {
@@ -17,6 +21,14 @@ struct TMMDEndfieldSkinResponse
         uint x = uint(round(float(width - 1u) * (float(tick) / 64.0)));
         return View.ToonProfileTexture.Load(int4(int(x), TOON_PROFILE_DIFFUSE_RAMP_Y,
             int(round(profile_id)), 0)).a;
+    }
+
+    float3 ReadPackedSlot(float profile_id, uint index)
+    {
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        uint x = min(uint(floor((float(index) + 0.5) * (float(width) / 256.0))), width - 1u);
+        return View.ToonProfileTexture.Load(int4(int(x), TOON_PROFILE_SPECULAR_RAMP_Y,
+            int(round(profile_id)), 0)).rgb;
     }
 
     void Load(float profile_id, uint role, uint response_mode)
@@ -28,9 +40,15 @@ struct TMMDEndfieldSkinResponse
         face_view_scale = 0.0;
         view_tint = float3(0.67, 0.60668504, 0.52930003);
         face_angular_softness = 2.0 / 255.0;
+        redness_strength = 0.0;
+        redness_width = 0.22;
+        redness_angular_width = 0.035;
+        redness_tint = float3(1.0, 0.4, 0.30);
         if (role != 1u || response_mode != 2u
             || uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u) return;
-        if (!(abs(ReadControl(profile_id, 9u) - 41.0) < 0.01)) return;
+        float layout = ReadControl(profile_id, 9u);
+        bool has_redness = abs(layout - 42.0) < 0.01;
+        if (!(abs(layout - 41.0) < 0.01 || has_redness)) return;
 
         float4 controls = float4(ReadControl(profile_id, 10u), ReadControl(profile_id, 11u),
             ReadControl(profile_id, 21u), ReadControl(profile_id, 22u));
@@ -44,6 +62,15 @@ struct TMMDEndfieldSkinResponse
         view_tint = clamp(tint_and_softness.xyz, 0.0, 2.0);
         face_angular_softness = clamp(tint_and_softness.w, 1.0 / 255.0, 0.15);
         valid = true;
+        if (!has_redness) return;
+        float3 redness_controls = ReadPackedSlot(profile_id, 216u);
+        float3 tint = ReadPackedSlot(profile_id, 217u);
+        // 新参数异常只关闭泛红，不能把仍有效的颜色立方体误认成高光RS。
+        if (!all(isfinite(redness_controls)) || !all(isfinite(tint))) return;
+        redness_strength = saturate(redness_controls.x);
+        redness_width = clamp(redness_controls.y, 0.05, 0.6);
+        redness_angular_width = clamp(redness_controls.z, 0.005, 0.15);
+        redness_tint = saturate(tint);
     }
 
     float3 LinearToEncoded(float3 linear_color)
@@ -58,12 +85,9 @@ struct TMMDEndfieldSkinResponse
 
     float3 ReadLutCorner(float profile_id, uint3 corner)
     {
-        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
         uint index = corner.x + 6u * corner.y + 36u * corner.z;
         // 固定 256 槽的常量平台，6^3 数据只占前 216 槽；不让 atlas 在线性跨行时串色。
-        uint x = min(uint(floor((float(index) + 0.5) * (float(width) / 256.0))), width - 1u);
-        return View.ToonProfileTexture.Load(int4(int(x), TOON_PROFILE_SPECULAR_RAMP_Y,
-            int(round(profile_id)), 0)).rgb;
+        return ReadPackedSlot(profile_id, index);
     }
 
     float3 ReadColorLut(float profile_id, float3 original_base_color)
@@ -116,5 +140,29 @@ struct TMMDEndfieldSkinResponse
         float skin_area = lerp(body_area, face_area, face_mask);
         float3 new_color = lit_color * lerp(1.0, view_tint, skin_area);
         return lerp(old_color, new_color, master);
+    }
+
+    float RednessBand(float margin, float half_width)
+    {
+        float band = 1.0 - smoothstep(0.0, half_width, abs(margin));
+        return band * band;
+    }
+
+    float3 ApplyRedness(float3 color, float3 diffuse_albedo, float band,
+        float geometry_no_v, float surface_shadow)
+    {
+        if (!valid || master <= 0.0 || redness_strength <= 0.0) return color;
+        float visibility = smoothstep(0.10, 0.65, saturate(surface_shadow));
+        float edge = 1.0 - saturate(geometry_no_v);
+        float weight = master * redness_strength * saturate(band) * visibility
+            * (0.65 + 0.35 * edge * edge);
+        if (weight <= 0.0 || max(redness_tint.r, max(redness_tint.g, redness_tint.b)) <= 0.00001)
+            return color;
+        float3 tinted = color * redness_tint;
+        float compensation = min(Luminance(color) / max(Luminance(tinted), 0.00001), 1.4);
+        tinted *= compensation;
+        // 有界的暖色重分配与少量红通道填充；光色/衰减仍只由外层乘一次。
+        float3 fill = max(diffuse_albedo - color, 0.0) * float3(1.0, 0.10, 0.02) * 0.08;
+        return max(lerp(color, tinted, weight) + fill * weight, 0.0);
     }
 };

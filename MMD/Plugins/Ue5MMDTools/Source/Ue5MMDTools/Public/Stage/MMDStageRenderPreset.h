@@ -60,6 +60,14 @@ struct UE5MMDTOOLS_API FMMDStageSkinLightingSettings
 	FLinearColor ViewTint = FLinearColor(0.6745f, 0.6116f, 0.5333f, 1.0f);
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0.003921569", ClampMax = "0.15", ToolTip = "V5 截止角两侧的柔化半宽，按半圈归一化；0.007843 为原有宽度。"))
 	float FaceAngularSoftness = 2.0f / 255.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "1", ToolTip = "受当前灯光与原生遮挡控制的明暗过渡泛红；0保持原有响应，不代表厚度透射。"))
+	float RednessStrength = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0.05", ClampMax = "0.6", ToolTip = "几何明暗交界的泛红半宽，以NdotL为单位。"))
+	float RednessWidth = 0.22f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0.005", ClampMax = "0.15", ToolTip = "脸部角阈值两侧泛红半宽，按半圈归一化；独立于SDF明暗柔化。"))
+	float RednessAngularWidth = 0.035f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", HideAlphaChannel))
+	FLinearColor RednessTint = FLinearColor(1.0f, 0.4f, 0.30f, 1.0f);
 };
 
 /** 皮肤表面的线性底色与高光参数；关闭时保留原部位设置，不改变源贴图和透明度。 */

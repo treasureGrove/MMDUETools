@@ -1,0 +1,889 @@
+{
+  "schema": "mmd.endfield.skin-redness-screenshots.v1",
+  "archived_at": "2026-10-16T18:24:49.844777+08:00",
+  "engine": "UE 5.8.3 CL58210709 / Win64 D3D12 SM6 / RenderOffscreen",
+  "versions": {
+    "backend": "endfield-native-bsdf-v13-skin-redness",
+    "protocol": 13,
+    "graph": 6,
+    "payload": 5,
+    "face_data": 5,
+    "head_frame": 1,
+    "skin_profile_layout": 42
+  },
+  "image_contract": "Actual engine PNG bytes, 1280x720. No repaint, grading, image generation or retouch. Derivative crops remain in Saved.",
+  "model": "YYB Hatsune Miku 16th winged reference pose; local validation only; no model assets distributed.",
+  "source_pmx": "D:/projectGithub/MMDUETools/MMD/Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/YYB Hatsune Miku_16th.pmx",
+  "sample_manifest": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+  "scene": {
+    "can_render": true,
+    "substrate_enabled": true,
+    "substrate_blendable_gbuffer": false,
+    "toon_profile_enabled": true,
+    "shader_platform": "PCD3D_SM6",
+    "rhi": "D3D12",
+    "r.Substrate": "1",
+    "r.Substrate.ProjectGBufferFormat": "1",
+    "r.Substrate.ClosuresPerPixel": "4",
+    "r.Substrate.BytesPerPixel": "80",
+    "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+    "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+    "r.Substrate.ToonProfile.Resolution": "256",
+    "r.DynamicGlobalIlluminationMethod": "1",
+    "r.ReflectionMethod": "1",
+    "r.Shadow.Virtual.Enable": "1",
+    "r.RayTracing": "1",
+    "r.Lumen.HardwareRayTracing": "1",
+    "r.GenerateMeshDistanceFields": "0",
+    "r.AntiAliasingMethod": "5",
+    "r.DefaultFeature.AutoExposure": "1"
+  },
+  "experiment": "Only Skin Profile slot216.R toggles 0/.18. Master, LUT, view tint, widths, alpha, exposure, native specular and all other controls stay fixed. GI/Sky/reflections/AO isolated off for skinredness; normal AB keeps the preset environment.",
+  "reports": {
+    "generate": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\generate13\\report.json",
+      "sha256": "671af141a3aeb8685f00af4cc73de7e23fc1841373f8ed8813ba7fe44313f4ca",
+      "bytes": 12305,
+      "modified_at": "2026-10-16T18:02:53.219344+08:00"
+    },
+    "mode2": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\report.json",
+      "sha256": "448e8d509b12589839133fcf224b43d33bc91855873cdb21bf11fb585c7e5d4c",
+      "bytes": 719154,
+      "modified_at": "2026-10-16T18:12:08.758320+08:00"
+    },
+    "mode0": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\mode0\\report.json",
+      "sha256": "cd2f07200aa381a175a18f7cd57cbdd31b728d63e0b2747deffa182d8d21abff",
+      "bytes": 415206,
+      "modified_at": "2026-10-16T18:10:22.281729+08:00"
+    },
+    "atlas64": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\atlas64\\report.json",
+      "sha256": "83b64446a29acfe2a756ef7b3237bea54c1cc8d1159efd21ee061bbcbe0fba34",
+      "bytes": 416818,
+      "modified_at": "2026-10-16T18:10:41.161718+08:00"
+    },
+    "analysis": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\analysis_redness\\analysis.json",
+      "sha256": "aedcf377c484a5e1ab26344bfef373ad4981a94d68d53cff18791d7fd18b6e3e",
+      "bytes": 205101,
+      "modified_at": "2026-10-16T18:17:40.237779+08:00"
+    },
+    "analysis_summary": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\analysis_redness\\summary.json",
+      "sha256": "18c7cbb315308196abe3de8fc7a6d387d2540c3d01baeeb721c866966325d1f9",
+      "bytes": 2072,
+      "modified_at": "2026-10-16T18:17:40.237779+08:00"
+    },
+    "roi_review": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3_rois.json",
+      "sha256": "3f7c33b1b0450b99443518408663d1074981388bb34f725c30fd67faeaa2944a",
+      "bytes": 7426,
+      "modified_at": "2026-10-16T18:16:31.660189+08:00"
+    },
+    "pixel_analyzer": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\analyze_redness.py",
+      "sha256": "1b5cf52cfe50332491f119ecb34848b9c83bd018cce38ef290f3ef30ee995baa",
+      "bytes": 24862,
+      "modified_at": "2026-10-16T18:17:37.667694+08:00"
+    },
+    "source_freeze": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\source-freeze-final.json",
+      "sha256": "080359d7adf845016fdfe14bbbc794488facad1467315de8edf3f9d0dbf6e622",
+      "bytes": 2318,
+      "modified_at": "2026-10-16T18:06:49.979810+08:00"
+    },
+    "protection": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\protected-final.json",
+      "sha256": "b8acccfacefa3723e307d23e2d88a5d4275613823237d4a6461e91eb68d1ee52",
+      "bytes": 505,
+      "modified_at": "2026-10-16T18:14:20.677555+08:00"
+    },
+    "static_audit": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\shader-static-audit.json",
+      "sha256": "3cd4a8720143e558e9414b81f756d232706a1a8397c54a445d91f00c17756ace",
+      "bytes": 4182,
+      "modified_at": "2026-10-16T18:14:21.910848+08:00"
+    },
+    "source_match": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\distribution-source-match.json",
+      "sha256": "987513c88d2c1193e109a40ed9cc3af2890c49750b6c5bb87a2a2a63c0776b91",
+      "bytes": 4784,
+      "modified_at": "2026-10-16T18:10:19.077569+08:00"
+    },
+    "distribution": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\EFSkinRedness16\\distribution.json",
+      "sha256": "0aa44ed37199fc7d3b09caf0572d7355a13876122d743f47e7d5130668d0a479",
+      "bytes": 3898,
+      "modified_at": "2026-10-16T18:07:21.602858+08:00"
+    }
+  },
+  "summary": {
+    "mode2": {
+      "image_count": 34,
+      "slot_check_count": 156,
+      "failures": 0
+    },
+    "mode0": {
+      "images": 8,
+      "slot_checks": 78,
+      "failures": 0
+    },
+    "atlas64_startup_fallback": {
+      "images": 8,
+      "slot_checks": 78,
+      "failures": 0
+    },
+    "analysis_checks": 72,
+    "pixel_controls_passed": true,
+    "all_gpu_verified": false,
+    "body_skin_tested": false,
+    "distribution_build_only": true,
+    "clean_host_adapter_verified": false,
+    "cooked_runtime_verified": false
+  },
+  "side_observation": {
+    "right_cheek_roi": [
+      710,
+      458,
+      728,
+      483
+    ],
+    "on_minus_off": {
+      "mae_rgb_0_255": 1.3029629629629629,
+      "rmse_rgb_0_255": 1.8226964152656422,
+      "max_abs_channel_0_255": 8,
+      "mean_delta_rgb_on_minus_off": [
+        1.0911111111111111,
+        -1.0911111111111111,
+        -1.5355555555555556
+      ],
+      "mean_delta_encoded_luma": -0.6592595555555556,
+      "mean_positive_luma_delta": 0.03691777777777778,
+      "max_positive_luma_delta": 1.0722,
+      "fraction_changed_rgb_pixels": 0.7422222222222222,
+      "rgb_bit_exact": false
+    },
+    "off_repeat_noise": {
+      "mae_rgb_0_255": 0.20222222222222222,
+      "rmse_rgb_0_255": 0.5099019513592785,
+      "max_abs_channel_0_255": 5,
+      "mean_delta_rgb_on_minus_off": [
+        0.006666666666666667,
+        0.006666666666666667,
+        0.011111111111111112
+      ],
+      "mean_delta_encoded_luma": 0.006987555555555558,
+      "mean_positive_luma_delta": 0.10010577777777777,
+      "max_positive_luma_delta": 1.8595999999999997,
+      "fraction_changed_rgb_pixels": 0.3377777777777778,
+      "rgb_bit_exact": false
+    },
+    "scope": "Predefined sampled right-cheek rectangle only; whole-face and backlit changes are not counted as established redness."
+  },
+  "deep_occlusion_observation": {
+    "sampled_right_cheek_blocked_div_clear_encoded_luma": 0.00034440009107004937,
+    "sampled_right_cheek_strength_effect_clear_mae": 1.3029629629629629,
+    "sampled_right_cheek_strength_effect_blocked_mae": 0.0,
+    "sampled_right_cheek_strength_effect_shadowoff_mae": 1.2703703703703704,
+    "actual_shadow_coverage_mask_available": false,
+    "full_deep_occlusion_verified": false,
+    "scope": "CPU ray-box intersection proves placement only. Review actual clear/blocked/shadow-off images and ROI luma before claiming received shadow. No per-pixel native ShadowTerms readback or full-face mask is available."
+  },
+  "frozen_source_files": [
+    {
+      "path": "Shaders/Core/TMMDEndfieldNativeBSDF.ush",
+      "workspace_sha256": "5f6e82865b03b6699c07463ec98e3cd70f918f420dbc80c5184b9b08e0350de0",
+      "frozen_sha256": "5f6e82865b03b6699c07463ec98e3cd70f918f420dbc80c5184b9b08e0350de0",
+      "package_sha256": "5f6e82865b03b6699c07463ec98e3cd70f918f420dbc80c5184b9b08e0350de0",
+      "match": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldNativeLegacy.ush",
+      "workspace_sha256": "c6752847d871eb32b270bfc9cb89e4bba94442988314dc03d71405ae3d1941d1",
+      "frozen_sha256": "c6752847d871eb32b270bfc9cb89e4bba94442988314dc03d71405ae3d1941d1",
+      "package_sha256": "c6752847d871eb32b270bfc9cb89e4bba94442988314dc03d71405ae3d1941d1",
+      "match": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldSkinResponse.ush",
+      "workspace_sha256": "bcd430a10e2f7c78eb5b35dc7e4d59a19bb830ab45deeaa2dd007676dd722bc9",
+      "frozen_sha256": "bcd430a10e2f7c78eb5b35dc7e4d59a19bb830ab45deeaa2dd007676dd722bc9",
+      "package_sha256": "bcd430a10e2f7c78eb5b35dc7e4d59a19bb830ab45deeaa2dd007676dd722bc9",
+      "match": true
+    },
+    {
+      "path": "Shaders/Private/MMDEndfieldNativeBackendProtocol.usf",
+      "workspace_sha256": "5eff0cf727f06b8f3e70fbf526c3641bfee536602a65ec327dc90f5e53b55f06",
+      "frozen_sha256": "5eff0cf727f06b8f3e70fbf526c3641bfee536602a65ec327dc90f5e53b55f06",
+      "package_sha256": "5eff0cf727f06b8f3e70fbf526c3641bfee536602a65ec327dc90f5e53b55f06",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp",
+      "workspace_sha256": "982facb88e5be361af25388f8fb1672355168638e52c729c442915e4162c663b",
+      "frozen_sha256": "982facb88e5be361af25388f8fb1672355168638e52c729c442915e4162c663b",
+      "package_sha256": "982facb88e5be361af25388f8fb1672355168638e52c729c442915e4162c663b",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp",
+      "workspace_sha256": "f0d735a22cdc61a66bf015030086c521fe902848b6e2916e3554f748959aa251",
+      "frozen_sha256": "f0d735a22cdc61a66bf015030086c521fe902848b6e2916e3554f748959aa251",
+      "package_sha256": "f0d735a22cdc61a66bf015030086c521fe902848b6e2916e3554f748959aa251",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp",
+      "workspace_sha256": "30c1645d2ded031bee999356399b431b415ea067ffa41841e70764f9db970ad4",
+      "frozen_sha256": "30c1645d2ded031bee999356399b431b415ea067ffa41841e70764f9db970ad4",
+      "package_sha256": "30c1645d2ded031bee999356399b431b415ea067ffa41841e70764f9db970ad4",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl",
+      "workspace_sha256": "a707247a0f0179df59db1eb337ed8f49957546ecdaec07e80e698cba2ecb02bf",
+      "frozen_sha256": "a707247a0f0179df59db1eb337ed8f49957546ecdaec07e80e698cba2ecb02bf",
+      "package_sha256": "a707247a0f0179df59db1eb337ed8f49957546ecdaec07e80e698cba2ecb02bf",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Rendering/MMDEndfieldNativeBackend.h",
+      "workspace_sha256": "ca67de3541bedb402da2d42513ea00a797d2e5b32c933b72c0af77a7e5b392f9",
+      "frozen_sha256": "ca67de3541bedb402da2d42513ea00a797d2e5b32c933b72c0af77a7e5b392f9",
+      "package_sha256": "ca67de3541bedb402da2d42513ea00a797d2e5b32c933b72c0af77a7e5b392f9",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h",
+      "workspace_sha256": "d319f5d837c10166340f38417baccc18f4fa62a2a73d2c988974a1ad65c38410",
+      "frozen_sha256": "d319f5d837c10166340f38417baccc18f4fa62a2a73d2c988974a1ad65c38410",
+      "package_sha256": "d319f5d837c10166340f38417baccc18f4fa62a2a73d2c988974a1ad65c38410",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp",
+      "workspace_sha256": "fb9c8288c42c22c0c8ee936e40b98da70fc02439ea842f53e771a55b254a38aa",
+      "frozen_sha256": "fb9c8288c42c22c0c8ee936e40b98da70fc02439ea842f53e771a55b254a38aa",
+      "package_sha256": "fb9c8288c42c22c0c8ee936e40b98da70fc02439ea842f53e771a55b254a38aa",
+      "match": true
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp",
+      "workspace_sha256": "a0224c240c4a04b69206e6ad1b642cee052bf480e4a44b06f6636827399b8217",
+      "frozen_sha256": "a0224c240c4a04b69206e6ad1b642cee052bf480e4a44b06f6636827399b8217",
+      "package_sha256": "a0224c240c4a04b69206e6ad1b642cee052bf480e4a44b06f6636827399b8217",
+      "match": true
+    }
+  ],
+  "protection": {
+    "count": 2381,
+    "unchanged": 2379,
+    "changed": [
+      {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Presets\\EndfieldV2\\DA_Render_EndfieldV2.uasset",
+        "reason": "changed"
+      },
+      {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\Profiles\\T_EndfieldV2_OffsetLinear.uasset",
+        "reason": "changed"
+      }
+    ],
+    "captured_at": "2026-10-16T18:14:20.678116+08:00"
+  },
+  "limitations": [
+    "Stylized local diffuse response, no spatial diffusion or thickness transmission.",
+    "Only face Skin in this actual model was tested; additional-light and legacy responses were compiled/static-reviewed, not independently GPU-isolated.",
+    "Backlit differences do not exceed same-condition repeat noise and are not counted as a verified redness response.",
+    "Native shadow suppression is observed in reviewed face rectangles; no per-pixel ShadowTerms buffer or complete coverage mask was read back.",
+    "No new clean-host rendering, full Cook/Shipping game run or performance measurement.",
+    "Distribution build preceded final documentation archive; runtime/source files match frozen render sources.",
+    "A startup atlas64 fallback is tested; runtime atlas resizing after cube allocation remains unsupported."
+  ],
+  "images": [
+    {
+      "file": "default-face.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_toon_face.png",
+        "sha256": "0463ff0bcca78b0e51b886738df9587c273d7423b81f4caab42d7fa6b695e436",
+        "bytes": 1548675,
+        "modified_at": "2026-10-16T18:12:00.673978+08:00"
+      },
+      "capture": {
+        "name": "toon_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_toon_face.png",
+        "ok": true,
+        "mean_luma": 138.79945746527778,
+        "center_mean_luma": 148.0686851192227,
+        "min_luma": 0,
+        "max_luma": 223,
+        "seconds": 0.24868270009756088,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": null
+    },
+    {
+      "file": "side-off.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_skinredness_side_off_face.png",
+        "sha256": "4f648dc9e9f2d9494756f4fc94f59010192536b387a3b1ea3a7887afcdd2de89",
+        "bytes": 1469726,
+        "modified_at": "2026-10-16T18:12:02.334855+08:00"
+      },
+      "capture": {
+        "name": "skinredness_side_off_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_skinredness_side_off_face.png",
+        "ok": true,
+        "mean_luma": 119.17389105902778,
+        "center_mean_luma": 133.12371055412132,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.2242623008787632,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinredness_side_off_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "redness_enabled": false,
+        "redness_strength": 0,
+        "native_shadows_enabled": true,
+        "occluder_placed": false,
+        "cpu_light_ray_intersects_occluder": false,
+        "occlusion_verified_by_cpu": false,
+        "occluder_transform": "0.000000,0.000000,-5000.000000|0.000000,0.000000,-0.000000|0.010000,0.010000,0.010000",
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true,
+        "showflag_ambient_occlusion": false,
+        "contact_shadows_enabled": false,
+        "occluder_main_pass_enabled": false,
+        "occluder_depth_pass_enabled": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              42,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ],
+            "redness_tail216_217_rgb": [
+              0,
+              0.2199999988079071,
+              0.03500000014901161,
+              1,
+              0.4000000059604645,
+              0.30000001192092896
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "side-on.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_skinredness_side_on_face.png",
+        "sha256": "a677299715abf98ea9959b917fcaa19ae75c6d6be3fe2b639c877f89927b3ff5",
+        "bytes": 1470085,
+        "modified_at": "2026-10-16T18:12:02.645208+08:00"
+      },
+      "capture": {
+        "name": "skinredness_side_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_skinredness_side_on_face.png",
+        "ok": true,
+        "mean_luma": 119.17168836805556,
+        "center_mean_luma": 133.1173109811226,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.22504960000514984,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinredness_side_on_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "redness_enabled": true,
+        "redness_strength": 0.18000000715255737,
+        "native_shadows_enabled": true,
+        "occluder_placed": false,
+        "cpu_light_ray_intersects_occluder": false,
+        "occlusion_verified_by_cpu": false,
+        "occluder_transform": "0.000000,0.000000,-5000.000000|0.000000,0.000000,-0.000000|0.010000,0.010000,0.010000",
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true,
+        "showflag_ambient_occlusion": false,
+        "contact_shadows_enabled": false,
+        "occluder_main_pass_enabled": false,
+        "occluder_depth_pass_enabled": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              42,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ],
+            "redness_tail216_217_rgb": [
+              0.18000000715255737,
+              0.2199999988079071,
+              0.03500000014901161,
+              1,
+              0.4000000059604645,
+              0.30000001192092896
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "side-off-repeat.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_skinredness_side_off_repeat_face.png",
+        "sha256": "45832dfb47fc9f899cf13d58aaa0e467c6fe2470d276a2dee3954b3004040d33",
+        "bytes": 1470085,
+        "modified_at": "2026-10-16T18:12:02.951256+08:00"
+      },
+      "capture": {
+        "name": "skinredness_side_off_repeat_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_skinredness_side_off_repeat_face.png",
+        "ok": true,
+        "mean_luma": 119.1750368923611,
+        "center_mean_luma": 133.12128143960436,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.22020699828863144,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinredness_side_off_repeat_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "redness_enabled": false,
+        "redness_strength": 0,
+        "native_shadows_enabled": true,
+        "occluder_placed": false,
+        "cpu_light_ray_intersects_occluder": false,
+        "occlusion_verified_by_cpu": false,
+        "occluder_transform": "0.000000,0.000000,-5000.000000|0.000000,0.000000,-0.000000|0.010000,0.010000,0.010000",
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true,
+        "showflag_ambient_occlusion": false,
+        "contact_shadows_enabled": false,
+        "occluder_main_pass_enabled": false,
+        "occluder_depth_pass_enabled": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              42,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ],
+            "redness_tail216_217_rgb": [
+              0,
+              0.2199999988079071,
+              0.03500000014901161,
+              1,
+              0.4000000059604645,
+              0.30000001192092896
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "occluded-shadow-on.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_skinredness_deep_shadowon_on_face.png",
+        "sha256": "1e6830a099bae8a4b597bbb812a58deaa670817ff9cd859184ba6876345ec107",
+        "bytes": 886979,
+        "modified_at": "2026-10-16T18:12:08.164497+08:00"
+      },
+      "capture": {
+        "name": "skinredness_deep_shadowon_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_skinredness_deep_shadowon_on_face.png",
+        "ok": true,
+        "mean_luma": 21.583390842013888,
+        "center_mean_luma": 7.604108798187423,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.20938199758529663,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinredness_deep_shadowon_on_face",
+        "group": "deep_occlusion",
+        "master_enabled": true,
+        "softness_override": false,
+        "redness_enabled": true,
+        "redness_strength": 0.18000000715255737,
+        "native_shadows_enabled": true,
+        "occluder_placed": true,
+        "cpu_light_ray_intersects_occluder": true,
+        "occlusion_verified_by_cpu": false,
+        "occluder_transform": "98.567261,-103.112362,193.311664|25.000001,-24.999998,0.000000|0.200000,1.200000,1.200000",
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true,
+        "showflag_ambient_occlusion": false,
+        "contact_shadows_enabled": false,
+        "occluder_main_pass_enabled": false,
+        "occluder_depth_pass_enabled": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              42,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ],
+            "redness_tail216_217_rgb": [
+              0.18000000715255737,
+              0.2199999988079071,
+              0.03500000014901161,
+              1,
+              0.4000000059604645,
+              0.30000001192092896
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "occluded-shadow-off.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_skinredness_deep_shadowoff_on_face.png",
+        "sha256": "e5b15ff48d27a608becf381c6d857399bbb2bf0fd4eefc685de6eb45b048b91c",
+        "bytes": 1540493,
+        "modified_at": "2026-10-16T18:12:08.683317+08:00"
+      },
+      "capture": {
+        "name": "skinredness_deep_shadowoff_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_skinredness_deep_shadowoff_on_face.png",
+        "ok": true,
+        "mean_luma": 135.36340711805556,
+        "center_mean_luma": 144.4603934511944,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.17047519981861115,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinredness_deep_shadowoff_on_face",
+        "group": "deep_occlusion",
+        "master_enabled": true,
+        "softness_override": false,
+        "redness_enabled": true,
+        "redness_strength": 0.18000000715255737,
+        "native_shadows_enabled": false,
+        "occluder_placed": true,
+        "cpu_light_ray_intersects_occluder": true,
+        "occlusion_verified_by_cpu": false,
+        "occluder_transform": "98.567261,-103.112362,193.311664|25.000001,-24.999998,0.000000|0.200000,1.200000,1.200000",
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true,
+        "showflag_ambient_occlusion": false,
+        "contact_shadows_enabled": false,
+        "occluder_main_pass_enabled": false,
+        "occluder_depth_pass_enabled": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              42,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ],
+            "redness_tail216_217_rgb": [
+              0.18000000715255737,
+              0.2199999988079071,
+              0.03500000014901161,
+              1,
+              0.4000000059604645,
+              0.30000001192092896
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "zero-direct-on.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\skin-redness-2026-10-16\\redness3\\redness3_skinredness_main_zero_on_face.png",
+        "sha256": "b4edf6ff4479356c16ac086d988e4efae6d99abbb453b0d44da006816cc657ad",
+        "bytes": 563654,
+        "modified_at": "2026-10-16T18:12:05.405610+08:00"
+      },
+      "capture": {
+        "name": "skinredness_main_zero_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/skin-redness-2026-10-16/redness3/redness3_skinredness_main_zero_on_face.png",
+        "ok": true,
+        "mean_luma": 12.478722873263889,
+        "center_mean_luma": 5.970681785998279,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.1425081007182598,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinredness_main_zero_on_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "redness_enabled": true,
+        "redness_strength": 0.18000000715255737,
+        "native_shadows_enabled": true,
+        "occluder_placed": false,
+        "cpu_light_ray_intersects_occluder": false,
+        "occlusion_verified_by_cpu": false,
+        "occluder_transform": "0.000000,0.000000,-5000.000000|0.000000,0.000000,-0.000000|0.010000,0.010000,0.010000",
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true,
+        "showflag_ambient_occlusion": false,
+        "contact_shadows_enabled": false,
+        "occluder_main_pass_enabled": false,
+        "occluder_depth_pass_enabled": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 0,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 0,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              42,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ],
+            "redness_tail216_217_rgb": [
+              0.18000000715255737,
+              0.2199999988079071,
+              0.03500000014901161,
+              1,
+              0.4000000059604645,
+              0.30000001192092896
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    }
+  ]
+}

@@ -5,9 +5,11 @@
 namespace MMDEndfieldSkinLutData
 {
     inline constexpr uint32 recipe_version = 1;
-    inline constexpr float layout_version = 41.0f;
+    inline constexpr float layout_version = 42.0f;
     inline constexpr int32 cube_side = 6;
     inline constexpr int32 cube_sample_count = cube_side * cube_side * cube_side;
+    inline constexpr int32 redness_parameters_slot = cube_sample_count;
+    inline constexpr int32 redness_tint_slot = cube_sample_count + 1;
     inline constexpr float shadow_transmission[3][3] = {
         {0.52f, 0.28f, 0.18f},
         {0.61f, 0.40f, 0.29f},
@@ -41,7 +43,7 @@ namespace MMDEndfieldSkinLutData
 
     inline FLinearColor EvaluateSlot(int32 slot)
     {
-        // r + 6*g + 36*b；剩余 40 槽重复最后一个有效颜色，不能按 216 槽拉伸到整条曲线。
+        // r + 6*g + 36*b；此函数只生成颜色，尾槽默认重复末色，216/217 控制值由 Profile 覆写。
         const int32 index = FMath::Clamp(slot, 0, cube_sample_count - 1);
         const float step = 1.0f / static_cast<float>(cube_side - 1);
         return EvaluateEncoded(static_cast<float>(index % cube_side) * step,

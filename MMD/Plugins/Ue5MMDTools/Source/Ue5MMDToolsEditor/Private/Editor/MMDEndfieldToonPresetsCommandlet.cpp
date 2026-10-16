@@ -805,6 +805,7 @@ namespace
 		// 皮肤层次由逐灯颜色查表和视角响应形成；静态肤色校正保留为可选美术控制。
 		Preset->CharacterSkinLighting = FMMDStageSkinLightingSettings();
 		Preset->CharacterSkinLighting.bEnabled = true;
+		Preset->CharacterSkinLighting.RednessStrength = 0.18f;
 		Preset->CharacterSkinSurface = FMMDStageSkinSurfaceSettings();
 		Preset->CharacterSkinSurface.bEnabled = false;
 		Preset->CharacterSkinSurface.Tint = FLinearColor(1.0f, 0.92f, 0.88f, 1.0f);
@@ -1189,8 +1190,9 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse"), EndfieldToonCVar(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse")));
 	Report->SetStringField(TEXT("unified_diffuse_notice"), TEXT("ToonUnifiedDiffuse 是可选实验开关，引擎默认 0；设为 1 的路径尚未通过视觉验收，生成与编译校验不要求启用。"));
 	Report->SetStringField(TEXT("candidate_notice"), TEXT("后端 Mode2 的 Skin/Hair/Cloth 使用客户端 RD 数据语义。Skin roughness=.742/specular=.454、Cloth roughness=.696 来自代表样本；Metal/Eye 和无贴图头发方向仍是通用近似，不代表原作完整复刻。"));
-	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("当前 Backend12、payload5：Mode2 自有 Skin 的 V5 数据是头部投影坐标上的左右主光角阈值、前层深度和覆盖，不是真实遮挡 SDF，也不占网格 UV 通道。四tap按覆盖与深度门控；opaque/masked 使用 adaptive GBuffer packed，已验证关联的透明附脸用 forward inline 同样量化解码。独立 Normal 保留高光/GI，缺数据用几何/球面回退。Mode0/1、fmt0保持旧兼容/原生 Toon 回退。"));
-	Report->SetStringField(TEXT("skin_response_contract"), TEXT("Backend12 的 Skin 使用 schema41 Profile 参数和原创6x6x6颜色LUT；LUT只替换逐灯暗部颜色源，视角响应独立控制。颜色坐标为encoded RGB，存储和插值输出为linear RGB；使用原Skin未启用RS的Specular RGB行，RD.A和其他部位RS保留。预设启用CharacterSkinLighting并默认关闭两组静态SkinSurface校正；Body/Face尺度分别为.7/1.1，Face沿头框架稳定NoV的通用近似不等价于原作RefineMask。不是屏幕空间SSS或厚度透射，客户端LUT仅本机对照，发行不包含其像素。"));
+	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("当前 Backend13、payload5：Mode2 自有 Skin 的 V5 数据是头部投影坐标上的左右主光角阈值、前层深度和覆盖，不是真实遮挡 SDF，也不占网格 UV 通道。四tap按覆盖与深度门控；opaque/masked 使用 adaptive GBuffer packed，已验证关联的透明附脸用 forward inline 同样量化解码。独立 Normal 保留高光/GI，缺数据用几何/球面回退。Mode0/1、fmt0保持旧兼容/原生 Toon 回退。"));
+	Report->SetStringField(TEXT("skin_response_contract"), TEXT("Backend13 的 Skin 使用 schema42 Profile 参数和原创6x6x6颜色LUT；LUT只替换逐灯暗部颜色源，视角响应独立控制。颜色坐标为encoded RGB，存储和插值输出为linear RGB；使用原Skin未启用RS的Specular RGB行，RD.A和其他部位RS保留。预设启用CharacterSkinLighting并默认关闭两组静态SkinSurface校正；Body/Face尺度分别为.7/1.1，Face沿头框架稳定NoV的通用近似不等价于原作RefineMask。不是屏幕空间SSS或厚度透射，客户端LUT仅本机对照，发行不包含其像素。"));
+	Report->SetStringField(TEXT("skin_redness_contract"), TEXT("layout42尾槽216保存泛红强度/几何NoL半宽/SDF归一化角半宽，217保存线性染色RGB，默认.18/.22/.035/(1,.4,.3)。只在本灯漫反射明暗过渡内微调，原生深遮挡关闭新项；灯色和衰减仍由原生外层乘一次，高光/GI保持原路径。独立强度0保留v12，旧layout41仍识别颜色立方体且关闭泛红；不添加固定红描边或厚度透射。"));
 	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("V5 阈值只控制主光明暗分区，不改变原生阴影接收或投射。默认 FaceShadowSuppress=0、关闭角色接触阴影。头发原生投影与脸部阈值是独立来源，需用 facefix 的 Hair-only 阴影代理对照诊断；不能把总 ShadowTerms 衰减称为仅关闭头发自投影。旧兼容 masked 路径保留可选 ShadowPassSwitch。"));
 	Report->SetStringField(TEXT("anisotropy_limit"), TEXT("本机 UE5.8 原生 Toon 不消费 Tangent 输入，各向异性方向只用引擎默认 basis，尚不能定制天使环。"));
 	Report->SetArrayField(TEXT("assets"), AssetReports);

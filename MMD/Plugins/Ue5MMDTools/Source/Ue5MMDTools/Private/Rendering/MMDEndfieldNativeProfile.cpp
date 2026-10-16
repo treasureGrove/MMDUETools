@@ -16,12 +16,13 @@ namespace MMDEndfieldNativeProfile
 {
     namespace
     {
-        constexpr uint32 mode2_recipe_version = 4;
+        constexpr uint32 mode2_recipe_version = 5;
 
         struct FSkinLightingMetadata
         {
             float values[9] = {MMDEndfieldSkinLutData::layout_version, 0.0f, 1.0f, 0.7f, 1.1f,
                 0.6745f, 0.6116f, 0.5333f, 2.0f / 255.0f};
+            float redness_values[6] = {0.0f, 0.22f, 0.035f, 1.0f, 0.4f, 0.30f};
         };
 
         FSkinLightingMetadata GetSkinLightingMetadata(const FMMDStageSkinLightingSettings* settings)
@@ -40,6 +41,12 @@ namespace MMDEndfieldNativeProfile
             metadata.values[6] = finite_clamp(settings->ViewTint.G, 0.0f, 2.0f, 0.6116f);
             metadata.values[7] = finite_clamp(settings->ViewTint.B, 0.0f, 2.0f, 0.5333f);
             metadata.values[8] = finite_clamp(settings->FaceAngularSoftness, 1.0f / 255.0f, 0.15f, 2.0f / 255.0f);
+            metadata.redness_values[0] = finite_clamp(settings->RednessStrength, 0.0f, 1.0f, 0.0f);
+            metadata.redness_values[1] = finite_clamp(settings->RednessWidth, 0.05f, 0.6f, 0.22f);
+            metadata.redness_values[2] = finite_clamp(settings->RednessAngularWidth, 0.005f, 0.15f, 0.035f);
+            metadata.redness_values[3] = finite_clamp(settings->RednessTint.R, 0.0f, 1.0f, 1.0f);
+            metadata.redness_values[4] = finite_clamp(settings->RednessTint.G, 0.0f, 1.0f, 0.4f);
+            metadata.redness_values[5] = finite_clamp(settings->RednessTint.B, 0.0f, 1.0f, 0.30f);
             return metadata;
         }
 
@@ -49,6 +56,7 @@ namespace MMDEndfieldNativeProfile
             const FSkinLightingMetadata metadata = GetSkinLightingMetadata(settings);
             FSHA1 hasher;
             hasher.Update(reinterpret_cast<const uint8*>(metadata.values), sizeof(metadata.values));
+            hasher.Update(reinterpret_cast<const uint8*>(metadata.redness_values), sizeof(metadata.redness_values));
             // 同源的脸部/身体参数并存于缓存；不能修改另一份 MID 正在使用的瞬态 Profile。
             return FString::Printf(TEXT("%u:%s"), static_cast<uint32>(role), *hasher.Finalize().ToString());
         }
@@ -118,15 +126,22 @@ namespace MMDEndfieldNativeProfile
             }
         }
 
-        void ApplyClientRamps(UToonProfile* profile, const FClientRampSelection& selection, bool use_skin_cube)
+        void ApplyClientRamps(UToonProfile* profile, const FClientRampSelection& selection, bool use_skin_cube,
+            const FSkinLightingMetadata& skin_metadata)
         {
             if (!selection.diffuse_pixels) return;
             static_assert(MMDEndfieldSkinLutData::cube_sample_count <= MMDEndfieldNativeRampData::rs_sample_count);
+            static_assert(MMDEndfieldSkinLutData::redness_tint_slot < MMDEndfieldNativeRampData::rs_sample_count);
             FLinearColor skin_cube[MMDEndfieldNativeRampData::rs_sample_count];
             if (use_skin_cube)
             {
                 for (int32 slot = 0; slot < MMDEndfieldNativeRampData::rs_sample_count; ++slot)
                     skin_cube[slot] = MMDEndfieldSkinLutData::EvaluateSlot(slot);
+                // 布局 42 仅借用两个尾槽；颜色立方体 0..215 和独立 RD.A 不变。
+                skin_cube[MMDEndfieldSkinLutData::redness_parameters_slot] = FLinearColor(
+                    skin_metadata.redness_values[0], skin_metadata.redness_values[1], skin_metadata.redness_values[2], 1.0f);
+                skin_cube[MMDEndfieldSkinLutData::redness_tint_slot] = FLinearColor(
+                    skin_metadata.redness_values[3], skin_metadata.redness_values[4], skin_metadata.redness_values[5], 1.0f);
             }
             auto& diffuse = profile->Settings.DiffuseRamp;
             auto& specular = profile->Settings.SpecularRamp;
@@ -207,6 +222,8 @@ namespace MMDEndfieldNativeProfile
             hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::recipe_version), sizeof(MMDEndfieldSkinLutData::recipe_version));
             hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::layout_version), sizeof(MMDEndfieldSkinLutData::layout_version));
             hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::cube_side), sizeof(MMDEndfieldSkinLutData::cube_side));
+            hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::redness_parameters_slot), sizeof(MMDEndfieldSkinLutData::redness_parameters_slot));
+            hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::redness_tint_slot), sizeof(MMDEndfieldSkinLutData::redness_tint_slot));
             hasher.Update(reinterpret_cast<const uint8*>(MMDEndfieldSkinLutData::shadow_transmission), sizeof(MMDEndfieldSkinLutData::shadow_transmission));
             hasher.Update(reinterpret_cast<const uint8*>(&algorithm_version), sizeof(algorithm_version));
             hasher.Update(reinterpret_cast<const uint8*>(&sample_count), sizeof(sample_count));
@@ -248,7 +265,8 @@ namespace MMDEndfieldNativeProfile
         profile->Settings.SpecularRamp = original->specular_ramp;
         const FNativeProfileOptions options = GetNativeProfileOptions();
         const bool use_skin_cube = apply_client_ramps && options.mode == 2 && role == EMMDMaterialRole::Skin;
-        if (apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role), use_skin_cube);
+        const FSkinLightingMetadata skin_metadata = GetSkinLightingMetadata(role == EMMDMaterialRole::Skin ? skin_settings : nullptr);
+        if (apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role), use_skin_cube, skin_metadata);
         FRichCurve* alpha_curve = &profile->Settings.DiffuseRamp.ColorCurves[3];
         if (UCurveLinearColor* source_curve = profile->Settings.DiffuseRamp.ExternalCurve)
         {
@@ -278,14 +296,13 @@ namespace MMDEndfieldNativeProfile
         }
         if (use_skin_cube)
         {
-            const FSkinLightingMetadata metadata = GetSkinLightingMetadata(skin_settings);
             constexpr int32 metadata_centers[] = {9, 10, 11, 21, 22, 23, 29, 30, 31};
             // 只用既有字段间的空隙；mode/GI/signature 与整段 diagnostic 平台不变。
             for (int32 index = 0; index < UE_ARRAY_COUNT(metadata_centers); ++index)
             {
                 const float center = static_cast<float>(metadata_centers[index]) / 64.0f;
-                alpha.SetKeyInterpMode(alpha.AddKey(center - 1.0f / 256.0f, metadata.values[index]), RCIM_Linear);
-                alpha.SetKeyInterpMode(alpha.AddKey(center + 1.0f / 256.0f, metadata.values[index]), RCIM_Linear);
+                alpha.SetKeyInterpMode(alpha.AddKey(center - 1.0f / 256.0f, skin_metadata.values[index]), RCIM_Linear);
+                alpha.SetKeyInterpMode(alpha.AddKey(center + 1.0f / 256.0f, skin_metadata.values[index]), RCIM_Linear);
             }
         }
         return true;

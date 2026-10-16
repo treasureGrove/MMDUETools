@@ -4,7 +4,21 @@
 
 读者入门入口：[终末地插件着色入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，含三版方案对比、数据流图、实际 GI 对照和代码入口。
 
-## 最新进度：v12 逐灯皮肤响应（2026-10-16）
+## 最新进度：v13 原创弱暖红过渡（2026-10-16）
+
+用户授权在现有皮肤明暗交界加弱暖红。当前后端为 **`endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**，Graph6／payload5／FaceData5／Frame1不变。生产表面两组静态校色继续关闭，生成器的新Preset设置 `RednessStrength=.18`、`RednessWidth=.22`（NoL半宽）、`RednessAngularWidth=.035`（归一π角半宽，约6.3°）、`RednessTint=(1,.4,.30)`；结构默认强度0，旧资产不被自动加红。
+
+新增项是**插件原创风格化泛红**，不能称提取到的原作红边、真实扩散或厚度透射。它只改Skin本灯漫反射：几何signed NoL形成局部band，主光V5用连续 `cutoff-theta` margin另算角band后按coverage与水平光可靠性混合；NoV只作弱权重，`SurfaceShadow≤.1`关闭新项。灯色和衰减只在原生外层乘一次，独立spec／GI不改，无新RT／GBuffer／空间pass。
+
+颜色配方仍recipe1，0..215 cube不变；Specular.RGB的216槽存强度／NoL宽度／角宽度，217槽存Tint RGB，218..255重复215。Specular.A／RD.A与原九平台保留，仅layout改42。shader兼容41并保持原cube响应、红强度0；42尾数据无效只关红，不让仍有效cube被误当RS。新六值有限净化并纳入角色cachekey。强度0保持同参数v12，Master0保留原关闭回退。
+
+最终 `Editor3`／`Game1`构建通过，`generate13`保存15包，七父材质真实shader数21／40／29／21／40／29／40。最终以 `redness3` **NativeBackendProbe**为准：26项skinredness加8项AB，共34图／156次槽检查／0失败；Mode0和启动atlas64各8图／78次检查／0失败，三组Editor GlobalShader协议13验证通过，17项静态边界检查通过。外部像素分析72／72，独立 `redness3_rois.json`按最终报告与PNG SHA绑定，当前图已目检；[原图归档](Screenshots/2026-10-16-endfield-skin-redness/README.md)与[摘要](Screenshots/2026-10-16-endfield-skin-redness/sources.json)保留来源，不提交Saved和测试角色。
+
+侧光固定右颊MAE1.30296，对照噪声.20222，平均RGB增量 `(+1.0911,-1.0911,-1.5356)`，仅说明很小局部暖红。背光未超自身噪声，不算新增效果。右颊画面编码亮度clear200.02576→block.068889→nativeShadowOff202.61194，新项开关效应分别1.30296／0／1.27037；关闭原生阴影后，两档强度各自的放块／不放块整图RGB相同，零直射灯的泛红开／关整图相同。它支持当前ROI的门控归因，不是整图shadowmask，也不是真实扩散或厚度透射。
+
+`Saved/EFSkinRedness16/Ue5MMDTools/` BuildOnly三配置与必需文件／皮肤源码检查通过，12份final-freeze Source／HLSL在工作区／发行包哈希一致。clean-host、发行角色GPU、Cooked及性能未重跑；身体Skin、additional与Legacy未独立GPU验证。保护2,381项中2,379不变，仅自有Preset和OffsetLinear两包变化。当前源码继续冻结，收尾只更新文档与原PNG归档；下方v12结果保持真实版本日期。完整十项目标、肤质与全部GPU路径仍未验收。
+
+## 历史：v12 逐灯皮肤响应（2026-10-16）
 
 用户指出静态暖tint不足以形成皮肤质感。当前新增 `CharacterSkinLighting`，在原逐灯入口分别调整暗色与视角受光色，再交给已有RD、原生阴影和灯光累加。新版生成的EndfieldV2预设开启它，`CharacterSkinSurface`／`CharacterFaceSkinSurface`两组静态校色默认关闭；独立Face父材质仍保留暖色预览兜底，Stage会显式覆盖。旧设置／nullptr默认关闭新响应。使用与维护入口见[皮肤材质说明](ENDFIELD_SKIN_MATERIAL_GUIDE.md)。
 
@@ -18,7 +32,7 @@ Mode2须在应用预设前将atlas设为至少256；绑定时低分辨率回原�
 
 实际背光暖肤差异明显，侧光／视角变化较细微；主光设0的开／关图全部RGB逐字节一致。外部55项严格检查全通过：背光白衣MAE5.0864≤自身off-repeat5.3136；右颊效应11.1052／噪声1.3548，鼻部核心9.9101／噪声.09788。这些只区分响应与时序波动，不是画质分数，鼻梁硬边仍在，不能称真实SSS或完整肤质验收。`FaceAngularSoftness`默认仍 `2/255`，`.025`只用于独立对照。首轮 `generate12`因Legacy调用漏第五参失败后修正；`response1`发现通过setter恢复DF阴影属性会裁值，Editor2修复后 `response2`46图0失败，最终 `response3`再补背光关闭复拍。
 
-最终 `EFSkinResponse16c` BuildOnly通过Editor Development／Game Development／Shipping三配置，`payload_files_verified`和`skin_response_sources_verified`为真。14份Source／Shader冻结文件在工作区与发行包逐字节匹配；`response3`后没有修改这些代码，后续仅补文档与截图归档。最终本机发行目录 `Saved/EFSkinResponse16c/Ue5MMDTools/`，依据见[来源摘要](Screenshots/2026-10-16-endfield-skin-response/sources.json)。v12空白宿主、发行包角色绘制与完整Cook／打包游戏均未重跑；BuildOnly不证明最终二进制角色GPU，不能沿用较早v11分发与v8 Cook结果。
+最终 `EFSkinResponse16c` BuildOnly通过Editor Development／Game Development／Shipping三配置，`payload_files_verified`和`skin_response_sources_verified`为真。14份Source／Shader冻结文件在当时工作区与发行包逐字节匹配；v12收尾阶段仅补文档与截图归档，v13源码变更另行验证。v12本机发行目录 `Saved/EFSkinResponse16c/Ue5MMDTools/`，依据见[来源摘要](Screenshots/2026-10-16-endfield-skin-response/sources.json)。v12空白宿主、发行包角色绘制与完整Cook／打包游戏均未重跑；BuildOnly不证明最终二进制角色GPU，不能沿用较早v11分发与v8 Cook结果。
 
 保护清单2,381项中2,379不变，仅自有Preset与OffsetLinear包变化；用户27资产、10旧PNG、Mobile文档、Face shader与安装引擎保持。完整十项目标、身体皮肤、真实空间SSS及终末地画质验收仍未完成。
 

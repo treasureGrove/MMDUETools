@@ -55,6 +55,18 @@ struct TMMDEndfieldNativeLegacy
         TOON_METALLIC(context.BSDF) = gbuffer.Metallic;
         TOON_SPECULAR(context.BSDF) = gbuffer.Specular;
         TOON_PROFILEID(context.BSDF) = profile_id;
+        TMMDEndfieldSkinResponse skin_response;
+        skin_response.Load(profile_id, role, 2u);
+        if (role == 1u)
+        {
+            float3 diffuse_albedo = gbuffer.DiffuseColor * 0.96;
+            float band = skin_response.RednessBand(dot(source_normal, native_light_data.light_vector),
+                skin_response.redness_width);
+            float3 diffuse_color = skin_response.ApplyRedness(diffuse_albedo, diffuse_albedo, band,
+                saturate(dot(source_normal, V)), surface_shadow);
+            result.Diffuse = area_light.Falloff * area_light.FalloffColor
+                * Diffuse_Lambert(diffuse_color) * saturate(area_light.NoL) * surface_shadow;
+        }
         if (native_light_data.rect_light)
         {
             // 矩形光不能把二维 RS tile 当原生一维颜色 ramp；用真实面积与 F0 的 LTC 物理兜底。
@@ -65,8 +77,6 @@ struct TMMDEndfieldNativeLegacy
         }
         else if (role == 1u || role == 2u || role == 3u)
         {
-            TMMDEndfieldSkinResponse skin_response;
-            skin_response.Load(profile_id, role, 2u);
             float specular_cosine = role == 2u ? 1.0 : saturate(area_light.NoL);
             result.Specular = surface_shadow * specular_cosine * area_light.Falloff * area_light.FalloffColor
                 * profile_control.EvaluateSpecular(context, specular_normal, role, source_normal, skin_response.valid);
