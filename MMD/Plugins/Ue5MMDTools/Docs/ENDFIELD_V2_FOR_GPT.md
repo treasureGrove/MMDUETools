@@ -4,7 +4,25 @@
 
 读者入门入口：[终末地插件着色入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，含三版方案对比、数据流图、实际 GI 对照和代码入口。
 
-## 最新进度：v11 脸部角阈值与透明附脸层（2026-10-16）
+## 最新进度：v12 逐灯皮肤响应（2026-10-16）
+
+用户指出静态暖tint不足以形成皮肤质感。当前新增 `CharacterSkinLighting`，在原逐灯入口分别调整暗色与视角受光色，再交给已有RD、原生阴影和灯光累加。新版生成的EndfieldV2预设开启它，`CharacterSkinSurface`／`CharacterFaceSkinSurface`两组静态校色默认关闭；独立Face父材质仍保留暖色预览兜底，Stage会显式覆盖。旧设置／nullptr默认关闭新响应。使用与维护入口见[皮肤材质说明](ENDFIELD_SKIN_MATERIAL_GUIDE.md)。
+
+后端为 **`endfield-native-bsdf-v12-skin-response`／Cooked协议12／payload5／Graph6／FaceData5／Frame1**，发布仍七父材质／15包。Skin的Specular.RGB改存插件原创6³颜色立方体，216点位于固定256槽，索引 `r+6*g+36*b`；输出linearRGB，坐标为底色的encodedRGB，非模型UV。Specular.A仍为RD.A；Diffuse.A空隙用布局41保存总开关、LUT权重、两组视角强度、RGB与角柔化。Hair／Cloth的32×8 RS、旧签名、Mode／GI／诊断平台保留。缓存按源、角色与净化设置隔离，不可把一个共享Profile随MID反复改写。
+
+新 `Core/TMMDEndfieldSkinResponse.ush` 与 `Private/Rendering/MMDEndfieldSkinLutData.inl` 必须随插件分发；配方为原创亮度相关暖色吸收，不复制／重采样客户端SkinLUT。没有改安装引擎、增加GBuffer或RT，也没有实现邻域扩散／厚度透射／真实空间SSS。原作RefineMask未接，因此脸部view响应仍是头框架与几何近似；不能把公开作者的SSS命名直接当物理散射。原作主脸高光使用几何法线，不能改用SDF方向覆盖它。
+
+Mode2须在应用预设前将atlas设为至少256；绑定时低分辨率回原曲线／Mode0，已经分配tile／cube Profile后不支持运行中降为64。新代码必须重编并重新Cook；v11／v8的成功结果不代表协议12通过。
+
+最终 `Editor3`成功；`Game1`运行时模块构建成功后，仅验证用CPP／Legacy USH继续修正。`generate12b`完成15包、七父材质，shader数依次为共享三模式21／40／29、Face三模式21／40／29、描边40。`response3` Mode2=47图／195次检查／0失败（18项skinresponse，含back-off-repeat；21项facefix；8项AB）；Mode0与启动atlas64各8图／78次检查／0失败。Editor全局shader编译反射协议12验证通过，不等于Cooked库验证。源码／验证文件共14项冻结，来源见[本轮归档](Screenshots/2026-10-16-endfield-skin-response/README.md)与[摘要](Screenshots/2026-10-16-endfield-skin-response/sources.json)，不提交Saved或测试模型。
+
+实际背光暖肤差异明显，侧光／视角变化较细微；主光设0的开／关图全部RGB逐字节一致。外部55项严格检查全通过：背光白衣MAE5.0864≤自身off-repeat5.3136；右颊效应11.1052／噪声1.3548，鼻部核心9.9101／噪声.09788。这些只区分响应与时序波动，不是画质分数，鼻梁硬边仍在，不能称真实SSS或完整肤质验收。`FaceAngularSoftness`默认仍 `2/255`，`.025`只用于独立对照。首轮 `generate12`因Legacy调用漏第五参失败后修正；`response1`发现通过setter恢复DF阴影属性会裁值，Editor2修复后 `response2`46图0失败，最终 `response3`再补背光关闭复拍。
+
+最终 `EFSkinResponse16c` BuildOnly通过Editor Development／Game Development／Shipping三配置，`payload_files_verified`和`skin_response_sources_verified`为真。14份Source／Shader冻结文件在工作区与发行包逐字节匹配；`response3`后没有修改这些代码，后续仅补文档与截图归档。最终本机发行目录 `Saved/EFSkinResponse16c/Ue5MMDTools/`，依据见[来源摘要](Screenshots/2026-10-16-endfield-skin-response/sources.json)。v12空白宿主、发行包角色绘制与完整Cook／打包游戏均未重跑；BuildOnly不证明最终二进制角色GPU，不能沿用较早v11分发与v8 Cook结果。
+
+保护清单2,381项中2,379不变，仅自有Preset与OffsetLinear包变化；用户27资产、10旧PNG、Mobile文档、Face shader与安装引擎保持。完整十项目标、身体皮肤、真实空间SSS及终末地画质验收仍未完成。
+
+## 历史：v11 脸部角阈值与透明附脸层（2026-10-16）
 
 用户认可 v9 的体积方向，本轮聚焦脸部 SDF 与疑似头发自投影。V4 实际是几何方向场；现改为 V5 左右角阈值、前层深度和覆盖。头部框架由骨骼与附近 Skin 几何拟合并持久化，运行时跟随同一头骨；不再用含翅膀／描边的全身包围盒，也不依赖 UV0 或实际新增 UV2／3／4。自动图是可继续绘制 R/G 的几何底图，不能称为原作手绘或真实遮挡距离场。
 

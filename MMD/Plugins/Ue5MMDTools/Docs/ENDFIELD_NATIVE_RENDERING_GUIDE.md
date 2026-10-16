@@ -6,9 +6,17 @@
 
 shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
 
-2026-10-16 新增[独立皮肤／脸部材质](ENDFIELD_SKIN_MATERIAL_GUIDE.md)：身体与脸部分别调肤色、粗糙度和高光，Face 三种透明模式各有父材质。肤色进入真实 BaseColor，按原生光照和 GI 计算；曝光及阴影公式保持现状。材质图更新为 Graph6，后端仍为 v11；[同机位开关实拍](Screenshots/2026-10-16-endfield-skin/README.md)可直接比较灰白问题的改善。
+当前源码为 **v12／Cooked协议12／payload5／Graph6／FaceData5／Frame1**。[皮肤／脸部说明](ENDFIELD_SKIN_MATERIAL_GUIDE.md)新增 `CharacterSkinLighting`：以原创颜色LUT产生暗部，以头部／几何视角调整受光区，再与既有RD和原生阴影混合。新版预设的静态 `CharacterSkinSurface`、`CharacterFaceSkinSurface` 默认关闭，保留源底色；独立Face父材质的预览暖色兜底仍保留。
 
-最新 v11 把脸部改为独立头部投影角阈值图，并给经过几何验证的透明附脸层接入相同响应，处理主脸与传统假鼻影分开受光的问题。[脸部 V5 说明](ENDFIELD_FACE_V5_GUIDE.md)解释坐标、贴图、刘海投影及维护入口。v9 的双暗层、二维高光及主辅光分工继续保留，[2026-10-15 实拍](Screenshots/2026-10-15-endfield-volume/README.md)属于上一批验证。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`，不足256将整体回退原生；v11完整Cook尚未重测。
+本版最终 `Editor3`与`Game1`运行时模块构建成功，`generate12b`完成15包／七父材质，shader数21／40／29／21／40／29／40。`response3` Mode2为47图／195次检查／0失败，Mode0及启动时atlas64各为8图／78次检查／0失败；Editor全局shader编译反射的协议12验证通过。原PNG和14文件冻结来源见[本轮归档](Screenshots/2026-10-16-endfield-skin-response/README.md)。`Game1`之后只有验证CPP／Legacy USH修正，未声称新Cooked运行。
+
+背光暖肤变化明显，侧光和视角变化较细微；主光0的开／关对照全部RGB逐字节一致。外部55项严格检查通过，背光白衣ROI的开关差异未超过自身复拍噪声，右颊／鼻部核心差异则明显高于该噪声；这不是画质评分，鼻梁硬边仍在。`.025`角柔化只作对照，默认仍为 `2/255`。失败修复与具体数据见[皮肤验证记录](ENDFIELD_SKIN_MATERIAL_GUIDE.md#维护与验证)。
+
+最终 `EFSkinResponse16c` BuildOnly通过Editor Development／Game Development／Shipping及必需文件、皮肤源文件检查，14份冻结Source／Shader与发行包逐字节一致。`response3`与这份冻结代码对应，之后只更新文档／截图归档；[来源摘要](Screenshots/2026-10-16-endfield-skin-response/sources.json)保留依据。v12空白宿主、发行包角色绘制与Cook仍未重跑，不能把BuildOnly称为最终二进制角色GPU或肤质验收。
+
+2026-10-16较早的v11新增独立身体／脸部表面参数和Face三父材质，[当时的同机位实拍](Screenshots/2026-10-16-endfield-skin/README.md)只验证静态肤色准备。新皮肤响应没有真实空间SSS、邻域扩散或厚度透射；脸部RefineMask尚未接入，视角处理属于通用近似。
+
+v11建立的独立头部投影角阈值图与透明附脸层继续保留，[脸部V5说明](ENDFIELD_FACE_V5_GUIDE.md)解释坐标、贴图、刘海投影及维护入口。v9双暗层、Hair／Cloth二维高光及主辅光分工也保留，[2026-10-15实拍](Screenshots/2026-10-15-endfield-volume/README.md)属于历史验证。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`；绑定时不足256会退回原曲线／Mode0，已分配Profile后不支持运行中直接降低分辨率。v12空白宿主与完整Cook仍待独立重测。
 
 本批也核对了别人公开复刻的完整分工：[参考源码对照](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。材质和逐灯入口保持，另补底色描边与[插件分发检查](ENDFIELD_PLUGIN_DISTRIBUTION.md)；完整眼睛、头发与屏幕效果仍逐项推进。
 
@@ -65,7 +73,7 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 **E 透明附脸层，在原有 Translucency 绘制里。** v11 于 `BasePassPixelShader.usf` 的 `SubstrateUpdateTree` 之后、建立 Forward context 之前填入 inline 载荷；它留在当前像素寄存器，不写 GBuffer。在 `SubstrateForwardLighting.ush` 的每灯 `GetShadowTerms()` 之后捕获原生灯光，再进入同一 Toon 响应。不是在不透明 BasePass 后额外补画一次脸，透明层本来就按原生调度绘制。
 
-E 当前针对自有单层 Toon、Surface Forward 及可靠附脸绑定；灯光范围是原生 Forward 选定方向光与局部灯，透明 GI 也不等同于 C 的不透明 Lumen。一般透明、多方向光一致性、移动端、MegaLights 或路径追踪不能由当前验证推导；SSS、TAA／TSR、tonemap 等仍沿用 UE 流程。
+E 当前针对自有单层 Toon、Surface Forward 及可靠附脸绑定；灯光范围是原生 Forward 选定方向光与局部灯，透明 GI 也不等同于 C 的不透明 Lumen。一般透明、多方向光一致性、移动端、MegaLights 或路径追踪不能由当前验证推导。TAA／TSR、tonemap仍沿用UE流程；本Toon分支没有自动获得原生皮肤空间SSS。
 
 维护时可对照安装引擎 `Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp`：BasePass 调用约在 3060 行，前一次 GI 在 3430 行，`RenderLights()` 在 3468 行，后一次 GI 在 3519 行，独立反射在 3529 行，后处理入口约在 4312 行。行号针对上述固定版本；只读对照，实际修改仍在插件适配器和 ush。
 
@@ -75,7 +83,7 @@ E 当前针对自有单层 Toon、Surface Forward 及可靠附脸绑定；灯光
 
 **ShadingModel／BSDF** 是使用这些记录计算受光效果的规则。当前仍使用原生 Toon 类型，没有新增一个 ShadingModel ID；替换的是指定 Toon 材质分支中的光照计算函数。
 
-插件通过 Profile 标记识别自己的材质。Profile 是一份可共享的着色设置：其色带的 alpha 保存角色标记、模式和 GI 倍率，RGB 仍保存颜色。普通 Toon 和 Default Lit 材质继续走原生响应。
+插件通过Profile标记识别自己的材质。它保存可共享的曲线与控制：Diffuse.A保存角色、模式、GI倍率，以及Skin布局41的皮肤设置；Diffuse.RGB仍是RD。Hair／Cloth的Specular.RGB保存32×8 RS，v12 Skin改存原创6³颜色立方体；Specular.A仍保留RD.A。普通Toon和Default Lit继续走原生响应。
 
 GBuffer 里保存的是 Profile ID，用它查找对应色带；这些标记和倍率不占用 GBuffer 的 alpha 通道。
 
@@ -93,7 +101,7 @@ shader 中的 `mmd_light_data` 只是“这一次光照计算的参数包”，�
 
 2026-10-16 改为 **V5 独立头部投影角阈值图**：左右光分别存截止角，逐灯以当前头空间光方向比较。专用坐标从位置与持久化头部框架计算，不占用网格 UV2／3／4，底图 UV 及附加 UV 保留。RGBA 的 B/A 负责前层深度和覆盖，四 tap 分别过滤后插值；不再受原 UV 重叠或全身翅膀包围盒影响。自动阈值是几何兜底，不是原作手绘 SDF 或真实遮挡距离场；真实阴影仍来自 UE。旧 V4 缓存需要重烘。
 
-V5 跟随头骨旋转及正均匀缩放。大幅 Morph／下颌、其他 LOD 及非均匀缩放仍有边界，深度不匹配处回到实时几何。payload 的权重对 V5 表示有效阈值覆盖，对方向类型表示准备后方向有效，不能混用语义。头发投影与脸部阈值独立；有效外脸退出身体 view tint，避免鼻侧额外压灰。传统半透明假鼻影若通过头权重、几何朝向、宿主深度与覆盖验证，会保留软 alpha 并复用主脸图；不会按测试角色的名字或槽号特判。详见[脸部 V5 与维护说明](ENDFIELD_FACE_V5_GUIDE.md)。
+V5跟随头骨旋转及正均匀缩放。大幅Morph／下颌、其他LOD及非均匀缩放仍有边界，深度不匹配处回到实时几何。payload权重对V5表示有效阈值覆盖，对方向类型表示准备后方向有效，不能混用语义。头发投影与脸部阈值独立；v11让外脸退出身体view tint，v12启用皮肤响应时改用受头部朝向和几何限制的脸部视角近似，避免直接把身体公式套满鼻侧。传统半透明假鼻影通过头权重、几何朝向、宿主深度与覆盖验证后，保留软alpha并复用主脸图；不按角色名字、槽号或特定UV特判。详见[脸部V5说明](ENDFIELD_FACE_V5_GUIDE.md)。
 
 ```text
 BasePass：头部投影阈值／通用方向 → 类型 + 权重 + 头部旋转 → 打包
@@ -101,11 +109,11 @@ BasePass：头部投影阈值／通用方向 → 类型 + 权重 + 头部旋转 
 高光／GI：独立原生 Normal → 原生数据 + 对应着色响应
 ```
 
-Skin、Hair、Cloth 的 RD 使用已有客户端完整 256 点数据。RD 的 alpha 决定明暗混合量，RGB 负责 tint；影色由底色亮度与饱和度派生，再作亮度补偿。RD alpha 存在 Profile 的 specular 行 alpha，diffuse 行 alpha 继续保存模式标记。**真实 RD 不能直接当作一个 RGB 乘数。**
+Skin、Hair、Cloth的RD使用已有客户端完整256点数据。A决定明暗混合量，RGB负责tint及亮度补偿；RD.A保存在Profile的Specular.A，Diffuse.A用于控制。Hair／Cloth影色继续从底色派生；v12 Skin开启新响应后可混入原创颜色LUT的暗色。**真实RD不能直接当作普通RGB乘数。**
 
-衣料高光保留 GGX 波瓣幅度与原作 `.04 × specular` 的 F0 约定；代表 Skin 未启用 RS，使用白色乘数。2026-10-15 起 Hair／Cloth 的 RS 使用 32×8 二维重采样，头发用几何竖向切线计算主高光环；没有原作 P 图／flow 图时仍属于明确近似。Skin 颜色 LUT、头发第二波瓣与独立高光法线数据、眼睛、深度 rim 及最终调色仍在复刻清单里。
+衣料高光保留GGX波瓣幅度与 `.04 × specular` 的F0。代表Skin未启用RS，因此新布局的Skin高光使用白色乘数，不能误采已存颜色LUT的RGB；旧布局保留既有读取。Hair／Cloth自2026-10-15使用32×8二维RS，缺P／flow图仍为几何近似。Skin LUT采用插件原创6³配方，不复制客户端颜色表；脸部RefineMask、头发第二波瓣／独立法线、眼睛、深度rim及最终调色仍待继续。
 
-Mode2 要求 `r.Substrate.Experimental.ToonUnifiedDiffuse=0`，由每盏灯处理 RD 语义；统一漫反射后段尚未适配，会拒绝启用此模式，避免二次套用色带。验证使用 Profile atlas 256 点；引擎默认 64 点会重采样，插件没有改工程的默认配置。
+Mode2要求 `r.Substrate.Experimental.ToonUnifiedDiffuse=0`，由每盏灯处理RD语义；统一漫反射后段尚未适配，会拒绝启用此模式。Profile atlas须在应用前设为至少256，插件没有改工程默认值；不得在已有tile／cube Profile运行中直接降为64来期待安全自动回退。
 
 本轮同镜头侧光、头发／衣料及packed读回原图见[2026-10-14画质迭代归档](Screenshots/2026-10-14-endfield-fidelity/README.md)。旧版鼻部、脸颊硬条块已明显减少；其余复刻项继续按清单推进，不以编译或图片数量判定终末地画质达标。
 
@@ -157,7 +165,9 @@ Editor／Cook 编译 shader
 
 打开 [TMMDEndfieldNativeBSDF.ush](../Shaders/Core/TMMDEndfieldNativeBSDF.ush)，看 `EvaluateToonResponse()`。
 
-这里接收材质、当前灯光、阴影和面积光。Mode2 的 Skin／Hair／Cloth 用 `ReadDiffuseRamp()`、`ApplyDiffuseRamp()` 和 `EvaluateSpecular()` 处理真实 RD 语义及高光。Skin 的漫反射方向来自 `BSDF.mmd_payload`，高光法线来自独立原生 Normal；矩形灯保留原生 LTC／Toon 积分，使用当前 RS 切片。
+这里接收材质、当前灯光、阴影和面积光。Mode2的Skin／Hair／Cloth用 `ReadDiffuseRamp()`、`ApplyDiffuseRamp()` 和 `EvaluateSpecular()` 处理RD与高光。Skin脸部阈值来自 `BSDF.mmd_payload`，高光法线独立；矩形灯使用原生GGX／LTC兜底，不把展平RS或颜色立方体交给一维高光查表。
+
+皮肤专门看 [TMMDEndfieldSkinResponse.ush](../Shaders/Core/TMMDEndfieldSkinResponse.ush)；原创配方在 [MMDEndfieldSkinLutData.inl](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl)，控制与使用方式见[皮肤材质说明](ENDFIELD_SKIN_MATERIAL_GUIDE.md)。它在同一逐灯入口调整暗部和受光区，不改GBuffer、GI算法或新增SSS pass。
 
 ### 改 GI 或反射的表现
 
@@ -175,7 +185,7 @@ Editor／Cook 编译 shader
 
 ### 改材质识别和引擎接入
 
-- [MMDEndfieldNativeProfile.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp)：`MarkTransient()` 和 `GetOrCreate()`，负责 Profile 标记、真实 RD／RS 曲线、控制值和瞬态副本；同目录 `MMDEndfieldNativeRampData.inl` 保存样本数据及来源。
+- [MMDEndfieldNativeProfile.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp)：标记、RD／RS／Skin cube与瞬态副本，按源、角色及皮肤设置隔离缓存；同目录 `MMDEndfieldNativeRampData.inl` 为已有RD／RS，`MMDEndfieldSkinLutData.inl` 为新原创配方，修改时分别维护版本。
 - [MMDStageLibrary.cpp](../Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp)：把对应 Profile 应用到角色材质。
 - [MMDEndfieldNativeBackend.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp)：版本保护、源码校验、缓存、光照入口及新增的 BasePass／Substrate packed export/read 适配。
 - [MMDEndfieldNativeBackendProtocol.cpp](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp)：从 Cooked 全局 shader 的序列化编译反射检查协议。只读记录，不 dispatch，不新增光照 pass；不能代替实际画面验证。

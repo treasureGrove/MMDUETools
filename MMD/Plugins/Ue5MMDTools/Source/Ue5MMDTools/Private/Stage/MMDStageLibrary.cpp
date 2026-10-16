@@ -413,7 +413,7 @@ namespace
 			if (MMDEndfieldNativeBackend::GetStatus().bProfileMarkerAllowed
 				&& Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")))
 			{
-				Profile = MMDEndfieldNativeProfile::GetOrCreate(Profile, Role);
+				Profile = MMDEndfieldNativeProfile::GetOrCreate(Profile, Role, &Preset->CharacterSkinLighting);
 			}
 			Material->ToonProfileOverride = Profile;
 			Material->bOverrideToonProfile = true;

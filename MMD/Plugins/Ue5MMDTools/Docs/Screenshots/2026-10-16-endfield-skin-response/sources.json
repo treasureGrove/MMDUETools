@@ -1,0 +1,696 @@
+{
+  "schema": "mmd.endfield.skin-response-screenshots.v1",
+  "archived_at": "2026-10-16T16:54:34.026533+08:00",
+  "engine": "UE 5.8.3 CL58210709 / Win64 D3D12 SM6 / RenderOffscreen",
+  "versions": {
+    "backend": "endfield-native-bsdf-v12-skin-response",
+    "protocol": 12,
+    "graph": 6,
+    "payload": 5,
+    "face_data": 5,
+    "head_frame": 1,
+    "skin_profile_layout": 41
+  },
+  "image_contract": "Actual engine PNG bytes, 1280x720. No repaint, grading, image generation or retouch. Derivative ROI analysis stays in Saved.",
+  "model": "YYB Hatsune Miku 16th winged reference pose; local validation only; no model assets distributed.",
+  "source_pmx": "D:/projectGithub/MMDUETools/MMD/Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/YYB Hatsune Miku_16th.pmx",
+  "sample_manifest": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+  "scene": {
+    "can_render": true,
+    "substrate_enabled": true,
+    "substrate_blendable_gbuffer": false,
+    "toon_profile_enabled": true,
+    "shader_platform": "PCD3D_SM6",
+    "rhi": "D3D12",
+    "r.Substrate": "1",
+    "r.Substrate.ProjectGBufferFormat": "1",
+    "r.Substrate.ClosuresPerPixel": "4",
+    "r.Substrate.BytesPerPixel": "80",
+    "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+    "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+    "r.Substrate.ToonProfile.Resolution": "256",
+    "r.DynamicGlobalIlluminationMethod": "1",
+    "r.ReflectionMethod": "1",
+    "r.Shadow.Virtual.Enable": "1",
+    "r.RayTracing": "1",
+    "r.Lumen.HardwareRayTracing": "1",
+    "r.GenerateMeshDistanceFields": "0",
+    "r.AntiAliasingMethod": "5",
+    "r.DefaultFeature.AutoExposure": "1"
+  },
+  "reports": {
+    "generate": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\generate12b\\report.json",
+      "sha256": "84789df226b07a57b86980cb7682bc446cc44b1d0f66585c68527f77af7fb78d",
+      "bytes": 11873,
+      "modified_at": "2026-10-16T16:25:53.830765+08:00"
+    },
+    "mode2": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\report.json",
+      "sha256": "9ca79ef75d5d89740700350436a62d022b01f4534aa95c0a7da3de74a657e4b9",
+      "bytes": 822867,
+      "modified_at": "2026-10-16T16:40:55.028767+08:00"
+    },
+    "mode0": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\mode0\\report.json",
+      "sha256": "8ec8a06ce19723dde6644aefec6889e261868c260f1fc65b0334301c3ca08614",
+      "bytes": 415070,
+      "modified_at": "2026-10-16T16:41:15.154342+08:00"
+    },
+    "atlas64": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\atlas64\\report.json",
+      "sha256": "7902134da486800554284cd667b20b0dceab0e4c1ddd0c380c44f19e8ab07bfa",
+      "bytes": 416680,
+      "modified_at": "2026-10-16T16:41:34.792796+08:00"
+    },
+    "analysis": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\analysis_response\\analysis.json",
+      "sha256": "ddefe37ffd05c026cef4f66baffdbada59f8f2557e676d28feb3329dc116c7ae",
+      "bytes": 187796,
+      "modified_at": "2026-10-16T16:46:09.582417+08:00"
+    },
+    "analysis_summary": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\analysis_response\\summary.json",
+      "sha256": "b6d7fcc45bbc485b5b119d6e7e758e410caa593420507959c5d6c7fcb5e5538f",
+      "bytes": 6128,
+      "modified_at": "2026-10-16T16:46:09.505360+08:00"
+    },
+    "roi": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3_rois.json",
+      "sha256": "fd3ed1a1b086da05b8b3834140531d9b368a79ba1a5578f49bec41023ed3a311",
+      "bytes": 4282,
+      "modified_at": "2026-10-16T16:46:07.848966+08:00"
+    },
+    "protection": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\protected-final.json",
+      "sha256": "d8ef0dc22544407c16368f76a081bf9e9e62a99fe65d4eba4578c5b112436d2a",
+      "bytes": 484,
+      "modified_at": "2026-10-16T16:49:49.081136+08:00"
+    },
+    "authored_lut_cpu": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\authored-lut-study\\report.json",
+      "sha256": "d9d0c61034ef4110842d5322a477eacae2343459b7ebaa60a98a04991f5477ab",
+      "bytes": 43773,
+      "modified_at": "2026-10-16T16:17:18.642645+08:00"
+    },
+    "distribution": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\EFSkinResponse16c\\distribution.json",
+      "sha256": "32b8e4e7280eff5682942ce7247e1fec822454c9ac69e446f5782ebb46ca02a2",
+      "bytes": 3899,
+      "modified_at": "2026-10-16T16:44:37.530138+08:00"
+    },
+    "distribution_source_match": {
+      "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\distribution-source-match.json",
+      "sha256": "2a1e8dd7068016d3bc961182962aff50fb27319011b706a39aab1246aaf753de",
+      "bytes": 5260,
+      "modified_at": "2026-10-16T16:49:42.536396+08:00"
+    }
+  },
+  "summary": {
+    "mode2": {
+      "images": 47,
+      "slot_checks": 195,
+      "failures": 0
+    },
+    "mode0": {
+      "images": 8,
+      "slot_checks": 78,
+      "failures": 0
+    },
+    "atlas64_startup_fallback": {
+      "images": 8,
+      "slot_checks": 78,
+      "failures": 0
+    },
+    "pixel_analysis_passed": true,
+    "all_gpu_verified": false,
+    "body_skin_tested": false,
+    "zero_main_light_rgb_bit_exact": true,
+    "distribution": {
+      "build_plugin_verified": true,
+      "three_configurations": true,
+      "frozen_source_matches": 14,
+      "clean_host_adapter_verified": false,
+      "cooked_runtime_verified": false
+    }
+  },
+  "frozen_source_files": [
+    {
+      "path": "Shaders/Core/TMMDEndfieldNativeBSDF.ush",
+      "frozen": "AEE2CFDA9531C4FF30699A6B3BD627316D8CA6BC5F23F965E535F82109BAA63F",
+      "source": "AEE2CFDA9531C4FF30699A6B3BD627316D8CA6BC5F23F965E535F82109BAA63F",
+      "packaged": "AEE2CFDA9531C4FF30699A6B3BD627316D8CA6BC5F23F965E535F82109BAA63F",
+      "passed": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldNativeLegacy.ush",
+      "frozen": "6F61F86BD74F4392488CE597D0C84FB9B046953E464AEB0F6A713B8A97C6C38C",
+      "source": "6F61F86BD74F4392488CE597D0C84FB9B046953E464AEB0F6A713B8A97C6C38C",
+      "packaged": "6F61F86BD74F4392488CE597D0C84FB9B046953E464AEB0F6A713B8A97C6C38C",
+      "passed": true
+    },
+    {
+      "path": "Shaders/Core/TMMDEndfieldSkinResponse.ush",
+      "frozen": "69F6672DDBE0A60C8EFE4F1528B6AE64AF6A4A7C7625A75A5F457375C89131A4",
+      "source": "69F6672DDBE0A60C8EFE4F1528B6AE64AF6A4A7C7625A75A5F457375C89131A4",
+      "packaged": "69F6672DDBE0A60C8EFE4F1528B6AE64AF6A4A7C7625A75A5F457375C89131A4",
+      "passed": true
+    },
+    {
+      "path": "Shaders/Private/MMDEndfieldNativeBackendProtocol.usf",
+      "frozen": "41D49F71FF89AB5D9EF698F2D2B51F5AA805D85B9CB07C160D7B699FCB7AA238",
+      "source": "41D49F71FF89AB5D9EF698F2D2B51F5AA805D85B9CB07C160D7B699FCB7AA238",
+      "packaged": "41D49F71FF89AB5D9EF698F2D2B51F5AA805D85B9CB07C160D7B699FCB7AA238",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp",
+      "frozen": "D9CA7B7DDB81EDF07DD180F2D223A56B19199C50132E00EE1620D61319C6B9D3",
+      "source": "D9CA7B7DDB81EDF07DD180F2D223A56B19199C50132E00EE1620D61319C6B9D3",
+      "packaged": "D9CA7B7DDB81EDF07DD180F2D223A56B19199C50132E00EE1620D61319C6B9D3",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp",
+      "frozen": "C53E940641B6D3636DC3A7891AF70EB188714263D45949CC9A9D241945C6A240",
+      "source": "C53E940641B6D3636DC3A7891AF70EB188714263D45949CC9A9D241945C6A240",
+      "packaged": "C53E940641B6D3636DC3A7891AF70EB188714263D45949CC9A9D241945C6A240",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp",
+      "frozen": "4DF8854BC01640F8EDB806F61337A39FB325BAB848E595262304DB81A411E703",
+      "source": "4DF8854BC01640F8EDB806F61337A39FB325BAB848E595262304DB81A411E703",
+      "packaged": "4DF8854BC01640F8EDB806F61337A39FB325BAB848E595262304DB81A411E703",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl",
+      "frozen": "B2BEA0019CBABB69E020B7771C1D24068E6636BAB6F9957C534C26D2D3C26CE4",
+      "source": "B2BEA0019CBABB69E020B7771C1D24068E6636BAB6F9957C534C26D2D3C26CE4",
+      "packaged": "B2BEA0019CBABB69E020B7771C1D24068E6636BAB6F9957C534C26D2D3C26CE4",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp",
+      "frozen": "3B2EA50BCDABB83F4E4990A501E6B285DD38ABDDCF5D4CF44D17B2B492D13928",
+      "source": "3B2EA50BCDABB83F4E4990A501E6B285DD38ABDDCF5D4CF44D17B2B492D13928",
+      "packaged": "3B2EA50BCDABB83F4E4990A501E6B285DD38ABDDCF5D4CF44D17B2B492D13928",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Rendering/MMDEndfieldNativeBackend.h",
+      "frozen": "1503CBDF2D04720B0FFBA8DD166857A79D81CC904EAD422B1E5F21DE15CC4DDE",
+      "source": "1503CBDF2D04720B0FFBA8DD166857A79D81CC904EAD422B1E5F21DE15CC4DDE",
+      "packaged": "1503CBDF2D04720B0FFBA8DD166857A79D81CC904EAD422B1E5F21DE15CC4DDE",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Rendering/MMDEndfieldNativeProfile.h",
+      "frozen": "30999BB1420159DBBFBEE52646621FD1D26F65FD02A8457C980FB50F692AEE70",
+      "source": "30999BB1420159DBBFBEE52646621FD1D26F65FD02A8457C980FB50F692AEE70",
+      "packaged": "30999BB1420159DBBFBEE52646621FD1D26F65FD02A8457C980FB50F692AEE70",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h",
+      "frozen": "171869FC67D58F53A2E21691B3F46A1F78CDB38B24CDFF559D14EDDDB5105E1A",
+      "source": "171869FC67D58F53A2E21691B3F46A1F78CDB38B24CDFF559D14EDDDB5105E1A",
+      "packaged": "171869FC67D58F53A2E21691B3F46A1F78CDB38B24CDFF559D14EDDDB5105E1A",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp",
+      "frozen": "1699A53992958C34CCEC236E3C7940CDC172C87F46B8FC373EF0527E42F9009E",
+      "source": "1699A53992958C34CCEC236E3C7940CDC172C87F46B8FC373EF0527E42F9009E",
+      "packaged": "1699A53992958C34CCEC236E3C7940CDC172C87F46B8FC373EF0527E42F9009E",
+      "passed": true
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp",
+      "frozen": "7B536334973EB6B0732B822D339786A84348BC049C6123FBE77C65ECB8EFC423",
+      "source": "7B536334973EB6B0732B822D339786A84348BC049C6123FBE77C65ECB8EFC423",
+      "packaged": "7B536334973EB6B0732B822D339786A84348BC049C6123FBE77C65ECB8EFC423",
+      "passed": true
+    }
+  ],
+  "protection": {
+    "changed": [
+      {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Presets\\EndfieldV2\\DA_Render_EndfieldV2.uasset",
+        "reason": "changed"
+      },
+      {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\Profiles\\T_EndfieldV2_OffsetLinear.uasset",
+        "reason": "changed"
+      }
+    ],
+    "count": 2381,
+    "captured_at": "2026-10-16T16:49:49.0683006+08:00"
+  },
+  "original_recipe_cpu_scope": "Authored recipe only; not the game LUT. CPU approximation error is not GPU or aesthetic validation.",
+  "limitations": [
+    "No spatial diffusion, thickness transmission or original RefineMask.",
+    "Face view tint uses a generic head-frame/coverage approximation.",
+    "Backlit VSM/temporal grain remains; compare with the same-condition OFF repeat.",
+    "Nose and angular shadow edges remain hard. Softness .025 was an experiment, not the default.",
+    "A startup atlas64 fallback is tested; lowering an allocated cube atlas at runtime is unsupported.",
+    "Distribution build preceded final documentation archive; runtime/source files match the frozen render source."
+  ],
+  "images": [
+    {
+      "file": "default-face.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_toon_face.png",
+        "sha256": "7d7c8852d8a46ef26cd718013ee7e92dc3d76e801b13f2e8951bc92c9a8fdd6c",
+        "bytes": 1548370,
+        "modified_at": "2026-10-16T16:40:44.087057+08:00"
+      },
+      "capture": {
+        "name": "toon_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_toon_face.png",
+        "ok": true,
+        "mean_luma": 138.79945638020834,
+        "center_mean_luma": 148.0686796727776,
+        "min_luma": 0,
+        "max_luma": 223,
+        "seconds": 0.2445027008652687,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": null
+    },
+    {
+      "file": "side-off.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_skinresponse_side_off_face.png",
+        "sha256": "dd1ef78d9d382340507f2f52c645115844e32cdfd21bdc506dc607082308ab41",
+        "bytes": 1469914,
+        "modified_at": "2026-10-16T16:40:45.092612+08:00"
+      },
+      "capture": {
+        "name": "skinresponse_side_off_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_skinresponse_side_off_face.png",
+        "ok": true,
+        "mean_luma": 119.22128472222222,
+        "center_mean_luma": 133.36233020707385,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.2221590019762516,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinresponse_side_off_face",
+        "group": "core",
+        "master_enabled": false,
+        "softness_override": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              41,
+              0,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "side-on.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_skinresponse_side_on_face.png",
+        "sha256": "62e9bff206b14f82e92e6782a853e51b388cdb3fb64291781b87754393c08200",
+        "bytes": 1469939,
+        "modified_at": "2026-10-16T16:40:45.396153+08:00"
+      },
+      "capture": {
+        "name": "skinresponse_side_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_skinresponse_side_on_face.png",
+        "ok": true,
+        "mean_luma": 119.1703125,
+        "center_mean_luma": 133.12330207073842,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.2163418009877205,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinresponse_side_on_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              41,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "back-off.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_skinresponse_back_off_face.png",
+        "sha256": "2a6e7f121f38e0791de19d02d04acb10a8c2c87ff9997f5505a26288fed50e7e",
+        "bytes": 1504764,
+        "modified_at": "2026-10-16T16:40:45.695005+08:00"
+      },
+      "capture": {
+        "name": "skinresponse_back_off_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_skinresponse_back_off_face.png",
+        "ok": true,
+        "mean_luma": 93.77838216145834,
+        "center_mean_luma": 110.1500985806564,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.2206473983824253,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinresponse_back_off_face",
+        "group": "core",
+        "master_enabled": false,
+        "softness_override": false,
+        "head_relative_light_yaw": 120,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=-0.785 Y=0.453 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=-30.000003 R=0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              41,
+              0,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "back-on.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_skinresponse_back_on_face.png",
+        "sha256": "d4df7ddaded4267fa8498379b540c13262213116100c9ffe08dc2f1d8965d621",
+        "bytes": 1503535,
+        "modified_at": "2026-10-16T16:40:45.991100+08:00"
+      },
+      "capture": {
+        "name": "skinresponse_back_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_skinresponse_back_on_face.png",
+        "ok": true,
+        "mean_luma": 93.68796115451389,
+        "center_mean_luma": 109.68875744801367,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.21811670064926147,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinresponse_back_on_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "head_relative_light_yaw": 120,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=-0.785 Y=0.453 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=-30.000003 R=0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              41,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "view-right-on.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_skinresponse_view_right_on_face.png",
+        "sha256": "4fa1b0d40301b1147cc0c507bca3753ac047b63740a6207201d03c13db37c6df",
+        "bytes": 1335195,
+        "modified_at": "2026-10-16T16:40:47.469470+08:00"
+      },
+      "capture": {
+        "name": "skinresponse_view_right_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_skinresponse_view_right_on_face.png",
+        "ok": true,
+        "mean_luma": 97.96146267361111,
+        "center_mean_luma": 144.43977865647093,
+        "min_luma": 0,
+        "max_luma": 220,
+        "seconds": 0.19667379930615425,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=84.309 Y=-148.035 Z=159.597",
+        "camera_rotation": "P=-4.226502 Y=133.810232 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinresponse_view_right_on_face",
+        "group": "core",
+        "master_enabled": true,
+        "softness_override": false,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 25,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              41,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.007843137718737125
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    },
+    {
+      "file": "softness-025.png",
+      "source": {
+        "path": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\sss-2026-10-16\\response3\\response3_skinresponse_softness_025_face.png",
+        "sha256": "cf59e99a5b5fdc6ff20d878ecc8894567a57b281a1ce68b5c1261bf593ee93a2",
+        "bytes": 1470212,
+        "modified_at": "2026-10-16T16:40:50.013366+08:00"
+      },
+      "capture": {
+        "name": "skinresponse_softness_025_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/sss-2026-10-16/response3/response3_skinresponse_softness_025_face.png",
+        "ok": true,
+        "mean_luma": 119.17207682291667,
+        "center_mean_luma": 133.1321634369247,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.22475779801607132,
+        "width": 1280,
+        "height": 720,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35
+      },
+      "skin_experiment": {
+        "image": "skinresponse_softness_025_face",
+        "group": "angular_softness_only",
+        "master_enabled": true,
+        "softness_override": true,
+        "angular_softness": 0.02500000037252903,
+        "head_relative_light_yaw": -65,
+        "head_relative_light_elevation": 25,
+        "camera_orbit_yaw": 0,
+        "main_light_multiplier": 1,
+        "mesh_transform": "0.000000,-55.000000,2.000000|0.000000,180.000000,-0.000000|1.000000,1.000000,1.000000",
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+        "key_rotation": "P=-25.000001 Y=155.000002 R=-0.000000",
+        "profiles": [
+          {
+            "profile": "/Engine/Transient.ToonProfile_0",
+            "layout41_values": [
+              41,
+              1,
+              1,
+              0.699999988079071,
+              1.100000023841858,
+              0.6744999885559082,
+              0.6115999817848206,
+              0.53329998254776,
+              0.02500000037252903
+            ]
+          }
+        ],
+        "cpu_controls_verified": true,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_five_face_bindings_preserved": true,
+        "auto_exposure_method": 2,
+        "exposure_bias": 0.10000000149011612,
+        "physical_camera_exposure": false,
+        "white_temperature": 6800,
+        "color_gain": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_gamma": "X=1.000 Y=1.000 Z=1.000 W=1.000",
+        "color_contrast": "X=1.040 Y=1.040 Z=1.040 W=1.000",
+        "color_saturation": "X=1.060 Y=1.060 Z=1.060 W=1.000",
+        "film_toe": 0.30000001192092896,
+        "film_slope": 0.8600000143051147
+      }
+    }
+  ]
+}

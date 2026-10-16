@@ -5,15 +5,54 @@
 #include "Rendering/MMDEndfieldNativeBackend.h"
 #include "Misc/SecureHash.h"
 #include "Serialization/ObjectWriter.h"
+#include "Stage/MMDStageRenderPreset.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 #include "MMDEndfieldNativeRampData.inl"
+#include "MMDEndfieldSkinLutData.inl"
 
 namespace MMDEndfieldNativeProfile
 {
     namespace
     {
+        constexpr uint32 mode2_recipe_version = 4;
+
+        struct FSkinLightingMetadata
+        {
+            float values[9] = {MMDEndfieldSkinLutData::layout_version, 0.0f, 1.0f, 0.7f, 1.1f,
+                0.6745f, 0.6116f, 0.5333f, 2.0f / 255.0f};
+        };
+
+        FSkinLightingMetadata GetSkinLightingMetadata(const FMMDStageSkinLightingSettings* settings)
+        {
+            FSkinLightingMetadata metadata;
+            if (!settings) return metadata;
+            const auto finite_clamp = [](float value, float minimum, float maximum, float fallback)
+            {
+                return FMath::IsFinite(value) ? FMath::Clamp(value, minimum, maximum) : fallback;
+            };
+            metadata.values[1] = settings->bEnabled ? 1.0f : 0.0f;
+            metadata.values[2] = finite_clamp(settings->ShadowLutStrength, 0.0f, 1.0f, 1.0f);
+            metadata.values[3] = finite_clamp(settings->BodyViewScale, 0.0f, 2.0f, 0.7f);
+            metadata.values[4] = finite_clamp(settings->FaceViewScale, 0.0f, 2.0f, 1.1f);
+            metadata.values[5] = finite_clamp(settings->ViewTint.R, 0.0f, 2.0f, 0.6745f);
+            metadata.values[6] = finite_clamp(settings->ViewTint.G, 0.0f, 2.0f, 0.6116f);
+            metadata.values[7] = finite_clamp(settings->ViewTint.B, 0.0f, 2.0f, 0.5333f);
+            metadata.values[8] = finite_clamp(settings->FaceAngularSoftness, 1.0f / 255.0f, 0.15f, 2.0f / 255.0f);
+            return metadata;
+        }
+
+        FString BuildRoleCacheKey(EMMDMaterialRole role, const FMMDStageSkinLightingSettings* settings)
+        {
+            if (role != EMMDMaterialRole::Skin) return FString::FromInt(static_cast<int32>(role));
+            const FSkinLightingMetadata metadata = GetSkinLightingMetadata(settings);
+            FSHA1 hasher;
+            hasher.Update(reinterpret_cast<const uint8*>(metadata.values), sizeof(metadata.values));
+            // 同源的脸部/身体参数并存于缓存；不能修改另一份 MID 正在使用的瞬态 Profile。
+            return FString::Printf(TEXT("%u:%s"), static_cast<uint32>(role), *hasher.Finalize().ToString());
+        }
+
         struct FNativeProfileOptions
         {
             int32 mode = 2;
@@ -70,7 +109,7 @@ namespace MMDEndfieldNativeProfile
             curve.PreInfinityExtrap = RCCE_Constant;
             curve.PostInfinityExtrap = RCCE_Constant;
             curve.SetDefaultValue(sample(0));
-            // RGB 是 32x8 数据包，不能让曲线在相邻行的最后/首个 texel 之间插值。
+            // RGB 是固定 256 槽数据包，不能让曲线在相邻数据槽之间插值。
             // atlas 按 texel 中心烘焙；宽度至少 256 时，shader 在 slot 中心选最近 texel Load。
             for (int32 slot = 0; slot < MMDEndfieldNativeRampData::rs_sample_count; ++slot)
             {
@@ -79,12 +118,19 @@ namespace MMDEndfieldNativeProfile
             }
         }
 
-        void ApplyClientRamps(UToonProfile* profile, const FClientRampSelection& selection)
+        void ApplyClientRamps(UToonProfile* profile, const FClientRampSelection& selection, bool use_skin_cube)
         {
             if (!selection.diffuse_pixels) return;
+            static_assert(MMDEndfieldSkinLutData::cube_sample_count <= MMDEndfieldNativeRampData::rs_sample_count);
+            FLinearColor skin_cube[MMDEndfieldNativeRampData::rs_sample_count];
+            if (use_skin_cube)
+            {
+                for (int32 slot = 0; slot < MMDEndfieldNativeRampData::rs_sample_count; ++slot)
+                    skin_cube[slot] = MMDEndfieldSkinLutData::EvaluateSlot(slot);
+            }
             auto& diffuse = profile->Settings.DiffuseRamp;
             auto& specular = profile->Settings.SpecularRamp;
-            // 客户端线性数值直接写入嵌入曲线，避免外部曲线的 HSV/alpha 调整改变真实数据。
+            // RD 与 Hair/Cloth RS 保留线性数值；Skin RGB 改存原创配方，均绕开外部曲线的 HSV 调整。
             diffuse.ExternalCurve = nullptr;
             specular.ExternalCurve = nullptr;
             for (int32 channel = 0; channel < 3; ++channel)
@@ -95,6 +141,7 @@ namespace MMDEndfieldNativeProfile
                 });
                 WriteTiledCurve(specular.ColorCurves[channel], [&](int32 slot)
                 {
+                    if (use_skin_cube) return skin_cube[slot].Component(channel);
                     return selection.specular_tile ? selection.specular_tile[slot][channel] : 1.0f;
                 });
             }
@@ -156,6 +203,11 @@ namespace MMDEndfieldNativeProfile
             hasher.Update(reinterpret_cast<const uint8*>(&options.diffuse_scale), sizeof(options.diffuse_scale));
             hasher.Update(reinterpret_cast<const uint8*>(&options.specular_scale), sizeof(options.specular_scale));
             using namespace MMDEndfieldNativeRampData;
+            hasher.Update(reinterpret_cast<const uint8*>(&mode2_recipe_version), sizeof(mode2_recipe_version));
+            hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::recipe_version), sizeof(MMDEndfieldSkinLutData::recipe_version));
+            hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::layout_version), sizeof(MMDEndfieldSkinLutData::layout_version));
+            hasher.Update(reinterpret_cast<const uint8*>(&MMDEndfieldSkinLutData::cube_side), sizeof(MMDEndfieldSkinLutData::cube_side));
+            hasher.Update(reinterpret_cast<const uint8*>(MMDEndfieldSkinLutData::shadow_transmission), sizeof(MMDEndfieldSkinLutData::shadow_transmission));
             hasher.Update(reinterpret_cast<const uint8*>(&algorithm_version), sizeof(algorithm_version));
             hasher.Update(reinterpret_cast<const uint8*>(&sample_count), sizeof(sample_count));
             hasher.Update(reinterpret_cast<const uint8*>(&rs_width), sizeof(rs_width));
@@ -171,7 +223,8 @@ namespace MMDEndfieldNativeProfile
         }
     }
 
-    bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role, bool apply_client_ramps)
+    bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role, bool apply_client_ramps,
+        const FMMDStageSkinLightingSettings* skin_settings)
     {
         if (!IsValid(profile) || !profile->HasAnyFlags(RF_Transient) || static_cast<uint8>(role) > 5) return false;
         check(IsInGameThread());
@@ -194,7 +247,8 @@ namespace MMDEndfieldNativeProfile
         profile->Settings.DiffuseRamp = original->diffuse_ramp;
         profile->Settings.SpecularRamp = original->specular_ramp;
         const FNativeProfileOptions options = GetNativeProfileOptions();
-        if (apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role));
+        const bool use_skin_cube = apply_client_ramps && options.mode == 2 && role == EMMDMaterialRole::Skin;
+        if (apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role), use_skin_cube);
         FRichCurve* alpha_curve = &profile->Settings.DiffuseRamp.ColorCurves[3];
         if (UCurveLinearColor* source_curve = profile->Settings.DiffuseRamp.ExternalCurve)
         {
@@ -222,14 +276,27 @@ namespace MMDEndfieldNativeProfile
         {
             alpha.SetKeyInterpMode(alpha.AddKey(key.Key, key.Value), RCIM_Linear);
         }
+        if (use_skin_cube)
+        {
+            const FSkinLightingMetadata metadata = GetSkinLightingMetadata(skin_settings);
+            constexpr int32 metadata_centers[] = {9, 10, 11, 21, 22, 23, 29, 30, 31};
+            // 只用既有字段间的空隙；mode/GI/signature 与整段 diagnostic 平台不变。
+            for (int32 index = 0; index < UE_ARRAY_COUNT(metadata_centers); ++index)
+            {
+                const float center = static_cast<float>(metadata_centers[index]) / 64.0f;
+                alpha.SetKeyInterpMode(alpha.AddKey(center - 1.0f / 256.0f, metadata.values[index]), RCIM_Linear);
+                alpha.SetKeyInterpMode(alpha.AddKey(center + 1.0f / 256.0f, metadata.values[index]), RCIM_Linear);
+            }
+        }
         return true;
     }
 
-    UToonProfile* GetOrCreate(UToonProfile* source, EMMDMaterialRole role)
+    UToonProfile* GetOrCreate(UToonProfile* source, EMMDMaterialRole role,
+        const FMMDStageSkinLightingSettings* skin_settings)
     {
         if (!IsValid(source) || static_cast<uint8>(role) > 5) return source;
         check(IsInGameThread());
-        using FRoleCache = TMap<uint8, TWeakObjectPtr<UToonProfile>>;
+        using FRoleCache = TMap<FString, TWeakObjectPtr<UToonProfile>>;
         struct FSourceCacheEntry
         {
             FSHAHash source_signature{};
@@ -250,8 +317,12 @@ namespace MMDEndfieldNativeProfile
             source_entry.source_signature = source_signature;
         }
         FRoleCache& roles = source_entry.roles;
-        const uint8 role_index = static_cast<uint8>(role);
-        if (const TWeakObjectPtr<UToonProfile>* existing = roles.Find(role_index))
+        for (auto iterator = roles.CreateIterator(); iterator; ++iterator)
+        {
+            if (!iterator.Value().IsValid()) iterator.RemoveCurrent();
+        }
+        const FString role_key = BuildRoleCacheKey(role, skin_settings);
+        if (const TWeakObjectPtr<UToonProfile>* existing = roles.Find(role_key))
         {
             if (existing->IsValid()) return existing->Get();
         }
@@ -260,8 +331,8 @@ namespace MMDEndfieldNativeProfile
         profile->SetFlags(RF_Transient);
         profile->ClearFlags(RF_Public | RF_Standalone);
         profile->Guid = FGuid::NewGuid();
-        if (!MarkTransient(profile, role)) return source;
-        roles.Add(role_index, profile);
+        if (!MarkTransient(profile, role, true, skin_settings)) return source;
+        roles.Add(role_key, profile);
         // MID 的 ToonProfileOverride 强引用负责副本生命周期，缓存只持弱引用。
         return profile;
     }

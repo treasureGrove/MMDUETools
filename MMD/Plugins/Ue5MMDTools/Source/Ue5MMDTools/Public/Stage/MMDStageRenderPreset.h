@@ -42,6 +42,26 @@ struct UE5MMDTOOLS_API FMMDStageToonRoleSettings
 	float FaceShadowSuppress = 0.0f;
 };
 
+/** 皮肤的逐灯颜色查表和视角响应；不代表屏幕空间扩散或厚度透射。 */
+USTRUCT(BlueprintType)
+struct UE5MMDTOOLS_API FMMDStageSkinLightingSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin")
+	bool bEnabled = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "1"))
+	float ShadowLutStrength = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "2"))
+	float BodyViewScale = 0.7f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "2"))
+	float FaceViewScale = 1.1f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", HideAlphaChannel))
+	FLinearColor ViewTint = FLinearColor(0.6745f, 0.6116f, 0.5333f, 1.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0.003921569", ClampMax = "0.15", ToolTip = "V5 截止角两侧的柔化半宽，按半圈归一化；0.007843 为原有宽度。"))
+	float FaceAngularSoftness = 2.0f / 255.0f;
+};
+
 /** 皮肤表面的线性底色与高光参数；关闭时保留原部位设置，不改变源贴图和透明度。 */
 USTRUCT(BlueprintType)
 struct UE5MMDTOOLS_API FMMDStageSkinSurfaceSettings
@@ -108,6 +128,8 @@ public:
 	TObjectPtr<UMaterialInterface> CharacterToonFaceMaterialTranslucent;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ToolTip = "按材质部位选择原生 Toon Profile 和参数；缺少部位时使用 Generic，缺少 Generic 时使用安全默认值。"))
 	TMap<EMMDMaterialRole, FMMDStageToonRoleSettings> CharacterToonRoles;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (ToolTip = "皮肤专用的阴影颜色查表和视角响应；底色校正在 SkinSurface 中单独调整。"))
+	FMMDStageSkinLightingSettings CharacterSkinLighting;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (ToolTip = "身体皮肤表面设置；脸部遮罩外继续使用这些参数，关闭时沿用原 Skin 部位参数。"))
 	FMMDStageSkinSurfaceSettings CharacterSkinSurface;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Face", meta = (ToolTip = "仅在有效脸部投影遮罩内覆盖皮肤表面参数；暖暗部从实际底色派生，不伪称 SSS。"))

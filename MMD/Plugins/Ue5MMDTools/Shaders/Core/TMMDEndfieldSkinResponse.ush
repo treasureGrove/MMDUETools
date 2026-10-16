@@ -1,0 +1,120 @@
+#pragma once
+
+// 原作风格的暗色查表与视角响应近似；不执行屏幕空间或体积散射。
+struct TMMDEndfieldSkinResponse
+{
+    bool valid;
+    float master;
+    float lut_strength;
+    float body_view_scale;
+    float face_view_scale;
+    float3 view_tint;
+    float face_angular_softness;
+
+    float ReadControl(float profile_id, uint tick)
+    {
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        uint x = uint(round(float(width - 1u) * (float(tick) / 64.0)));
+        return View.ToonProfileTexture.Load(int4(int(x), TOON_PROFILE_DIFFUSE_RAMP_Y,
+            int(round(profile_id)), 0)).a;
+    }
+
+    void Load(float profile_id, uint role, uint response_mode)
+    {
+        valid = false;
+        master = 0.0;
+        lut_strength = 0.0;
+        body_view_scale = 1.0;
+        face_view_scale = 0.0;
+        view_tint = float3(0.67, 0.60668504, 0.52930003);
+        face_angular_softness = 2.0 / 255.0;
+        if (role != 1u || response_mode != 2u
+            || uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u) return;
+        if (!(abs(ReadControl(profile_id, 9u) - 41.0) < 0.01)) return;
+
+        float4 controls = float4(ReadControl(profile_id, 10u), ReadControl(profile_id, 11u),
+            ReadControl(profile_id, 21u), ReadControl(profile_id, 22u));
+        float4 tint_and_softness = float4(ReadControl(profile_id, 23u), ReadControl(profile_id, 29u),
+            ReadControl(profile_id, 30u), ReadControl(profile_id, 31u));
+        if (!all(isfinite(controls)) || !all(isfinite(tint_and_softness))) return;
+        master = saturate(controls.x);
+        lut_strength = saturate(controls.y);
+        body_view_scale = clamp(controls.z, 0.0, 2.0);
+        face_view_scale = clamp(controls.w, 0.0, 2.0);
+        view_tint = clamp(tint_and_softness.xyz, 0.0, 2.0);
+        face_angular_softness = clamp(tint_and_softness.w, 1.0 / 255.0, 0.15);
+        valid = true;
+    }
+
+    float3 LinearToEncoded(float3 linear_color)
+    {
+        float3 color = saturate(linear_color);
+        float3 low = color * 12.92;
+        float3 high = 1.055 * pow(color, 1.0 / 2.4) - 0.055;
+        return float3(color.r <= 0.0031308 ? low.r : high.r,
+            color.g <= 0.0031308 ? low.g : high.g,
+            color.b <= 0.0031308 ? low.b : high.b);
+    }
+
+    float3 ReadLutCorner(float profile_id, uint3 corner)
+    {
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        uint index = corner.x + 6u * corner.y + 36u * corner.z;
+        // 固定 256 槽的常量平台，6^3 数据只占前 216 槽；不让 atlas 在线性跨行时串色。
+        uint x = min(uint(floor((float(index) + 0.5) * (float(width) / 256.0))), width - 1u);
+        return View.ToonProfileTexture.Load(int4(int(x), TOON_PROFILE_SPECULAR_RAMP_Y,
+            int(round(profile_id)), 0)).rgb;
+    }
+
+    float3 ReadColorLut(float profile_id, float3 original_base_color)
+    {
+        // LUT 坐标为 encoded RGB，texel 保存 linear RGB 输出，插值后不再解码 gamma。
+        float3 grid = LinearToEncoded(original_base_color) * 5.0;
+        uint3 first = uint3(floor(grid));
+        uint3 last = min(first + 1u, uint3(5u, 5u, 5u));
+        float3 fraction = frac(grid);
+        float3 first_first = lerp(ReadLutCorner(profile_id, first),
+            ReadLutCorner(profile_id, uint3(last.x, first.y, first.z)), fraction.x);
+        float3 last_first = lerp(ReadLutCorner(profile_id, uint3(first.x, last.y, first.z)),
+            ReadLutCorner(profile_id, uint3(last.x, last.y, first.z)), fraction.x);
+        float3 first_last = lerp(ReadLutCorner(profile_id, uint3(first.x, first.y, last.z)),
+            ReadLutCorner(profile_id, uint3(last.x, first.y, last.z)), fraction.x);
+        float3 last_last = lerp(ReadLutCorner(profile_id, uint3(first.x, last.y, last.z)),
+            ReadLutCorner(profile_id, last), fraction.x);
+        return max(lerp(lerp(first_first, last_first, fraction.y),
+            lerp(first_last, last_last, fraction.y), fraction.z), 0.0);
+    }
+
+    float3 ApplyDarkColor(float profile_id, float3 original_base_color, float metallic, float3 old_dark_color)
+    {
+        float weight = valid ? master * lut_strength : 0.0;
+        if (weight <= 0.0) return old_dark_color;
+        float3 lut_color = ReadColorLut(profile_id, original_base_color);
+        if (!all(isfinite(lut_color))) return old_dark_color;
+        return lerp(old_dark_color, lut_color * (0.96 * (1.0 - saturate(metallic))), weight);
+    }
+
+    float3 ApplyViewTint(float3 lit_color, float geometry_no_v, float face_mask,
+        float3 local_view, float3 local_camera)
+    {
+        geometry_no_v = saturate(geometry_no_v);
+        face_mask = saturate(face_mask);
+        float old_area = saturate((1.0 - (geometry_no_v * 0.85 + 0.15)) * 0.7)
+            * (1.0 - face_mask);
+        float3 old_color = lit_color * lerp(1.0, float3(0.67, 0.60668504, 0.52930003), old_area);
+        if (!valid || master <= 0.0) return old_color;
+
+        // V5 覆盖只限定脸部近似范围，不冒充原作 RefineMask，也不修改独立高光法线。
+        float stable_face_no_v = lerp(geometry_no_v, max(geometry_no_v, saturate(local_view.y)),
+            face_mask * 0.65);
+        float horizontal_length = length(local_camera.xy);
+        float head_facing = horizontal_length > 0.000001
+            ? saturate(local_camera.y / horizontal_length + 0.5) : 0.0;
+        float body_area = saturate((1.0 - (geometry_no_v * 0.85 + 0.15)) * body_view_scale);
+        float face_area = saturate((1.0 - (stable_face_no_v * 0.85 + 0.15))
+            * head_facing * face_view_scale);
+        float skin_area = lerp(body_area, face_area, face_mask);
+        float3 new_color = lit_color * lerp(1.0, view_tint, skin_area);
+        return lerp(old_color, new_color, master);
+    }
+};

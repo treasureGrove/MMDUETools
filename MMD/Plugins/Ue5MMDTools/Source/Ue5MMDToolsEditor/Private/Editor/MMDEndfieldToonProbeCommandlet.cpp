@@ -20,6 +20,7 @@
 //   -FitSampleCamera：仅 full 机位按当前模型包围球取安全距离，默认机位保持原基准。
 //   -Exp=facefix：显式 YYB16th SampleManifest + -PoseTime=-1；12 张隔离 + 4 张掠射 + 1 张鼻壳隔离 + 2 张阈值响应 + 2 张载荷诊断。
 //   -Exp=skin：同一 Face 父材质的表面处理关闭/三档候选/关闭复拍，以及 GI、高光、主光和方向场隔离。
+//   -Exp=skinresponse：布局41的逐灯颜色查表/视角响应，16张开关/复拍对照+2张独立柔化宽度对照。
 //
 // 本文件内所有新增 helper 均带 ToonProbe 前缀，避免与同模块 unity build 里的同名 helper 撞名。
 #include "MMDEndfieldToonProbeCommandlet.h"
@@ -95,6 +96,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "Serialization/ObjectWriter.h"
 #include "ShaderCompiler.h"
 #include "Stage/MMDStageActor.h"
 #include "Stage/MMDStageLibrary.h"
@@ -105,6 +107,7 @@
 #include "UObject/SavePackage.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UnrealType.h"
+#include "UObject/UObjectIterator.h"
 
 namespace
 {
@@ -1370,7 +1373,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	TArray<FString> Exps;
 	ExpText.ParseIntoArray(Exps, TEXT(","), true);
 	const TArray<FString> AllowedExps = { TEXT("ab"), TEXT("shadow"), TEXT("ramp"), TEXT("lighting"), TEXT("face"),
-		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("volume"), TEXT("facefix"), TEXT("skin"), TEXT("all") };
+		TEXT("hair"), TEXT("override"), TEXT("translucent"), TEXT("runtime"), TEXT("sdf"), TEXT("backend"), TEXT("fidelity"), TEXT("outline"), TEXT("volume"), TEXT("facefix"), TEXT("skin"), TEXT("skinresponse"), TEXT("all") };
 	for (const FString& Exp : Exps)
 	{
 		if (!AllowedExps.Contains(Exp))
@@ -1431,16 +1434,16 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		Report->SetStringField(TEXT("native_preset"), NativePresetPath);
 		for (const FString& Exp : Exps)
 		{
-			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline") && Exp != TEXT("volume") && Exp != TEXT("facefix") && Exp != TEXT("skin"))
+			if (Exp != TEXT("ab") && Exp != TEXT("runtime") && Exp != TEXT("shadow") && Exp != TEXT("lighting") && Exp != TEXT("sdf") && Exp != TEXT("backend") && Exp != TEXT("fidelity") && Exp != TEXT("outline") && Exp != TEXT("volume") && Exp != TEXT("facefix") && Exp != TEXT("skin") && Exp != TEXT("skinresponse"))
 			{
-					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline/volume/facefix/skin, received %s"), *Exp);
+					UE_LOG(LogTemp, Error, TEXT("[ToonProbe] NativePreset only supports ab/runtime/shadow/lighting/sdf/backend/fidelity/outline/volume/facefix/skin/skinresponse, received %s"), *Exp);
 				return 1;
 			}
 		}
 	}
-	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline")) || Exps.Contains(TEXT("volume")) || Exps.Contains(TEXT("facefix")) || Exps.Contains(TEXT("skin"))) && !NativePreset.IsValid())
+	if ((Exps.Contains(TEXT("runtime")) || Exps.Contains(TEXT("sdf")) || Exps.Contains(TEXT("outline")) || Exps.Contains(TEXT("volume")) || Exps.Contains(TEXT("facefix")) || Exps.Contains(TEXT("skin")) || Exps.Contains(TEXT("skinresponse"))) && !NativePreset.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline/volume/facefix/skin checks require -NativePreset"));
+		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] Runtime/SDF/outline/volume/facefix/skin/skinresponse checks require -NativePreset"));
 		return 1;
 	}
 	if (!bSubstrate && !NativePreset.IsValid())
@@ -1724,7 +1727,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 				ToonMaterials.Add(Variant.Name, Material);
 			}
 		}
-		if (NativePreset.IsValid() && ToonProbeHasExp(Exps, TEXT("skin")))
+		if (NativePreset.IsValid() && (ToonProbeHasExp(Exps, TEXT("skin")) || ToonProbeHasExp(Exps, TEXT("skinresponse"))))
 		{
 			for (const EBlendMode Blend : { BLEND_Opaque, BLEND_Masked, BLEND_Translucent })
 			{
@@ -1892,6 +1895,383 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 		ToonProbeFinishMaterialSwap(Rig, Sample);
 	};
 	const bool bCanToon = bSubstrate && ToonOpaque && ToonMasked;
+	if (ToonProbeHasExp(Exps, TEXT("skinresponse")) && NativePreset.IsValid())
+	{
+		const FTransform EntryCamera = Rig.Capture->GetComponentTransform();
+		const float EntryFOV = Rig.Capture->FOVAngle;
+		const FPostProcessSettings EntryPostProcess = Rig.PostProcess, EntryCapturePostProcess = Rig.Capture->PostProcessSettings;
+		const TArray<FEngineShowFlagsSetting> EntryFlags = Rig.Capture->GetShowFlagSettings();
+		UseToonBaseline();
+		ToonProbePose(Rig, Sample.BeautyTime);
+		ToonProbeSetShot(Rig, EToonProbeShot::Face);
+		UMMDHeadBoneSubsystem::UpdateComponentHeadFrame(Rig.Character.Get());
+		TSharedRef<FJsonObject> Response = ToonProbeJsonObject();
+		Report->SetObjectField(TEXT("skinresponse"), Response);
+		auto Check = [&](const TCHAR* Name, bool bPassed)
+		{
+			Response->SetBoolField(Name, bPassed);
+			if (!bPassed) ++Log.Failures;
+			return bPassed;
+		};
+		Response->SetStringField(TEXT("scope"), TEXT("Layout41 plugin-owned procedural 6x6x6 color LUT and view response. Same-run Master0/1, with both albedo preprocessing switches disabled. Not a game LUT, screen diffusion or thickness transmission. The last two softness captures form a separate experiment."));
+		Response->SetBoolField(TEXT("body_skin_tested"), false);
+		Response->SetBoolField(TEXT("all_gpu_verified"), false);
+		Response->SetBoolField(TEXT("pixel_difference_verified_by_this_report"), false);
+		Response->SetNumberField(TEXT("planned_core_images"), 16);
+		Response->SetNumberField(TEXT("planned_softness_images"), 2);
+		Response->SetNumberField(TEXT("planned_images"), 18);
+		const auto& Backend = MMDEndfieldNativeBackend::GetStatus();
+		UMMDEndfieldFaceData* FaceData = Sample.Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
+		bool bReady = Check(TEXT("native_layout_path_ready"), bCanToon && Backend.bProfileMarkerAllowed && Backend.Mode == 2
+			&& ToonProbeCVar(TEXT("r.Substrate.ProjectGBufferFormat")) == TEXT("1")
+			&& FCString::Atoi(*ToonProbeCVar(TEXT("r.Substrate.ToonProfile.Resolution"))) >= 256);
+		bReady &= Check(TEXT("explicit_yyb_reference_pose"), bExplicitSample && Sample.bReferencePose && Sample.MeshPath.Contains(TEXT("YYB16th")));
+		bReady &= Check(TEXT("current_face_data_ready"), FaceData && FaceData->Version == UMMDEndfieldFaceData::CurrentVersion
+			&& FaceData->FrameVersion == MMDEndfieldHeadFrame::CurrentFrameVersion && Rig.HeadIndex != INDEX_NONE && Rig.Stage->KeyLight);
+		bool bParentsReady = true;
+		for (const auto& Pair : { TPair<const TCHAR*, EBlendMode>(TEXT("Opaque"), BLEND_Opaque), { TEXT("Masked"), BLEND_Masked }, { TEXT("Translucent"), BLEND_Translucent } })
+		{
+			const FString OrdinaryName = Pair.Value == BLEND_Translucent ? TEXT("ToonProbe_TranslucentGrey") : FString(TEXT("ToonProbe_")) + Pair.Key;
+			UMaterial* Ordinary = ReadyMaterial(*OrdinaryName);
+			UMaterial* Face = ReadyMaterial(*(FString(TEXT("ToonProbe_Face_")) + Pair.Key));
+			bParentsReady &= Ordinary && Face && Ordinary->GetPathName() == ToonProbeNativeSurfaceParentPath(Pair.Value, false)
+				&& Face->GetPathName() == ToonProbeNativeSurfaceParentPath(Pair.Value, true);
+		}
+		UMaterial* Outline = ReadyMaterial(TEXT("ToonProbe_Outline"));
+		bParentsReady &= Outline && Outline->GetPathName() == TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline");
+		bReady &= Check(TEXT("seven_exact_parent_shaders_ready"), bParentsReady);
+		struct FToonProbeResponseSlot
+		{
+			int32 Slot = INDEX_NONE;
+			UMaterialInstanceDynamic* Material = nullptr;
+			UMaterialInterface* Parent = nullptr;
+			UToonProfile* Profile = nullptr;
+			bool bOverride = false, bHasOpacity = false, bHasBase = false;
+			bool bSkin = false, bFace = false;
+			EMMDMaterialRole Role = EMMDMaterialRole::Generic;
+			float Opacity = 0.0f;
+			FLinearColor Base = FLinearColor::Transparent;
+			TArray<FScalarParameterValue> Scalars;
+			TArray<FVectorParameterValue> Vectors;
+			TArray<FTextureParameterValue> Textures;
+		};
+		struct FToonProbeResponseProfile
+		{
+			UToonProfile* Original = nullptr;
+			UToonProfile* Copy = nullptr;
+			float Metadata[9] = {};
+			TArray<uint8> OriginalBytes;
+		};
+		constexpr int32 Centers[9] = { 9, 10, 11, 21, 22, 23, 29, 30, 31 };
+		TArray<TSharedPtr<FJsonValue>> MetadataCenters;
+		for (const int32 Center : Centers) MetadataCenters.Add(MakeShared<FJsonValueNumber>(Center));
+		Response->SetArrayField(TEXT("metadata_centers_over64"), MetadataCenters);
+		auto AlphaCurve = [](UToonProfile* Profile) -> FRichCurve&
+		{
+			return Profile->Settings.DiffuseRamp.ExternalCurve ? Profile->Settings.DiffuseRamp.ExternalCurve->FloatCurves[3]
+				: Profile->Settings.DiffuseRamp.ColorCurves[3];
+		};
+		TArray<FToonProbeResponseSlot> Slots;
+		TArray<FToonProbeResponseProfile> ProfileCopies;
+		TMap<UToonProfile*, int32> ProfileIndices;
+		TArray<TSharedPtr<FJsonValue>> SlotReports;
+		int32 SkinCount = 0, FaceCount = 0, InlineCount = 0;
+		bool bMetadataValid = true, bSourceAlphaMatches = true;
+		const UMMDStageMaterialState* MaterialState = Cast<UMMDStageMaterialState>(Rig.Character->GetAssetUserDataOfClass(UMMDStageMaterialState::StaticClass()));
+		for (int32 Slot = 0; Slot < Rig.Character->GetNumMaterials(); ++Slot)
+		{
+			UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Rig.Character->GetMaterial(Slot));
+			if (!MID) { bReady = false; ++Log.Failures; continue; }
+			FToonProbeResponseSlot& Saved = Slots.AddDefaulted_GetRef();
+			Saved.Slot = Slot; Saved.Material = MID; Saved.Parent = MID->Parent.Get();
+			Saved.Profile = MID->ToonProfileOverride; Saved.bOverride = MID->bOverrideToonProfile;
+			Saved.Scalars = MID->ScalarParameterValues; Saved.Vectors = MID->VectorParameterValues; Saved.Textures = MID->TextureParameterValues;
+			Saved.Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Slot);
+			Saved.bSkin = Saved.Role == EMMDMaterialRole::Skin;
+			Saved.bHasOpacity = MID->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Saved.Opacity);
+			Saved.bHasBase = MID->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), Saved.Base);
+			const FName SlotName = Sample.Mesh->GetMaterials()[Slot].MaterialSlotName;
+			const FMMDGeneratedFaceSdfSlot* Binding = FaceData ? FaceData->FindDirectionSlot(Slot, SlotName) : nullptr;
+			Saved.bFace = Saved.bSkin && Binding;
+			if (Saved.bFace) { ++FaceCount; if (Binding->bForwardOverlay) ++InlineCount; }
+			KeepAlive.Emplace(MID);
+			if (Saved.bSkin)
+			{
+				++SkinCount;
+				UToonProfile* Original = Saved.Profile;
+				if (!Original || !Original->HasAnyFlags(RF_Transient)) { bMetadataValid = false; continue; }
+				if (!ProfileIndices.Contains(Original))
+				{
+					const int32 Index = ProfileCopies.Num();
+					FToonProbeResponseProfile& Profile = ProfileCopies.AddDefaulted_GetRef();
+					Profile.Original = Original;
+					FObjectWriter Writer(Original, Profile.OriginalBytes);
+					FRichCurve& Alpha = AlphaCurve(Original);
+					for (int32 Field = 0; Field < 9; ++Field) Profile.Metadata[Field] = Alpha.Eval(float(Centers[Field]) / 64.0f);
+					bMetadataValid &= FMath::IsNearlyEqual(Profile.Metadata[0], 41.0f) && FMath::IsNearlyEqual(Alpha.Eval(0.0f), -33.0f)
+						&& FMath::IsNearlyEqual(Alpha.Eval(1.0f), -65.0f) && FMath::IsNearlyEqual(Alpha.Eval(0.25f), 2.0f);
+					for (const float Value : Profile.Metadata) bMetadataValid &= FMath::IsFinite(Value);
+					Profile.Copy = DuplicateObject<UToonProfile>(Original, GetTransientPackage());
+					Profile.Copy->Guid = FGuid::NewGuid();
+					Profile.Copy->SetFlags(RF_Transient); Profile.Copy->ClearFlags(RF_Public | RF_Standalone);
+					if (Original->Settings.DiffuseRamp.ExternalCurve)
+					{
+						UCurveLinearColor* Copy = DuplicateObject<UCurveLinearColor>(Original->Settings.DiffuseRamp.ExternalCurve, GetTransientPackage());
+						Profile.Copy->Settings.DiffuseRamp.ExternalCurve = Copy;
+						KeepAlive.Emplace(Copy);
+					}
+					KeepAlive.Emplace(Original); KeepAlive.Emplace(Profile.Copy);
+					ProfileIndices.Add(Original, Index);
+				}
+			}
+			UMaterialInterface* Source = MaterialState && MaterialState->SourceMaterials.IsValidIndex(Slot) ? MaterialState->SourceMaterials[Slot].Get()
+				: Sample.Mesh->GetMaterials()[Slot].MaterialInterface.Get();
+			float SourceOpacity = 0.0f;
+			const bool bSourceOpacity = Source && Source->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), SourceOpacity);
+			if (bSourceOpacity) bSourceAlphaMatches &= Saved.bHasOpacity && FMath::IsNearlyEqual(SourceOpacity, Saved.Opacity);
+			TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
+			Item->SetNumberField(TEXT("slot"), Slot); Item->SetStringField(TEXT("slot_name"), SlotName.ToString());
+			Item->SetStringField(TEXT("role"), UEnum::GetValueAsString(Saved.Role));
+			Item->SetBoolField(TEXT("skin_response_target"), Saved.bSkin); Item->SetBoolField(TEXT("bound_face_target"), Saved.bFace);
+			Item->SetStringField(TEXT("parent"), Saved.Parent ? Saved.Parent->GetPathName() : TEXT("none"));
+			Item->SetStringField(TEXT("original_profile"), Saved.Profile ? Saved.Profile->GetPathName() : TEXT("none"));
+			Item->SetBoolField(TEXT("source_opacity_parameter_found"), bSourceOpacity);
+			if (bSourceOpacity) Item->SetNumberField(TEXT("source_opacity"), SourceOpacity);
+			if (Saved.bHasOpacity) Item->SetNumberField(TEXT("actual_opacity"), Saved.Opacity);
+			if (Saved.bHasBase) Item->SetStringField(TEXT("actual_base_color_rgba"), Saved.Base.ToString());
+			ToonProbeWriteFaceBindingFields(Item, Binding); SlotReports.Add(MakeShared<FJsonValueObject>(Item));
+		}
+		Response->SetArrayField(TEXT("source_slots"), SlotReports);
+		Response->SetNumberField(TEXT("skin_slot_count"), SkinCount); Response->SetNumberField(TEXT("bound_face_slot_count"), FaceCount);
+		Response->SetNumberField(TEXT("packed_face_slot_count"), FaceCount - InlineCount); Response->SetNumberField(TEXT("inline_face_slot_count"), InlineCount);
+		Response->SetNumberField(TEXT("unbound_skin_fallback_slot_count"), SkinCount - FaceCount);
+		bReady &= Check(TEXT("seven_skin_five_face_targets"), SkinCount == 7 && FaceCount == 5 && InlineCount == 2);
+		bReady &= Check(TEXT("skin_layout41_metadata_preserved"), bMetadataValid && !ProfileCopies.IsEmpty());
+		bReady &= Check(TEXT("source_opacity_preserved"), bSourceAlphaMatches);
+		ToonProbeValidateSlots(Rig, Log, TEXT("skinresponse_initial"));
+		if (bReady)
+		{
+			struct FToonProbeResponseLight { ULightComponent* Light; float Intensity; };
+			TArray<FToonProbeResponseLight> SceneLights;
+			for (TObjectIterator<ULightComponent> It; It; ++It)
+				if (It->GetWorld() == Rig.World) SceneLights.Add({ *It, It->Intensity });
+			UDirectionalLightComponent* Key = Rig.Stage->KeyLight.Get();
+			const float KeyIntensity = Key->Intensity;
+			Response->SetNumberField(TEXT("scene_light_component_count"), SceneLights.Num());
+			const bool bKeyTracked = SceneLights.ContainsByPredicate([Key](const FToonProbeResponseLight& Entry) { return Entry.Light == Key; });
+			Check(TEXT("key_light_in_scene_snapshot"), bKeyTracked && KeyIntensity > 0.0f);
+			const FRotator KeyRotation = Key->GetComponentRotation();
+			const bool bKeyShadow = Key->CastShadows, bKeyDynamicShadow = Key->CastDynamicShadows;
+			const ECastRayTracedShadow::Type RayShadow = Key->CastRaytracedShadow;
+			const bool bDistanceFieldShadow = Key->bUseRayTracedDistanceFieldShadows;
+			auto RecordKeyShadowState = [&]()
+			{
+				TSharedRef<FJsonObject> State = ToonProbeJsonObject();
+				State->SetBoolField(TEXT("cast_shadows"), Key->CastShadows);
+				State->SetBoolField(TEXT("cast_dynamic_shadows"), Key->CastDynamicShadows);
+				State->SetNumberField(TEXT("ray_traced_shadows"), static_cast<int32>(Key->CastRaytracedShadow.GetValue()));
+				State->SetBoolField(TEXT("distance_field_shadows"), Key->bUseRayTracedDistanceFieldShadows);
+				State->SetStringField(TEXT("rotation"), Key->GetComponentRotation().ToString());
+				return State;
+			};
+			Response->SetObjectField(TEXT("native_key_shadow_state_before"), RecordKeyShadowState());
+			const bool bContact = Rig.Character->bCastContactShadow;
+			bool bRestored = false;
+			auto AssignProfile = [](UMaterialInstanceDynamic* MID, UToonProfile* Profile, bool bOverride)
+			{
+				const TArray<FScalarParameterValue> Scalars = MID->ScalarParameterValues;
+				const TArray<FVectorParameterValue> Vectors = MID->VectorParameterValues;
+				const TArray<FTextureParameterValue> Textures = MID->TextureParameterValues;
+				MID->ToonProfileOverride = Profile; MID->bOverrideToonProfile = bOverride; MID->ClearParameterValues();
+				for (const FScalarParameterValue& Value : Scalars) MID->SetScalarParameterValue(Value.ParameterInfo.Name, Value.ParameterValue);
+				for (const FVectorParameterValue& Value : Vectors) MID->SetVectorParameterValue(Value.ParameterInfo.Name, Value.ParameterValue);
+				for (const FTextureParameterValue& Value : Textures) MID->SetTextureParameterValue(Value.ParameterInfo.Name, Value.ParameterValue);
+			};
+			auto Restore = [&]()
+			{
+				if (bRestored) return; bRestored = true;
+				for (const FToonProbeResponseSlot& Saved : Slots)
+				{
+					UMaterialInstanceDynamic* MID = Saved.Material;
+					MID->ToonProfileOverride = Saved.Profile; MID->bOverrideToonProfile = Saved.bOverride; MID->ClearParameterValues();
+					for (const FScalarParameterValue& Value : Saved.Scalars) MID->SetScalarParameterValue(Value.ParameterInfo.Name, Value.ParameterValue);
+					for (const FVectorParameterValue& Value : Saved.Vectors) MID->SetVectorParameterValue(Value.ParameterInfo.Name, Value.ParameterValue);
+					for (const FTextureParameterValue& Value : Saved.Textures) MID->SetTextureParameterValue(Value.ParameterInfo.Name, Value.ParameterValue);
+				}
+				for (const auto& Light : SceneLights) Light.Light->SetIntensity(Light.Intensity);
+				Key->SetIntensity(KeyIntensity);
+				Key->SetWorldRotation(KeyRotation); Key->SetCastShadows(bKeyShadow); Key->CastDynamicShadows = bKeyDynamicShadow;
+				Key->SetCastRaytracedShadows(RayShadow);
+				// 精确还原快照；运行时 setter 会按项目距离场支持裁剪原始属性位。
+				Key->bUseRayTracedDistanceFieldShadows = bDistanceFieldShadow;
+				Key->MarkRenderStateDirty(); Rig.Character->SetCastContactShadow(bContact);
+				Rig.Capture->SetShowFlagSettings(EntryFlags); Rig.PostProcess = EntryPostProcess;
+				Rig.Capture->PostProcessSettings = EntryCapturePostProcess; Rig.Capture->SetWorldTransform(EntryCamera); Rig.Capture->FOVAngle = EntryFOV;
+				Rig.World->SendAllEndOfFrameUpdates(); FlushRenderingCommands();
+			};
+			ON_SCOPE_EXIT { Restore(); };
+			for (const FToonProbeResponseSlot& Saved : Slots)
+			{
+				if (Saved.bSkin) AssignProfile(Saved.Material, ProfileCopies[ProfileIndices[Saved.Profile]].Copy, true);
+				Saved.Material->SetScalarParameterValue(TEXT("ToonSkinEnabled"), 0.0f);
+				Saved.Material->SetScalarParameterValue(TEXT("ToonFaceSkinEnabled"), 0.0f);
+			}
+			for (const auto& Light : SceneLights) if (Light.Light != Key) Light.Light->SetIntensity(0.0f);
+			Key->SetCastShadows(true); Key->CastDynamicShadows = true;
+			Key->SetCastRaytracedShadows(ECastRayTracedShadow::Disabled); Key->SetUseRayTracedDistanceFieldShadows(false); Key->MarkRenderStateDirty();
+			Rig.Character->SetCastContactShadow(false);
+			ToonProbeSetShowFlags(Rig, { TEXT("GlobalIllumination"), TEXT("SkyLighting"), TEXT("ReflectionEnvironment"),
+				TEXT("LumenReflections"), TEXT("ScreenSpaceReflections"), TEXT("AmbientOcclusion"), TEXT("LumenShortRangeAmbientOcclusion"), TEXT("ContactShadows") });
+			FLinearColor F, R;
+			Rig.Character->GetMaterial(FaceData->Slots[0].MaterialIndex)->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadForward), F);
+			Rig.Character->GetMaterial(FaceData->Slots[0].MaterialIndex)->GetVectorParameterValue(FHashedMaterialParameterInfo(UMMDHeadBoneSubsystem::ParamHeadRight), R);
+			const FVector HeadForward = FVector(F.R, F.G, F.B).GetSafeNormal(), HeadRight = FVector(R.R, R.G, R.B).GetSafeNormal();
+			const FVector HeadUp = FVector::CrossProduct(HeadRight, HeadForward).GetSafeNormal();
+			const FVector Head = Rig.Character->GetBoneTransform(Rig.HeadIndex).GetLocation();
+			const FVector CameraTarget = Head + FVector(0.0f, -3.0f, 8.0f), BaseCamera = Rig.Capture->GetComponentLocation();
+			Response->SetStringField(TEXT("head_forward"), HeadForward.ToString()); Response->SetStringField(TEXT("head_right"), HeadRight.ToString());
+			Response->SetStringField(TEXT("head_up"), HeadUp.ToString()); Response->SetNumberField(TEXT("base_key_intensity"), KeyIntensity);
+			Response->SetStringField(TEXT("camera_orbit_contract"), TEXT("Camera alone rotates about head-up; model and world light stay fixed for view-left/right. ROI positions must be reviewed separately for these views."));
+			TArray<TSharedPtr<FJsonValue>> Captures;
+			const int32 FirstImage = Log.Images.Num();
+			bool bAllControls = bKeyTracked && KeyIntensity > 0.0f;
+			auto SetPlateau = [](FRichCurve& Alpha, int32 Center, float Value)
+			{
+				for (const float Delta : { -1.0f / 256.0f, 1.0f / 256.0f })
+					Alpha.SetKeyInterpMode(Alpha.UpdateOrAddKey(float(Center) / 64.0f + Delta, Value), RCIM_Linear);
+			};
+			auto Capture = [&](const TCHAR* Name, const TCHAR* Group, bool bMaster, float LightYaw, float CameraYaw, float Multiplier, bool bSoftness, float Softness)
+			{
+				bool bControls = bKeyTracked && KeyIntensity > 0.0f;
+				TArray<TSharedPtr<FJsonValue>> Metadata;
+				for (FToonProbeResponseProfile& Profile : ProfileCopies)
+				{
+					FRichCurve& Alpha = AlphaCurve(Profile.Copy);
+					SetPlateau(Alpha, 10, bMaster ? 1.0f : 0.0f);
+					if (bSoftness) SetPlateau(Alpha, 31, Softness);
+					TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
+					Item->SetStringField(TEXT("profile"), Profile.Copy->GetPathName());
+					TArray<TSharedPtr<FJsonValue>> Values;
+					for (int32 Field = 0; Field < 9; ++Field)
+					{
+						const float Value = Alpha.Eval(float(Centers[Field]) / 64.0f);
+						const float Expected = Field == 1 ? (bMaster ? 1.0f : 0.0f) : Field == 8 && bSoftness ? Softness : Profile.Metadata[Field];
+						bControls &= FMath::IsNearlyEqual(Value, Expected); Values.Add(MakeShared<FJsonValueNumber>(Value));
+					}
+					Item->SetArrayField(TEXT("layout41_values"), Values); Metadata.Add(MakeShared<FJsonValueObject>(Item));
+					ToonProbeRefreshProfile(Profile.Copy);
+				}
+				const float Yaw = FMath::DegreesToRadians(LightYaw), Pitch = FMath::DegreesToRadians(25.0f);
+				const FVector L = ((HeadForward * FMath::Cos(Yaw) + HeadRight * FMath::Sin(Yaw)) * FMath::Cos(Pitch) + HeadUp * FMath::Sin(Pitch)).GetSafeNormal();
+				Key->SetWorldRotation((-L).Rotation()); Key->SetIntensity(KeyIntensity * Multiplier);
+				const FVector Location = Head + (BaseCamera - Head).RotateAngleAxis(CameraYaw, HeadUp);
+				Rig.Capture->SetWorldLocationAndRotation(Location, (CameraTarget - Location).Rotation());
+				bControls &= !HeadUp.IsNearlyZero() && !HeadForward.IsNearlyZero() && !HeadRight.IsNearlyZero();
+				bool bAlpha = true, bBindings = true;
+				for (const FToonProbeResponseSlot& Saved : Slots)
+				{
+					float Body = 0.0f, Face = 0.0f, Opacity = 0.0f;
+					FLinearColor Base;
+					Saved.Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonSkinEnabled")), Body);
+					Saved.Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonFaceSkinEnabled")), Face);
+					bControls &= FMath::IsNearlyZero(Body) && FMath::IsNearlyZero(Face) && Saved.Material->Parent == Saved.Parent
+						&& UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Saved.Slot) == Saved.Role;
+					bControls &= Saved.Material->ToonProfileOverride == (Saved.bSkin ? ProfileCopies[ProfileIndices[Saved.Profile]].Copy : Saved.Profile);
+					bAlpha &= !Saved.bHasOpacity || (Saved.Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Opacity) && FMath::IsNearlyEqual(Opacity, Saved.Opacity));
+					bAlpha &= !Saved.bHasBase || (Saved.Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), Base) && Base.Equals(Saved.Base));
+					if (Saved.bFace)
+					{
+						float Enabled = 0.0f, Version = 0.0f, Payload = 0.0f;
+						UTexture* Texture = nullptr;
+						Saved.Material->GetScalarParameterValue(FHashedMaterialParameterInfo(UMMDEndfieldFaceData::DirectionEnabledParameter), Enabled);
+						Saved.Material->GetScalarParameterValue(FHashedMaterialParameterInfo(UMMDEndfieldFaceData::DirectionVersionParameter), Version);
+						Saved.Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonNativePayloadEnabled")), Payload);
+						Saved.Material->GetTextureParameterValue(FHashedMaterialParameterInfo(UMMDEndfieldFaceData::DirectionTextureParameter), Texture);
+						bBindings &= Enabled == 1.0f && Payload == 1.0f && Version == UMMDEndfieldFaceData::CurrentVersion
+							&& Texture == FaceData->FindDirectionTexture(Saved.Slot, Sample.Mesh->GetMaterials()[Saved.Slot].MaterialSlotName);
+					}
+				}
+				for (const auto& Light : SceneLights) if (Light.Light != Key) bControls &= FMath::IsNearlyZero(Light.Light->Intensity);
+				bControls &= FMath::IsNearlyEqual(Key->Intensity, KeyIntensity * Multiplier) && Rig.Capture->ShowFlags.DynamicShadows
+					&& Key->CastShadows && Key->CastDynamicShadows && Rig.Character->CastShadow
+					&& !Rig.Capture->ShowFlags.ContactShadows && !Rig.Capture->ShowFlags.GlobalIllumination && !Rig.Capture->ShowFlags.SkyLighting
+					&& !Rig.Capture->ShowFlags.ReflectionEnvironment && !Rig.Capture->ShowFlags.LumenReflections && !Rig.Capture->ShowFlags.ScreenSpaceReflections;
+				TSharedRef<FJsonObject> Item = ToonProbeJsonObject();
+				Item->SetStringField(TEXT("image"), Name); Item->SetStringField(TEXT("group"), Group);
+				Item->SetBoolField(TEXT("master_enabled"), bMaster); Item->SetBoolField(TEXT("softness_override"), bSoftness);
+				if (bSoftness) Item->SetNumberField(TEXT("angular_softness"), Softness);
+				Item->SetNumberField(TEXT("head_relative_light_yaw"), LightYaw); Item->SetNumberField(TEXT("head_relative_light_elevation"), 25.0f);
+				Item->SetNumberField(TEXT("camera_orbit_yaw"), CameraYaw); Item->SetNumberField(TEXT("main_light_multiplier"), Multiplier);
+				Item->SetStringField(TEXT("mesh_transform"), Rig.Character->GetComponentTransform().ToString());
+				Item->SetNumberField(TEXT("key_intensity"), Key->Intensity); Item->SetStringField(TEXT("key_color"), Key->GetLightColor().ToString());
+				Item->SetStringField(TEXT("surface_to_light_world"), L.ToString()); Item->SetStringField(TEXT("key_rotation"), Key->GetComponentRotation().ToString());
+				Item->SetArrayField(TEXT("profiles"), Metadata);
+				Item->SetBoolField(TEXT("cpu_controls_verified"), bControls); Item->SetBoolField(TEXT("cpu_source_alpha_unchanged"), bAlpha);
+				Item->SetBoolField(TEXT("cpu_five_face_bindings_preserved"), bBindings);
+				const FPostProcessSettings& PP = Rig.Capture->PostProcessSettings;
+				Item->SetNumberField(TEXT("auto_exposure_method"), int32(PP.AutoExposureMethod)); Item->SetNumberField(TEXT("exposure_bias"), PP.AutoExposureBias);
+				Item->SetBoolField(TEXT("physical_camera_exposure"), PP.AutoExposureApplyPhysicalCameraExposure);
+				Item->SetNumberField(TEXT("white_temperature"), PP.WhiteTemp); Item->SetStringField(TEXT("color_gain"), PP.ColorGain.ToString());
+				Item->SetStringField(TEXT("color_gamma"), PP.ColorGamma.ToString()); Item->SetStringField(TEXT("color_contrast"), PP.ColorContrast.ToString());
+				Item->SetStringField(TEXT("color_saturation"), PP.ColorSaturation.ToString()); Item->SetNumberField(TEXT("film_toe"), PP.FilmToe); Item->SetNumberField(TEXT("film_slope"), PP.FilmSlope);
+				bAllControls &= bControls && bAlpha && bBindings;
+				if (bControls && bAlpha && bBindings) { Rig.Capture->bCameraCutThisFrame = true; ToonProbeCapture(Rig, Log, Name, FMath::Max(Frames, 24)); }
+				else { ++Log.Failures; Item->SetBoolField(TEXT("capture_skipped"), true); }
+				Captures.Add(MakeShared<FJsonValueObject>(Item));
+			};
+			for (const auto& Light : { TPair<const TCHAR*, float>(TEXT("side"), -65.0f), { TEXT("back"), 120.0f } })
+			{
+				for (const bool bOn : { false, true }) Capture(*FString::Printf(TEXT("skinresponse_%s_%s_face"), Light.Key, bOn ? TEXT("on") : TEXT("off")), TEXT("core"), bOn, Light.Value, 0.0f, 1.0f, false, 0.0f);
+				if (FString(Light.Key) == TEXT("back"))
+					Capture(TEXT("skinresponse_back_off_repeat_face"), TEXT("core"), false, Light.Value, 0.0f, 1.0f, false, 0.0f);
+			}
+			for (const auto& View : { TPair<const TCHAR*, float>(TEXT("left"), -25.0f), { TEXT("right"), 25.0f } })
+				for (const bool bOn : { false, true }) Capture(*FString::Printf(TEXT("skinresponse_view_%s_%s_face"), View.Key, bOn ? TEXT("on") : TEXT("off")), TEXT("core"), bOn, -65.0f, View.Value, 1.0f, false, 0.0f);
+			for (const auto& Intensity : { TPair<const TCHAR*, float>(TEXT("zero"), 0.0f), { TEXT("half"), 0.5f }, { TEXT("double"), 2.0f } })
+				for (const bool bOn : { false, true }) Capture(*FString::Printf(TEXT("skinresponse_main_%s_%s_face"), Intensity.Key, bOn ? TEXT("on") : TEXT("off")), TEXT("core"), bOn, -65.0f, 0.0f, Intensity.Value, false, 0.0f);
+			Capture(TEXT("skinresponse_side_off_repeat_face"), TEXT("core"), false, -65.0f, 0.0f, 1.0f, false, 0.0f);
+			bool bOriginalSoftnessMatches = true;
+			const float OriginalSoftness = ProfileCopies[0].Metadata[8];
+			for (const FToonProbeResponseProfile& Profile : ProfileCopies) bOriginalSoftnessMatches &= FMath::IsNearlyEqual(Profile.Metadata[8], OriginalSoftness);
+			Check(TEXT("shared_original_angular_softness"), bOriginalSoftnessMatches);
+			if (bOriginalSoftnessMatches)
+			{
+				Capture(TEXT("skinresponse_softness_original_face"), TEXT("angular_softness_only"), true, -65.0f, 0.0f, 1.0f, true, OriginalSoftness);
+				Capture(TEXT("skinresponse_softness_025_face"), TEXT("angular_softness_only"), true, -65.0f, 0.0f, 1.0f, true, 0.025f);
+			}
+			Response->SetArrayField(TEXT("captures"), Captures); Response->SetNumberField(TEXT("captured_images"), Log.Images.Num() - FirstImage);
+			Check(TEXT("all_capture_cpu_controls_verified"), bAllControls); Check(TEXT("all_eighteen_images_captured"), Log.Images.Num() - FirstImage == 18);
+			Restore();
+			bool bRestoredValues = true, bOriginalProfilesUnchanged = true, bLightsRestored = true;
+			for (const FToonProbeResponseSlot& Saved : Slots)
+			{
+				UMaterialInstanceDynamic* MID = Saved.Material;
+				bRestoredValues &= MID->Parent == Saved.Parent && MID->ToonProfileOverride == Saved.Profile && MID->bOverrideToonProfile == Saved.bOverride
+					&& MID->ScalarParameterValues.Num() == Saved.Scalars.Num() && MID->VectorParameterValues.Num() == Saved.Vectors.Num()
+					&& MID->TextureParameterValues.Num() == Saved.Textures.Num() && UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Saved.Slot) == Saved.Role;
+				for (const FScalarParameterValue& Value : Saved.Scalars) { float Actual = 0.0f; bRestoredValues &= MID->GetScalarParameterValue(FHashedMaterialParameterInfo(Value.ParameterInfo.Name), Actual) && FMath::IsNearlyEqual(Actual, Value.ParameterValue); }
+				for (const FVectorParameterValue& Value : Saved.Vectors) { FLinearColor Actual; bRestoredValues &= MID->GetVectorParameterValue(FHashedMaterialParameterInfo(Value.ParameterInfo.Name), Actual) && Actual.Equals(Value.ParameterValue); }
+				for (const FTextureParameterValue& Value : Saved.Textures) { UTexture* Actual = nullptr; bRestoredValues &= MID->GetTextureParameterValue(FHashedMaterialParameterInfo(Value.ParameterInfo.Name), Actual) && Actual == Value.ParameterValue; }
+			}
+			for (FToonProbeResponseProfile& Profile : ProfileCopies) { TArray<uint8> Bytes; FObjectWriter Writer(Profile.Original, Bytes); bOriginalProfilesUnchanged &= Bytes == Profile.OriginalBytes; }
+			for (const auto& Light : SceneLights) bLightsRestored &= FMath::IsNearlyEqual(Light.Light->Intensity, Light.Intensity);
+			Check(TEXT("all_material_parameters_profiles_and_roles_restored"), bRestoredValues);
+			Check(TEXT("original_profile_bytes_unchanged"), bOriginalProfilesUnchanged);
+			Check(TEXT("all_scene_light_intensities_restored"), bLightsRestored);
+			Response->SetObjectField(TEXT("native_key_shadow_state_after"), RecordKeyShadowState());
+			Check(TEXT("native_key_shadow_flags_restored"), Key->CastShadows == bKeyShadow && Key->CastDynamicShadows == bKeyDynamicShadow
+				&& Key->CastRaytracedShadow == RayShadow && Key->bUseRayTracedDistanceFieldShadows == bDistanceFieldShadow && Key->GetComponentRotation().Equals(KeyRotation, 0.001f));
+			const TArray<FEngineShowFlagsSetting> RestoredFlags = Rig.Capture->GetShowFlagSettings();
+			bool bFlagsRestored = RestoredFlags.Num() == EntryFlags.Num();
+			for (int32 Index = 0; Index < FMath::Min(RestoredFlags.Num(), EntryFlags.Num()); ++Index)
+				bFlagsRestored &= RestoredFlags[Index].ShowFlagName == EntryFlags[Index].ShowFlagName && RestoredFlags[Index].Enabled == EntryFlags[Index].Enabled;
+			Check(TEXT("showflag_settings_restored"), bFlagsRestored);
+			Check(TEXT("postprocess_settings_restored"), FPostProcessSettings::StaticStruct()->CompareScriptStruct(&Rig.PostProcess, &EntryPostProcess, 0)
+				&& FPostProcessSettings::StaticStruct()->CompareScriptStruct(&Rig.Capture->PostProcessSettings, &EntryCapturePostProcess, 0));
+			Check(TEXT("camera_and_contact_restored"), Rig.Capture->GetComponentTransform().Equals(EntryCamera) && FMath::IsNearlyEqual(Rig.Capture->FOVAngle, EntryFOV) && Rig.Character->bCastContactShadow == bContact);
+			ToonProbeValidateSlots(Rig, Log, TEXT("skinresponse_restored"));
+		}
+	}
 	if (ToonProbeHasExp(Exps, TEXT("skin")) && NativePreset.IsValid())
 	{
 		const FTransform SkinEntryCamera = Rig.Capture->GetComponentTransform();
@@ -2777,7 +3157,8 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 				Rig.Stage->KeyLight->SetCastShadows(bOriginalKeyShadow);
 				Rig.Stage->KeyLight->CastDynamicShadows = bOriginalKeyDynamicShadow;
 				Rig.Stage->KeyLight->SetCastRaytracedShadows(OriginalRayShadow);
-				Rig.Stage->KeyLight->SetUseRayTracedDistanceFieldShadows(bOriginalDistanceFieldShadow);
+				// 保留原始属性位，不让支持性检查改变探针进入前的状态。
+				Rig.Stage->KeyLight->bUseRayTracedDistanceFieldShadows = bOriginalDistanceFieldShadow;
 				Rig.Stage->KeyLight->MarkRenderStateDirty();
 				for (int32 Index = 0; Index < 3; ++Index) if (StageLights[Index]) StageLights[Index]->SetIntensity(OriginalLightIntensities[Index]);
 				for (int32 Index = 0; Index < AccentLights.Num(); ++Index) if (AccentLights[Index]) AccentLights[Index]->SetIntensity(AccentIntensities[Index]);

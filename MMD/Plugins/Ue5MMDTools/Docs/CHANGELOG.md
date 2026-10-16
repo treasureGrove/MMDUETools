@@ -2,6 +2,15 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-16 — v12：皮肤暗部颜色 LUT 与脸部视角响应
+
+- 根据已核对的客户端 Skin／Face 路径和公开复刻源码，补齐暗部颜色查表与视角染色。客户端 LUT 仅留本机参考，发行使用原创的三档吸收调色配方，按编码 RGB 查表并在线性空间插值；只替换逐灯暗部颜色，不把整张底图统一染色。主光、原生遮挡、高光独立法线与 GI 合成沿用现有入口，没有新增皮肤 RT、GBuffer 附件或后处理 pass。
+- 新增 `CharacterSkinLighting` 控制 LUT 权重、身体／脸部视角尺度、染色及脸部角度柔化。V2 默认启用该响应，关闭上一批两组静态肤色修正，旧参数仍可选用。6³ 共216色存于 Skin 原未启用的 RS RGB 行，RD.A 保持；schema41 参数使用 Diffuse.A 的独立平台，Hair／Cloth 行保持。缓存签名包含参数和配方，避免不同预设互相改写瞬态 Profile。
+- 后端与 Cooked 协议升12；Graph6、payload5、FaceData5、头框架1保持。真正的空间 SSS、厚度透射和原作 RefineMask 尚未接入；当前脸部 NoV 稳定处理是利用现有头框架与覆盖的通用近似，不能称为逐像素原版复刻。分辨率须在应用预设前设置为至少256，不支持已有 tile／cube Profile 运行中直接降 atlas 分辨率。
+- 最终Editor3／Game1运行时构建通过。`generate12b`15包／七父材质真实编译（21／40／29／21／40／29／40 shaders）；`response3`47图／195槽、Mode0与启动atlas64回退各8图／78槽，均0失败，实际Editor协议12。外部像素分析55项检查通过，主灯归零的开关全图RGB一致；逆光肤色变化高于同条件复拍噪声，对照白衣等区域在噪声容差内，不声称整图无时序差异。7个Skin、5个脸部绑定及源透明度、39槽参数／Profile／父材质恢复保持。[7张原始实拍与来源](Screenshots/2026-10-16-endfield-skin-response/README.md)记录实际效果及限制；鼻梁／分区硬边仍在，`.025`柔化仅作对照未改默认。
+- 首轮`generate12`因Legacy高光调用遗漏第五参数，在出图前失败；只补该调用点读取布局标志，未改冻结的皮肤公式。`response1`46图有一项探针恢复失败：距离场阴影setter会按当前能力裁掉原属性位；改为精确恢复快照并标脏后，`response2`46图0失败。最终`response3`增加逆光OFF复拍，未放宽噪声判断。历史失败日志和原图保留Saved。
+- `EFSkinResponse16c`独立BuildOnly三配置及文件检查通过，14份冻结Source／Shader在工作区与发行包逐字节一致；中间一次与本地UBT同时启动的分发重试因互斥锁退出，不是SDK缺失。v12空白宿主、发行角色绘制、完整Cook／Shipping游戏及性能未重测，不能沿用v11或v8结果。2381项保护中2379项不变，仅自有V2预设及OffsetLinear包更新；用户27项资产、10张旧PNG、Mobile文档、Face shader、安装引擎和项目配置保持。身体Skin／RefineMask／真正空间SSS与完整终末地画质仍未验收。
+
 ## 2026-10-16 — Graph6：独立皮肤／脸部材质与肤色修正
 
 - 新增 Face Opaque／Masked／Translucent 三个父材质，保留 Skin 角色及原生后端 v11／protocol11／payload5。共享与 Face 六个 Toon 父材质均经 `TMMDEndfieldSkinMaterial.ush` 的 struct 成员函数准备实际 BaseColor、Roughness 和 Specular，材质图升 Graph6，生成白名单15包／七父材质。源贴图、BaseColor 参数与 alpha 不改写，不通过曝光或自发光补肤色。

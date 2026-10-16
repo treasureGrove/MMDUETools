@@ -23,7 +23,7 @@ namespace
 {
 	constexpr TCHAR MMDEndfieldBackendSection[] = TEXT("Ue5MMDTools.EndfieldNativeBackend");
 	constexpr TCHAR MMDEndfieldBackendVirtualRoot[] = TEXT("/Engine/Private");
-	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v11-forward-face");
+	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v12-skin-response");
 	// 修改 CustomOutput 名称、输出次序/类型/默认值或打包协议时同步此版本。
 	constexpr TCHAR MMDEndfieldBackendPayloadProtocol[] = TEXT("endfield-skin-payload-v5:GetMMDEndfieldNativePayload:direction-or-threshold4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:values16-type1-mask7-quat32");
 	MMDEndfieldNativeBackend::FStatus MMDEndfieldBackendStatus;
@@ -526,7 +526,7 @@ namespace
 		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("Ue5MMDTools"));
 		if (!Plugin.IsValid()) return MMDEndfieldBackendFail(TEXT("Ue5MMDTools plugin directory was not found."));
 		const FString PluginShaderRoot = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
-        const TCHAR* PluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"), TEXT("Core/TMMDEndfieldNativeData.ush"),
+        const TCHAR* PluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"), TEXT("Core/TMMDEndfieldSkinResponse.ush"), TEXT("Core/TMMDEndfieldNativeData.ush"),
             TEXT("Core/TMMDEndfieldNativeLightCapture.ush"), TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
             TEXT("Core/TMMDEndfieldNativePayload.ush"), TEXT("Core/TMMDEndfieldNativeForwardPayload.ush"),
             TEXT("Core/TMMDEndfieldNativeForwardLight.ush"), TEXT("Private/MMDEndfieldNativeBackendProtocol.usf") };

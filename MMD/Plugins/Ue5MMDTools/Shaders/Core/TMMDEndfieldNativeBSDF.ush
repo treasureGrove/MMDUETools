@@ -1,5 +1,7 @@
 #pragma once
 
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldSkinResponse.ush"
+
 // 仅由原生 BSDF 后端 include；需在 FSubstrateBSDFContext 与原生 Toon 函数定义之后。
 // Profile alpha 控制模式：0 保真透传，1 阴影诊断，2 客户端 RD 语义与几何高光响应。
 struct TMMDEndfieldNativeBSDF
@@ -168,15 +170,14 @@ struct TMMDEndfieldNativeBSDF
         return max(lerp(Luminance(color).xxx, color, saturation), 0.0);
     }
 
-    float3 ApplyDiffuseRamp(float3 base_color, float3 lit_color, float4 ramp,
-        float view_alpha, float shadow, uint role)
+    float3 ApplyDiffuseRamp(float3 lit_color, float3 dark_color, float4 ramp,
+        float view_alpha, float shadow)
     {
         // 没有独立材质 AO 输入，明确取 1；不把阴影冒充 AO，也不重复读场景捕获。
         float ao = 1.0;
         float visibility = ao * saturate(shadow);
         float blend = min(saturate(ramp.a), min(ao, saturate(shadow)));
         float view_visibility = visibility * saturate(view_alpha);
-        float3 dark_color = ShadowColor(base_color, role);
         float3 deep_color = dark_color * 0.65;
         deep_color = max(lerp(Luminance(deep_color).xxx, deep_color, 1.2), 0.0);
         float3 inner_color = lerp(deep_color, dark_color, saturate(view_visibility + ramp.a));
@@ -187,7 +188,8 @@ struct TMMDEndfieldNativeBSDF
         return tinted * compensation;
     }
 
-    float3 EvaluateSpecular(FSubstrateBSDFContext bsdf_context, float3 normal, uint role, float3 source_normal)
+    float3 EvaluateSpecular(FSubstrateBSDFContext bsdf_context, float3 normal, uint role, float3 source_normal,
+        bool skin_has_color_cube)
     {
         float3 H = SafeNormalize(bsdf_context.L + bsdf_context.V, normal);
         if (role != 2u && bsdf_context.mmd_light_data.key_directional_light)
@@ -225,7 +227,9 @@ struct TMMDEndfieldNativeBSDF
             return f0 * response * coordinate * edge * (0.96 * 5.0);
         }
         float3 f0 = lerp(0.04 * TOON_SPECULAR(bsdf_context.BSDF), TOON_BASECOLOR(bsdf_context.BSDF), TOON_METALLIC(bsdf_context.BSDF));
-        float3 response = ReadSpecularRamp2D(TOON_PROFILEID(bsdf_context.BSDF), float2(coordinate, roughness));
+        // 仅 schema41 的 Skin RGB 是颜色立方体；旧 Profile 仍读取原 RS，Master 关闭不改变格式。
+        float3 response = role == 1u && skin_has_color_cube ? 1.0
+            : ReadSpecularRamp2D(TOON_PROFILEID(bsdf_context.BSDF), float2(coordinate, roughness));
         return f0 * response * amplitude;
     }
 
@@ -256,6 +260,8 @@ struct TMMDEndfieldNativeBSDF
         // 32x8 独立样点至少需要 256 个 atlas texel；低分辨率由 C++ 同步拒绝 tile Profile。
         if (uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u)
             return EvaluateNative(bsdf_context, shadow_terms, specular_area_light, is_rect_light, apply_diffuse_ramp);
+        TMMDEndfieldSkinResponse skin_response;
+        skin_response.Load(profile_id, role, 2u);
         float3 independent_specular_normal = SafeNormalize(specular_normal, bsdf_context.N);
         if (role == 2u) independent_specular_normal = HairSpecularNormal(independent_specular_normal, bsdf_context.V);
         FSubstrateBSDFContext specular_context = BuildSpecularContext(bsdf_context, independent_specular_normal);
@@ -299,8 +305,9 @@ struct TMMDEndfieldNativeBSDF
                 float theta = atan2(abs(local_light.x), local_light.y) * (1.0 / PI);
                 float cutoff = local_light.x >= 0.0 ? bsdf_context.BSDF.mmd_payload.face_sdf_thresholds.x
                     : bsdf_context.BSDF.mmd_payload.face_sdf_thresholds.y;
-                // 两个 8bit 角度台阶的柔化；端点分别表示始终暗/亮，不被 smoothstep 抬入半亮。
-                float softness = 2.0 / 255.0;
+                // 端点仍分别表示始终暗/亮；仅新 Skin 主开关启用时使用可调角度柔化。
+                float softness = skin_response.valid && skin_response.master > 0.0
+                    ? skin_response.face_angular_softness : 2.0 / 255.0;
                 float sdf_n_dot_l = cutoff <= 0.0 ? -1.0 : cutoff >= 1.0 ? 1.0
                     : 1.0 - 2.0 * smoothstep(cutoff - softness, cutoff + softness, theta);
                 float horizontal_weight = smoothstep(0.000001, 0.0001, horizontal_length_squared);
@@ -320,25 +327,33 @@ struct TMMDEndfieldNativeBSDF
         if (apply_diffuse_ramp && (role == 2u || role == 3u))
             view_alpha = ReadDiffuseRamp(profile_id, saturate(dot(normal, camera_forward) * 0.5 + 0.5)).a;
         float3 lit_color = diffuse_color;
+        float3 dark_color = ShadowColor(diffuse_color, role);
         if (role == 1u)
         {
-            // 代表客户端 Skin 的视角染色参数；暗部 LUT 尚未接入，仍使用通用底色派生。
             float skin_view = saturate(dot(SafeNormalize(specular_normal, bsdf_context.N), bsdf_context.V));
-            float skin_area = saturate((1.0 - (skin_view * 0.85 + 0.15)) * 0.7);
-            // 外脸没有 SSS 修饰遮罩时不套身体染色；这是通用兜底，独立高光法线仍保留。
             float face_sdf_mask = bsdf_context.BSDF.mmd_payload.valid && bsdf_context.BSDF.mmd_payload.has_face_sdf
                 ? bsdf_context.BSDF.mmd_payload.mask : 0.0;
-            skin_area *= 1.0 - face_sdf_mask;
-            lit_color *= lerp(1.0, float3(0.67, 0.60668504, 0.52930003), skin_area);
+            float3 local_view = float3(0.0, 0.0, 1.0);
+            float3 local_camera = local_view;
+            if (bsdf_context.BSDF.mmd_payload.valid)
+            {
+                TMMDEndfieldNativePayload codec;
+                local_view = codec.ToHeadDirection(bsdf_context.BSDF.mmd_payload, bsdf_context.V);
+                local_camera = codec.ToHeadDirection(bsdf_context.BSDF.mmd_payload, camera_forward);
+            }
+            lit_color = skin_response.ApplyViewTint(lit_color, skin_view, face_sdf_mask, local_view, local_camera);
+            dark_color = skin_response.ApplyDarkColor(profile_id, TOON_BASECOLOR(bsdf_context.BSDF),
+                TOON_METALLIC(bsdf_context.BSDF), dark_color);
         }
-        result.DiffuseColor = ApplyDiffuseRamp(diffuse_color, lit_color, ramp, view_alpha, shadow, role);
+        result.DiffuseColor = ApplyDiffuseRamp(lit_color, dark_color, ramp, view_alpha, shadow);
         result.DiffusePathValue = Diffuse_Lambert(result.DiffuseColor);
         result.IntegratedDiffuseValue = diffuse_area_light.Falloff * diffuse_area_light.FalloffColor * result.DiffusePathValue;
         if (additional_light)
             ApplyAdditionalDiffuse(bsdf_context, shadow_terms, diffuse_area_light, normal, result);
         if (!is_rect_light)
         {
-            result.SpecularPathValue = EvaluateSpecular(specular_context, specular_context.N, role, specular_normal);
+            result.SpecularPathValue = EvaluateSpecular(specular_context, specular_context.N, role,
+                specular_normal, skin_response.valid);
             // Hair 的客户端波瓣自身决定角度响应；保留原生阴影，不再追加一个普通 NoL。
             float specular_cosine = role == 2u ? 1.0 : saturate(specular_area_light.NoL);
             result.IntegratedSpecularValue = saturate(shadow_terms.SurfaceShadow) * specular_cosine

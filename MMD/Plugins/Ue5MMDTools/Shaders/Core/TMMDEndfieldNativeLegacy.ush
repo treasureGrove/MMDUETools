@@ -65,9 +65,11 @@ struct TMMDEndfieldNativeLegacy
         }
         else if (role == 1u || role == 2u || role == 3u)
         {
+            TMMDEndfieldSkinResponse skin_response;
+            skin_response.Load(profile_id, role, 2u);
             float specular_cosine = role == 2u ? 1.0 : saturate(area_light.NoL);
             result.Specular = surface_shadow * specular_cosine * area_light.Falloff * area_light.FalloffColor
-                * profile_control.EvaluateSpecular(context, specular_normal, role, source_normal);
+                * profile_control.EvaluateSpecular(context, specular_normal, role, source_normal, skin_response.valid);
         }
         // 其它分类保留 ToonBxDF 的原生高光；外层不再重复相乘 SurfaceShadow。
         result.Transmission = 0.0;
