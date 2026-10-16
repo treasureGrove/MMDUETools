@@ -6,6 +6,8 @@
 
 shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
 
+2026-10-16 新增[独立皮肤／脸部材质](ENDFIELD_SKIN_MATERIAL_GUIDE.md)：身体与脸部分别调肤色、粗糙度和高光，Face 三种透明模式各有父材质。肤色进入真实 BaseColor，按原生光照和 GI 计算；曝光及阴影公式保持现状。材质图更新为 Graph6，后端仍为 v11；[同机位开关实拍](Screenshots/2026-10-16-endfield-skin/README.md)可直接比较灰白问题的改善。
+
 最新 v11 把脸部改为独立头部投影角阈值图，并给经过几何验证的透明附脸层接入相同响应，处理主脸与传统假鼻影分开受光的问题。[脸部 V5 说明](ENDFIELD_FACE_V5_GUIDE.md)解释坐标、贴图、刘海投影及维护入口。v9 的双暗层、二维高光及主辅光分工继续保留，[2026-10-15 实拍](Screenshots/2026-10-15-endfield-volume/README.md)属于上一批验证。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`，不足256将整体回退原生；v11完整Cook尚未重测。
 
 本批也核对了别人公开复刻的完整分工：[参考源码对照](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。材质和逐灯入口保持，另补底色描边与[插件分发检查](ENDFIELD_PLUGIN_DISTRIBUTION.md)；完整眼睛、头发与屏幕效果仍逐项推进。

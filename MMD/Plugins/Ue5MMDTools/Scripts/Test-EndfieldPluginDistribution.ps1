@@ -64,8 +64,12 @@ try {
         'ThirdParty/Bullet/lib/BulletSoftBody.lib', 'ThirdParty/Bullet/lib/LinearMath.lib',
         'Source/Ue5MMDTools/Ue5MMDTools.Build.cs',
         'Shaders/Core/TMMDEndfieldNativePayload.ush', 'Shaders/Core/TMMDEndfieldNativeBSDF.ush',
+        'Shaders/Core/TMMDEndfieldSkinMaterial.ush',
         'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.uasset',
         'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.uasset',
+        'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.uasset',
+        'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.uasset',
+        'Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.uasset',
         'Content/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.uasset'
     )
     $file_hashes = [ordered]@{}
@@ -107,7 +111,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "干净项目探针失败，exit=$LASTEXITCODE，见 clean-host.log。" }
         $probe = Get-Content -LiteralPath (Join-Path $probe_dir 'report.json') -Raw | ConvertFrom-Json
         if (-not $probe.backend_success -or -not $probe.adapter_only -or $probe.draw_verified -or -not $probe.published_materials_compile_verified) { throw '干净项目探针没有返回预期的适配器和已发布材质编译验证报告。' }
-        if (@($probe.published_materials).Count -ne 4) { throw '预期校验四个父材质（含专用描边），报告数量不符。' }
+        if (@($probe.published_materials).Count -ne 7) { throw '预期校验七个父材质（含脸部三种透明模式和专用描边），报告数量不符。' }
         foreach ($material in $probe.published_materials) {
             if (-not $material.shader_map_ready -or -not $material.compilation_finished -or
                 -not $material.compiled_successfully -or -not $material.compilation_finalized -or

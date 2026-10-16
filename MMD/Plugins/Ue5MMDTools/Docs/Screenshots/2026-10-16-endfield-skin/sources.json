@@ -1,0 +1,1210 @@
+{
+  "schema": "mmd.endfield.skin-graph6-evidence.v1",
+  "archive_generated_utc": "2026-10-16T06:37:49.786931+00:00",
+  "archive_generated_local": "2026-10-16T14:37:49.786931+08:00",
+  "local_timezone": "Asia/Singapore (UTC+08:00)",
+  "capture_dates_utc": [
+    "2026-10-16"
+  ],
+  "capture_dates_local": [
+    "2026-10-16"
+  ],
+  "engine": "5.8.3-58210709+++UE5+Release-5.8",
+  "protocols": {
+    "backend": 11,
+    "payload": 5,
+    "graph": 6,
+    "face_data": 5,
+    "head_frame": 1
+  },
+  "input": {
+    "pmx": {
+      "path": "Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/YYB Hatsune Miku_16th.pmx",
+      "sha256": "fcc391f66d760186081eddc8b64e7696cc9790cf4cf0f5980b5d494ff4154918",
+      "bytes": 51735411
+    },
+    "manifest": {
+      "path": "Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+      "sha256": "23f2e43db98b33b4b05d4c1e1eea31a92b9c6afb2daebfaa82adfd640b6cffce",
+      "bytes": 30730
+    },
+    "pose": "reference (-PoseTime=-1)",
+    "source_material_slots": 39,
+    "test_assets_committed": false
+  },
+  "final_run": {
+    "wrapper": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/report.json",
+      "sha256": "389913edd514b354eb38ad5ce28646c72fef81870410572ccd4471db104da7d1",
+      "bytes": 856945
+    },
+    "delegate": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_report.json",
+      "sha256": "0be904280fcad83eb7acc132de5630417f0f477fea2c659621a9ed078f121a04",
+      "bytes": 610049
+    },
+    "execution": {
+      "exit": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2.exit.txt",
+        "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+        "bytes": 3,
+        "exit_code": 0
+      },
+      "log": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2.log",
+        "sha256": "f8eefe9a79f37f7bfd1216a23deba8fb699dbe343d2d5d09cdfc1e0438190db1",
+        "bytes": 307229
+      },
+      "stdout.txt": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2.stdout.txt",
+        "sha256": "db7e6413e8167131949ea40f1537d576a2483d5a9ccef86af77465714796c654",
+        "bytes": 67682
+      }
+    },
+    "image_count": 44,
+    "slot_check_count": 195,
+    "failures": 0,
+    "slot_labels": {
+      "unlit_baseline": 39,
+      "toon_native": 39,
+      "skin_initial_route": 39,
+      "skin_restored": 39,
+      "facefix_native_baseline": 39
+    },
+    "adapter_signature": "EE89B6B4FEC060DEE26EAFF4BC5B8B50AFC2F2F5",
+    "mode": 2,
+    "global_shader_protocol": 11,
+    "global_shader_protocol_verified": true,
+    "environment": {
+      "can_render": true,
+      "substrate_enabled": true,
+      "substrate_blendable_gbuffer": false,
+      "toon_profile_enabled": true,
+      "shader_platform": "PCD3D_SM6",
+      "rhi": "D3D12",
+      "r.Substrate": "1",
+      "r.Substrate.ProjectGBufferFormat": "1",
+      "r.Substrate.ClosuresPerPixel": "4",
+      "r.Substrate.BytesPerPixel": "80",
+      "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+      "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+      "r.Substrate.ToonProfile.Resolution": "256",
+      "r.DynamicGlobalIlluminationMethod": "1",
+      "r.ReflectionMethod": "1",
+      "r.Shadow.Virtual.Enable": "1",
+      "r.RayTracing": "1",
+      "r.Lumen.HardwareRayTracing": "1",
+      "r.GenerateMeshDistanceFields": "0",
+      "r.AntiAliasingMethod": "5",
+      "r.DefaultFeature.AutoExposure": "1"
+    },
+    "reference_pose": true
+  },
+  "mode0_control": {
+    "wrapper": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/mode0b/report.json",
+      "sha256": "8bb3387200b3d709e6f232e5419997762e4fdcb388ea2e6ab20ff30e31cdc727",
+      "bytes": 415797
+    },
+    "delegate": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/mode0b/mode0b_report.json",
+      "sha256": "59a75025560f6e6f78295db258f9cbd596d1660891ce76123f00b64407f22e6a",
+      "bytes": 178967
+    },
+    "execution": {
+      "exit": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/mode0b.exit.txt",
+        "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+        "bytes": 3,
+        "exit_code": 0
+      },
+      "log": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/mode0b.log",
+        "sha256": "f612473b56fa356cac5bec6f573b923a04e09627daadd86be7392019e384b653",
+        "bytes": 281315
+      },
+      "stdout.txt": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/mode0b.stdout.txt",
+        "sha256": "8015f784eb3a1f991ce8815d0dd46d3b64a3a6d57ccab54b9d297c7ef5270ddd",
+        "bytes": 41777
+      }
+    },
+    "image_count": 8,
+    "slot_check_count": 78,
+    "failures": 0,
+    "slot_labels": {
+      "unlit_baseline": 39,
+      "toon_native": 39
+    },
+    "adapter_signature": "EE89B6B4FEC060DEE26EAFF4BC5B8B50AFC2F2F5",
+    "mode": 0,
+    "global_shader_protocol": 11,
+    "global_shader_protocol_verified": true,
+    "environment": {
+      "can_render": true,
+      "substrate_enabled": true,
+      "substrate_blendable_gbuffer": false,
+      "toon_profile_enabled": true,
+      "shader_platform": "PCD3D_SM6",
+      "rhi": "D3D12",
+      "r.Substrate": "1",
+      "r.Substrate.ProjectGBufferFormat": "1",
+      "r.Substrate.ClosuresPerPixel": "4",
+      "r.Substrate.BytesPerPixel": "80",
+      "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+      "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+      "r.Substrate.ToonProfile.Resolution": "256",
+      "r.DynamicGlobalIlluminationMethod": "1",
+      "r.ReflectionMethod": "1",
+      "r.Shadow.Virtual.Enable": "1",
+      "r.RayTracing": "1",
+      "r.Lumen.HardwareRayTracing": "1",
+      "r.GenerateMeshDistanceFields": "0",
+      "r.AntiAliasingMethod": "5",
+      "r.DefaultFeature.AutoExposure": "1"
+    },
+    "reference_pose": true
+  },
+  "builds": {
+    "editor2": {
+      "exit": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/editor2.exit.txt",
+        "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+        "bytes": 3,
+        "exit_code": 0
+      },
+      "log": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/editor2.log",
+        "sha256": "4efe123d6d31c2e1cc1a00b27524a960fbcbec33bbade0ad51e2d2013d3927f3",
+        "bytes": 12516
+      },
+      "stdout.txt": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/editor2.stdout.txt",
+        "sha256": "6627711eab8d5e22d5b6b242f163a5d7b6431fe24c14b8fd61b66662fbaea96a",
+        "bytes": 3170
+      },
+      "json": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/editor2.json",
+        "sha256": "0a222be972ea612bffc302f3b1a4e650ab94e94cf38b3baf7263a5bb307b0e1a",
+        "bytes": 39063
+      }
+    },
+    "game2": {
+      "exit": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/game2.exit.txt",
+        "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+        "bytes": 3,
+        "exit_code": 0
+      },
+      "log": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/game2.log",
+        "sha256": "fecd09c361b0935c57cc14ae88373ceb18a7f77631b63fa41dde6104572fd481",
+        "bytes": 10369
+      },
+      "stdout.txt": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/game2.stdout.txt",
+        "sha256": "22ebf9cb827b5ae67b0f6099206d4e18d977cba0cfb19c9744f59f459eb92724",
+        "bytes": 2121
+      },
+      "json": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/game2.json",
+        "sha256": "a605bb7d51f94edd3394c28937f9f0ae5d4e10ef74b0bbe2f038bff66d882dcf",
+        "bytes": 34055
+      }
+    }
+  },
+  "compilation": {
+    "generate": {
+      "report": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/generate6/report.json",
+        "sha256": "ecdc18da35f5f55de642c593cc8dc9da060ca258fcbb3a123f5c029e8ed7970f",
+        "bytes": 11282
+      },
+      "execution": {
+        "exit": {
+          "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/generate6.exit.txt",
+          "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+          "bytes": 3,
+          "exit_code": 0
+        },
+        "log": {
+          "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/generate6.log",
+          "sha256": "4beade113117f84312eb5c1bc331f194da30859bb0b1ac95b4d598400b7f1a0b",
+          "bytes": 275702
+        },
+        "stdout.txt": {
+          "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/generate6.stdout.txt",
+          "sha256": "d3d618451c26b1f99e81a15090908e83caf7debffd338d9e80b68de18a30ab69",
+          "bytes": 30369
+        }
+      },
+      "graph_version": "EndfieldV2NativeToonGraph=6",
+      "parent_count": 7,
+      "package_count": 15,
+      "compiled_parents": [
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.M_MMD_EndfieldV2_Opaque",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 21,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        },
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.M_MMD_EndfieldV2_Masked",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 40,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        },
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 29,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        },
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.M_MMD_EndfieldV2_Face_Opaque",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 21,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        },
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.M_MMD_EndfieldV2_Face_Masked",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 40,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        },
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.M_MMD_EndfieldV2_Face_Translucent",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 29,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        },
+        {
+          "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline",
+          "finished": true,
+          "success": true,
+          "finalized": true,
+          "shader_count": 40,
+          "rendering_valid": true,
+          "passed": true,
+          "errors": []
+        }
+      ]
+    },
+    "adapter": {
+      "report": {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/adapter2/report.json",
+        "sha256": "b286e8ab712f5c9b74c767b0b34892f8bf67910148ffddbdb180d6cc47155846",
+        "bytes": 234796
+      },
+      "execution": {
+        "exit": {
+          "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/adapter2.exit.txt",
+          "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+          "bytes": 3,
+          "exit_code": 0
+        },
+        "log": {
+          "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/adapter2.log",
+          "sha256": "57544daecc11f6b5b69cf73d9877aebe67f30043a98e040af71a11dc494fbaa2",
+          "bytes": 266585
+        },
+        "stdout.txt": {
+          "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/adapter2.stdout.txt",
+          "sha256": "7b5282110b4851209ddc29f461c97aed95f286e8a7bff2410c062ff5dbc23e02",
+          "bytes": 28451
+        }
+      },
+      "published_parent_count": 7,
+      "draw_verified": false,
+      "scope": "Editor 适配映射及发布材质 shader map；不是 Cook 或角色 GPU 绘制证明"
+    }
+  },
+  "source_freeze": {
+    "manifest": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/source-freeze-final.json",
+      "sha256": "e8d48c261711a6a28e31575ec3950566e6b279e5eed690aee93baad86759135a",
+      "bytes": 1112
+    },
+    "checked_sources": [
+      {
+        "path": "Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldSkinMaterial.ush",
+        "sha256": "260f4c396bb5971adb92d2c722f3b4b46d8c5209c544dcb9ab15ae3c57db229b",
+        "bytes": 3723
+      },
+      {
+        "path": "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp",
+        "sha256": "f28c58978e172d711c79c156320d265807019c8d2b84a2e81ed145bd1f21122c",
+        "bytes": 69985
+      },
+      {
+        "path": "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp",
+        "sha256": "9ef653fdda3f7c089de84e762935cb4e738c3a23fcd464c36ab9486d2f8adca6",
+        "bytes": 230062
+      },
+      {
+        "path": "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldNativeBackendProbeCommandlet.cpp",
+        "sha256": "070c214325b5320489cf2e35f6c4dadcdf74429830bf3dfdc7312a4b700d256a",
+        "bytes": 32643
+      },
+      {
+        "path": "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp",
+        "sha256": "314c5033ff4451ed999004093d17509deef82eb078a7b7e3405be3eccf833d51",
+        "bytes": 34251
+      },
+      {
+        "path": "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h",
+        "sha256": "ef87cf03f0b851a519a6bd2c546f9ab832746c8d5c8ca36d14778d1cc4947df6",
+        "bytes": 15827
+      },
+      {
+        "path": "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/UMMDHeadBoneSubsystem.cpp",
+        "sha256": "3d0df2c5181b7a4ef29d77f4290c1a24d9af8a19555842a65f8eb479aa6ca3b4",
+        "bytes": 8865
+      }
+    ]
+  },
+  "protected_baseline": {
+    "receipt": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/protected-check.json",
+      "sha256": "fc4a15ba889fe1c851cea73ddaafd2b52f40e7f8e6750aff5250603c30f1ef2f",
+      "bytes": 1746
+    },
+    "checked": 2378,
+    "unchanged": 2373,
+    "intentional_changed_count": 5,
+    "intentional_changes": [
+      {
+        "file": "Plugins/Ue5MMDTools/Content/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.uasset",
+        "before_sha256": "f003cc6bbe4aa36822bfb4e66bef12b7a2629f92a9d4aede58a69a0d9015af6d",
+        "after_sha256": "45fad64d1c0a75edfc67b03df953feb0710504fa1f43bbe22cf671cc3fbf37ed"
+      },
+      {
+        "file": "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.uasset",
+        "before_sha256": "9c1755ab36a11a4f169cf93f7d551443809e9f9dfc957e4aac6112e1994c1e05",
+        "after_sha256": "a84c64e199c96c9240946b97fcc52e1fc6cfabf07acfcdaec7a2af7b29d375db"
+      },
+      {
+        "file": "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.uasset",
+        "before_sha256": "0b1a6f91b0b8687667d749ec95e4d1b8e54f75a1eb88414c0430127c58babf6a",
+        "after_sha256": "7452ed9968e3f7451b8e09f1524969b2d51c81e2ff1e2bff6a5024f5dd878121"
+      },
+      {
+        "file": "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.uasset",
+        "before_sha256": "0c5b1f325c9b046b6af66b1954ca32ea8e06bf738e53b1a7e531cfaadcd08bcd",
+        "after_sha256": "586b71709cbfd2fed62353718e2fd81ef4a489c5f440a4d163b9f3c7fec15048"
+      },
+      {
+        "file": "Plugins/Ue5MMDTools/Content/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear.uasset",
+        "before_sha256": "cf9acee48df5459b198a529c5a0e6b78bde7ce3adf82e79bdbec08be64235a22",
+        "after_sha256": "3e8e1e47d0d6287bb66ccedf50752ec94ba59a37f185a0c02744bc68747ced28"
+      }
+    ],
+    "scope": "仅限该 2378 项保护基线；新增 Face 资产和下列发行过滤配置另列，不宣称所有 Config 不变。"
+  },
+  "intentional_distribution_config": {
+    "file": {
+      "path": "Plugins/Ue5MMDTools/Config/FilterPlugin.ini",
+      "sha256": "d11f7c214f42df1aea1affb1af6e88b6b5813e1ffc437f58a51c93462f909b3a",
+      "bytes": 916
+    },
+    "scope": "本批显式增加两份文档与两个截图目录的发行过滤条目；此配置文件不在上述保护基线内。"
+  },
+  "analysis": {
+    "report": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/analysis_skin/analysis.json",
+      "sha256": "5106d95b8f751611f4f999d87e46b9b28a23486e86db7e0b7fd307b0a6e4042d",
+      "bytes": 205117
+    },
+    "summary": {
+      "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/analysis_skin/summary.json",
+      "sha256": "a0df4eb7f7aab796b63f11dd9b18bc8548a7a8843113c13973a691a8660f003f",
+      "bytes": 3634
+    },
+    "required_integrity_and_response_checks_passed": true,
+    "non_target_controls_within_observed_repeat_tolerance": true,
+    "direction_off_color_response_observed": true,
+    "aesthetic_acceptance": "not_automatically_judged"
+  },
+  "cpu_validation": {
+    "required_lifecycle_fields": {
+      "cpu_face_skin_only_fixture_ready": true,
+      "cpu_face_skin_only_manual_off_preserves_current_version": true,
+      "cpu_face_skin_only_remove_data_clears_version": true,
+      "cpu_face_skin_only_reattach_restores_current_version": true,
+      "cpu_face_skin_only_host_name_mismatch_clears_version": true,
+      "cpu_face_skin_only_host_name_restore_restores_current_version": true,
+      "cpu_face_skin_only_host_texture_mismatch_clears_version": true,
+      "cpu_face_skin_only_host_texture_restore_restores_current_version": true,
+      "cpu_face_skin_only_original_controls_restored": true
+    },
+    "face_skin_only_binding_states": [
+      {
+        "case": "cpu_face_skin_only_manual_off_preserves_current_version",
+        "slot": 3,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_manual_off_preserves_current_version",
+        "slot": 7,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_manual_off_preserves_current_version",
+        "slot": 10,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_manual_off_preserves_current_version",
+        "slot": 11,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_manual_off_preserves_current_version",
+        "slot": 12,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_remove_data_clears_version",
+        "slot": 3,
+        "data_attached": false,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_remove_data_clears_version",
+        "slot": 7,
+        "data_attached": false,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_remove_data_clears_version",
+        "slot": 10,
+        "data_attached": false,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_remove_data_clears_version",
+        "slot": 11,
+        "data_attached": false,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_remove_data_clears_version",
+        "slot": 12,
+        "data_attached": false,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_reattach_restores_current_version",
+        "slot": 3,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_reattach_restores_current_version",
+        "slot": 7,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_reattach_restores_current_version",
+        "slot": 10,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_reattach_restores_current_version",
+        "slot": 11,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_reattach_restores_current_version",
+        "slot": 12,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_mismatch_clears_version",
+        "slot": 3,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_mismatch_clears_version",
+        "slot": 7,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_mismatch_clears_version",
+        "slot": 10,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_mismatch_clears_version",
+        "slot": 11,
+        "data_attached": true,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_mismatch_clears_version",
+        "slot": 12,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_restore_restores_current_version",
+        "slot": 3,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_restore_restores_current_version",
+        "slot": 7,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_restore_restores_current_version",
+        "slot": 10,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_restore_restores_current_version",
+        "slot": 11,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_name_restore_restores_current_version",
+        "slot": 12,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_mismatch_clears_version",
+        "slot": 3,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_mismatch_clears_version",
+        "slot": 7,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_mismatch_clears_version",
+        "slot": 10,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_mismatch_clears_version",
+        "slot": 11,
+        "data_attached": true,
+        "binding_valid": false,
+        "expected_version": 0,
+        "actual_version": 0,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_mismatch_clears_version",
+        "slot": 12,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_restore_restores_current_version",
+        "slot": 3,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_restore_restores_current_version",
+        "slot": 7,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_restore_restores_current_version",
+        "slot": 10,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_restore_restores_current_version",
+        "slot": 11,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      },
+      {
+        "case": "cpu_face_skin_only_host_texture_restore_restores_current_version",
+        "slot": 12,
+        "data_attached": true,
+        "binding_valid": true,
+        "expected_version": 5,
+        "actual_version": 5,
+        "direction_enabled": 0,
+        "face_skin_enabled": 1,
+        "native_payload_enabled": 0,
+        "matches": true
+      }
+    ],
+    "source_opacity_preserved": true,
+    "restored_slot_count": 39,
+    "restore_mismatches": [],
+    "face_source_alpha": [
+      {
+        "slot": 3,
+        "slot_name": "face01",
+        "source_opacity": 1,
+        "actual_opacity": 1,
+        "source_matches_actual": true,
+        "yyb_expected_source_opacity": 1.0,
+        "yyb_source_matches_expected": true,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=1.000000)",
+        "blend_mode": "BLEND_Opaque",
+        "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.M_MMD_EndfieldV2_Face_Opaque",
+        "payload_transport": "opaque_masked_packed"
+      },
+      {
+        "slot": 7,
+        "slot_name": "face02",
+        "source_opacity": 1,
+        "actual_opacity": 1,
+        "source_matches_actual": true,
+        "yyb_expected_source_opacity": 1.0,
+        "yyb_source_matches_expected": true,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=1.000000)",
+        "blend_mode": "BLEND_Opaque",
+        "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.M_MMD_EndfieldV2_Face_Opaque",
+        "payload_transport": "opaque_masked_packed"
+      },
+      {
+        "slot": 10,
+        "slot_name": "face04",
+        "source_opacity": 1,
+        "actual_opacity": 1,
+        "source_matches_actual": true,
+        "yyb_expected_source_opacity": 1.0,
+        "yyb_source_matches_expected": true,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=1.000000)",
+        "blend_mode": "BLEND_Opaque",
+        "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.M_MMD_EndfieldV2_Face_Opaque",
+        "payload_transport": "opaque_masked_packed"
+      },
+      {
+        "slot": 11,
+        "slot_name": "B",
+        "source_opacity": 0.44999998807907104,
+        "actual_opacity": 0.44999998807907104,
+        "source_matches_actual": true,
+        "yyb_expected_source_opacity": 0.45,
+        "yyb_source_matches_expected": true,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.450000)",
+        "blend_mode": "BLEND_Translucent",
+        "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.M_MMD_EndfieldV2_Face_Translucent",
+        "payload_transport": "forward_inline"
+      },
+      {
+        "slot": 12,
+        "slot_name": "B_L",
+        "source_opacity": 0.0010000000474974513,
+        "actual_opacity": 0.0010000000474974513,
+        "source_matches_actual": true,
+        "yyb_expected_source_opacity": 0.001,
+        "yyb_source_matches_expected": true,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.001000)",
+        "blend_mode": "BLEND_Translucent",
+        "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.M_MMD_EndfieldV2_Face_Translucent",
+        "payload_transport": "forward_inline"
+      }
+    ],
+    "packed_face_target_count": 3,
+    "inline_face_target_count": 2
+  },
+  "images": [
+    {
+      "file": "surface-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_skin_surface_off_face.png",
+      "sha256": "56104fadd611cf437c8a999372a950d3817a4e9d7d88b593da340acc5e05f6ba",
+      "type": "raw_engine_capture_png",
+      "capture_name": "skin_surface_off_face",
+      "capture_utc_from_log": "2026-10-16T06:35:49.447000+00:00",
+      "capture_local_from_log": "2026-10-16T14:35:49.447000+08:00",
+      "camera": {
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35,
+        "width": 1280,
+        "height": 720
+      },
+      "controls": {
+        "image": "skin_surface_off_face",
+        "candidate": "medium",
+        "surface_enabled": false,
+        "direction_enabled": true,
+        "native_environment_enabled": true,
+        "specular_enabled": true,
+        "main_light_multiplier": 1,
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "key_rotation": "P=-32.000000 Y=48.000000 R=-0.000000",
+        "fill_intensity": 0.30000001192092896,
+        "rim_intensity": 1.0499999523162842,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_surface_controls_match": true,
+        "cpu_sdf_binding_preserved": true,
+        "contact_shadows_enabled": false,
+        "showflag_global_illumination": true,
+        "showflag_skylighting": true,
+        "showflag_reflection_environment": true,
+        "showflag_lumen_reflections": true,
+        "showflag_screen_space_reflections": true,
+        "showflag_specular": true
+      }
+    },
+    {
+      "file": "skin-medium.png",
+      "source": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_skin_medium_face.png",
+      "sha256": "e954dd429b0d2becd1adc65ba9ec2b72e0d5ffa852986d08d4dce46ceaaf18dc",
+      "type": "raw_engine_capture_png",
+      "capture_name": "skin_medium_face",
+      "capture_utc_from_log": "2026-10-16T06:35:50.379000+00:00",
+      "capture_local_from_log": "2026-10-16T14:35:50.379000+08:00",
+      "camera": {
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35,
+        "width": 1280,
+        "height": 720
+      },
+      "controls": {
+        "image": "skin_medium_face",
+        "candidate": "medium",
+        "surface_enabled": true,
+        "direction_enabled": true,
+        "native_environment_enabled": true,
+        "specular_enabled": true,
+        "main_light_multiplier": 1,
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "key_rotation": "P=-32.000000 Y=48.000000 R=-0.000000",
+        "fill_intensity": 0.30000001192092896,
+        "rim_intensity": 1.0499999523162842,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_surface_controls_match": true,
+        "cpu_sdf_binding_preserved": true,
+        "contact_shadows_enabled": false,
+        "showflag_global_illumination": true,
+        "showflag_skylighting": true,
+        "showflag_reflection_environment": true,
+        "showflag_lumen_reflections": true,
+        "showflag_screen_space_reflections": true,
+        "showflag_specular": true
+      }
+    },
+    {
+      "file": "skin-default.png",
+      "source": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_toon_face.png",
+      "sha256": "d41404df0aea3ff11fd35d38e0786170df5155d4a5b79ae815ea1ae5f28a16fa",
+      "type": "raw_engine_capture_png",
+      "capture_name": "toon_face",
+      "capture_utc_from_log": "2026-10-16T06:35:48.246000+00:00",
+      "capture_local_from_log": "2026-10-16T14:35:48.246000+08:00",
+      "camera": {
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35,
+        "width": 1280,
+        "height": 720
+      },
+      "controls": {}
+    },
+    {
+      "file": "skin-gi-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_skin_gi_off_medium_face.png",
+      "sha256": "413e1950efaa024a9280a8ffa489da9c17c249dc0782baa37cd2361fa4e04c81",
+      "type": "raw_engine_capture_png",
+      "capture_name": "skin_gi_off_medium_face",
+      "capture_utc_from_log": "2026-10-16T06:35:51.768000+00:00",
+      "capture_local_from_log": "2026-10-16T14:35:51.768000+08:00",
+      "camera": {
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35,
+        "width": 1280,
+        "height": 720
+      },
+      "controls": {
+        "image": "skin_gi_off_medium_face",
+        "candidate": "medium",
+        "surface_enabled": true,
+        "direction_enabled": true,
+        "native_environment_enabled": false,
+        "specular_enabled": true,
+        "main_light_multiplier": 1,
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "key_rotation": "P=-32.000000 Y=48.000000 R=-0.000000",
+        "fill_intensity": 0.30000001192092896,
+        "rim_intensity": 1.0499999523162842,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_surface_controls_match": true,
+        "cpu_sdf_binding_preserved": true,
+        "contact_shadows_enabled": false,
+        "showflag_global_illumination": false,
+        "showflag_skylighting": false,
+        "showflag_reflection_environment": false,
+        "showflag_lumen_reflections": false,
+        "showflag_screen_space_reflections": false,
+        "showflag_specular": true
+      }
+    },
+    {
+      "file": "skin-main-double.png",
+      "source": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_skin_main_double_medium_face.png",
+      "sha256": "b2ab1255f640cbd9152432d478b9bc2cf58a0cdbf73d82c069cd317b73e2a97e",
+      "type": "raw_engine_capture_png",
+      "capture_name": "skin_main_double_medium_face",
+      "capture_utc_from_log": "2026-10-16T06:35:54.550000+00:00",
+      "capture_local_from_log": "2026-10-16T14:35:54.550000+08:00",
+      "camera": {
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35,
+        "width": 1280,
+        "height": 720
+      },
+      "controls": {
+        "image": "skin_main_double_medium_face",
+        "candidate": "medium",
+        "surface_enabled": true,
+        "direction_enabled": true,
+        "native_environment_enabled": true,
+        "specular_enabled": true,
+        "main_light_multiplier": 2,
+        "key_intensity": 7.199999809265137,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "key_rotation": "P=-32.000000 Y=48.000000 R=-0.000000",
+        "fill_intensity": 0.30000001192092896,
+        "rim_intensity": 1.0499999523162842,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_surface_controls_match": true,
+        "cpu_sdf_binding_preserved": true,
+        "contact_shadows_enabled": false,
+        "showflag_global_illumination": true,
+        "showflag_skylighting": true,
+        "showflag_reflection_environment": true,
+        "showflag_lumen_reflections": true,
+        "showflag_screen_space_reflections": true,
+        "showflag_specular": true
+      }
+    },
+    {
+      "file": "skin-direction-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin2/skin2_skin_direction_off_medium_face.png",
+      "sha256": "8ff87fe09c576e3fe543eb2c364d9e14524582d2ce49dbbd33b33636df2824bb",
+      "type": "raw_engine_capture_png",
+      "capture_name": "skin_direction_off_medium_face",
+      "capture_utc_from_log": "2026-10-16T06:35:55.475000+00:00",
+      "capture_local_from_log": "2026-10-16T14:35:55.475000+08:00",
+      "camera": {
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_rotation": "P=-4.249790 Y=108.285352 R=0.000000",
+        "camera_fov": 35,
+        "width": 1280,
+        "height": 720
+      },
+      "controls": {
+        "image": "skin_direction_off_medium_face",
+        "candidate": "medium",
+        "surface_enabled": true,
+        "direction_enabled": false,
+        "native_environment_enabled": true,
+        "specular_enabled": true,
+        "main_light_multiplier": 1,
+        "key_intensity": 3.5999999046325684,
+        "key_color": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "key_rotation": "P=-32.000000 Y=48.000000 R=-0.000000",
+        "fill_intensity": 0.30000001192092896,
+        "rim_intensity": 1.0499999523162842,
+        "cpu_source_alpha_unchanged": true,
+        "cpu_surface_controls_match": true,
+        "cpu_sdf_binding_preserved": true,
+        "contact_shadows_enabled": false,
+        "showflag_global_illumination": true,
+        "showflag_skylighting": true,
+        "showflag_reflection_environment": true,
+        "showflag_lumen_reflections": true,
+        "showflag_screen_space_reflections": true,
+        "showflag_specular": true
+      }
+    }
+  ],
+  "scope": {
+    "all_gpu_verified": false,
+    "all_material_kernel_verified": false,
+    "body_skin_tested": false,
+    "cooked_runtime_tested_for_this_change": false,
+    "buildplugin_tested_for_this_change": false,
+    "subsurface_scattering_implemented": false,
+    "cpu": "39 个源槽路由、连续 alpha/参数恢复和指定 Version0 生命周期断言；不是 GPU 像素验证。",
+    "alpha": "源 Opacity 与 MID 的 CPU 值及参数恢复检查；纹理 alpha 保留原绑定和材质连线，未逐像素重建其覆盖。",
+    "gpu_observation": "同 run 原始 FinalColorLDR PNG 的局部肤色响应与非目标控制；不是逐内核验证、线性辐亮度或终末地画质验收。",
+    "gi_off": "同时关闭 GI、天空和反射 showflags；不是单独测量 Lumen。",
+    "mode0": "同 V2 架构的原生 Toon 响应模式 0；不是旧 Unlit。",
+    "lighting": "无固定自发光或全局曝光补偿；主光倍增只改变 key，fill/rim 的同条件控制保留。"
+  },
+  "history": {
+    "first_run": "skin1",
+    "first_run_render_success": true,
+    "review_finding": "首轮 44 图成功后发现真正失效的 Host/Data 绑定只关闭 DirectionEnabled 而保留 Version5，独立肤色可能读取旧 atlas；首轮未覆盖这一退化。",
+    "resolution": "修复真正失效时的版本清零并加强 Probe 生命周期验证；本归档仅展示最终重跑的六张原图。",
+    "evidence": [
+      {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin1/report.json",
+        "sha256": "441dbeed18d652d7af5867715608e14a13ee6e0f3bd0e7a81411301956f7d06b",
+        "bytes": 844390
+      },
+      {
+        "path": "Saved/Phase2Reference/Endfield2/skin-2026-10-16/skin1.log",
+        "sha256": "f7022c540cc23b0cc92b25c2f003bcf11b37061288479683ca699f206263b324",
+        "bytes": 307742
+      }
+    ]
+  }
+}

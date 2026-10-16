@@ -1,8 +1,8 @@
 # 终末地后端怎样随插件分发
 
-适配范围：**UE 5.8.3 / CL58210709，Win64 桌面延迟渲染**。本批实际运行验证为D3D12 SM6。核查日期：2026-10-15。这是一份固定引擎版本的插件适配，不是跨版本自定义 ShadingModel API。
+适配范围：**UE 5.8.3 / CL58210709，Win64 桌面延迟渲染**。实际运行验证为D3D12 SM6。最近核查日期：2026-10-16。这是一份固定引擎版本的插件适配，不是跨版本自定义 ShadingModel API。
 
-**版本更新**：当前源码为 v9／Cooked 协议9，增加双暗层、二维 RS 和主辅光分工。下文 BuildPlugin、空白宿主、正反 Cook 的具体记录属于同日较早的 v8，不能当作 v9 已重新发行验证。v8 的库需用 v9 模块重新 Cook；Profile 的二维数据布局已变化。Mode2 还需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`；低于256整体退回原生曲线并提示，默认配置不自动改写。
+**版本更新**：当前源码为 v11／Cooked 协议11／payload5／Graph6，保留 v9 双暗层与二维 RS，增加 V5 头部角阈值、透明附脸层和[独立皮肤／脸部材质](ENDFIELD_SKIN_MATERIAL_GUIDE.md)。发布父材质共七个（共享三模式、Face三模式、描边），生成白名单15包。最新构建／分发结果见[2026-10-16皮肤批次](Screenshots/2026-10-16-endfield-skin/README.md)；下文正反 Cook 的具体记录属于2026-10-15的 v8，不能当作 v11 Cooked 已验证。旧库需重新 Cook。Mode2 还需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`；低于256整体退回原生曲线并提示，默认配置不自动改写。
 
 ## 用户拿到什么
 
@@ -42,7 +42,7 @@ flowchart LR
   -OutputRoot 'D:\PluginReleases\Endfield-test-001'
 ```
 
-脚本运行 UE 的 BuildPlugin（Editor Development、Game Development、Shipping），核查包内所需文件，然后把发行包复制到一个空白项目。测试副本移出 CustomOutput 的私有 `.cpp`，发行原包不变；该项目没有本仓库角色和工程配置，使用 `-AdapterOnly` 实际检查目录映射、源码完整性、全局协议及四个已发布父材质编译（含专用描边）。结果写入 `distribution.json`；日志和宿主留在输出目录便于定位。
+脚本运行 UE 的 BuildPlugin（Editor Development、Game Development、Shipping），核查包内所需文件，然后把发行包复制到一个空白项目。测试副本移出 CustomOutput 的私有 `.cpp`，发行原包不变；该项目没有本仓库角色和工程配置，使用 `-AdapterOnly` 实际检查目录映射、源码完整性、全局协议及七个已发布父材质编译（含Face三模式与专用描边）。结果写入 `distribution.json`；日志和宿主留在输出目录便于定位。
 
 `-BuildOnly` 仅做打包与文件检查。**AdapterOnly 不绘制模型，也不代表画质验收或 Cooked 游戏通过。** 渲染和打包运行须另附实拍与 Cook 来源。
 

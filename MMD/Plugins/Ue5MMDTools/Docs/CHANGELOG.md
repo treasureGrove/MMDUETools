@@ -2,6 +2,15 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-10-16 — Graph6：独立皮肤／脸部材质与肤色修正
+
+- 新增 Face Opaque／Masked／Translucent 三个父材质，保留 Skin 角色及原生后端 v11／protocol11／payload5。共享与 Face 六个 Toon 父材质均经 `TMMDEndfieldSkinMaterial.ush` 的 struct 成员函数准备实际 BaseColor、Roughness 和 Specular，材质图升 Graph6，生成白名单15包／七父材质。源贴图、BaseColor 参数与 alpha 不改写，不通过曝光或自发光补肤色。
+- `CharacterSkinSurface` 与 `CharacterFaceSkinSurface` 分开设置线性乘色、权重、反射率倍率、饱和度、粗糙度与高光。身体与脸部分别从源 RGB 生成，按逐像素 V5 有效覆盖混合，附脸鼻影层继承同组参数，避免整槽染色和重复相乘。脸部中档起点 scale `.85`、tint `(1,.84,.76)`、strength `.70`、saturation `1.10`；roughness `.742`／specular `.454`。这属于本插件美术参数，未声称提取到原作 SkinLUT。
+- 肤色覆盖独立于 SDF 阈值开关。只读审查发现旧缓存真失效时仅关 Direction、仍留 Version5，新增肤色可能继续采旧图；头部子系统现对 Payload 或 FaceSkin 任一启用的路径校验绑定，真失效清 Version0，有效恢复 Version5，肤色-only 不自动开启 Direction。探针增加 Data 移除／宿主名错／宿主纹理错及恢复、手动关闭和源参数恢复的35条逐槽观测，旧 payload 失效检查同步要求版本清零。
+- 首轮 `skin1` 44张实拍与 CPU 检查通过后发现上述遗漏，修复后 `editor2`／`game2` 重建通过；最终 `skin2` 44图／195次槽检查、`mode0b` 8图／78次，均0失败。肤色15图包含三档、GI+天空+反射组合关闭、高光关闭、主光半／倍强度、Direction关闭及复拍。外部像素分析确认脸部响应、非目标衣物／翅膀／头发／背景在复拍容差内，39源槽参数／Profile／父材质恢复，主脸三槽及透明附层两槽原 opacity `1/1/1/.45/.001` 保持。CPU及少量图像对照不冒充全部GPU内核验证。
+- [原始实拍与来源](Screenshots/2026-10-16-endfield-skin/README.md)归档6张原 PNG；[使用与维护](ENDFIELD_SKIN_MATERIAL_GUIDE.md)说明默认值、绑定、GI及失效回退。安装引擎 shader、用户 Face shader 和原有未提交工作保持；2,378项保护中2,373项不变，仅五个自有 V2 包更新，另新增三个 Face 包。插件过滤器显式增加脸部／皮肤说明与两批截图目录，不提交 Saved、构建产物或测试角色。
+- `EFSkin16` 独立 BuildPlugin 的 Editor Development／Game Development／Shipping及文件过滤通过；移走私有 CustomOutput cpp 的空白宿主七父材质真实编译为30／54／48／40／30／54／48 shaders，协议11、0失败。七份冻结源码在发行包中逐字节相同；[分发来源](Screenshots/2026-10-16-endfield-skin/distribution-sources.json)。没有在空白宿主绘制角色，未重跑新 Cook／Shipping 游戏画面。本轮未实现厚度透射、真正 SSS 或 SkinLUT；本模型 `body01` 仍为 Generic，脸部实拍不代替身体 Skin 美术验收。极侧光鼻梁硬边、完整头发与眼睛等继续迭代。
+
 ## 2026-10-16 — v11：头部投影角阈值、透明附脸层与鼻斑排查
 
 - V4几何方向场升级V5左右角阈值图：从头骨、眼骨与头附近Skin拟合共享框架，保存头骨局部中心／半径／签名，运行时使用同一标定跟随。摆脱全身翅膀／描边包围盒与UV0重叠；使用过程化坐标，原UV0和附加UV不改，不实际增加UV2／3／4。每Skin槽独立frontmost投影，RGBA分别为左右截止角、前层深度和覆盖；四tap逐点深度校验后插值。自动图是可编辑R/G的几何底图，不冒称原作手绘或真实遮挡距离场。

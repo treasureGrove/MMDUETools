@@ -1,4 +1,4 @@
-// 原生 Toon 资产与旧 Endfield 资产独立；只有 -Generate 且三套材质真实编译成功后才写盘。
+// 原生 Toon 资产与旧 Endfield 资产独立；只有 -Generate 且七套父材质真实编译成功后才写盘。
 // 启动参数需开启 r.Substrate=True；ToonUnifiedDiffuse 是可选实验开关，默认 0。
 // 用法：-run=MMDEndfieldToonPresets [-Generate] -Report=<JSON路径> -AllowCommandletRendering -d3d12
 #include "MMDEndfieldToonPresetsCommandlet.h"
@@ -66,11 +66,15 @@ namespace
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/TP_EndfieldV2_Eye"),
 		TEXT("/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear"),
-		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline") };
+		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline"),
+		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque"),
+		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked"),
+		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent") };
 	constexpr const TCHAR* EndfieldToonTemplatePath = TEXT("/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield.DA_Render_Endfield");
-	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=5");
+	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=6");
 	constexpr const TCHAR* EndfieldToonOutlineGraphVersion = TEXT("EndfieldV2SourceOutlineGraph=2");
-	constexpr int32 EndfieldToonMaterialCount = 3;
+	constexpr int32 EndfieldToonMaterialCount = 6;
+	constexpr int32 EndfieldToonMaterialPackages[] = { 0, 1, 2, 12, 13, 14 };
 	constexpr int32 EndfieldToonProfileCount = 6;
 	constexpr int32 EndfieldToonGradientWidth = 256;
 	constexpr int32 EndfieldToonGradientHeight = 4;
@@ -386,6 +390,27 @@ namespace
 		Input.Input.Connect(OutputIndex, Source);
 	}
 
+	void EndfieldToonSkinCustomInputs(UMaterial* Material, UMaterialExpressionCustom* Custom,
+		const FString& ParameterPrefix, const FString& InputPrefix, bool bFaceMaterial)
+	{
+		// 独立 Face 父材质不依赖 Stage 或 SDF 才能显示肤色；两组同值避免遮罩边界变色。
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("enabled")),
+			EndfieldToonScalar(Material, *(ParameterPrefix + TEXT("Enabled")), bFaceMaterial ? 1.0f : 0.0f));
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("tint")),
+			EndfieldToonVector(Material, *(ParameterPrefix + TEXT("Tint")),
+				bFaceMaterial ? FLinearColor(1.0f, 0.84f, 0.76f, 1.0f) : FLinearColor::White));
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("tint_strength")),
+			EndfieldToonScalar(Material, *(ParameterPrefix + TEXT("TintStrength")), bFaceMaterial ? 0.70f : 0.0f));
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("albedo_scale")),
+			EndfieldToonScalar(Material, *(ParameterPrefix + TEXT("AlbedoScale")), bFaceMaterial ? 0.85f : 1.0f, 0.0f, 2.0f));
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("saturation")),
+			EndfieldToonScalar(Material, *(ParameterPrefix + TEXT("Saturation")), bFaceMaterial ? 1.10f : 1.0f, 0.0f, 2.0f));
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("roughness")),
+			EndfieldToonScalar(Material, *(ParameterPrefix + TEXT("Roughness")), 0.742f, 0.04f));
+		EndfieldToonCustomInput(Custom, *(InputPrefix + TEXT("specular")),
+			EndfieldToonScalar(Material, *(ParameterPrefix + TEXT("Specular")), 0.454f));
+	}
+
 	bool EndfieldToonIsRootInput(const FStructProperty* Property)
 	{
 		const FString Name = Property->Struct->GetName();
@@ -402,7 +427,8 @@ namespace
 		}
 	}
 
-	void EndfieldToonConfigureMaterial(UMaterial* Material, EBlendMode Blend, UTexture2D* White, UTexture2D* Black, UToonProfile* Profile)
+	void EndfieldToonConfigureMaterial(UMaterial* Material, EBlendMode Blend, UTexture2D* White, UTexture2D* Black,
+		UToonProfile* Profile, bool bFaceMaterial)
 	{
 		Material->GetExpressionCollection().Empty();
 		EndfieldToonResetRootInputs(Material);
@@ -433,9 +459,8 @@ namespace
 
 		UMaterialExpressionSubstrateToonBSDF* Toon = EndfieldToonAdd<UMaterialExpressionSubstrateToonBSDF>(Material);
 		Toon->ToonProfile = Profile;
-		Toon->BaseColor.Connect(0, Base);
-		Toon->Roughness.Connect(0, EndfieldToonScalar(Material, TEXT("ToonRoughness"), 0.5f, 0.04f));
-		Toon->Specular.Connect(0, EndfieldToonScalar(Material, TEXT("ToonSpecular"), 0.5f));
+		UMaterialExpressionScalarParameter* SourceRoughness = EndfieldToonScalar(Material, TEXT("ToonRoughness"), 0.5f, 0.04f);
+		UMaterialExpressionScalarParameter* SourceSpecular = EndfieldToonScalar(Material, TEXT("ToonSpecular"), 0.5f);
 		Toon->Metallic.Connect(0, EndfieldToonScalar(Material, TEXT("ToonMetallic"), 0.0f));
 		Toon->Anisotropy.Connect(0, EndfieldToonScalar(Material, TEXT("ToonAnisotropy"), 0.0f, -1.0f));
 
@@ -459,10 +484,12 @@ namespace
 		EndfieldToonCustomInput(Normal, TEXT("mesh_normal"), MeshNormal);
 		EndfieldToonCustomInput(Normal, TEXT("head_position_radius"), Head, 5);
 		EndfieldToonCustomInput(Normal, TEXT("sphere_blend"), EndfieldToonScalar(Material, TEXT("ToonSphereBlend"), 0.0f));
-		EndfieldToonCustomInput(Normal, TEXT("head_forward"), EndfieldToonVector(Material,
-			UMMDHeadBoneSubsystem::ParamHeadForward, FLinearColor(0, 0, 0, 0)));
-		EndfieldToonCustomInput(Normal, TEXT("head_right"), EndfieldToonVector(Material,
-			UMMDHeadBoneSubsystem::ParamHeadRight, FLinearColor(0, 0, 0, 0)));
+		UMaterialExpressionVectorParameter* HeadForward = EndfieldToonVector(Material,
+			UMMDHeadBoneSubsystem::ParamHeadForward, FLinearColor(0, 0, 0, 0));
+		EndfieldToonCustomInput(Normal, TEXT("head_forward"), HeadForward);
+		UMaterialExpressionVectorParameter* HeadRight = EndfieldToonVector(Material,
+			UMMDHeadBoneSubsystem::ParamHeadRight, FLinearColor(0, 0, 0, 0));
+		EndfieldToonCustomInput(Normal, TEXT("head_right"), HeadRight);
 		UMaterialExpressionTextureCoordinate* UV = EndfieldToonAdd<UMaterialExpressionTextureCoordinate>(Material);
 		UV->CoordinateIndex = 0;
 		EndfieldToonCustomInput(Normal, TEXT("surface_uv"), UV);
@@ -484,7 +511,8 @@ namespace
 		Direction->SamplerType = SAMPLERTYPE_LinearColor;
 		EndfieldToonCustomInput(Normal, TEXT("direction_tex"), Direction);
 		EndfieldToonCustomInput(Normal, TEXT("direction_enabled"), EndfieldToonScalar(Material, TEXT("ToonFaceDirectionEnabled"), 0.0f));
-		EndfieldToonCustomInput(Normal, TEXT("direction_version"), EndfieldToonScalar(Material, TEXT("ToonFaceDirectionVersion"), 0.0f));
+		UMaterialExpressionScalarParameter* DirectionVersion = EndfieldToonScalar(Material, TEXT("ToonFaceDirectionVersion"), 0.0f);
+		EndfieldToonCustomInput(Normal, TEXT("direction_version"), DirectionVersion);
 		UMaterialExpressionScalarParameter* PayloadEnabled = EndfieldToonScalar(Material, TEXT("ToonNativePayloadEnabled"), 0.0f);
 		EndfieldToonCustomInput(Normal, TEXT("payload_enabled"), PayloadEnabled);
 		EndfieldToonCustomInput(Normal, TEXT("specular_sphere_blend"), EndfieldToonScalar(Material, TEXT("ToonSpecularSphereBlend"), 0.0f));
@@ -506,6 +534,42 @@ namespace
 		Normal->RebuildOutputs();
 		Toon->Normal.Connect(0, Normal);
 		Toon->PatternUVs.Connect(1, Normal);
+
+		UMaterialExpressionCustom* Skin = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
+		Skin->Description = TEXT("皮肤与有效外脸的线性肤色准备；光照、SDF、阴影由原生链路处理");
+		Skin->Desc = EndfieldToonGraphVersion;
+		Skin->OutputType = CMOT_Float3;
+		Skin->Code = TEXT(
+			"#include \"/Plugin/Ue5MMDTools/Core/TMMDEndfieldSkinMaterial.ush\"\n"
+			"TMMDEndfieldSkinMaterial skin;\n"
+			"float coverage = skin.ResolveFaceCoverage(face_mask, world_pos, head_position_radius, head_forward, head_right, "
+			"direction_tex, direction_version, face_enabled);\n"
+			"return skin.PrepareSurface(source_color, source_roughness, source_specular, coverage, "
+			"body_enabled, body_tint, body_tint_strength, body_albedo_scale, body_saturation, body_roughness, body_specular, "
+			"face_enabled, face_tint, face_tint_strength, face_albedo_scale, face_saturation, face_roughness, face_specular, "
+			"roughness, specular);\n");
+		EndfieldToonCustomInput(Skin, TEXT("source_color"), Base);
+		EndfieldToonCustomInput(Skin, TEXT("source_roughness"), SourceRoughness);
+		EndfieldToonCustomInput(Skin, TEXT("source_specular"), SourceSpecular);
+		EndfieldToonCustomInput(Skin, TEXT("face_mask"), Normal, 2);
+		EndfieldToonCustomInput(Skin, TEXT("world_pos"), Position);
+		EndfieldToonCustomInput(Skin, TEXT("head_position_radius"), Head, 5);
+		EndfieldToonCustomInput(Skin, TEXT("head_forward"), HeadForward);
+		EndfieldToonCustomInput(Skin, TEXT("head_right"), HeadRight);
+		EndfieldToonCustomInput(Skin, TEXT("direction_tex"), Direction);
+		EndfieldToonCustomInput(Skin, TEXT("direction_version"), DirectionVersion);
+		EndfieldToonSkinCustomInputs(Material, Skin, TEXT("ToonSkin"), TEXT("body_"), bFaceMaterial);
+		EndfieldToonSkinCustomInputs(Material, Skin, TEXT("ToonFaceSkin"), TEXT("face_"), bFaceMaterial);
+		FCustomOutput& SkinRoughness = Skin->AdditionalOutputs.AddDefaulted_GetRef();
+		SkinRoughness.OutputName = TEXT("roughness");
+		SkinRoughness.OutputType = CMOT_Float1;
+		FCustomOutput& SkinSpecular = Skin->AdditionalOutputs.AddDefaulted_GetRef();
+		SkinSpecular.OutputName = TEXT("specular");
+		SkinSpecular.OutputType = CMOT_Float1;
+		Skin->RebuildOutputs();
+		Toon->BaseColor.Connect(0, Skin);
+		Toon->Roughness.Connect(1, Skin);
+		Toon->Specular.Connect(2, Skin);
 		UMaterialExpressionMMDEndfieldNativePayload* Payload = EndfieldToonAdd<UMaterialExpressionMMDEndfieldNativePayload>(Material);
 		Payload->FaceDirection.Connect(4, Normal);
 		Payload->HeadQuaternion.Connect(5, Normal);
@@ -735,6 +799,26 @@ namespace
 		Preset->CharacterToonMaterialOpaque = Materials[0].Get();
 		Preset->CharacterToonMaterialMasked = Materials[1].Get();
 		Preset->CharacterToonMaterialTranslucent = Materials[2].Get();
+		Preset->CharacterToonFaceMaterialOpaque = Materials[3].Get();
+		Preset->CharacterToonFaceMaterialMasked = Materials[4].Get();
+		Preset->CharacterToonFaceMaterialTranslucent = Materials[5].Get();
+		// 首轮仅准备肤色；以下是可调的美术起点，不是原作 SSS 或客户端肤色参数。
+		Preset->CharacterSkinSurface = FMMDStageSkinSurfaceSettings();
+		Preset->CharacterSkinSurface.bEnabled = true;
+		Preset->CharacterSkinSurface.Tint = FLinearColor(1.0f, 0.92f, 0.88f, 1.0f);
+		Preset->CharacterSkinSurface.TintStrength = 0.35f;
+		Preset->CharacterSkinSurface.AlbedoScale = 0.96f;
+		Preset->CharacterSkinSurface.Saturation = 1.05f;
+		Preset->CharacterSkinSurface.Roughness = 0.742f;
+		Preset->CharacterSkinSurface.Specular = 0.454f;
+		Preset->CharacterFaceSkinSurface = FMMDStageSkinSurfaceSettings();
+		Preset->CharacterFaceSkinSurface.bEnabled = true;
+		Preset->CharacterFaceSkinSurface.Tint = FLinearColor(1.0f, 0.84f, 0.76f, 1.0f);
+		Preset->CharacterFaceSkinSurface.TintStrength = 0.70f;
+		Preset->CharacterFaceSkinSurface.AlbedoScale = 0.85f;
+		Preset->CharacterFaceSkinSurface.Saturation = 1.10f;
+		Preset->CharacterFaceSkinSurface.Roughness = 0.742f;
+		Preset->CharacterFaceSkinSurface.Specular = 0.454f;
 		Preset->CharacterOutlineMaterial = Outline;
 		Preset->bCharacterOutline = true;
 		Preset->OutlineSourceColorBlend = 1.0f;
@@ -935,17 +1019,20 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	{
 		for (int32 Index = 0; Index < EndfieldToonMaterialCount; ++Index)
 		{
-			UMaterial* Material = EndfieldToonLoadOrCreate<UMaterial>(EndfieldToonAllowedPackages[Index], bGenerate, Error);
+			UMaterial* Material = EndfieldToonLoadOrCreate<UMaterial>(EndfieldToonAllowedPackages[EndfieldToonMaterialPackages[Index]], bGenerate, Error);
 			if (!Material) { Errors.Add(Error); continue; }
 			Materials.Emplace(Material);
+			const bool bFaceMaterial = Index >= 3;
+			const EBlendMode Blend = Blends[Index % UE_ARRAY_COUNT(Blends)];
+			UToonProfile* Profile = Profiles[bFaceMaterial ? static_cast<int32>(EMMDMaterialRole::Skin) : 0].Get();
 			TStrongObjectPtr<UMaterial> Expected(NewObject<UMaterial>(GetTransientPackage(), NAME_None, RF_Transient));
 			FArchiveUObject InitialArchive;
 			Expected->Serialize(InitialArchive);
-			EndfieldToonConfigureMaterial(Expected.Get(), Blends[Index], White.Get(), Black.Get(), Profiles[0].Get());
+			EndfieldToonConfigureMaterial(Expected.Get(), Blend, White.Get(), Black.Get(), Profile, bFaceMaterial);
 			const bool bMatches = EndfieldToonMaterialMatches(Material, Expected.Get());
 			if (!bMatches && bGenerate)
 			{
-				EndfieldToonConfigureMaterial(Material, Blends[Index], White.Get(), Black.Get(), Profiles[0].Get());
+				EndfieldToonConfigureMaterial(Material, Blend, White.Get(), Black.Get(), Profile, bFaceMaterial);
 				Material->StateId = FGuid::NewGuid();
 				Material->PostEditChange();
 			}
@@ -1078,6 +1165,7 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("target"), TEXT("EndfieldV2NativeToon"));
 	Report->SetStringField(TEXT("graph_version"), EndfieldToonGraphVersion);
 	Report->SetNumberField(TEXT("expected_package_count"), UE_ARRAY_COUNT(EndfieldToonAllowedPackages));
+	Report->SetNumberField(TEXT("expected_parent_material_count"), EndfieldToonMaterialCount + 1);
 	Report->SetStringField(TEXT("offset_gradient_source_hash"), GradientSourceHash);
 	Report->SetStringField(TEXT("outline_material"), OutlineMaterial.IsValid() ? OutlineMaterial->GetPathName() : TEXT("missing"));
 	Report->SetStringField(TEXT("outline_graph_version"), EndfieldToonOutlineGraphVersion);
@@ -1087,6 +1175,11 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	const FString NativeSourcePath = GetShaderSourceFilePath(TEXT("/Plugin/Ue5MMDTools/Core/TMMDEndfieldNative.ush"));
 	Report->SetStringField(TEXT("native_ush_source_hash"), FFileHelper::LoadFileToString(NativeSource, *NativeSourcePath)
 		? EndfieldToonHash(NativeSource) : TEXT("missing"));
+	FString SkinSource;
+	const FString SkinSourcePath = GetShaderSourceFilePath(TEXT("/Plugin/Ue5MMDTools/Core/TMMDEndfieldSkinMaterial.ush"));
+	Report->SetStringField(TEXT("skin_material_ush_source_hash"), FFileHelper::LoadFileToString(SkinSource, *SkinSourcePath)
+		? EndfieldToonHash(SkinSource) : TEXT("missing"));
+	Report->SetStringField(TEXT("skin_surface_contract"), TEXT("Graph6 的六套 Toon 父材质在 base_color_tex 的 sRGB Color 采样及 BaseColor 相乘后准备线性肤色。三套共享父材质的 ToonSkin/ToonFaceSkin 默认 Enabled=0；三套独立 Face 父材质两组默认 Enabled=1，均用 scale=.85、linear tint=(1,.84,.76)、strength=.70、saturation=1.10、roughness=.742/specular=.454，无 SDF 时也有相同暖肤兜底。Stage 显式覆写各组参数，Body 与 Face 分别从源 RGB 计算；肤色范围独立读取有效 V5 覆盖与前层深度，不跟随 DirectionEnabled 明暗阈值开关，缺少有效头框架/版本时退原几何遮罩。保留原 alpha、SDF、原生阴影、Profile Skin=1 和 GI。肤色倍率为待实拍的美术起点，不是 SSS，不加自发光、不改曝光。"));
 	Report->SetStringField(TEXT("shader_platform"), LexToString(GMaxRHIShaderPlatform));
 	Report->SetStringField(TEXT("template"), EndfieldToonTemplatePath);
 	Report->SetStringField(TEXT("preset"), Preset.IsValid() ? Preset->GetPathName() : TEXT("missing"));
@@ -1094,7 +1187,7 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse"), EndfieldToonCVar(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse")));
 	Report->SetStringField(TEXT("unified_diffuse_notice"), TEXT("ToonUnifiedDiffuse 是可选实验开关，引擎默认 0；设为 1 的路径尚未通过视觉验收，生成与编译校验不要求启用。"));
 	Report->SetStringField(TEXT("candidate_notice"), TEXT("后端 Mode2 的 Skin/Hair/Cloth 使用客户端 RD 数据语义。Skin roughness=.742/specular=.454、Cloth roughness=.696 来自代表样本；Metal/Eye 和无贴图头发方向仍是通用近似，不代表原作完整复刻。"));
-	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("Mode2 + adaptive GBuffer 的自有 Skin 通过专用 CustomOutput 传递头空间方向和旋转，原生 Normal 独立保留高光/GI。自动 V4 是完整几何方向场（非遮挡距离场），四tap先解离散镜像再插值，未提供时用球面/几何法线。Mode0/1、fmt0和透明保持旧 threshold bridge/原生 Toon 回退。"));
+	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("当前 Backend11、payload5：Mode2 自有 Skin 的 V5 数据是头部投影坐标上的左右主光角阈值、前层深度和覆盖，不是真实遮挡 SDF，也不占网格 UV 通道。四tap按覆盖与深度门控；opaque/masked 使用 adaptive GBuffer packed，已验证关联的透明附脸用 forward inline 同样量化解码。独立 Normal 保留高光/GI，缺数据用几何/球面回退。Mode0/1、fmt0保持旧兼容/原生 Toon 回退。"));
 	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("V5 阈值只控制主光明暗分区，不改变原生阴影接收或投射。默认 FaceShadowSuppress=0、关闭角色接触阴影。头发原生投影与脸部阈值是独立来源，需用 facefix 的 Hair-only 阴影代理对照诊断；不能把总 ShadowTerms 衰减称为仅关闭头发自投影。旧兼容 masked 路径保留可选 ShadowPassSwitch。"));
 	Report->SetStringField(TEXT("anisotropy_limit"), TEXT("本机 UE5.8 原生 Toon 不消费 Tangent 输入，各向异性方向只用引擎默认 basis，尚不能定制天使环。"));
 	Report->SetArrayField(TEXT("assets"), AssetReports);

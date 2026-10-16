@@ -1,0 +1,61 @@
+// 材质 Custom 内 include：只准备线性肤色和表面参数，不计算光照或模拟 SSS。
+#include "TMMDEndfieldNative.ush"
+
+struct TMMDEndfieldSkinMaterial
+{
+    float ResolveFaceCoverage(float existing_mask, float3 world_pos, float4 head_position_radius,
+        float3 head_forward, float3 head_right, Texture2D direction_tex, float direction_version,
+        float face_enabled)
+    {
+        // 肤色范围只读有效 V5 覆盖，不跟随明暗阈值开关；缺数据沿用已有几何遮罩。
+        if (face_enabled <= 0.0 || direction_version != 5.0 || head_position_radius.w <= 0.0
+            || !all(isfinite(head_position_radius)) || !all(isfinite(head_forward)) || !all(isfinite(head_right))
+            || dot(head_forward, head_forward) < 0.000001)
+            return existing_mask;
+        TMMDEndfieldNative geometry;
+        float3 forward = geometry.SafeNormalize(head_forward, float3(0.0, 1.0, 0.0));
+        float3 projected_right = head_right - forward * dot(head_right, forward);
+        if (dot(projected_right, projected_right) < 0.000001) return existing_mask;
+        float3 right = geometry.SafeNormalize(projected_right, float3(1.0, 0.0, 0.0));
+        float3 up = geometry.SafeNormalize(cross(right, forward), float3(0.0, 0.0, 1.0));
+        float3 head_offset = world_pos - head_position_radius.xyz;
+        float3 local_position = float3(dot(head_offset, right), dot(head_offset, forward), dot(head_offset, up))
+            / head_position_radius.w;
+        float2 face_uv = float2(0.5 + local_position.x / 3.0, 0.5 - local_position.z / 3.0);
+        return geometry.ReadFaceSdf(direction_tex, face_uv, local_position.y).a;
+    }
+
+    float3 PrepareColor(float3 source_color, float3 tint, float tint_strength,
+        float albedo_scale, float saturation)
+    {
+        float3 color = max(source_color, 0.0);
+        float luminance = dot(color, float3(0.212673, 0.715152, 0.072175));
+        color = max(lerp(luminance.xxx, color, clamp(saturation, 0.0, 2.0)), 0.0);
+        // 仅乘源底色：保留纹理细节和黑色，不添加自发光或固定肤色底。
+        return color * lerp(1.0, max(tint, 0.0), saturate(tint_strength))
+            * clamp(albedo_scale, 0.0, 2.0);
+    }
+
+    float3 PrepareSurface(float3 source_color, float source_roughness, float source_specular,
+        float face_mask, float body_enabled, float3 body_tint, float body_tint_strength,
+        float body_albedo_scale, float body_saturation, float body_roughness, float body_specular,
+        float face_enabled, float3 face_tint, float face_tint_strength, float face_albedo_scale,
+        float face_saturation, float face_roughness, float face_specular,
+        out float roughness, out float specular)
+    {
+        float body_weight = saturate(body_enabled);
+        float face_weight = saturate(face_enabled) * saturate(face_mask);
+        float3 body_color = PrepareColor(source_color, body_tint, body_tint_strength,
+            body_albedo_scale, body_saturation);
+        float3 face_color = PrepareColor(source_color, face_tint, face_tint_strength,
+            face_albedo_scale, face_saturation);
+        float3 color = lerp(source_color, body_color, body_weight);
+        // Face 独立从源底色生成，避免主脸和透明附层重复乘两次肤色。
+        color = lerp(color, face_color, face_weight);
+        roughness = lerp(source_roughness, clamp(body_roughness, 0.04, 1.0), body_weight);
+        roughness = lerp(roughness, clamp(face_roughness, 0.04, 1.0), face_weight);
+        specular = lerp(source_specular, saturate(body_specular), body_weight);
+        specular = lerp(specular, saturate(face_specular), face_weight);
+        return color;
+    }
+};

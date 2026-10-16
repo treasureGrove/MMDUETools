@@ -228,7 +228,10 @@ namespace
 			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.M_MMD_EndfieldV2_Opaque"),
 			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.M_MMD_EndfieldV2_Masked"),
 			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent"),
-			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline") };
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline"),
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.M_MMD_EndfieldV2_Face_Opaque"),
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.M_MMD_EndfieldV2_Face_Masked"),
+			TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.M_MMD_EndfieldV2_Face_Translucent") };
 		TArray<TStrongObjectPtr<UMaterial>> Materials;
 		for (const TCHAR* Path : Paths)
 		{
@@ -491,7 +494,7 @@ int32 UMMDEndfieldNativeBackendProbeCommandlet::Main(const FString& Params)
 	Report->SetBoolField(TEXT("backend_success"), Errors.IsEmpty() && Status.bRequested && Status.bActive);
 	Report->SetBoolField(TEXT("visual_accepted"), false);
 	Report->SetStringField(TEXT("validation_scope"), bAdapterOnly
-		? TEXT("AdapterOnly：验证启动映射、patched 磁盘源码 hash、引擎/插件 shader 前后完整性、模块 payload 协议、当前 Editor 全局 shader 的编译反射协议和四份发布父材质的真实 shader map 编译；不创建角色或测试绘制。draw_verified=false，image_count=0，all_material_kernel_verified=false，成功不代表 GPU 绘制、独立 Cook 库或最终画质通过。")
+		? TEXT("AdapterOnly：验证启动映射、patched 磁盘源码 hash、引擎/插件 shader 前后完整性、模块 payload 协议、当前 Editor 全局 shader 的编译反射协议和七份发布父材质的真实 shader map 编译；不创建角色或测试绘制。draw_verified=false，image_count=0，all_material_kernel_verified=false，成功不代表 GPU 绘制、独立 Cook 库或最终画质通过。")
 		: TEXT("验证启动映射、patched 磁盘源码 hash、引擎/插件源文件前后完整性、真实绘制 shader、非默认/fallback 材质和截图产出；不读取或更改 shader 源码缓存。success 表示测试装置验证通过，backend_success 另要求后端请求且激活。显式 AllowInactiveBackend 只允许完全未请求的原生引擎负对照，绝不接受请求后激活失败。成功不等于画面复刻验收。kernel 模式/环境倍率来自自有 Profile alpha metadata，不因模式改变而重编译；报告配置是请求默认值，实际每个 Profile 的 GPU 响应由实拍对照判定。"));
 	Report->SetStringField(TEXT("experimental_limits"), bAdapterOnly
 		? TEXT("仅验证空白宿主适配器与材质编译，不执行 backend/lighting 实验、材质槽 fallback 核对或截图。Cook/Shipping 仍需独立运行与图像对照。")

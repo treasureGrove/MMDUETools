@@ -12,7 +12,7 @@
 
 不透明／遮罩仍走原生 BasePass packed 导出／逐灯读回；可靠透明附脸层在原生 Substrate Forward 绘制中使用 inline 载荷及阴影。没有新增 GBuffer RT、脸部 SceneCapture 或角色绘制。透明层高光／GI 使用头部球面代理，选定方向光使用相同阈值，局部灯刷新单位 L 的 BSDF Context。透明 Forward 的方向光数量、GI 与不透明 Lumen 仍有差别，不承诺全灯一致。
 
-当前 **Backend `endfield-native-bsdf-v11-forward-face`／Cooked协议11／payload5／Graph5／FaceData5／Frame1**。Mode2、atlas256等门控继续保留；旧V4自动绑定关闭，需重烘。精确接入时序、贴图编辑和代码入口见[脸部V5说明](ENDFIELD_FACE_V5_GUIDE.md)，实拍、失败重试与验证边界见[2026-10-16归档](Screenshots/2026-10-16-endfield-face/README.md)。本轮Editor/Game构建通过；新Cook／BuildPlugin未重跑，不能沿用v8证明v11发行已验收。
+当前 **Backend `endfield-native-bsdf-v11-forward-face`／Cooked协议11／payload5／Graph6／FaceData5／Frame1**。Mode2、atlas256等门控继续保留；旧V4自动绑定关闭，需重烘。精确接入时序、贴图编辑和代码入口见[脸部V5说明](ENDFIELD_FACE_V5_GUIDE.md)，实拍、失败重试与验证边界见[脸部V5归档](Screenshots/2026-10-16-endfield-face/README.md)。同日新增[皮肤与脸部专用材质](ENDFIELD_SKIN_MATERIAL_GUIDE.md)，七个发布父材质、15包；肤色写真实BaseColor，Body与Face各自从源RGB计算，覆盖独立于SDF阈值开关，透明附脸层alpha保留。该批Editor/Game及44张Mode2、8张Mode0实拍通过，独立BuildPlugin三配置与空白宿主七父材质编译也通过，详见[皮肤批次来源](Screenshots/2026-10-16-endfield-skin/README.md)。新Cook尚未重跑；不能沿用v8证明v11 Cooked运行已验收。
 
 首轮 `overlay11` 的CPU检查虽全过，diagnostic18却发现不透明脸全红、阈值无响应。原因是误用 `!SUBSTRATE_INLINE_SHADING`：UE在所有BasePass均定义其为1。已换成真正的 `SUBSTRATE_OPAQUE_DEFERRED` 并重编；必须同时检查不透明packed与透明inline的绿红负对照，不能只看5槽绑定或进程exit0。
 

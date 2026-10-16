@@ -42,6 +42,28 @@ struct UE5MMDTOOLS_API FMMDStageToonRoleSettings
 	float FaceShadowSuppress = 0.0f;
 };
 
+/** 皮肤表面的线性底色与高光参数；关闭时保留原部位设置，不改变源贴图和透明度。 */
+USTRUCT(BlueprintType)
+struct UE5MMDTOOLS_API FMMDStageSkinSurfaceSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin")
+	bool bEnabled = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", HideAlphaChannel))
+	FLinearColor Tint = FLinearColor::White;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "1"))
+	float TintStrength = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "2"))
+	float AlbedoScale = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "2"))
+	float Saturation = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0.04", ClampMax = "1"))
+	float Roughness = 0.742f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "1"))
+	float Specular = 0.454f;
+};
+
 UENUM(BlueprintType)
 enum class EMMDStageTheme : uint8
 {
@@ -78,8 +100,18 @@ public:
 	TObjectPtr<UMaterialInterface> CharacterToonMaterialMasked;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Materials", meta = (ToolTip = "启用 Substrate Toon Profile 时优先使用此父材质；未配置时沿用原半透明父材质。"))
 	TObjectPtr<UMaterialInterface> CharacterToonMaterialTranslucent;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Materials|Face", meta = (ToolTip = "有效脸部绑定使用的专用不透明 Toon 父材质；为空或混合模式不符时沿用普通父材质。"))
+	TObjectPtr<UMaterialInterface> CharacterToonFaceMaterialOpaque;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Materials|Face", meta = (ToolTip = "有效脸部绑定使用的专用遮罩 Toon 父材质；保留原裁剪与显式阴影投射设置。"))
+	TObjectPtr<UMaterialInterface> CharacterToonFaceMaterialMasked;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Materials|Face", meta = (ToolTip = "已验证透明附脸层的专用 Toon 父材质；必须保留原连续 alpha，不自动改为遮罩。"))
+	TObjectPtr<UMaterialInterface> CharacterToonFaceMaterialTranslucent;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ToolTip = "按材质部位选择原生 Toon Profile 和参数；缺少部位时使用 Generic，缺少 Generic 时使用安全默认值。"))
 	TMap<EMMDMaterialRole, FMMDStageToonRoleSettings> CharacterToonRoles;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Skin", meta = (ToolTip = "身体皮肤表面设置；脸部遮罩外继续使用这些参数，关闭时沿用原 Skin 部位参数。"))
+	FMMDStageSkinSurfaceSettings CharacterSkinSurface;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon|Face", meta = (ToolTip = "仅在有效脸部投影遮罩内覆盖皮肤表面参数；暖暗部从实际底色派生，不伪称 SSS。"))
+	FMMDStageSkinSurfaceSettings CharacterFaceSkinSurface;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Materials", meta = (ToolTip = "将整体 Opacity 为 1 的半透明头发改用 Masked 父材质，优先保证深度与排序稳定；会舍弃贴图的柔和透明过渡。需要保留渐隐时可关闭；头发阴影层和整体淡出不受此选项影响。"))
 	bool bUseMaskedHair = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Materials", meta = (ToolTip = "让使用本预设的角色参与插件主光阴影，形成刘海、衣领和肢体间的真实遮挡；显式 MMDShadowExclude 标签仍优先。恢复材质时恢复原阴影标签。"))

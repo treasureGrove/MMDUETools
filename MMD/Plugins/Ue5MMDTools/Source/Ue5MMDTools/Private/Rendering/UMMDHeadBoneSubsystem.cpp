@@ -103,15 +103,17 @@ bool UMMDHeadBoneSubsystem::ApplyHeadFrame(USkeletalMeshComponent* Component, FH
 		if (bCacheRebuilt || Frame.BoundMaterials.FindRef(Slot).Get() != Dynamic)
 		{
 			Frame.BoundMaterials.Add(Slot, Dynamic);
-			float PayloadEnabled = 0.0f, DirectionEnabled = 0.0f, DirectionVersion = 0.0f;
+			float PayloadEnabled = 0.0f, FaceSkinEnabled = 0.0f, DirectionEnabled = 0.0f, DirectionVersion = 0.0f;
 			UTexture* PreviousTexture = nullptr;
 			const bool bHasPayload = Dynamic->GetScalarParameterValue(FMaterialParameterInfo(TEXT("ToonNativePayloadEnabled")), PayloadEnabled);
 			const bool bHasDirection = Dynamic->GetScalarParameterValue(
 				FMaterialParameterInfo(UMMDEndfieldFaceData::DirectionEnabledParameter), DirectionEnabled)
 				&& Dynamic->GetTextureParameterValue(FMaterialParameterInfo(UMMDEndfieldFaceData::DirectionTextureParameter), PreviousTexture);
 			Dynamic->GetScalarParameterValue(FMaterialParameterInfo(UMMDEndfieldFaceData::DirectionVersionParameter), DirectionVersion);
-			// 只在框架失效/重建时同步 V5；保留手动 V4，以及普通无 payload 路径的参数。
-			if (bHasPayload && PayloadEnabled > 0.0f && bHasDirection && DirectionVersion != 4.0f)
+			Dynamic->GetScalarParameterValue(FMaterialParameterInfo(TEXT("ToonFaceSkinEnabled")), FaceSkinEnabled);
+			const bool bSyncPayload = bHasPayload && PayloadEnabled > 0.0f;
+			// 肤色独立读取 V5 覆盖，同样必须校验缓存；手动 V4 与普通无脸部路径保持原样。
+			if ((bSyncPayload || FaceSkinEnabled > 0.0f) && bHasDirection && DirectionVersion != 4.0f)
 			{
 				// 首帧骨骼未就绪只令头参数为零；可靠参考图仍可绑定，后续姿态就绪即自动生效。
 				UTexture2D* Texture = Reference.bValid && Reference.bFromFaceData && Data && Mesh->GetMaterials().IsValidIndex(Slot)
@@ -122,7 +124,10 @@ bool UMMDHeadBoneSubsystem::ApplyHeadFrame(USkeletalMeshComponent* Component, FH
 					Dynamic->SetScalarParameterValue(UMMDEndfieldFaceData::DirectionVersionParameter,
 						static_cast<float>(UMMDEndfieldFaceData::CurrentVersion));
 				}
-				Dynamic->SetScalarParameterValue(UMMDEndfieldFaceData::DirectionEnabledParameter, Texture ? 1.0f : 0.0f);
+				else Dynamic->SetScalarParameterValue(UMMDEndfieldFaceData::DirectionVersionParameter, 0.0f);
+				// 真失效同时关闭阈值；仅同步肤色时不重新打开用户关闭的明暗开关。
+				if (bSyncPayload || !Texture)
+					Dynamic->SetScalarParameterValue(UMMDEndfieldFaceData::DirectionEnabledParameter, Texture ? 1.0f : 0.0f);
 			}
 		}
 		if (bForward) Dynamic->SetVectorParameterValue(ParamHeadForward, Forward);

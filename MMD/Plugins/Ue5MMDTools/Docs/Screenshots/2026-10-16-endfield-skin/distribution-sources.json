@@ -1,0 +1,143 @@
+{
+  "schema": "mmd.endfield.skin-distribution-evidence.v1",
+  "recorded_utc": "2026-10-16T06:59:18.937473+00:00",
+  "engine": "5.8.3-58210709+++UE5+Release-5.8",
+  "build_configurations": [
+    "Editor Development",
+    "Game Development",
+    "Game Shipping"
+  ],
+  "build_plugin_verified": true,
+  "payload_files_verified": true,
+  "clean_host_adapter_verified": true,
+  "sample_models_and_motions_excluded": true,
+  "private_expression_source_available_in_probe": false,
+  "published_materials": [
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.M_MMD_EndfieldV2_Opaque",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 30,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Masked.M_MMD_EndfieldV2_Masked",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 54,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 48,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.M_MMD_EndfieldV2_Outline",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 40,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.M_MMD_EndfieldV2_Face_Opaque",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 30,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.M_MMD_EndfieldV2_Face_Masked",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 54,
+      "compile_errors": []
+    },
+    {
+      "asset": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.M_MMD_EndfieldV2_Face_Translucent",
+      "loaded": true,
+      "shader_map_ready": true,
+      "compilation_finished": true,
+      "compiled_successfully": true,
+      "compilation_finalized": true,
+      "rendering_valid": true,
+      "shader_count": 48,
+      "compile_errors": []
+    }
+  ],
+  "global_shader_protocol": 11,
+  "global_shader_protocol_verified": true,
+  "engine_sources_unchanged_after": true,
+  "plugin_sources_unchanged_after": true,
+  "frozen_sources_byte_identical_in_package": true,
+  "draw_verified": false,
+  "rendering_verified": false,
+  "cooked_runtime_verified": false,
+  "all_material_kernel_verified": false,
+  "evidence": [
+    {
+      "path": "Saved/EFSkin16/distribution.json",
+      "sha256": "ab88924fd3438e2f6801d8f0d1843677bcb2998d50f2c4820112e510c0f85439"
+    },
+    {
+      "path": "Saved/EFSkin16/build-plugin.log",
+      "sha256": "99ce78d7ffe7bb859456763de888028264ae26ddae473b6df7703777a189ab6b"
+    },
+    {
+      "path": "Saved/EFSkin16/clean-host.log",
+      "sha256": "c505379af89d4652331054621a5d0bbea5745bb1342a163c21c25ec6b99429d5"
+    },
+    {
+      "path": "Saved/EFSkin16/adapter/report.json",
+      "sha256": "1265682c2855a13ac2e6d0e6004defabb6b046ed5fdc9b1b4ad83380b5edeb89"
+    }
+  ],
+  "packaged_required_file_hashes": {
+    "Ue5MMDTools.uplugin": "D882BDD942A2BB36F060A28E7EA6E5DD71A75D03372A68169A562D8742670A2E",
+    "LICENSE": "9DC41BDC2C340FA61128735522B52839AF3CFF31DCEAA308E9CD13807BF96D00",
+    "Binaries/Win64/UnrealEditor-Ue5MMDTools.dll": "8ED4B0D3AC8641307BD36EA6E2F5DC1071C1125B6A374DB1C5B216F57B6BA5E2",
+    "Binaries/Win64/UnrealEditor-Ue5MMDToolsEditor.dll": "512F75E2F337A3A6944385790A5D48A508FF16040C8E86AA1BE7D252BC8C8319",
+    "ThirdParty/Bullet/include/btBulletDynamicsCommon.h": "5C46C61CEEBBAE3E46DA83E01C2FA59C7EA49A00A3990C0D0EDB28E632371D7F",
+    "ThirdParty/Bullet/lib/BulletCollision.lib": "297D2CB9AF8ECAB1382B350045C13526110159B550349DA8F05BD83C44CB6D93",
+    "ThirdParty/Bullet/lib/BulletDynamics.lib": "3994FB087A6D846860DD0823B5FBD4ED7B45EC6209DC5818CD187B13B469D0CA",
+    "ThirdParty/Bullet/lib/BulletSoftBody.lib": "D5ABB080FAEA3F648E7AC18198A763E56F91FC52A3027B5B6D1D58704FDF5A2C",
+    "ThirdParty/Bullet/lib/LinearMath.lib": "32D5AF95732CD825AA099D08BBC4038857D5FDA1E1C9F6A638AE4A82EFBE1841",
+    "Source/Ue5MMDTools/Ue5MMDTools.Build.cs": "58D66B96A5C2D30CFE8B5EA19FED916B16C7ECAA1E718F4640C3AD414DE21BC2",
+    "Shaders/Core/TMMDEndfieldNativePayload.ush": "DFC1E547B91E778ED68D609B07E2BED643B89DBBA437BC9F80250059A045ED4F",
+    "Shaders/Core/TMMDEndfieldNativeBSDF.ush": "8B2B0CB7DB6943CDCCE34996905C6DECC42E75420CA5CF279096845904194FA2",
+    "Shaders/Core/TMMDEndfieldSkinMaterial.ush": "260F4C396BB5971ADB92D2C722F3B4B46D8C5209C544DCB9AB15AE3C57DB229B",
+    "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Opaque.uasset": "7452ED9968E3F7451B8E09F1524969B2D51C81E2FF1E2BFF6A5024F5DD878121",
+    "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline.uasset": "030CAAAB73D295AAF06479FB0B2EB2157EC95E6FF3C8F07CD9B2AEFA38626E0B",
+    "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Opaque.uasset": "F272D4BD2E92B11FCD6CD94824C12479C250D0EB528F8DD0B06FD1A94E156B03",
+    "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Masked.uasset": "11A80FE5004B71D2D4D25246C4E1AA4C336D98E1D3C074FD001F1ECBEFA9DE25",
+    "Content/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Face_Translucent.uasset": "C3F148C3A4AE151E1D0D3D6EF3B56761E8100635E5724D0547E9A62CB696F30F",
+    "Content/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.uasset": "45FAD64D1C0A75EDFC67B03DF953FEB0710504FA1F43BBE22CF671CC3FBF37ED"
+  },
+  "scope": "Independent BuildPlugin and seven published parent shader maps in a clean host without the private payload-expression cpp. No model draw, full Cook, Shipping runtime or general visual acceptance."
+}
