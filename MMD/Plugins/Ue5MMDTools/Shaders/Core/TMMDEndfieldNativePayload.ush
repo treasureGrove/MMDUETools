@@ -4,7 +4,9 @@
 struct TMMDEndfieldNativePayloadData
 {
     bool valid;
+    bool has_face_sdf;
     float3 diffuse_normal_head_local;
+    float2 face_sdf_thresholds;
     float mask;
     float4 head_quaternion;
     uint role;
@@ -28,17 +30,25 @@ struct TMMDEndfieldNativePayload
     TMMDEndfieldNativePayloadData Make(float4 face_direction, float4 head_quaternion, float enabled)
     {
         TMMDEndfieldNativePayloadData data = (TMMDEndfieldNativePayloadData)0;
-        // 本轮只允许 Skin=1；未连线、无有效覆盖或坏输入均回到普通 Toon。
+        // payload5：负 w 是 V5 阈值，正 w 保留几何方向；两类均只用于 Skin。
         if (abs(enabled - 1.0) > 0.0001 || !isfinite(enabled)
             || !all(isfinite(face_direction)) || !all(isfinite(head_quaternion))
-            || !isfinite(dot(face_direction.xyz, face_direction.xyz))
             || !isfinite(dot(head_quaternion, head_quaternion))
-            || dot(face_direction.xyz, face_direction.xyz) < 0.000001
             || dot(head_quaternion, head_quaternion) < 0.000001) return data;
-        uint mask_bits = uint(round(saturate(face_direction.w) * 255.0));
+        data.has_face_sdf = face_direction.w < 0.0;
+        uint mask_bits = uint(round(saturate(abs(face_direction.w)) * 127.0));
         if (mask_bits == 0u) return data;
-        data.diffuse_normal_head_local = SafeNormalize(face_direction.xyz, float3(0.0, 1.0, 0.0));
-        data.mask = float(mask_bits) * (1.0 / 255.0);
+        if (data.has_face_sdf)
+        {
+            data.face_sdf_thresholds = saturate(face_direction.xy);
+        }
+        else
+        {
+            float length_squared = dot(face_direction.xyz, face_direction.xyz);
+            if (!isfinite(length_squared) || length_squared < 0.000001) return data;
+            data.diffuse_normal_head_local = face_direction.xyz * rsqrt(length_squared);
+        }
+        data.mask = float(mask_bits) * (1.0 / 127.0);
         data.head_quaternion = NormalizeQuaternion(head_quaternion);
         data.role = 1u;
         data.valid = true;
@@ -47,13 +57,22 @@ struct TMMDEndfieldNativePayload
 
     uint PackDirection24(TMMDEndfieldNativePayloadData data)
     {
-        float3 normal = SafeNormalize(data.diffuse_normal_head_local, float3(0.0, 1.0, 0.0));
-        float2 oct = normal.xy / (abs(normal.x) + abs(normal.y) + abs(normal.z));
-        if (normal.z < 0.0)
-            oct = (1.0 - abs(oct.yx)) * float2(oct.x >= 0.0 ? 1.0 : -1.0, oct.y >= 0.0 ? 1.0 : -1.0);
-        uint2 direction_bits = uint2(round(saturate(oct * 0.5 + 0.5) * 255.0));
-        uint mask_bits = uint(round(saturate(data.mask) * 255.0));
-        return direction_bits.x | (direction_bits.y << 8u) | (mask_bits << 16u);
+        uint2 values;
+        if (data.has_face_sdf)
+        {
+            values = uint2(round(saturate(data.face_sdf_thresholds) * 255.0));
+        }
+        else
+        {
+            float3 normal = SafeNormalize(data.diffuse_normal_head_local, float3(0.0, 1.0, 0.0));
+            float2 oct = normal.xy / (abs(normal.x) + abs(normal.y) + abs(normal.z));
+            if (normal.z < 0.0)
+                oct = (1.0 - abs(oct.yx)) * float2(oct.x >= 0.0 ? 1.0 : -1.0, oct.y >= 0.0 ? 1.0 : -1.0);
+            values = uint2(round(saturate(oct * 0.5 + 0.5) * 255.0));
+        }
+        uint mask_bits = uint(round(saturate(data.mask) * 127.0));
+        uint type_and_mask = mask_bits | (data.has_face_sdf ? 128u : 0u);
+        return values.x | (values.y << 8u) | (type_and_mask << 16u);
     }
 
     float3 UnpackDirection16(uint packed)
@@ -106,10 +125,15 @@ struct TMMDEndfieldNativePayload
     TMMDEndfieldNativePayloadData Decode(uint packed_direction, uint packed_rotation)
     {
         TMMDEndfieldNativePayloadData data = (TMMDEndfieldNativePayloadData)0;
-        uint mask_bits = (packed_direction >> 16u) & 255u;
+        uint type_and_mask = (packed_direction >> 16u) & 255u;
+        uint mask_bits = type_and_mask & 127u;
         if (mask_bits == 0u) return data;
-        data.diffuse_normal_head_local = UnpackDirection16(packed_direction);
-        data.mask = float(mask_bits) * (1.0 / 255.0);
+        data.has_face_sdf = (type_and_mask & 128u) != 0u;
+        if (data.has_face_sdf)
+            data.face_sdf_thresholds = float2(packed_direction & 255u, (packed_direction >> 8u) & 255u) * (1.0 / 255.0);
+        else
+            data.diffuse_normal_head_local = UnpackDirection16(packed_direction);
+        data.mask = float(mask_bits) * (1.0 / 127.0);
         data.head_quaternion = UnpackQuaternion32(packed_rotation);
         data.role = 1u;
         data.valid = true;
@@ -123,5 +147,15 @@ struct TMMDEndfieldNativePayload
         float3 rotated = direction + 2.0 * cross(rotation.xyz,
             cross(rotation.xyz, direction) + rotation.w * direction);
         return SafeNormalize(rotated, float3(0.0, 1.0, 0.0));
+    }
+
+    float3 ToHeadDirection(TMMDEndfieldNativePayloadData data, float3 world_direction)
+    {
+        float4 rotation = NormalizeQuaternion(data.head_quaternion);
+        rotation.xyz = -rotation.xyz;
+        float3 rotated = world_direction + 2.0 * cross(rotation.xyz,
+            cross(rotation.xyz, world_direction) + rotation.w * world_direction);
+        // 零方向回退到头顶，后续水平分量检查会保留普通几何 NoL。
+        return SafeNormalize(rotated, float3(0.0, 0.0, 1.0));
     }
 };

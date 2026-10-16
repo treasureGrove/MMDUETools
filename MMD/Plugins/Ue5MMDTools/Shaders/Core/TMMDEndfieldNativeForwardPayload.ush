@@ -1,0 +1,40 @@
+#pragma once
+
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativePayload.ush"
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeBSDF.ush"
+
+// 在桌面材质 BasePass 的 SubstrateEvaluation 之后使用；数据仅保留在当前像素寄存器中。
+struct TMMDEndfieldNativeForwardPayload
+{
+    void Apply(FMaterialPixelParameters material_parameters, inout FSubstratePixelHeader pixel_header)
+    {
+        #if PIXELSHADER && !SHADING_PATH_MOBILE && SUBSTRATE_INLINE_SHADING && !MATERIAL_SHADINGMODEL_SINGLELAYERWATER && (FORWARD_SHADING || TRANSLUCENCY_LIGHTING_SURFACE_FORWARDSHADING) && NUM_MATERIAL_OUTPUTS_GETMMDENDFIELDNATIVEPAYLOAD == 3
+        // Inline 不导出 packed 材质，不能沿用 deferred 的 GBuffer 格式和 24byte 预算条件。
+        // 单层/单基限制仍必须满足；多层、物理各向异性、非中性 UV 保留原生路径。
+        if (pixel_header.SubstrateTree.BSDFCount != 1u || pixel_header.SharedLocalBases.Count != 1u) return;
+        if (BSDF_GETTYPE(pixel_header.SubstrateTree.BSDFs[0]) != SUBSTRATE_BSDF_TYPE_TOON
+            || BSDF_GETSHAREDLOCALBASISID(pixel_header.SubstrateTree.BSDFs[0]) != 0u
+            || abs(TOON_ANISOTROPY(pixel_header.SubstrateTree.BSDFs[0])) >= 0.000001
+            || any(abs(TOON_PATTERNUVS(pixel_header.SubstrateTree.BSDFs[0]) - float2(0.5, 0.5)) >= 0.000001)
+            || uint(View.ToonProfileTextureSizeAndInvSize.x) < 256u) return;
+        TMMDEndfieldNativeBSDF response;
+        uint role;
+        float profile_id = TOON_PROFILEID(pixel_header.SubstrateTree.BSDFs[0]);
+        if (!response.IsEndfieldProfile(profile_id, role) || role != 1u
+            || response.ReadProfileControls(profile_id).x != 2.0) return;
+
+        TMMDEndfieldNativePayload codec;
+        TMMDEndfieldNativePayloadData payload = codec.Make(
+            GetMMDEndfieldNativePayload0(material_parameters),
+            GetMMDEndfieldNativePayload1(material_parameters),
+            GetMMDEndfieldNativePayload2(material_parameters));
+        if (payload.valid)
+        {
+            // 不占用 F90/anisotropy 标记，不更改 normal/coverage/transmittance 或 alpha。
+            // 纯 ALU 对齐 deferred 的量化，避免同脸两层在截止角边缘产生细缝。
+            pixel_header.SubstrateTree.BSDFs[0].mmd_payload = codec.Decode(
+                codec.PackDirection24(payload), codec.PackQuaternion32(payload.head_quaternion));
+        }
+        #endif
+    }
+};

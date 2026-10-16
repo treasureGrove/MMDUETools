@@ -1,10 +1,26 @@
 # 终末地渲染 V2：给接手者的说明（Toon BSDF 探针阶段结论）
 
-初稿：2026-10-13；最近核查：2026-10-15。写给接手的 AI（GPT）。先读这份，再读同目录 `ENDFIELD_V2_HANDOFF.md`（历史工作区与踩坑）。
+初稿：2026-10-13；最近核查：2026-10-16。写给接手的 AI（GPT）。先读这份，再读同目录 `ENDFIELD_V2_HANDOFF.md`（历史工作区与踩坑）。
 
 读者入门入口：[终末地插件着色入门与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，含三版方案对比、数据流图、实际 GI 对照和代码入口。
 
-## 最新进度：v9 暗部体积与二维高光（2026-10-15）
+## 最新进度：v11 脸部角阈值与透明附脸层（2026-10-16）
+
+用户认可 v9 的体积方向，本轮聚焦脸部 SDF 与疑似头发自投影。V4 实际是几何方向场；现改为 V5 左右角阈值、前层深度和覆盖。头部框架由骨骼与附近 Skin 几何拟合并持久化，运行时跟随同一头骨；不再用含翅膀／描边的全身包围盒，也不依赖 UV0 或实际新增 UV2／3／4。自动图是可继续绘制 R/G 的几何底图，不能称为原作手绘或真实遮挡距离场。
+
+鼻部残斑通过“关方向／关全部动态阴影／只关 Hair 投射／只关鼻壳 opacity”分离。主要残斑来自模型另叠的半透明假鼻影壳，主脸阈值本身无法控制它；有效外脸额外退出身体 view tint。新增通用附脸关联，按骨权重、几何朝向、真实贴合距离、面积覆盖和全部现有 LOD 验证，透明层复用宿主图并保留原 RGB／软 alpha。生产没有 YYB、B、槽11/12或特定UV判定；这些只出现在固定样本诊断中。
+
+不透明／遮罩仍走原生 BasePass packed 导出／逐灯读回；可靠透明附脸层在原生 Substrate Forward 绘制中使用 inline 载荷及阴影。没有新增 GBuffer RT、脸部 SceneCapture 或角色绘制。透明层高光／GI 使用头部球面代理，选定方向光使用相同阈值，局部灯刷新单位 L 的 BSDF Context。透明 Forward 的方向光数量、GI 与不透明 Lumen 仍有差别，不承诺全灯一致。
+
+当前 **Backend `endfield-native-bsdf-v11-forward-face`／Cooked协议11／payload5／Graph5／FaceData5／Frame1**。Mode2、atlas256等门控继续保留；旧V4自动绑定关闭，需重烘。精确接入时序、贴图编辑和代码入口见[脸部V5说明](ENDFIELD_FACE_V5_GUIDE.md)，实拍、失败重试与验证边界见[2026-10-16归档](Screenshots/2026-10-16-endfield-face/README.md)。本轮Editor/Game构建通过；新Cook／BuildPlugin未重跑，不能沿用v8证明v11发行已验收。
+
+首轮 `overlay11` 的CPU检查虽全过，diagnostic18却发现不透明脸全红、阈值无响应。原因是误用 `!SUBSTRATE_INLINE_SHADING`：UE在所有BasePass均定义其为1。已换成真正的 `SUBSTRATE_OPAQUE_DEFERRED` 并重编；必须同时检查不透明packed与透明inline的绿红负对照，不能只看5槽绑定或进程exit0。
+
+最终`editor-final11`／`game-final11`与`generate11b`通过；后者12包／四父材质。`final11`42图／156槽、`final0`8图／78槽、`final-lights11`11图／78槽，共61图／312槽／0失败，实际协议11。外部像素检查确认主脸与软鼻壳区域绿→红、阈值暗／亮响应、旧Unlit四机位像素不变；三主图+两透明引用，源opacity .45／.001保持。鼻壳两槽各182/182顶点、100%面积，最大几何误差`.02013R`；8/9层未达98%故拒绝。四类灯测试仍有VSM Non-Nanite队列溢出警告，性能未验收。保护2,378项中2,373不变，仅5个自有V2包变化；本轮归档9张原PNG／源数据，不提交角色或Saved。
+
+本轮没有完成独立Morph／下颌、动态LOD、非均匀缩放或跨引擎版本验证。完整十项继续，后续仍优先独立球面Hair高光法线、Skin LUT、双波瓣、眼睛、深度Rim和后处理。不要把本次鼻斑修复或原生接入等同于完整终末地画质验收。
+
+## 历史：v9 暗部体积与二维高光（2026-10-15）
 
 用户明确指出上一版仍然偏平，不能用原生接入或分发通过代替画质。v9恢复Cloth/Hair的双暗层、RD(NoF)、背光项及Cloth/Skin日间主光高光方向偏置，Skin补视角染色；真实Cloth04/Hair09 RS改为32×8二维重采样，保留RGB/A分工。AO仍为1兜底，Skin LUT和完整头发方程尚未恢复。
 

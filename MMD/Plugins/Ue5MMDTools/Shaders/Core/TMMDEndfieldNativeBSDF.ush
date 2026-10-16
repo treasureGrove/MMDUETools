@@ -279,7 +279,7 @@ struct TMMDEndfieldNativeBSDF
         #endif
 
         float3 normal = SafeNormalize(diffuse_normal, bsdf_context.N);
-        if (bsdf_context.BSDF.mmd_payload.valid && role == 1u)
+        if (bsdf_context.BSDF.mmd_payload.valid && role == 1u && !bsdf_context.BSDF.mmd_payload.has_face_sdf)
         {
             TMMDEndfieldNativePayload codec;
             float3 face_normal = codec.ToWorldDirection(bsdf_context.BSDF.mmd_payload);
@@ -287,6 +287,27 @@ struct TMMDEndfieldNativeBSDF
             diffuse_offset = 0.0;
         }
         float n_dot_l = clamp(dot(normal, bsdf_context.L), -1.0, 1.0);
+        if (role == 1u && bsdf_context.BSDF.mmd_payload.valid && bsdf_context.BSDF.mmd_payload.has_face_sdf
+            && bsdf_context.mmd_light_data.valid && bsdf_context.mmd_light_data.key_directional_light)
+        {
+            TMMDEndfieldNativePayload codec;
+            float3 local_light = codec.ToHeadDirection(bsdf_context.BSDF.mmd_payload, bsdf_context.L);
+            float horizontal_length_squared = dot(local_light.xy, local_light.xy);
+            // 近垂直光没有可靠左右角；渐退回真实几何 NoL，避免 atan2(0,0) 和左右跳变。
+            if (horizontal_length_squared > 0.000001)
+            {
+                float theta = atan2(abs(local_light.x), local_light.y) * (1.0 / PI);
+                float cutoff = local_light.x >= 0.0 ? bsdf_context.BSDF.mmd_payload.face_sdf_thresholds.x
+                    : bsdf_context.BSDF.mmd_payload.face_sdf_thresholds.y;
+                // 两个 8bit 角度台阶的柔化；端点分别表示始终暗/亮，不被 smoothstep 抬入半亮。
+                float softness = 2.0 / 255.0;
+                float sdf_n_dot_l = cutoff <= 0.0 ? -1.0 : cutoff >= 1.0 ? 1.0
+                    : 1.0 - 2.0 * smoothstep(cutoff - softness, cutoff + softness, theta);
+                float horizontal_weight = smoothstep(0.000001, 0.0001, horizontal_length_squared);
+                n_dot_l = lerp(n_dot_l, sdf_n_dot_l, bsdf_context.BSDF.mmd_payload.mask * horizontal_weight);
+                diffuse_offset = 0.0;
+            }
+        }
         float3 camera_forward = CameraFacingDirection(bsdf_context.V);
         float ramp_n_dot_l = n_dot_l;
         if (role == 2u || role == 3u)
@@ -304,6 +325,10 @@ struct TMMDEndfieldNativeBSDF
             // 代表客户端 Skin 的视角染色参数；暗部 LUT 尚未接入，仍使用通用底色派生。
             float skin_view = saturate(dot(SafeNormalize(specular_normal, bsdf_context.N), bsdf_context.V));
             float skin_area = saturate((1.0 - (skin_view * 0.85 + 0.15)) * 0.7);
+            // 外脸没有 SSS 修饰遮罩时不套身体染色；这是通用兜底，独立高光法线仍保留。
+            float face_sdf_mask = bsdf_context.BSDF.mmd_payload.valid && bsdf_context.BSDF.mmd_payload.has_face_sdf
+                ? bsdf_context.BSDF.mmd_payload.mask : 0.0;
+            skin_area *= 1.0 - face_sdf_mask;
             lit_color *= lerp(1.0, float3(0.67, 0.60668504, 0.52930003), skin_area);
         }
         result.DiffuseColor = ApplyDiffuseRamp(diffuse_color, lit_color, ramp, view_alpha, shadow, role);
@@ -351,10 +376,15 @@ struct TMMDEndfieldNativeBSDF
             uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
             float diagnostic = View.ToonProfileTexture.Load(int4(int(round(float(width - 1u) * 0.75)),
                 TOON_PROFILE_DIFFUSE_RAMP_Y, int(round(TOON_PROFILEID(bsdf_context.BSDF))), 0)).a;
-            if (role == 1u && abs(diagnostic - 17.0) < 0.01)
+            bool diagnose_payload = abs(diagnostic - 17.0) < 0.01;
+            bool diagnose_face_sdf = abs(diagnostic - 18.0) < 0.01;
+            if (role == 1u && (diagnose_payload || diagnose_face_sdf))
             {
                 FSubstrateEvaluateToonResult validation = EvaluateNative(bsdf_context, shadow_terms, area_light, is_rect_light, apply_diffuse_ramp);
-                validation.DiffuseColor = bsdf_context.BSDF.mmd_payload.valid ? float3(0.02, 1.0, 0.02) : float3(1.0, 0.02, 0.02);
+                // 17 验证任意有效载荷；18 进一步验证 V5 SDF 类型已穿过 packed 字段。
+                bool payload_valid = bsdf_context.BSDF.mmd_payload.valid
+                    && (!diagnose_face_sdf || bsdf_context.BSDF.mmd_payload.has_face_sdf);
+                validation.DiffuseColor = payload_valid ? float3(0.02, 1.0, 0.02) : float3(1.0, 0.02, 0.02);
                 validation.DiffusePathValue = Diffuse_Lambert(validation.DiffuseColor);
                 validation.IntegratedDiffuseValue = area_light.Falloff * area_light.FalloffColor * validation.DiffusePathValue;
                 validation.SpecularPathValue = 0.0;

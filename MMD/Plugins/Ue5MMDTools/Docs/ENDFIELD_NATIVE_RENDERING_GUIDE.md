@@ -1,12 +1,12 @@
 # 终末地插件着色入门与维护
 
-更新日期：2026-10-15。适用版本：UE 5.8.3 / CL58210709。
+更新日期：2026-10-16。适用版本：UE 5.8.3 / CL58210709。
 
 **UE 负责准备真实灯光、阴影和环境光，插件负责决定角色被照亮后是什么样子。** 这就是目前的方案。材质仍使用原生 Substrate Toon 的数据格式，光照计算入口已经接到插件自己的 `.ush`。
 
 shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
 
-最新 v9 补了“为什么画面仍平”的方程问题：主光保留两层暗部，补光只补受光面；衣料/头发加入视角响应，高光表恢复二维，未分类翅膀改连续明暗过渡。GI与曝光配置没有降低，新旧Unlit控制图逐像素一致。[同机位前后实拍](Screenshots/2026-10-15-endfield-volume/README.md)记录了实际变化与剩余缺口，完整复刻仍未验收。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`，不足256将整体回退原生；v9完整Cook尚未重测。
+最新 v11 把脸部改为独立头部投影角阈值图，并给经过几何验证的透明附脸层接入相同响应，处理主脸与传统假鼻影分开受光的问题。[脸部 V5 说明](ENDFIELD_FACE_V5_GUIDE.md)解释坐标、贴图、刘海投影及维护入口。v9 的双暗层、二维高光及主辅光分工继续保留，[2026-10-15 实拍](Screenshots/2026-10-15-endfield-volume/README.md)属于上一批验证。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`，不足256将整体回退原生；v11完整Cook尚未重测。
 
 本批也核对了别人公开复刻的完整分工：[参考源码对照](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。材质和逐灯入口保持，另补底色描边与[插件分发检查](ENDFIELD_PLUGIN_DISTRIBUTION.md)；完整眼睛、头发与屏幕效果仍逐项推进。
 
@@ -52,7 +52,7 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 ![材质直射间接与反射入口在管线中的位置](Images/EndfieldNative/pipeline-hooks.svg)
 
-- **A 材质准备，在 BasePass 内。** 材质 Custom 调用 `TMMDEndfieldNative::PrepareSurface()`，计算独立原生法线、脸部漫反射方向和头部旋转。专用 CustomOutput 将后两项交给 BasePass 的打包入口，再供逐灯读取。这一步还没有当前逐灯光的最终阴影。
+- **A 材质准备，在 BasePass 内。** 材质 Custom 调用 `TMMDEndfieldNative::PrepareSurface()`，计算独立原生法线、脸部角阈值／方向和头部旋转。专用 CustomOutput 将后两项交给 BasePass 的打包入口，再供逐灯读取。这一步还没有当前逐灯光的最终阴影。
 - **B 直射，在 RenderLights 内。** `DeferredLightPixelShaders.usf` 调用 `SubstrateDeferredLighting()`；该调用链准备原生阴影、接触阴影与 AreaLight，再在 `SubstrateEvaluation.ush` 的 Toon 分支调用我们的 `EvaluatePerLight()`。返回后，UE 外层乘灯色／LightMask 等并累加。额外灯光参数的复制在同一调用链中完成。
 - **C 间接，在 DiffuseIndirectComposite 内。** UE 已取得 GI／反射输入，算好原生材质权重和 AO，插件再调用 `Process()`；adaptive 路径处理 `OutBSDF.Diffuse/Specular`，传统路径处理 `IndirectLighting.Diffuse/Specular`，随后才累加到 SceneColor。位置在原生分离输出及后续合成之前，不在 Lumen 射线追踪或历史更新内部。
 - **D 独立环境／反射，在 ReflectionEnvironment 内。** `SubstrateEnvLightingCommon()` 及适用的独立 Lumen 反射合成先计算贡献，再调用插件 `Process()`，之后进入原生反射量化、分离输出和颜色合成。如果 Lumen 的组合路径已经在 C 合成了对应贡献，这个独立 pass 会按配置跳过，不能重复处理同一份结果。
@@ -61,7 +61,9 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 当 GI 使用 Lumen 时，对应反射已由 C 合成，独立 D 会跳过；GI 不使用 Lumen 的独立反射／天空路径才可能执行 D。这里也没有接管 D 循环外的非零独立 SSR 合成。
 
-不包括透明前向、移动端、MegaLights 或路径追踪的完整覆盖；这些不能从当前桌面延迟验证推导出来。后续 SSS、透明与 TAA／TSR、tonemap 等后处理仍沿用 UE 流程。
+**E 透明附脸层，在原有 Translucency 绘制里。** v11 于 `BasePassPixelShader.usf` 的 `SubstrateUpdateTree` 之后、建立 Forward context 之前填入 inline 载荷；它留在当前像素寄存器，不写 GBuffer。在 `SubstrateForwardLighting.ush` 的每灯 `GetShadowTerms()` 之后捕获原生灯光，再进入同一 Toon 响应。不是在不透明 BasePass 后额外补画一次脸，透明层本来就按原生调度绘制。
+
+E 当前针对自有单层 Toon、Surface Forward 及可靠附脸绑定；灯光范围是原生 Forward 选定方向光与局部灯，透明 GI 也不等同于 C 的不透明 Lumen。一般透明、多方向光一致性、移动端、MegaLights 或路径追踪不能由当前验证推导；SSS、TAA／TSR、tonemap 等仍沿用 UE 流程。
 
 维护时可对照安装引擎 `Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp`：BasePass 调用约在 3060 行，前一次 GI 在 3430 行，`RenderLights()` 在 3468 行，后一次 GI 在 3519 行，独立反射在 3529 行，后处理入口约在 4312 行。行号针对上述固定版本；只读对照，实际修改仍在插件适配器和 ush。
 
@@ -75,31 +77,31 @@ Lumen 的 GI／反射会使用历史累积，VSM 会复用仍然有效的阴影�
 
 GBuffer 里保存的是 Profile ID，用它查找对应色带；这些标记和倍率不占用 GBuffer 的 alpha 通道。
 
-shader 中的 `mmd_light_data` 只是“这一次光照计算的参数包”，不写入 GBuffer。新版另有正式打包的 `mmd_payload`：24 bit 保存头空间漫反射方向及权重，32 bit 保存头部旋转。它复用自有 Toon 的 PatternUV 字段和材质编译器已预留的 anisotropy word；Profile ID、底色和粗糙度保持。原生 Normal 独立供高光与 GI 使用。
+shader 中的 `mmd_light_data` 只是“这一次光照计算的参数包”，不写入 GBuffer。正式打包的 `mmd_payload` 使用 24 bit 保存方向或 V5 左右阈值、类型及权重，32 bit 保存头部旋转。它复用自有 Toon 的 PatternUV 字段和材质编译器已预留的 anisotropy word；Profile ID、底色和粗糙度保持。原生 Normal 独立供高光与 GI 使用。
 
-目前这条通道只用于 **Mode2、adaptive GBuffer=1、不透明／遮罩、单 Toon Skin**，并检查实际预算。真实各向异性、透明、fmt0、多层和简化变体会回退；不能把这套字段分配当成所有材质都可使用的空闲存储。普通材质不使用这些标记。没有新增一次角色绘制或离屏光照 pass。
+这条 **packed 通道**只用于 Mode2、adaptive GBuffer=1、不透明／遮罩、单 Toon Skin，并检查实际预算。真实各向异性、fmt0、多层和简化变体会回退；不能把这套字段分配当成所有材质都可使用的空闲存储。透明附脸层使用独立 **inline 通道**：同一份阈值与旋转、相同量化，留在当前像素寄存器，既不占 anisotropy word，也不经 packed 读回。普通材质不使用这些标记，没有新增角色绘制或离屏光照 pass。
 
 这也不是“完全没有额外写入”：原生零 anisotropy 的像素可能跳过该32 bit word，新通道会写它，只是没有超出编译器预留预算。打包、读回和解码都有成本，目前未测净性能收益。
 
 ## 本轮脸部与 ramp 改了什么
 
-![脸部方向与独立原生法线的数据流](Images/EndfieldNative/face-payload.svg)
+![2026-10-14 V4 方向载荷示意，现已增加 V5 阈值类型](Images/EndfieldNative/face-payload.svg)
 
 旧版把固定俯角下的脸部阈值转换成一条共享法线，同时影响明暗、高光和 GI。改变灯光俯角时，这条法线无法重建烘焙时的方向；原型还会先做三档分类、再叠加偏移。
 
-新版自动生成 **V4 几何方向场**：保存完整的头空间方向，逐灯用真实光方向求明暗，不再依赖固定俯角。镜像共 UV 的四个采样点先恢复各自左右语义再插值；复杂冲突退回几何计算。保留 UV0，未增加 UV2，也不需要用户手绘贴图。这个方向场没有计算遮挡距离，不能称为真正的阴影 SDF；真实遮挡仍来自 UE。
+2026-10-16 改为 **V5 独立头部投影角阈值图**：左右光分别存截止角，逐灯以当前头空间光方向比较。专用坐标从位置与持久化头部框架计算，不占用网格 UV2／3／4，底图 UV 及附加 UV 保留。RGBA 的 B/A 负责前层深度和覆盖，四 tap 分别过滤后插值；不再受原 UV 重叠或全身翅膀包围盒影响。自动阈值是几何兜底，不是原作手绘 SDF 或真实遮挡距离场；真实阴影仍来自 UE。旧 V4 缓存需要重烘。
 
-V4 的烘焙方向目前跟随头骨刚性旋转，尚未重建嘴／脸颊 Morph 或独立下颌骨造成的局部方向变化；无派生数据时的几何回退使用实时位置和顶点法线。这里仍需加入变形修正，高光与 GI 的原生法线则继续跟随真实几何。payload 的权重表示准备后方向有效，贴图的覆盖权重已在材质阶段混合，不能再次相乘。
+V5 跟随头骨旋转及正均匀缩放。大幅 Morph／下颌、其他 LOD 及非均匀缩放仍有边界，深度不匹配处回到实时几何。payload 的权重对 V5 表示有效阈值覆盖，对方向类型表示准备后方向有效，不能混用语义。头发投影与脸部阈值独立；有效外脸退出身体 view tint，避免鼻侧额外压灰。传统半透明假鼻影若通过头权重、几何朝向、宿主深度与覆盖验证，会保留软 alpha 并复用主脸图；不会按测试角色的名字或槽号特判。详见[脸部 V5 与维护说明](ENDFIELD_FACE_V5_GUIDE.md)。
 
 ```text
-BasePass：几何／自动方向场 → 漫反射方向 + 头部旋转 → 打包
-逐盏灯：读回方向 → 与本盏灯求 N·L → RD 明暗混合 + 颜色 tint
+BasePass：头部投影阈值／通用方向 → 类型 + 权重 + 头部旋转 → 打包
+主光 Skin：角度比较阈值；其他情况：几何 N·L → RD 明暗混合 + 颜色 tint
 高光／GI：独立原生 Normal → 原生数据 + 对应着色响应
 ```
 
 Skin、Hair、Cloth 的 RD 使用已有客户端完整 256 点数据。RD 的 alpha 决定明暗混合量，RGB 负责 tint；影色由底色亮度与饱和度派生，再作亮度补偿。RD alpha 存在 Profile 的 specular 行 alpha，diffuse 行 alpha 继续保存模式标记。**真实 RD 不能直接当作一个 RGB 乘数。**
 
-衣料高光保留 GGX 波瓣幅度与原作 `.04 × specular` 的 F0 约定；代表 Skin 未启用 RS，使用白色乘数。Hair／Cloth 的二维 RS 暂取固定纵坐标切片，头发用几何竖向切线计算主高光环；没有原作 P 图／flow 图时属于明确的近似。完整二维 RS、Skin 颜色 LUT、头发第二波瓣与独立高光法线数据、眼睛、深度 rim／描边及最终调色仍在复刻清单里。
+衣料高光保留 GGX 波瓣幅度与原作 `.04 × specular` 的 F0 约定；代表 Skin 未启用 RS，使用白色乘数。2026-10-15 起 Hair／Cloth 的 RS 使用 32×8 二维重采样，头发用几何竖向切线计算主高光环；没有原作 P 图／flow 图时仍属于明确近似。Skin 颜色 LUT、头发第二波瓣与独立高光法线数据、眼睛、深度 rim 及最终调色仍在复刻清单里。
 
 Mode2 要求 `r.Substrate.Experimental.ToonUnifiedDiffuse=0`，由每盏灯处理 RD 语义；统一漫反射后段尚未适配，会拒绝启用此模式，避免二次套用色带。验证使用 Profile atlas 256 点；引擎默认 64 点会重采样，插件没有改工程的默认配置。
 
@@ -165,7 +167,7 @@ Editor／Cook 编译 shader
 
 打开 [TMMDEndfieldNative.ush](../Shaders/Core/TMMDEndfieldNative.ush) 的 `PrepareSurface()`；材质图由 [MMDEndfieldToonPresetsCommandlet.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp) 构建。
 
-这层负责底色、几何和脸部方向场。`ReadDirection()` 负责逐 texel 解镜像，`FrameQuaternion()` 负责头部旋转。旧 V3 阈值桥保留在 `PrepareLegacySurface()`，与 V4 分开读取。派生数据由 [MMDEndfieldFaceSdfBaker.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldFaceSdfBaker.cpp) 自动生成。
+这层负责底色、几何和脸部数据。V5 `ReadFaceSdf()` 在独立头部坐标按覆盖／前层深度过滤；`ReadDirection()` 保留手动 V4 兼容，`FrameQuaternion()` 负责头部旋转。旧 V3 阈值桥保留在 `PrepareLegacySurface()`，各编码分开读取。派生数据由 [MMDEndfieldFaceSdfBaker.cpp](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldFaceSdfBaker.cpp) 自动生成。
 
 跨阶段打包维护 [TMMDEndfieldNativePayload.ush](../Shaders/Core/TMMDEndfieldNativePayload.ush)；正式材质输出是 [MaterialExpressionMMDEndfieldNativePayload.h](../Source/Ue5MMDTools/Public/Materials/MaterialExpressionMMDEndfieldNativePayload.h)。新增数据时必须一起检查 CustomOutput、BasePass 注入、packed export/read、预算与简化回退，不能只给局部 struct 加成员。
 

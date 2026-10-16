@@ -1,11 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Rendering/MMDEndfieldHeadFrame.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "UMMDHeadBoneSubsystem.generated.h"
 
 class USkeletalMesh;
 class USkeletalMeshComponent;
+class UMMDEndfieldFaceData;
+class UMaterialInstanceDynamic;
 
 /** 为需要的材质提供可选头部几何基；缺少头骨时保留通用法线着色。 */
 UCLASS()
@@ -25,16 +28,30 @@ public:
 	static constexpr const TCHAR* ParamHeadRight = TEXT("MMDHeadRight");
 	static constexpr const TCHAR* ParamHeadPositionRadius = TEXT("MMDHeadPositionRadius");
 
+protected:
+	// 离屏与编辑器模型预览也需持久缓存，避免每次手动刷新都重新开启调试开关。
+	virtual bool DoesSupportWorldType(EWorldType::Type WorldType) const override
+	{
+		return Super::DoesSupportWorldType(WorldType) || WorldType == EWorldType::EditorPreview;
+	}
+
 private:
 	struct FHeadFrameCache
 	{
 		TWeakObjectPtr<USkeletalMesh> Mesh;
-		int32 HeadIndex = INDEX_NONE;
-		FQuat ReferenceHeadRotation = FQuat::Identity;
-		FVector EyeOffset = FVector::ZeroVector;
-		float ReferenceRadius = 0.0f;
-		bool bHasEyes = false;
-		bool bMMD = false;
+		TWeakObjectPtr<UMMDEndfieldFaceData> FaceData;
+		FMMDReferenceHeadFrame Reference;
+		TMap<int32, TWeakObjectPtr<UMaterialInstanceDynamic>> BoundMaterials;
+		FString SkeletonSignature;
+		FString LiveSkeletonSignature;
+		FName BoneName;
+		FVector CenterHeadLocal = FVector::ZeroVector;
+		FQuat ReferenceRotation = FQuat::Identity;
+		float Radius = 0.0f;
+		int32 DataVersion = 0;
+		uint32 BindingSignature = 0;
+		int32 FrameVersion = 0;
+		bool bInitialized = false;
 	};
 	TMap<TWeakObjectPtr<USkeletalMeshComponent>, FHeadFrameCache> HeadFrames;
 	static void BuildReferenceFrame(USkeletalMesh* Mesh, FHeadFrameCache& Frame);

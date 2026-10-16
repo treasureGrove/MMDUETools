@@ -226,6 +226,18 @@ namespace
 		State->RoleReasons[MaterialIndex] = Reason;
 	}
 
+	bool MMDStageIsAppliedFaceOverlay(USkeletalMeshComponent* Component, int32 MaterialIndex, const UMMDStageMaterialState* State)
+	{
+		if (!State || State->RoleOverrides.Contains(MaterialIndex) || !State->AppliedMaterials.IsValidIndex(MaterialIndex)
+			|| State->AppliedMaterials[MaterialIndex] != Component->GetMaterial(MaterialIndex)
+			|| !State->RoleReasons.IsValidIndex(MaterialIndex)
+			|| !State->RoleReasons[MaterialIndex].StartsWith(TEXT("skin:attached_overlay:"))) return false;
+		USkeletalMesh* Mesh = Component->GetSkeletalMeshAsset();
+		const UMMDEndfieldFaceData* Face = Mesh->GetAssetUserData<UMMDEndfieldFaceData>();
+		const FMMDGeneratedFaceSdfSlot* Slot = Face ? Face->FindDirectionSlot(MaterialIndex, Mesh->GetMaterials()[MaterialIndex].MaterialSlotName) : nullptr;
+		return Slot && Slot->bForwardOverlay;
+	}
+
 	void UpdateOwnedMaterialRole(USkeletalMeshComponent* Component, UMMDStageMaterialState* State, int32 MaterialIndex)
 	{
 		FString Reason;
@@ -312,7 +324,7 @@ namespace
 		UMaterialInterface* Source = State->SourceMaterials[MaterialIndex];
 		if (!Source) return false;
 		FString RoleReason;
-		const EMMDMaterialRole Role = ResolveMaterialRole(Component, MaterialIndex, State, RoleReason);
+		EMMDMaterialRole Role = ResolveMaterialRole(Component, MaterialIndex, State, RoleReason);
 		EBlendMode Blend = Source->GetBlendMode();
 		FLinearColor SourceBase;
 		float SourceOpacity;
@@ -329,6 +341,20 @@ namespace
 			? Preset->CharacterToonMaterialTranslucent.Get() : Preset->CharacterToonMaterialOpaque.Get();
 		const bool bUseToon = bReplaceMaterials && Substrate::IsToonProfileEnabled() && IsValid(ToonConfigured);
 		if (bUseToon) Configured = ToonConfigured;
+		USkeletalMesh* MeshAsset = Component->GetSkeletalMeshAsset();
+		const UMMDEndfieldFaceData* FaceData = MeshAsset->GetAssetUserData<UMMDEndfieldFaceData>();
+		const FMMDGeneratedFaceSdfSlot* DirectionBinding = FaceData
+			? FaceData->FindDirectionSlot(MaterialIndex, MeshAsset->GetMaterials()[MaterialIndex].MaterialSlotName) : nullptr;
+		const auto& NativeBackend = MMDEndfieldNativeBackend::GetStatus();
+		const bool bForwardFaceLayer = bUseToon && Blend == BLEND_Translucent && DirectionBinding && DirectionBinding->bForwardOverlay
+			&& NativeBackend.bProfileMarkerAllowed && NativeBackend.Mode == 2
+			&& Configured->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))
+			&& (Role == EMMDMaterialRole::Skin || (Role == EMMDMaterialRole::Generic && !State->RoleOverrides.Contains(MaterialIndex)));
+		if (bForwardFaceLayer)
+		{
+			Role = EMMDMaterialRole::Skin;
+			RoleReason = TEXT("skin:attached_overlay:") + DirectionBinding->HostSlotName.ToString();
+		}
 		const FMMDStageToonRoleSettings* FaceSettings = Preset->CharacterToonRoles.Find(Role);
 		if (bUseToon && Blend == BLEND_Opaque && Role == EMMDMaterialRole::Skin && FaceSettings
 			&& FMath::IsFinite(FaceSettings->FaceShadowSuppress) && FaceSettings->FaceShadowSuppress > 0.0f
@@ -366,6 +392,8 @@ namespace
 		CopyMaterialInputs(Source, Material);
 		UMMDStageLibrary::ApplyPresetParameters(Material, Preset);
 		if (bUseToon) MMDStageToonApplyRoleParameters(Material, ToonSettings);
+		// 附着层可能带作者制作的反向阴影法线；高光/GI 使用头部代理，漫反射继承主脸阈值。
+		if (bForwardFaceLayer) Material->SetScalarParameterValue(TEXT("ToonSpecularSphereBlend"), 1.0f);
 		// 缺少派生数据或切换分类时显式关闭，避免复制源 MID 后残留脸部参数。
 		Material->SetScalarParameterValue(TEXT("ToonFaceSdfEnabled"), 0.0f);
 		Material->SetScalarParameterValue(TEXT("ToonFaceDirectionEnabled"), 0.0f);
@@ -377,7 +405,7 @@ namespace
 		const bool bNativePayload = bUseToon && Role == EMMDMaterialRole::Skin && Backend.bProfileMarkerAllowed
 			&& Backend.Mode == 2 && FormatVariable && FormatVariable->GetInt() == 1
 			&& Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))
-			&& (Configured->GetBlendMode() == BLEND_Opaque || Configured->GetBlendMode() == BLEND_Masked);
+			&& (Configured->GetBlendMode() == BLEND_Opaque || Configured->GetBlendMode() == BLEND_Masked || bForwardFaceLayer);
 		Material->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), bNativePayload ? 1.0f : 0.0f);
 		bool bFaceBound = false;
 		if (bReplaceMaterials && Role == EMMDMaterialRole::Skin)
@@ -391,7 +419,7 @@ namespace
 					{
 						Material->SetTextureParameterValue(TEXT("ToonFaceDirectionTexture"), Direction);
 						Material->SetScalarParameterValue(TEXT("ToonFaceDirectionEnabled"), 1.0f);
-						Material->SetScalarParameterValue(TEXT("ToonFaceDirectionVersion"), 4.0f);
+						Material->SetScalarParameterValue(TEXT("ToonFaceDirectionVersion"), static_cast<float>(Face->Version));
 						bFaceBound = true;
 					}
 				}
@@ -518,7 +546,19 @@ EMMDMaterialRole UMMDStageLibrary::GetResolvedCharacterMaterialRole(USkeletalMes
 {
 	if (!IsValidMaterialSlot(Component, MaterialIndex)) return EMMDMaterialRole::Generic;
 	FString Reason;
-	return ResolveMaterialRole(Component, MaterialIndex, FindMaterialState(Component), Reason);
+	const UMMDStageMaterialState* State = FindMaterialState(Component);
+	const EMMDMaterialRole Role = ResolveMaterialRole(Component, MaterialIndex, State, Reason);
+	return MMDStageIsAppliedFaceOverlay(Component, MaterialIndex, State) ? EMMDMaterialRole::Skin : Role;
+}
+
+FString UMMDStageLibrary::GetResolvedCharacterMaterialRoleReason(USkeletalMeshComponent* Component, int32 MaterialIndex)
+{
+	FString Reason;
+	const UMMDStageMaterialState* State = FindMaterialState(Component);
+	ResolveMaterialRole(Component, MaterialIndex, State, Reason);
+	if (IsValidMaterialSlot(Component, MaterialIndex) && MMDStageIsAppliedFaceOverlay(Component, MaterialIndex, State))
+		return State->RoleReasons[MaterialIndex];
+	return Reason;
 }
 
 bool UMMDStageLibrary::SetCharacterMaterialRoleOverride(USkeletalMeshComponent* Component, int32 MaterialIndex, EMMDMaterialRole Role)

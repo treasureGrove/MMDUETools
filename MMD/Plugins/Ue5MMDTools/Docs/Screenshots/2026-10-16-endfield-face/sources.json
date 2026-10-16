@@ -1,0 +1,3398 @@
+{
+  "schema": "mmd.endfield.face-v5-evidence.v1",
+  "archive_date": "2026-10-16",
+  "capture_date": "2026-10-16",
+  "engine": "5.8.3-58210709+++UE5+Release-5.8",
+  "backend": "endfield-native-bsdf-v11-forward-face",
+  "protocols": {
+    "backend_cooked": 11,
+    "payload": 5,
+    "graph": 5,
+    "face_data": 5,
+    "head_frame": 1
+  },
+  "model": {
+    "name": "YYB Hatsune Miku 16th wing variant",
+    "source_pmx": "Plugins/Ue5MMDTools/Resources/YYB Hatsune Miku_16th_by_Delta幻黑_83251427bb502bc4569b040c47db3c8c/YYB Hatsune Miku_16th.pmx",
+    "source_pmx_sha256": "fcc391f66d760186081eddc8b64e7696cc9790cf4cf0f5980b5d494ff4154918",
+    "manifest": "Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+    "manifest_sha256": "23f2e43db98b33b4b05d4c1e1eea31a92b9c6afb2daebfaa82adfd640b6cffce",
+    "imported_vertices": 610819,
+    "imported_triangles": 997023,
+    "materials": 39,
+    "bones": 550,
+    "morph_targets": 71,
+    "pose": "reference (-PoseTime=-1)",
+    "test_assets_committed": false
+  },
+  "builds": {
+    "editor-final11": {
+      "stdout_sha256": "2941b7d07a6916593addca07a760e134e7551fca6abb87052a876f7c3ee4dca4",
+      "exit_code": 0
+    },
+    "game-final11": {
+      "stdout_sha256": "191dc2a4a7c874e7548a1726826a0eaeabae00239e3169c2351ee6104faa70fa",
+      "exit_code": 0
+    },
+    "generate11b": {
+      "stdout_sha256": "85e3471563f0aec4cd07a4185eaa66cce3733317b61ee45ea45f9b069e950650",
+      "exit_code": 0
+    }
+  },
+  "reports": {
+    "before": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/before/report.json",
+      "sha256": "965e3ccc21c352a7497d60e47dc86d7d7d1a9acac2a85a74e55ce019f89dc702",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 23,
+      "slot_check_count": 78,
+      "failures": 0,
+      "source_signature": "6BA57CE68050FF673DFB19DF0072D14BC6AF3B64",
+      "expected_global_shader_protocol": 9,
+      "global_shader_protocol": 9,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "ab,shadow",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 5,
+      "sdf_data_version": null,
+      "sdf_frame_version": null,
+      "sdf_uv_channel": null,
+      "sdf_face_texels": 243596
+    },
+    "after5": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/after5/report.json",
+      "sha256": "d0699c131e430f7ed721ab6e6d4054e8be4dc54a18dbb946f24b11764d6a966c",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 22,
+      "slot_check_count": 117,
+      "failures": 0,
+      "source_signature": "DF4F648AB04BB140D88DAC9FC02A800A0CD80438",
+      "expected_global_shader_protocol": 10,
+      "global_shader_protocol": 10,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "ab,facefix",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 3,
+      "sdf_data_version": 5,
+      "sdf_frame_version": 1,
+      "sdf_uv_channel": -1,
+      "sdf_face_texels": 94500
+    },
+    "cause10": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/cause10/report.json",
+      "sha256": "ebcf2b2a4018acb81be34c5d0a14ee2e93badf31118880dac3f502d86ee467a9",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 21,
+      "slot_check_count": 78,
+      "failures": 0,
+      "source_signature": "DF4F648AB04BB140D88DAC9FC02A800A0CD80438",
+      "expected_global_shader_protocol": 10,
+      "global_shader_protocol": 10,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "facefix",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 3,
+      "sdf_data_version": 5,
+      "sdf_frame_version": 1,
+      "sdf_uv_channel": -1,
+      "sdf_face_texels": 94500
+    },
+    "overlay11": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/overlay11/report.json",
+      "sha256": "853b61dc14253f160c548fa6fd64b8423ce883535c62de52b78e6a6753acc6f0",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 42,
+      "slot_check_count": 156,
+      "failures": 0,
+      "source_signature": "7C1AE9EDE31C743F1BC81C9DE3953751E7210A93",
+      "expected_global_shader_protocol": 11,
+      "global_shader_protocol": 11,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "ab,facefix,fidelity",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 5,
+      "sdf_data_version": 5,
+      "sdf_frame_version": 1,
+      "sdf_uv_channel": -1,
+      "sdf_face_texels": 94500,
+      "gpu_observation_status": "FAILED: opaque diag18 stayed red and thresholds did not respond; inline shell worked. Superseded by final11."
+    },
+    "final11": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/report.json",
+      "sha256": "c9724ba18faf5fd170d01f62dc232cfbe8979c13731cf21c9558871825f15f40",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 42,
+      "slot_check_count": 156,
+      "failures": 0,
+      "source_signature": "EE89B6B4FEC060DEE26EAFF4BC5B8B50AFC2F2F5",
+      "expected_global_shader_protocol": 11,
+      "global_shader_protocol": 11,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "ab,facefix,fidelity",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 5,
+      "sdf_data_version": 5,
+      "sdf_frame_version": 1,
+      "sdf_uv_channel": -1,
+      "sdf_face_texels": 94500
+    },
+    "final0": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final0/report.json",
+      "sha256": "f7e99d0fd18e7b3820d315d96445a321a98567ad55a5461b8ebbf936f30050d8",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "failures": 0,
+      "source_signature": "EE89B6B4FEC060DEE26EAFF4BC5B8B50AFC2F2F5",
+      "expected_global_shader_protocol": 11,
+      "global_shader_protocol": 11,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "ab",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 5,
+      "sdf_data_version": 5,
+      "sdf_frame_version": 1,
+      "sdf_uv_channel": -1,
+      "sdf_face_texels": 94500
+    },
+    "final-lights11": {
+      "path_relative_to_workspace": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final-lights11/report.json",
+      "sha256": "a21fde31e1ae44175ba67ef007fe0605185411c6987ba6a64d07d14b5daf3f47",
+      "success": true,
+      "exit_code": 0,
+      "image_count": 11,
+      "slot_check_count": 78,
+      "failures": 0,
+      "source_signature": "EE89B6B4FEC060DEE26EAFF4BC5B8B50AFC2F2F5",
+      "expected_global_shader_protocol": 11,
+      "global_shader_protocol": 11,
+      "global_shader_protocol_verified": true,
+      "cooked_runtime": false,
+      "visual_accepted": false,
+      "all_material_kernel_verified": false,
+      "experiments": "backend",
+      "environment": {
+        "can_render": true,
+        "substrate_enabled": true,
+        "substrate_blendable_gbuffer": false,
+        "toon_profile_enabled": true,
+        "shader_platform": "PCD3D_SM6",
+        "rhi": "D3D12",
+        "r.Substrate": "1",
+        "r.Substrate.ProjectGBufferFormat": "1",
+        "r.Substrate.ClosuresPerPixel": "4",
+        "r.Substrate.BytesPerPixel": "80",
+        "r.Substrate.Experimental.ToonUnifiedDiffuse": "0",
+        "r.Substrate.Experimental.ToonReflectionQuantizationEnabled": "0",
+        "r.Substrate.ToonProfile.Resolution": "256",
+        "r.DynamicGlobalIlluminationMethod": "1",
+        "r.ReflectionMethod": "1",
+        "r.Shadow.Virtual.Enable": "1",
+        "r.RayTracing": "1",
+        "r.Lumen.HardwareRayTracing": "1",
+        "r.GenerateMeshDistanceFields": "0",
+        "r.AntiAliasingMethod": "5",
+        "r.DefaultFeature.AutoExposure": "1"
+      },
+      "reference_pose": true,
+      "pose_time_seconds": 0,
+      "sdf_bound_slots": 5,
+      "sdf_data_version": 5,
+      "sdf_frame_version": 1,
+      "sdf_uv_channel": -1,
+      "sdf_face_texels": 94500
+    }
+  },
+  "head_frame": {
+    "sdf_head_frame_valid": true,
+    "sdf_head_bone": "頭",
+    "sdf_head_center_reference_component": "X=-0.000 Y=-0.533 Z=144.432",
+    "sdf_head_center_head_local": "X=0.000 Y=-2.683 Z=3.834",
+    "sdf_head_forward": "X=0.000 Y=1.000 Z=0.000",
+    "sdf_head_right": "X=1.000 Y=0.000 Z=0.000",
+    "sdf_head_up": "X=0.000 Y=0.000 Z=1.000",
+    "sdf_head_radius": 8.644993782043457,
+    "sdf_bone_radius": 8.644993782043457,
+    "sdf_head_reference_rotation": "X=0.000000000 Y=0.000000000 Z=0.000000000 W=1.000000000",
+    "sdf_head_skeleton_signature": "5F4A8660F9E02CBDA110439AAB804FD6B08158C3"
+  },
+  "bake_stats": [
+    {
+      "slot": 3,
+      "face_texels": 1982,
+      "mirrored_texels": 0,
+      "conflicting_texels": 0,
+      "triangles": 174,
+      "front_dark_texels": 0,
+      "noncontinuous_texels": 0,
+      "projected_occluded_texels": 8,
+      "clipped_triangles": 0,
+      "depth_clamped_texels": 0,
+      "skipped_translucent": false
+    },
+    {
+      "slot": 7,
+      "face_texels": 92394,
+      "mirrored_texels": 0,
+      "conflicting_texels": 0,
+      "triangles": 3101,
+      "front_dark_texels": 0,
+      "noncontinuous_texels": 0,
+      "projected_occluded_texels": 996,
+      "clipped_triangles": 0,
+      "depth_clamped_texels": 0,
+      "skipped_translucent": false
+    },
+    {
+      "slot": 8,
+      "face_texels": 0,
+      "mirrored_texels": 0,
+      "conflicting_texels": 0,
+      "triangles": 0,
+      "front_dark_texels": 0,
+      "noncontinuous_texels": 0,
+      "projected_occluded_texels": 0,
+      "clipped_triangles": 0,
+      "depth_clamped_texels": 0,
+      "skipped_translucent": true
+    },
+    {
+      "slot": 9,
+      "face_texels": 0,
+      "mirrored_texels": 0,
+      "conflicting_texels": 0,
+      "triangles": 0,
+      "front_dark_texels": 0,
+      "noncontinuous_texels": 0,
+      "projected_occluded_texels": 0,
+      "clipped_triangles": 0,
+      "depth_clamped_texels": 0,
+      "skipped_translucent": true
+    },
+    {
+      "slot": 10,
+      "face_texels": 124,
+      "mirrored_texels": 0,
+      "conflicting_texels": 0,
+      "triangles": 122,
+      "front_dark_texels": 0,
+      "noncontinuous_texels": 0,
+      "projected_occluded_texels": 0,
+      "clipped_triangles": 0,
+      "depth_clamped_texels": 0,
+      "skipped_translucent": false
+    }
+  ],
+  "overlay_association": [
+    {
+      "slot": 2,
+      "host_material_index": -1,
+      "host_slot_name": "None",
+      "source_role_reason": "generic:unrecognized",
+      "associated": false,
+      "validated_lods": 0,
+      "tested_vertices": 0,
+      "matched_vertices": 0,
+      "tested_triangles": 0,
+      "valid_vertex_ratio": 0,
+      "valid_area_ratio": 0,
+      "minimum_head_weight": 0,
+      "max_matched_depth_error": 0,
+      "reason": "没有满足角色/底图限制的有效主脸"
+    },
+    {
+      "slot": 8,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "source_role_reason": "skin:face",
+      "associated": false,
+      "validated_lods": 0,
+      "tested_vertices": 621,
+      "matched_vertices": 510,
+      "tested_triangles": 1080,
+      "valid_vertex_ratio": 0.8212560415267944,
+      "valid_area_ratio": 0.765975832939148,
+      "minimum_head_weight": 1,
+      "max_matched_depth_error": 0.013618886470794678,
+      "reason": "LOD0 顶点/面积贴合率 0.8213/0.7660 未同时达到 .98"
+    },
+    {
+      "slot": 9,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "source_role_reason": "skin:face",
+      "associated": false,
+      "validated_lods": 0,
+      "tested_vertices": 2524,
+      "matched_vertices": 808,
+      "tested_triangles": 3722,
+      "valid_vertex_ratio": 0.3201267719268799,
+      "valid_area_ratio": 0.041951488703489304,
+      "minimum_head_weight": 1,
+      "max_matched_depth_error": 0.029999420046806335,
+      "reason": "LOD0 顶点/面积贴合率 0.3201/0.0420 未同时达到 .98"
+    },
+    {
+      "slot": 11,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "source_role_reason": "generic:unrecognized",
+      "associated": true,
+      "validated_lods": 1,
+      "tested_vertices": 182,
+      "matched_vertices": 182,
+      "tested_triangles": 304,
+      "valid_vertex_ratio": 1,
+      "valid_area_ratio": 1,
+      "minimum_head_weight": 1,
+      "max_matched_depth_error": 0.02012808248400688,
+      "reason": "所有可见参考 LOD 同时通过头权重、几何朝向、覆盖和 .03R 深度检查"
+    },
+    {
+      "slot": 12,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "source_role_reason": "generic:unrecognized",
+      "associated": true,
+      "validated_lods": 1,
+      "tested_vertices": 182,
+      "matched_vertices": 182,
+      "tested_triangles": 304,
+      "valid_vertex_ratio": 1,
+      "valid_area_ratio": 1,
+      "minimum_head_weight": 1,
+      "max_matched_depth_error": 0.02012808248400688,
+      "reason": "所有可见参考 LOD 同时通过头权重、几何朝向、覆盖和 .03R 深度检查"
+    },
+    {
+      "slot": 18,
+      "host_material_index": -1,
+      "host_slot_name": "None",
+      "source_role_reason": "generic:unrecognized",
+      "associated": false,
+      "validated_lods": 0,
+      "tested_vertices": 0,
+      "matched_vertices": 0,
+      "tested_triangles": 0,
+      "valid_vertex_ratio": 0,
+      "valid_area_ratio": 0,
+      "minimum_head_weight": 0,
+      "max_matched_depth_error": 0,
+      "reason": "没有满足角色/底图限制的有效主脸"
+    }
+  ],
+  "bound_payload_slots": [
+    {
+      "slot": 3,
+      "face_data_binding_valid": true,
+      "forward_overlay": false,
+      "host_material_index": -1,
+      "host_slot_name": "None",
+      "expected_face_payload_transport": "opaque_masked_packed",
+      "overlay_validated_lods": 0,
+      "overlay_tested_vertices": 0,
+      "overlay_valid_vertex_ratio": 0,
+      "overlay_valid_area_ratio": 0,
+      "overlay_minimum_head_weight": 0,
+      "overlay_max_matched_depth_error": 0,
+      "enabled": 1,
+      "payload_enabled": 1,
+      "version": 5,
+      "uv_channel": -1,
+      "face_shadow_suppress": 0,
+      "bound_and_toggled": true,
+      "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_3"
+    },
+    {
+      "slot": 7,
+      "face_data_binding_valid": true,
+      "forward_overlay": false,
+      "host_material_index": -1,
+      "host_slot_name": "None",
+      "expected_face_payload_transport": "opaque_masked_packed",
+      "overlay_validated_lods": 0,
+      "overlay_tested_vertices": 0,
+      "overlay_valid_vertex_ratio": 0,
+      "overlay_valid_area_ratio": 0,
+      "overlay_minimum_head_weight": 0,
+      "overlay_max_matched_depth_error": 0,
+      "enabled": 1,
+      "payload_enabled": 1,
+      "version": 5,
+      "uv_channel": -1,
+      "face_shadow_suppress": 0,
+      "bound_and_toggled": true,
+      "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7"
+    },
+    {
+      "slot": 10,
+      "face_data_binding_valid": true,
+      "forward_overlay": false,
+      "host_material_index": -1,
+      "host_slot_name": "None",
+      "expected_face_payload_transport": "opaque_masked_packed",
+      "overlay_validated_lods": 0,
+      "overlay_tested_vertices": 0,
+      "overlay_valid_vertex_ratio": 0,
+      "overlay_valid_area_ratio": 0,
+      "overlay_minimum_head_weight": 0,
+      "overlay_max_matched_depth_error": 0,
+      "enabled": 1,
+      "payload_enabled": 1,
+      "version": 5,
+      "uv_channel": -1,
+      "face_shadow_suppress": 0,
+      "bound_and_toggled": true,
+      "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_10"
+    },
+    {
+      "slot": 11,
+      "face_data_binding_valid": true,
+      "forward_overlay": true,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "expected_face_payload_transport": "forward_inline",
+      "overlay_validated_lods": 1,
+      "overlay_tested_vertices": 182,
+      "overlay_valid_vertex_ratio": 1,
+      "overlay_valid_area_ratio": 1,
+      "overlay_minimum_head_weight": 1,
+      "overlay_max_matched_depth_error": 0.02012808248400688,
+      "enabled": 1,
+      "payload_enabled": 1,
+      "version": 5,
+      "uv_channel": -1,
+      "face_shadow_suppress": 0,
+      "bound_and_toggled": true,
+      "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7"
+    },
+    {
+      "slot": 12,
+      "face_data_binding_valid": true,
+      "forward_overlay": true,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "expected_face_payload_transport": "forward_inline",
+      "overlay_validated_lods": 1,
+      "overlay_tested_vertices": 182,
+      "overlay_valid_vertex_ratio": 1,
+      "overlay_valid_area_ratio": 1,
+      "overlay_minimum_head_weight": 1,
+      "overlay_max_matched_depth_error": 0.02012808248400688,
+      "enabled": 1,
+      "payload_enabled": 1,
+      "version": 5,
+      "uv_channel": -1,
+      "face_shadow_suppress": 0,
+      "bound_and_toggled": true,
+      "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7"
+    }
+  ],
+  "cpu_lifecycle_checks": {
+    "persistent_subsystem_present": true,
+    "cpu_lifecycle_remove_data_disables_direction": true,
+    "cpu_lifecycle_reattach_same_data_restores_binding": true,
+    "cpu_lifecycle_same_data_legacy_version_disables_direction": true,
+    "cpu_lifecycle_restore_current_version_restores_binding": true,
+    "cpu_lifecycle_new_mid_created": true,
+    "cpu_lifecycle_new_mid_same_frame_rebinds_direction": true,
+    "cpu_lifecycle_original_mid_restored_binding": true,
+    "cpu_overlay_binding_case_present": true,
+    "cpu_overlay_regression_slot": 11,
+    "cpu_overlay_regression_host_slot": 7,
+    "cpu_overlay_binding_signature_original": 1428441531,
+    "cpu_overlay_binding_signature_wrong_host": 353590342,
+    "cpu_overlay_inplace_host_name_mismatch_disables": true,
+    "cpu_overlay_host_name_restore_rebinds": true,
+    "cpu_overlay_mismatch_texture_available": true,
+    "cpu_overlay_binding_signature_wrong_texture": 3666211707,
+    "cpu_overlay_inplace_texture_mismatch_disables": true,
+    "cpu_overlay_texture_restore_rebinds": true,
+    "cpu_lifecycle_unchanged_cache_preserves_manual_off": true,
+    "cpu_head_center_expected_world": "X=0.000 Y=-54.467 Z=146.432",
+    "cpu_head_center_mid_world": "X=0.000 Y=-54.467 Z=146.432",
+    "cpu_head_center_error_cm": 4.962117989803385e-06,
+    "cpu_head_center_matches_saved_local_transform": true,
+    "cpu_lifecycle_scope": "Current valid V5 bindings: FaceData remove/reattach/version, new MID, in-place overlay host-name/texture mismatch invalidation and restore, stable-cache manual off, head center. Binding signatures are cache keys, not integrity/GPU proofs; arbitrary slot reorder/deformation is not tested."
+  },
+  "forward_layer_material_checks": [
+    {
+      "label": "toon_native",
+      "slot": 11,
+      "slot_name": "B",
+      "rendered_default_material": false,
+      "rendered_fallback": false,
+      "actual_material": "/Engine/Transient.World_0:PersistentLevel.Actor_0.ToonProbeCharacter.MID_M_MMD_EndfieldV2_Translucent_5",
+      "actual_blend_mode": "BLEND_Translucent",
+      "actual_opacity_parameter_found": true,
+      "actual_base_color_parameter_found": true,
+      "actual_opacity": 0.44999998807907104,
+      "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.450000)",
+      "actual_base_color_alpha": 0.44999998807907104,
+      "source_material": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Materials/B.B",
+      "source_blend_mode": "BLEND_Translucent",
+      "source_opacity_parameter_found": true,
+      "source_base_color_parameter_found": false,
+      "source_opacity": 0.44999998807907104,
+      "face_data_binding_valid": true,
+      "forward_overlay": true,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "expected_face_payload_transport": "forward_inline",
+      "overlay_validated_lods": 1,
+      "overlay_tested_vertices": 182,
+      "overlay_valid_vertex_ratio": 1,
+      "overlay_valid_area_ratio": 1,
+      "overlay_minimum_head_weight": 1,
+      "overlay_max_matched_depth_error": 0.02012808248400688,
+      "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+      "profile_override": "/Engine/Transient.TP_EndfieldV2_Skin",
+      "base_color_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Textures/face_png.face_png",
+      "face_sdf_enabled": 0,
+      "face_sdf_texture": "/Engine/EngineResources/Black.Black",
+      "face_direction_enabled": 1,
+      "native_payload_enabled": 1,
+      "face_direction_version": 5,
+      "face_direction_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7",
+      "native_payload_expected": true,
+      "native_payload_matches_expected": true,
+      "role_reason": "skin:attached_overlay:face02",
+      "forward_overlay_role_matches": true
+    },
+    {
+      "label": "toon_native",
+      "slot": 12,
+      "slot_name": "B_L",
+      "rendered_default_material": false,
+      "rendered_fallback": false,
+      "actual_material": "/Engine/Transient.World_0:PersistentLevel.Actor_0.ToonProbeCharacter.MID_M_MMD_EndfieldV2_Translucent_6",
+      "actual_blend_mode": "BLEND_Translucent",
+      "actual_opacity_parameter_found": true,
+      "actual_base_color_parameter_found": true,
+      "actual_opacity": 0.0010000000474974513,
+      "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.001000)",
+      "actual_base_color_alpha": 0.0010000000474974513,
+      "source_material": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Materials/B_L.B_L",
+      "source_blend_mode": "BLEND_Translucent",
+      "source_opacity_parameter_found": true,
+      "source_base_color_parameter_found": false,
+      "source_opacity": 0.0010000000474974513,
+      "face_data_binding_valid": true,
+      "forward_overlay": true,
+      "host_material_index": 7,
+      "host_slot_name": "face02",
+      "expected_face_payload_transport": "forward_inline",
+      "overlay_validated_lods": 1,
+      "overlay_tested_vertices": 182,
+      "overlay_valid_vertex_ratio": 1,
+      "overlay_valid_area_ratio": 1,
+      "overlay_minimum_head_weight": 1,
+      "overlay_max_matched_depth_error": 0.02012808248400688,
+      "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+      "profile_override": "/Engine/Transient.TP_EndfieldV2_Skin",
+      "base_color_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Textures/face_png.face_png",
+      "face_sdf_enabled": 0,
+      "face_sdf_texture": "/Engine/EngineResources/Black.Black",
+      "face_direction_enabled": 1,
+      "native_payload_enabled": 1,
+      "face_direction_version": 5,
+      "face_direction_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7",
+      "native_payload_expected": true,
+      "native_payload_matches_expected": true,
+      "role_reason": "skin:attached_overlay:face02",
+      "forward_overlay_role_matches": true
+    }
+  ],
+  "facefix_controls": [
+    {
+      "image": "facefix_left_direction_on_shadow_on_hair_on_face",
+      "light_side": "left",
+      "head_relative_yaw_degrees": -65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=-0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_left_direction_off_shadow_on_hair_on_face",
+      "light_side": "left",
+      "head_relative_yaw_degrees": -65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=-0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": false,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_left_direction_on_shadow_off_hair_on_face",
+      "light_side": "left",
+      "head_relative_yaw_degrees": -65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=-0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": false,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_left_direction_on_shadow_on_hair_off_face",
+      "light_side": "left",
+      "head_relative_yaw_degrees": -65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=-0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": false,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_right_direction_on_shadow_on_hair_on_face",
+      "light_side": "right",
+      "head_relative_yaw_degrees": 65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=-0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_right_direction_off_shadow_on_hair_on_face",
+      "light_side": "right",
+      "head_relative_yaw_degrees": 65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=-0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": false,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_right_direction_on_shadow_off_hair_on_face",
+      "light_side": "right",
+      "head_relative_yaw_degrees": 65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=-0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": false,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_right_direction_on_shadow_on_hair_off_face",
+      "light_side": "right",
+      "head_relative_yaw_degrees": 65,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=-0.821 Y=-0.383 Z=0.423",
+      "light_travel_world": "X=0.821 Y=0.383 Z=-0.423",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": false,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_top_direction_on_shadow_on_hair_on_face",
+      "light_side": "top",
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 65,
+      "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+      "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_top_direction_off_shadow_on_hair_on_face",
+      "light_side": "top",
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 65,
+      "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+      "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+      "direction_enabled": false,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_top_direction_on_shadow_off_hair_on_face",
+      "light_side": "top",
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 65,
+      "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+      "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": false,
+      "hair_proxy_sections_enabled": true,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_top_direction_on_shadow_on_hair_off_face",
+      "light_side": "top",
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 65,
+      "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+      "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": false,
+      "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+    },
+    {
+      "image": "facefix_grazing_left85_face",
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "head_relative_yaw_degrees": -85,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=0.903 Y=-0.079 Z=0.423"
+    },
+    {
+      "image": "facefix_grazing_left90_face",
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "head_relative_yaw_degrees": -90,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=0.906 Y=0.000 Z=0.423"
+    },
+    {
+      "image": "facefix_grazing_right85_face",
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "head_relative_yaw_degrees": 85,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=-0.903 Y=-0.079 Z=0.423"
+    },
+    {
+      "image": "facefix_grazing_right90_face",
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": true,
+      "hair_proxy_sections_enabled": true,
+      "head_relative_yaw_degrees": 90,
+      "head_relative_elevation_degrees": 25,
+      "surface_to_light_world": "X=-0.906 Y=0.000 Z=0.423"
+    },
+    {
+      "image": "facefix_generic_nose_shell_opacity_off_face",
+      "opacity_zero_slots": "11,12",
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": false,
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 65,
+      "baseline_image": "facefix_top_direction_on_shadow_off_hair_on_face",
+      "contract": "YYB16th test-only: only current MID Opacity for Generic slots11/12 set0; slots8/9 and shadow proxy unchanged; DynamicShadows off; RAII restores opacity."
+    },
+    {
+      "image": "facefix_threshold_always_dark_face",
+      "threshold_r_g_bytes": 0,
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": false,
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 25,
+      "contract": "Transient linear one-mip BGRA copies; R/G=0 or255 only, source B/A unchanged. These captures test SDF threshold response with the normal Profile; CPU setup does not assert image quality."
+    },
+    {
+      "image": "facefix_threshold_always_lit_face",
+      "threshold_r_g_bytes": 255,
+      "normal_profile": true,
+      "direction_enabled": true,
+      "native_dynamic_shadows_enabled": false,
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 25,
+      "contract": "Transient linear one-mip BGRA copies; R/G=0 or255 only, source B/A unchanged. These captures test SDF threshold response with the normal Profile; CPU setup does not assert image quality."
+    },
+    {
+      "image": "facefix_payload_sdf_on_face",
+      "bsdf_diagnostic": 18,
+      "direction_enabled": true,
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 25,
+      "contract": "Marked Skin only: green=valid && has_face_sdf, red=otherwise. Opaque/masked reads packed deferred data; attached translucent overlays read forward inline data. Continuous alpha may mix layers; CPU binding alone is not GPU proof."
+    },
+    {
+      "image": "facefix_payload_sdf_off_face",
+      "bsdf_diagnostic": 18,
+      "direction_enabled": false,
+      "head_relative_yaw_degrees": 0,
+      "head_relative_elevation_degrees": 25,
+      "contract": "Marked Skin only: green=valid && has_face_sdf, red=otherwise. Opaque/masked reads packed deferred data; attached translucent overlays read forward inline data. Continuous alpha may mix layers; CPU binding alone is not GPU proof."
+    }
+  ],
+  "images": [
+    {
+      "file": "nose-before.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/cause10/cause10_facefix_top_direction_on_shadow_off_hair_on_face.png",
+      "sha256": "f928eea240169297eada34a7770b0ab0cb6944130a74cddff6df7dd3cc64f8bc",
+      "type": "raw_engine_capture_png",
+      "source_tag": "cause10",
+      "image_record": {
+        "name": "facefix_top_direction_on_shadow_off_hair_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/cause10/cause10_facefix_top_direction_on_shadow_off_hair_on_face.png",
+        "ok": true,
+        "mean_luma": 137.24000542534722,
+        "center_mean_luma": 143.18801673147937,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.13697849959135056,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T04:33:10.803000+00:00",
+      "facefix_controls": {
+        "image": "facefix_top_direction_on_shadow_off_hair_on_face",
+        "light_side": "top",
+        "head_relative_yaw_degrees": 0,
+        "head_relative_elevation_degrees": 65,
+        "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+        "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+        "direction_enabled": true,
+        "native_dynamic_shadows_enabled": false,
+        "hair_proxy_sections_enabled": true,
+        "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+      }
+    },
+    {
+      "file": "nose-after.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_top_direction_on_shadow_off_hair_on_face.png",
+      "sha256": "224c956a860d239ea6e73f4b62d599017f984507f9bee51085cefb08bca1380f",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "facefix_top_direction_on_shadow_off_hair_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_top_direction_on_shadow_off_hair_on_face.png",
+        "ok": true,
+        "mean_luma": 137.24252061631944,
+        "center_mean_luma": 143.200619805453,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.125712800770998,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:30.878000+00:00",
+      "facefix_controls": {
+        "image": "facefix_top_direction_on_shadow_off_hair_on_face",
+        "light_side": "top",
+        "head_relative_yaw_degrees": 0,
+        "head_relative_elevation_degrees": 65,
+        "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+        "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+        "direction_enabled": true,
+        "native_dynamic_shadows_enabled": false,
+        "hair_proxy_sections_enabled": true,
+        "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+      }
+    },
+    {
+      "file": "toon-face.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_toon_face.png",
+      "sha256": "a1fb19db5370f851bf5e2abbf116a743fd62014e8f7757dfd6f24a1df5d71c73",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "toon_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_toon_face.png",
+        "ok": true,
+        "mean_luma": 138.8424197048611,
+        "center_mean_luma": 148.28376523643018,
+        "min_luma": 0,
+        "max_luma": 223,
+        "seconds": 0.25022440031170845,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:27.563000+00:00",
+      "facefix_controls": null
+    },
+    {
+      "file": "grazing-left90.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_grazing_left90_face.png",
+      "sha256": "278b0c47731269eb8bf016811da2e00f57e20866780e58e8a03cc3b6211a4293",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "facefix_grazing_left90_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_grazing_left90_face.png",
+        "ok": true,
+        "mean_luma": 112.82586805555556,
+        "center_mean_luma": 126.49776695750684,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.1542723998427391,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:31.608000+00:00",
+      "facefix_controls": {
+        "image": "facefix_grazing_left90_face",
+        "normal_profile": true,
+        "direction_enabled": true,
+        "native_dynamic_shadows_enabled": true,
+        "hair_proxy_sections_enabled": true,
+        "head_relative_yaw_degrees": -90,
+        "head_relative_elevation_degrees": 25,
+        "surface_to_light_world": "X=0.906 Y=0.000 Z=0.423"
+      }
+    },
+    {
+      "file": "native-hair-shadow-on.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_top_direction_on_shadow_on_hair_on_face.png",
+      "sha256": "75bd06d3e8025a4785d480efa2f48baae9e815ae35b5a1d7d5af46cfee2b74d1",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "facefix_top_direction_on_shadow_on_hair_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_top_direction_on_shadow_on_hair_on_face.png",
+        "ok": true,
+        "mean_luma": 123.61768988715278,
+        "center_mean_luma": 133.36334324586343,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.16722029820084572,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:30.410000+00:00",
+      "facefix_controls": {
+        "image": "facefix_top_direction_on_shadow_on_hair_on_face",
+        "light_side": "top",
+        "head_relative_yaw_degrees": 0,
+        "head_relative_elevation_degrees": 65,
+        "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+        "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+        "direction_enabled": true,
+        "native_dynamic_shadows_enabled": true,
+        "hair_proxy_sections_enabled": true,
+        "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+      }
+    },
+    {
+      "file": "native-hair-shadow-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_top_direction_on_shadow_on_hair_off_face.png",
+      "sha256": "23e35dd4823a3fb5c43dfd287e1b1fc7b9c58e09feee87576ef03370896b21be",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "facefix_top_direction_on_shadow_on_hair_off_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_top_direction_on_shadow_on_hair_off_face.png",
+        "ok": true,
+        "mean_luma": 125.10980360243056,
+        "center_mean_luma": 136.78314978813327,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.15769189968705177,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:31.124000+00:00",
+      "facefix_controls": {
+        "image": "facefix_top_direction_on_shadow_on_hair_off_face",
+        "light_side": "top",
+        "head_relative_yaw_degrees": 0,
+        "head_relative_elevation_degrees": 65,
+        "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+        "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+        "direction_enabled": true,
+        "native_dynamic_shadows_enabled": true,
+        "hair_proxy_sections_enabled": false,
+        "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+      }
+    },
+    {
+      "file": "sdf-on.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_payload_sdf_on_face.png",
+      "sha256": "38b2602f1d327c5991641f2f2640d4f9ad928c7b0c851e5d6f3c5b082c8a74e9",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "facefix_payload_sdf_on_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_payload_sdf_on_face.png",
+        "ok": true,
+        "mean_luma": 129.85799479166667,
+        "center_mean_luma": 127.89692602638257,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.1621157005429268,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:33.012000+00:00",
+      "facefix_controls": {
+        "image": "facefix_payload_sdf_on_face",
+        "bsdf_diagnostic": 18,
+        "direction_enabled": true,
+        "head_relative_yaw_degrees": 0,
+        "head_relative_elevation_degrees": 25,
+        "contract": "Marked Skin only: green=valid && has_face_sdf, red=otherwise. Opaque/masked reads packed deferred data; attached translucent overlays read forward inline data. Continuous alpha may mix layers; CPU binding alone is not GPU proof."
+      }
+    },
+    {
+      "file": "sdf-off.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_payload_sdf_off_face.png",
+      "sha256": "38ae14b685bd4565327db887d29f2525f63c2d0627df93e6b38627106a5cdc63",
+      "type": "raw_engine_capture_png",
+      "source_tag": "final11",
+      "image_record": {
+        "name": "facefix_payload_sdf_off_face",
+        "file": "D:/projectGithub/MMDUETools/MMD/Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_facefix_payload_sdf_off_face.png",
+        "ok": true,
+        "mean_luma": 130.72814344618055,
+        "center_mean_luma": 132.26339553173645,
+        "min_luma": 0,
+        "max_luma": 222,
+        "seconds": 0.15245169773697853,
+        "camera_location": "X=38.000 Y=-175.150 Z=159.597",
+        "camera_fov": 35
+      },
+      "capture_utc_from_log": "2026-10-16T05:22:33.249000+00:00",
+      "facefix_controls": {
+        "image": "facefix_payload_sdf_off_face",
+        "bsdf_diagnostic": 18,
+        "direction_enabled": false,
+        "head_relative_yaw_degrees": 0,
+        "head_relative_elevation_degrees": 25,
+        "contract": "Marked Skin only: green=valid && has_face_sdf, red=otherwise. Opaque/masked reads packed deferred data; attached translucent overlays read forward inline data. Continuous alpha may mix layers; CPU binding alone is not GPU proof."
+      }
+    },
+    {
+      "file": "face-threshold-rgba.png",
+      "source": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final11/final11_face_texture_slot7_v5.png",
+      "sha256": "c25d904cde837c62cc42f93fbec24c471d7c7dad169cd81110c5d7b93b79c8ca",
+      "type": "raw_texture_source_export_not_render",
+      "width": 512,
+      "height": 512,
+      "linear": true,
+      "meaning": "R/G angular cutoffs; B front depth; A coverage"
+    }
+  ],
+  "external_image_validation": {
+    "schema": "mmd.face-observation-analysis.v1",
+    "analysis_utc": "2026-10-16T05:23:17.438970+00:00",
+    "inputs": {
+      "baseline_report": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\cause10\\cause10_report.json",
+      "candidate_report": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_report.json",
+      "legacy_unlit_reference": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5"
+    },
+    "checks": {
+      "probe_execution": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "failures": 0,
+          "recorded_captures": 42
+        }
+      },
+      "wrapper_execution": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "backend_success": true,
+          "delegate_exit_code": 0,
+          "draw_verified": true
+        }
+      },
+      "persistent_subsystem_present": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_remove_data_disables_direction": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_reattach_same_data_restores_binding": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_same_data_legacy_version_disables_direction": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_restore_current_version_restores_binding": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_new_mid_created": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_new_mid_same_frame_rebinds_direction": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_original_mid_restored_binding": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_lifecycle_unchanged_cache_preserves_manual_off": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_head_center_matches_saved_local_transform": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_overlay_binding_case_present": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_overlay_inplace_host_name_mismatch_disables": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_overlay_host_name_restore_rebinds": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_overlay_mismatch_texture_available": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_overlay_inplace_texture_mismatch_disables": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "cpu_overlay_texture_restore_rebinds": {
+        "status": "pass",
+        "required": true,
+        "evidence": true
+      },
+      "head_center_error": {
+        "status": "pass",
+        "required": true,
+        "evidence": 4.962117989803385e-06
+      },
+      "reported_pose_camera_light_alignment": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "sample_manifest": {
+            "baseline": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+            "candidate": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json"
+          },
+          "character": {
+            "baseline": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95",
+            "candidate": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95"
+          },
+          "reference_pose": {
+            "baseline": true,
+            "candidate": true
+          },
+          "pose_time_seconds": {
+            "baseline": 0,
+            "candidate": 0
+          },
+          "camera_location": {
+            "baseline": "X=38.000 Y=-175.150 Z=159.597",
+            "candidate": "X=38.000 Y=-175.150 Z=159.597"
+          },
+          "camera_rotation": {
+            "baseline": "P=-4.249790 Y=108.285352 R=0.000000",
+            "candidate": "P=-4.249790 Y=108.285352 R=0.000000"
+          },
+          "camera_fov": {
+            "baseline": 35,
+            "candidate": 35
+          },
+          "key_intensity": {
+            "baseline": 3.5999999046325684,
+            "candidate": 3.5999999046325684
+          },
+          "key_color": {
+            "baseline": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+            "candidate": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)"
+          },
+          "head_forward": {
+            "baseline": "X=-0.000 Y=-1.000 Z=0.000",
+            "candidate": "X=-0.000 Y=-1.000 Z=0.000"
+          },
+          "head_right": {
+            "baseline": "X=-1.000 Y=0.000 Z=0.000",
+            "candidate": "X=-1.000 Y=0.000 Z=0.000"
+          },
+          "head_up": {
+            "baseline": "X=0.000 Y=0.000 Z=1.000",
+            "candidate": "X=0.000 Y=0.000 Z=1.000"
+          }
+        }
+      },
+      "exposure_and_complete_postprocess_alignment": {
+        "status": "not_recorded",
+        "required": false,
+        "evidence": "Not recorded by these reports; pixel comparison does not independently prove equal exposure/PP"
+      },
+      "yyb_three_direct_two_forward_bindings": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "direct": [
+            3,
+            7,
+            10
+          ],
+          "forward": [
+            11,
+            12
+          ]
+        }
+      },
+      "slot11_source_actual_soft_opacity": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "actual_opacity_parameter_found": true,
+          "actual_opacity": 0.44999998807907104,
+          "source_opacity_parameter_found": true,
+          "source_opacity": 0.44999998807907104,
+          "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.450000)",
+          "actual_base_color_alpha": 0.44999998807907104,
+          "source_base_color_rgba": null,
+          "source_base_color_alpha": null,
+          "actual_blend_mode": "BLEND_Translucent",
+          "role_reason": "skin:attached_overlay:face02"
+        }
+      },
+      "slot11_attached_overlay_contract": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "label": "facefix_native_baseline",
+          "slot": 11,
+          "slot_name": "B",
+          "rendered_default_material": false,
+          "rendered_fallback": false,
+          "actual_material": "/Engine/Transient.World_0:PersistentLevel.Actor_0.ToonProbeCharacter.MID_M_MMD_EndfieldV2_Translucent_18",
+          "actual_blend_mode": "BLEND_Translucent",
+          "actual_opacity_parameter_found": true,
+          "actual_base_color_parameter_found": true,
+          "actual_opacity": 0.44999998807907104,
+          "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.450000)",
+          "actual_base_color_alpha": 0.44999998807907104,
+          "source_material": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Materials/B.B",
+          "source_blend_mode": "BLEND_Translucent",
+          "source_opacity_parameter_found": true,
+          "source_base_color_parameter_found": false,
+          "source_opacity": 0.44999998807907104,
+          "face_data_binding_valid": true,
+          "forward_overlay": true,
+          "host_material_index": 7,
+          "host_slot_name": "face02",
+          "expected_face_payload_transport": "forward_inline",
+          "overlay_validated_lods": 1,
+          "overlay_tested_vertices": 182,
+          "overlay_valid_vertex_ratio": 1,
+          "overlay_valid_area_ratio": 1,
+          "overlay_minimum_head_weight": 1,
+          "overlay_max_matched_depth_error": 0.02012808248400688,
+          "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+          "profile_override": "/Engine/Transient.TP_EndfieldV2_Skin",
+          "base_color_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Textures/face_png.face_png",
+          "face_sdf_enabled": 0,
+          "face_sdf_texture": "/Engine/EngineResources/Black.Black",
+          "face_direction_enabled": 1,
+          "native_payload_enabled": 1,
+          "face_direction_version": 5,
+          "face_direction_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7",
+          "native_payload_expected": true,
+          "native_payload_matches_expected": true,
+          "role_reason": "skin:attached_overlay:face02",
+          "forward_overlay_role_matches": true
+        }
+      },
+      "slot12_source_actual_soft_opacity": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "actual_opacity_parameter_found": true,
+          "actual_opacity": 0.0010000000474974513,
+          "source_opacity_parameter_found": true,
+          "source_opacity": 0.0010000000474974513,
+          "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.001000)",
+          "actual_base_color_alpha": 0.0010000000474974513,
+          "source_base_color_rgba": null,
+          "source_base_color_alpha": null,
+          "actual_blend_mode": "BLEND_Translucent",
+          "role_reason": "skin:attached_overlay:face02"
+        }
+      },
+      "slot12_attached_overlay_contract": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "label": "facefix_native_baseline",
+          "slot": 12,
+          "slot_name": "B_L",
+          "rendered_default_material": false,
+          "rendered_fallback": false,
+          "actual_material": "/Engine/Transient.World_0:PersistentLevel.Actor_0.ToonProbeCharacter.MID_M_MMD_EndfieldV2_Translucent_19",
+          "actual_blend_mode": "BLEND_Translucent",
+          "actual_opacity_parameter_found": true,
+          "actual_base_color_parameter_found": true,
+          "actual_opacity": 0.0010000000474974513,
+          "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.001000)",
+          "actual_base_color_alpha": 0.0010000000474974513,
+          "source_material": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Materials/B_L.B_L",
+          "source_blend_mode": "BLEND_Translucent",
+          "source_opacity_parameter_found": true,
+          "source_base_color_parameter_found": false,
+          "source_opacity": 0.0010000000474974513,
+          "face_data_binding_valid": true,
+          "forward_overlay": true,
+          "host_material_index": 7,
+          "host_slot_name": "face02",
+          "expected_face_payload_transport": "forward_inline",
+          "overlay_validated_lods": 1,
+          "overlay_tested_vertices": 182,
+          "overlay_valid_vertex_ratio": 1,
+          "overlay_valid_area_ratio": 1,
+          "overlay_minimum_head_weight": 1,
+          "overlay_max_matched_depth_error": 0.02012808248400688,
+          "parent": "/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Translucent.M_MMD_EndfieldV2_Translucent",
+          "profile_override": "/Engine/Transient.TP_EndfieldV2_Skin",
+          "base_color_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Textures/face_png.face_png",
+          "face_sdf_enabled": 0,
+          "face_sdf_texture": "/Engine/EngineResources/Black.Black",
+          "face_direction_enabled": 1,
+          "native_payload_enabled": 1,
+          "face_direction_version": 5,
+          "face_direction_texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7",
+          "native_payload_expected": true,
+          "native_payload_matches_expected": true,
+          "role_reason": "skin:attached_overlay:face02",
+          "forward_overlay_role_matches": true
+        }
+      },
+      "immediate_post_capture_opacity_restore": {
+        "status": "not_recorded",
+        "required": false,
+        "evidence": "Initial scalar snapshots and RAII contract are recorded; no dedicated immediate post-restore readback is recorded"
+      },
+      "top_default_reported_camera_matches": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "camera_location": {
+            "baseline": "X=38.000 Y=-175.150 Z=159.597",
+            "candidate": "X=38.000 Y=-175.150 Z=159.597"
+          },
+          "camera_fov": {
+            "baseline": 35,
+            "candidate": 35
+          }
+        }
+      },
+      "top_default_dimensions_match": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "baseline": [
+            720,
+            1280,
+            4
+          ],
+          "candidate": [
+            720,
+            1280,
+            4
+          ]
+        }
+      },
+      "top_shadowoff_reported_camera_matches": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "camera_location": {
+            "baseline": "X=38.000 Y=-175.150 Z=159.597",
+            "candidate": "X=38.000 Y=-175.150 Z=159.597"
+          },
+          "camera_fov": {
+            "baseline": 35,
+            "candidate": 35
+          }
+        }
+      },
+      "top_shadowoff_dimensions_match": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "baseline": [
+            720,
+            1280,
+            4
+          ],
+          "candidate": [
+            720,
+            1280,
+            4
+          ]
+        }
+      },
+      "nose_opacity_off_reported_camera_matches": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "camera_location": {
+            "baseline": "X=38.000 Y=-175.150 Z=159.597",
+            "candidate": "X=38.000 Y=-175.150 Z=159.597"
+          },
+          "camera_fov": {
+            "baseline": 35,
+            "candidate": 35
+          }
+        }
+      },
+      "nose_opacity_off_dimensions_match": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "baseline": [
+            720,
+            1280,
+            4
+          ],
+          "candidate": [
+            720,
+            1280,
+            4
+          ]
+        }
+      },
+      "threshold_response_at_opaque_reference_roi": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "criterion": "Observed RGB MAE>1/255 at fixed opaque reference ROI, not an image-quality threshold",
+          "metrics": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 252,
+            "pixels": 252,
+            "mae_rgb_0_255": 30.64021164021164,
+            "rmse_rgb_0_255": 30.98472059020236,
+            "max_abs_channel_0_255": 38
+          }
+        }
+      },
+      "diag18_green_to_red_at_opaque_reference_roi": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "criterion": ">=95% fixed ROI meets declared strict green-on/red-off masks; does not identify every material",
+          "metrics": {
+            "roi": [
+              650,
+              458,
+              664,
+              476
+            ],
+            "pixels": 252,
+            "on_mean_rgb": [
+              0.04365079365079365,
+              229.015873015873,
+              15.357142857142858
+            ],
+            "off_mean_rgb": [
+              235.06746031746033,
+              65.98412698412699,
+              44.78968253968254
+            ],
+            "strict_green_on_pixels": 252,
+            "strict_red_on_pixels": 0,
+            "strict_red_off_pixels": 252,
+            "strict_green_to_red_pixels": 252,
+            "strict_green_to_red_fraction": 1.0,
+            "difference": {
+              "same_dimensions": true,
+              "pixel_equal": false,
+              "changed_pixels": 252,
+              "pixels": 252,
+              "mae_rgb_0_255": 142.49603174603175,
+              "rmse_rgb_0_255": 166.01422693544535,
+              "max_abs_channel_0_255": 236
+            }
+          }
+        }
+      },
+      "unlit_after5_full_pixel_equal": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "same_dimensions": true,
+          "pixel_equal": true,
+          "changed_pixels": 0,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.0,
+          "rmse_rgb_0_255": 0.0,
+          "max_abs_channel_0_255": 0,
+          "camera_location_equal": true,
+          "camera_fov_equal": true,
+          "reference_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_full.png",
+            "png_sha256": "b593bd4c90e0203c4b118c36889d7d316bd855607502495be7bb82d97cbf6cf2",
+            "decoded_rgba8_sha256": "b655ffdfaa93ec452963fe41dfef81cc79cd556f72547c2e08fbd1b2d865e5ab",
+            "width": 1280,
+            "height": 720
+          },
+          "candidate_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_full.png",
+            "png_sha256": "b593bd4c90e0203c4b118c36889d7d316bd855607502495be7bb82d97cbf6cf2",
+            "decoded_rgba8_sha256": "b655ffdfaa93ec452963fe41dfef81cc79cd556f72547c2e08fbd1b2d865e5ab",
+            "width": 1280,
+            "height": 720
+          }
+        }
+      },
+      "unlit_after5_face_pixel_equal": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "same_dimensions": true,
+          "pixel_equal": true,
+          "changed_pixels": 0,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.0,
+          "rmse_rgb_0_255": 0.0,
+          "max_abs_channel_0_255": 0,
+          "camera_location_equal": true,
+          "camera_fov_equal": true,
+          "reference_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_face.png",
+            "png_sha256": "a46d02d789c1710007d43d7fab009ace4c2832d6a6a9ca65dc75e8b059e194f2",
+            "decoded_rgba8_sha256": "3c8bc210aecda093ace055d178783dde88b8269cec5c08cfcc8ea5a43119a8b6",
+            "width": 1280,
+            "height": 720
+          },
+          "candidate_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_face.png",
+            "png_sha256": "a46d02d789c1710007d43d7fab009ace4c2832d6a6a9ca65dc75e8b059e194f2",
+            "decoded_rgba8_sha256": "3c8bc210aecda093ace055d178783dde88b8269cec5c08cfcc8ea5a43119a8b6",
+            "width": 1280,
+            "height": 720
+          }
+        }
+      },
+      "unlit_after5_cloth_pixel_equal": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "same_dimensions": true,
+          "pixel_equal": true,
+          "changed_pixels": 0,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.0,
+          "rmse_rgb_0_255": 0.0,
+          "max_abs_channel_0_255": 0,
+          "camera_location_equal": true,
+          "camera_fov_equal": true,
+          "reference_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_cloth.png",
+            "png_sha256": "b59f15403a3c1b5a09a810ab9e8be141bc36e748a8826edf0eb3945f9b8a37e0",
+            "decoded_rgba8_sha256": "0686654ff865ed7c7a9a7d27496aedec74f47f6d03fa801a289263594df1916c",
+            "width": 1280,
+            "height": 720
+          },
+          "candidate_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_cloth.png",
+            "png_sha256": "b59f15403a3c1b5a09a810ab9e8be141bc36e748a8826edf0eb3945f9b8a37e0",
+            "decoded_rgba8_sha256": "0686654ff865ed7c7a9a7d27496aedec74f47f6d03fa801a289263594df1916c",
+            "width": 1280,
+            "height": 720
+          }
+        }
+      },
+      "unlit_after5_hair_pixel_equal": {
+        "status": "pass",
+        "required": true,
+        "evidence": {
+          "same_dimensions": true,
+          "pixel_equal": true,
+          "changed_pixels": 0,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.0,
+          "rmse_rgb_0_255": 0.0,
+          "max_abs_channel_0_255": 0,
+          "camera_location_equal": true,
+          "camera_fov_equal": true,
+          "reference_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_hair.png",
+            "png_sha256": "5c2441176864f5457a8d72e8cf1851471e7240d2ae3c07ee4a1f8396177ffa8c",
+            "decoded_rgba8_sha256": "d26caa2e2cf85084df2bccb58fa305d3802f3fdc6a055823f2c7ee25e69f591a",
+            "width": 1280,
+            "height": 720
+          },
+          "candidate_source": {
+            "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_hair.png",
+            "png_sha256": "5c2441176864f5457a8d72e8cf1851471e7240d2ae3c07ee4a1f8396177ffa8c",
+            "decoded_rgba8_sha256": "d26caa2e2cf85084df2bccb58fa305d3802f3fdc6a055823f2c7ee25e69f591a",
+            "width": 1280,
+            "height": 720
+          }
+        }
+      }
+    },
+    "required_observations_passed": true,
+    "all_gpu_verified": false,
+    "cpu_process_success_is_not_gpu_success": true,
+    "camera_alignment": {
+      "sample_manifest": {
+        "baseline": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json",
+        "candidate": "D:/projectGithub/MMDUETools/MMD/Saved/BackgroundValidation/ImportedAssets/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/manifest.json"
+      },
+      "character": {
+        "baseline": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95",
+        "candidate": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95"
+      },
+      "reference_pose": {
+        "baseline": true,
+        "candidate": true
+      },
+      "pose_time_seconds": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "camera_location": {
+        "baseline": "X=38.000 Y=-175.150 Z=159.597",
+        "candidate": "X=38.000 Y=-175.150 Z=159.597"
+      },
+      "camera_rotation": {
+        "baseline": "P=-4.249790 Y=108.285352 R=0.000000",
+        "candidate": "P=-4.249790 Y=108.285352 R=0.000000"
+      },
+      "camera_fov": {
+        "baseline": 35,
+        "candidate": 35
+      },
+      "key_intensity": {
+        "baseline": 3.5999999046325684,
+        "candidate": 3.5999999046325684
+      },
+      "key_color": {
+        "baseline": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)",
+        "candidate": "(R=1.000000,G=0.955973,B=0.921582,A=1.000000)"
+      },
+      "head_forward": {
+        "baseline": "X=-0.000 Y=-1.000 Z=0.000",
+        "candidate": "X=-0.000 Y=-1.000 Z=0.000"
+      },
+      "head_right": {
+        "baseline": "X=-1.000 Y=0.000 Z=0.000",
+        "candidate": "X=-1.000 Y=0.000 Z=0.000"
+      },
+      "head_up": {
+        "baseline": "X=0.000 Y=0.000 Z=1.000",
+        "candidate": "X=0.000 Y=0.000 Z=1.000"
+      }
+    },
+    "slot_opacity": {
+      "11": {
+        "actual_opacity_parameter_found": true,
+        "actual_opacity": 0.44999998807907104,
+        "source_opacity_parameter_found": true,
+        "source_opacity": 0.44999998807907104,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.450000)",
+        "actual_base_color_alpha": 0.44999998807907104,
+        "source_base_color_rgba": null,
+        "source_base_color_alpha": null,
+        "actual_blend_mode": "BLEND_Translucent",
+        "role_reason": "skin:attached_overlay:face02"
+      },
+      "12": {
+        "actual_opacity_parameter_found": true,
+        "actual_opacity": 0.0010000000474974513,
+        "source_opacity_parameter_found": true,
+        "source_opacity": 0.0010000000474974513,
+        "actual_base_color_rgba": "(R=1.000000,G=1.000000,B=1.000000,A=0.001000)",
+        "actual_base_color_alpha": 0.0010000000474974513,
+        "source_base_color_rgba": null,
+        "source_base_color_alpha": null,
+        "actual_blend_mode": "BLEND_Translucent",
+        "role_reason": "skin:attached_overlay:face02"
+      }
+    },
+    "direction_slots": [
+      {
+        "slot": 3,
+        "face_data_binding_valid": true,
+        "forward_overlay": false,
+        "host_material_index": -1,
+        "host_slot_name": "None",
+        "expected_face_payload_transport": "opaque_masked_packed",
+        "overlay_validated_lods": 0,
+        "overlay_tested_vertices": 0,
+        "overlay_valid_vertex_ratio": 0,
+        "overlay_valid_area_ratio": 0,
+        "overlay_minimum_head_weight": 0,
+        "overlay_max_matched_depth_error": 0,
+        "enabled": 1,
+        "payload_enabled": 1,
+        "version": 5,
+        "uv_channel": -1,
+        "face_shadow_suppress": 0,
+        "bound_and_toggled": true,
+        "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_3"
+      },
+      {
+        "slot": 7,
+        "face_data_binding_valid": true,
+        "forward_overlay": false,
+        "host_material_index": -1,
+        "host_slot_name": "None",
+        "expected_face_payload_transport": "opaque_masked_packed",
+        "overlay_validated_lods": 0,
+        "overlay_tested_vertices": 0,
+        "overlay_valid_vertex_ratio": 0,
+        "overlay_valid_area_ratio": 0,
+        "overlay_minimum_head_weight": 0,
+        "overlay_max_matched_depth_error": 0,
+        "enabled": 1,
+        "payload_enabled": 1,
+        "version": 5,
+        "uv_channel": -1,
+        "face_shadow_suppress": 0,
+        "bound_and_toggled": true,
+        "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7"
+      },
+      {
+        "slot": 10,
+        "face_data_binding_valid": true,
+        "forward_overlay": false,
+        "host_material_index": -1,
+        "host_slot_name": "None",
+        "expected_face_payload_transport": "opaque_masked_packed",
+        "overlay_validated_lods": 0,
+        "overlay_tested_vertices": 0,
+        "overlay_valid_vertex_ratio": 0,
+        "overlay_valid_area_ratio": 0,
+        "overlay_minimum_head_weight": 0,
+        "overlay_max_matched_depth_error": 0,
+        "enabled": 1,
+        "payload_enabled": 1,
+        "version": 5,
+        "uv_channel": -1,
+        "face_shadow_suppress": 0,
+        "bound_and_toggled": true,
+        "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_10"
+      },
+      {
+        "slot": 11,
+        "face_data_binding_valid": true,
+        "forward_overlay": true,
+        "host_material_index": 7,
+        "host_slot_name": "face02",
+        "expected_face_payload_transport": "forward_inline",
+        "overlay_validated_lods": 1,
+        "overlay_tested_vertices": 182,
+        "overlay_valid_vertex_ratio": 1,
+        "overlay_valid_area_ratio": 1,
+        "overlay_minimum_head_weight": 1,
+        "overlay_max_matched_depth_error": 0.02012808248400688,
+        "enabled": 1,
+        "payload_enabled": 1,
+        "version": 5,
+        "uv_channel": -1,
+        "face_shadow_suppress": 0,
+        "bound_and_toggled": true,
+        "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7"
+      },
+      {
+        "slot": 12,
+        "face_data_binding_valid": true,
+        "forward_overlay": true,
+        "host_material_index": 7,
+        "host_slot_name": "face02",
+        "expected_face_payload_transport": "forward_inline",
+        "overlay_validated_lods": 1,
+        "overlay_tested_vertices": 182,
+        "overlay_valid_vertex_ratio": 1,
+        "overlay_valid_area_ratio": 1,
+        "overlay_minimum_head_weight": 1,
+        "overlay_max_matched_depth_error": 0.02012808248400688,
+        "enabled": 1,
+        "payload_enabled": 1,
+        "version": 5,
+        "uv_channel": -1,
+        "face_shadow_suppress": 0,
+        "bound_and_toggled": true,
+        "texture": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95:T_MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95_FaceDirection_5_7"
+      }
+    ],
+    "sdf_overlay_association_stats": [
+      {
+        "slot": 2,
+        "host_material_index": -1,
+        "host_slot_name": "None",
+        "source_role_reason": "generic:unrecognized",
+        "associated": false,
+        "validated_lods": 0,
+        "tested_vertices": 0,
+        "matched_vertices": 0,
+        "tested_triangles": 0,
+        "valid_vertex_ratio": 0,
+        "valid_area_ratio": 0,
+        "minimum_head_weight": 0,
+        "max_matched_depth_error": 0,
+        "reason": "没有满足角色/底图限制的有效主脸"
+      },
+      {
+        "slot": 8,
+        "host_material_index": 7,
+        "host_slot_name": "face02",
+        "source_role_reason": "skin:face",
+        "associated": false,
+        "validated_lods": 0,
+        "tested_vertices": 621,
+        "matched_vertices": 510,
+        "tested_triangles": 1080,
+        "valid_vertex_ratio": 0.8212560415267944,
+        "valid_area_ratio": 0.765975832939148,
+        "minimum_head_weight": 1,
+        "max_matched_depth_error": 0.013618886470794678,
+        "reason": "LOD0 顶点/面积贴合率 0.8213/0.7660 未同时达到 .98"
+      },
+      {
+        "slot": 9,
+        "host_material_index": 7,
+        "host_slot_name": "face02",
+        "source_role_reason": "skin:face",
+        "associated": false,
+        "validated_lods": 0,
+        "tested_vertices": 2524,
+        "matched_vertices": 808,
+        "tested_triangles": 3722,
+        "valid_vertex_ratio": 0.3201267719268799,
+        "valid_area_ratio": 0.041951488703489304,
+        "minimum_head_weight": 1,
+        "max_matched_depth_error": 0.029999420046806335,
+        "reason": "LOD0 顶点/面积贴合率 0.3201/0.0420 未同时达到 .98"
+      },
+      {
+        "slot": 11,
+        "host_material_index": 7,
+        "host_slot_name": "face02",
+        "source_role_reason": "generic:unrecognized",
+        "associated": true,
+        "validated_lods": 1,
+        "tested_vertices": 182,
+        "matched_vertices": 182,
+        "tested_triangles": 304,
+        "valid_vertex_ratio": 1,
+        "valid_area_ratio": 1,
+        "minimum_head_weight": 1,
+        "max_matched_depth_error": 0.02012808248400688,
+        "reason": "所有可见参考 LOD 同时通过头权重、几何朝向、覆盖和 .03R 深度检查"
+      },
+      {
+        "slot": 12,
+        "host_material_index": 7,
+        "host_slot_name": "face02",
+        "source_role_reason": "generic:unrecognized",
+        "associated": true,
+        "validated_lods": 1,
+        "tested_vertices": 182,
+        "matched_vertices": 182,
+        "tested_triangles": 304,
+        "valid_vertex_ratio": 1,
+        "valid_area_ratio": 1,
+        "minimum_head_weight": 1,
+        "max_matched_depth_error": 0.02012808248400688,
+        "reason": "所有可见参考 LOD 同时通过头权重、几何朝向、覆盖和 .03R 深度检查"
+      },
+      {
+        "slot": 18,
+        "host_material_index": -1,
+        "host_slot_name": "None",
+        "source_role_reason": "generic:unrecognized",
+        "associated": false,
+        "validated_lods": 0,
+        "tested_vertices": 0,
+        "matched_vertices": 0,
+        "tested_triangles": 0,
+        "valid_vertex_ratio": 0,
+        "valid_area_ratio": 0,
+        "minimum_head_weight": 0,
+        "max_matched_depth_error": 0,
+        "reason": "没有满足角色/底图限制的有效主脸"
+      }
+    ],
+    "image_pairs": {
+      "top_default": {
+        "capture": "facefix_top_direction_on_shadow_on_hair_on_face",
+        "metrics": {
+          "full_image": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 28,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.00010452835648148149,
+            "rmse_rgb_0_255": 0.024495783367301766,
+            "max_abs_channel_0_255": 9
+          },
+          "face": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 26,
+            "pixels": 40200,
+            "mae_rgb_0_255": 0.0023797678275290215,
+            "rmse_rgb_0_255": 0.11721618982694158,
+            "max_abs_channel_0_255": 9
+          },
+          "nose": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 26,
+            "pixels": 1472,
+            "mae_rgb_0_255": 0.0649909420289855,
+            "rmse_rgb_0_255": 0.6125573028504046,
+            "max_abs_channel_0_255": 9
+          },
+          "soft_nose_core_reference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 6,
+            "pixels": 126,
+            "mae_rgb_0_255": 0.15079365079365079,
+            "rmse_rgb_0_255": 0.8923543557893895,
+            "max_abs_channel_0_255": 9
+          },
+          "opaque_neighbor_reference": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 252,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "hairline": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 7440,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          }
+        },
+        "baseline_control": {
+          "image": "facefix_top_direction_on_shadow_on_hair_on_face",
+          "light_side": "top",
+          "head_relative_yaw_degrees": 0,
+          "head_relative_elevation_degrees": 65,
+          "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+          "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+          "direction_enabled": true,
+          "native_dynamic_shadows_enabled": true,
+          "hair_proxy_sections_enabled": true,
+          "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+        },
+        "candidate_control": {
+          "image": "facefix_top_direction_on_shadow_on_hair_on_face",
+          "light_side": "top",
+          "head_relative_yaw_degrees": 0,
+          "head_relative_elevation_degrees": 65,
+          "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+          "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+          "direction_enabled": true,
+          "native_dynamic_shadows_enabled": true,
+          "hair_proxy_sections_enabled": true,
+          "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+        }
+      },
+      "top_shadowoff": {
+        "capture": "facefix_top_direction_on_shadow_off_hair_on_face",
+        "metrics": {
+          "full_image": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 467,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.0026041666666666665,
+            "rmse_rgb_0_255": 0.1456794823373356,
+            "max_abs_channel_0_255": 11
+          },
+          "face": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 395,
+            "pixels": 40200,
+            "mae_rgb_0_255": 0.0591044776119403,
+            "rmse_rgb_0_255": 0.6970918029627642,
+            "max_abs_channel_0_255": 11
+          },
+          "nose": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 333,
+            "pixels": 1472,
+            "mae_rgb_0_255": 1.600090579710145,
+            "rmse_rgb_0_255": 3.640987981065149,
+            "max_abs_channel_0_255": 11
+          },
+          "soft_nose_core_reference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 126,
+            "pixels": 126,
+            "mae_rgb_0_255": 8.39153439153439,
+            "rmse_rgb_0_255": 8.536569326902692,
+            "max_abs_channel_0_255": 11
+          },
+          "opaque_neighbor_reference": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 252,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "hairline": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 2,
+            "pixels": 7440,
+            "mae_rgb_0_255": 8.960573476702509e-05,
+            "rmse_rgb_0_255": 0.009466030570784413,
+            "max_abs_channel_0_255": 1
+          }
+        },
+        "baseline_control": {
+          "image": "facefix_top_direction_on_shadow_off_hair_on_face",
+          "light_side": "top",
+          "head_relative_yaw_degrees": 0,
+          "head_relative_elevation_degrees": 65,
+          "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+          "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+          "direction_enabled": true,
+          "native_dynamic_shadows_enabled": false,
+          "hair_proxy_sections_enabled": true,
+          "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+        },
+        "candidate_control": {
+          "image": "facefix_top_direction_on_shadow_off_hair_on_face",
+          "light_side": "top",
+          "head_relative_yaw_degrees": 0,
+          "head_relative_elevation_degrees": 65,
+          "surface_to_light_world": "X=-0.000 Y=-0.423 Z=0.906",
+          "light_travel_world": "X=0.000 Y=0.423 Z=-0.906",
+          "direction_enabled": true,
+          "native_dynamic_shadows_enabled": false,
+          "hair_proxy_sections_enabled": true,
+          "cpu_direction_proxy_visibility_and_shadow_flags_verified": true
+        }
+      },
+      "nose_opacity_off": {
+        "capture": "facefix_generic_nose_shell_opacity_off_face",
+        "metrics": {
+          "full_image": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "face": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 40200,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "nose": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 1472,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "soft_nose_core_reference": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 126,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "opaque_neighbor_reference": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 252,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          },
+          "hairline": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 7440,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0
+          }
+        },
+        "baseline_control": {
+          "image": "facefix_generic_nose_shell_opacity_off_face",
+          "opacity_zero_slots": "11,12",
+          "normal_profile": true,
+          "direction_enabled": true,
+          "native_dynamic_shadows_enabled": false,
+          "head_relative_yaw_degrees": 0,
+          "head_relative_elevation_degrees": 65,
+          "baseline_image": "facefix_top_direction_on_shadow_off_hair_on_face",
+          "contract": "YYB16th test-only: only current MID Opacity for Generic slots11/12 set0; slots8/9 and shadow proxy unchanged; DynamicShadows off; RAII restores opacity."
+        },
+        "candidate_control": {
+          "image": "facefix_generic_nose_shell_opacity_off_face",
+          "opacity_zero_slots": "11,12",
+          "normal_profile": true,
+          "direction_enabled": true,
+          "native_dynamic_shadows_enabled": false,
+          "head_relative_yaw_degrees": 0,
+          "head_relative_elevation_degrees": 65,
+          "baseline_image": "facefix_top_direction_on_shadow_off_hair_on_face",
+          "contract": "YYB16th test-only: only current MID Opacity for Generic slots11/12 set0; slots8/9 and shadow proxy unchanged; DynamicShadows off; RAII restores opacity."
+        }
+      }
+    },
+    "within_candidate": {
+      "nose_shell_on_off": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 359,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.0006517650462962963,
+          "rmse_rgb_0_255": 0.044471562907181565,
+          "max_abs_channel_0_255": 5
+        },
+        "face": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 329,
+          "pixels": 40200,
+          "mae_rgb_0_255": 0.014693200663349917,
+          "rmse_rgb_0_255": 0.21234691100554928,
+          "max_abs_channel_0_255": 5
+        },
+        "nose": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 310,
+          "pixels": 1472,
+          "mae_rgb_0_255": 0.3969655797101449,
+          "rmse_rgb_0_255": 1.1077583776205016,
+          "max_abs_channel_0_255": 5
+        },
+        "soft_nose_core_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 126,
+          "pixels": 126,
+          "mae_rgb_0_255": 2.0634920634920637,
+          "rmse_rgb_0_255": 2.5768608111831806,
+          "max_abs_channel_0_255": 5
+        },
+        "opaque_neighbor_reference": {
+          "same_dimensions": true,
+          "pixel_equal": true,
+          "changed_pixels": 0,
+          "pixels": 252,
+          "mae_rgb_0_255": 0.0,
+          "rmse_rgb_0_255": 0.0,
+          "max_abs_channel_0_255": 0
+        },
+        "hairline": {
+          "same_dimensions": true,
+          "pixel_equal": true,
+          "changed_pixels": 0,
+          "pixels": 7440,
+          "mae_rgb_0_255": 0.0,
+          "rmse_rgb_0_255": 0.0,
+          "max_abs_channel_0_255": 0
+        }
+      },
+      "direction_left_on_off": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 132176,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.7270695891203703,
+          "rmse_rgb_0_255": 3.931333630535996,
+          "max_abs_channel_0_255": 160
+        },
+        "face": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 26212,
+          "pixels": 40200,
+          "mae_rgb_0_255": 3.6536898839137644,
+          "rmse_rgb_0_255": 6.51828338154477,
+          "max_abs_channel_0_255": 39
+        },
+        "nose": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 1472,
+          "pixels": 1472,
+          "mae_rgb_0_255": 8.160778985507246,
+          "rmse_rgb_0_255": 9.709993171537473,
+          "max_abs_channel_0_255": 20
+        },
+        "soft_nose_core_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 126,
+          "pixels": 126,
+          "mae_rgb_0_255": 8.19047619047619,
+          "rmse_rgb_0_255": 9.750864837508777,
+          "max_abs_channel_0_255": 16
+        },
+        "opaque_neighbor_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 252,
+          "pixels": 252,
+          "mae_rgb_0_255": 7.002645502645502,
+          "rmse_rgb_0_255": 7.8706473651847695,
+          "max_abs_channel_0_255": 13
+        },
+        "hairline": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 4015,
+          "pixels": 7440,
+          "mae_rgb_0_255": 1.4299283154121865,
+          "rmse_rgb_0_255": 2.7723351698354963,
+          "max_abs_channel_0_255": 19
+        }
+      },
+      "direction_right_on_off": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 128496,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.646507884837963,
+          "rmse_rgb_0_255": 3.4313119281161844,
+          "max_abs_channel_0_255": 141
+        },
+        "face": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 27320,
+          "pixels": 40200,
+          "mae_rgb_0_255": 4.771940298507463,
+          "rmse_rgb_0_255": 8.07123755206663,
+          "max_abs_channel_0_255": 36
+        },
+        "nose": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 1472,
+          "pixels": 1472,
+          "mae_rgb_0_255": 6.4363677536231885,
+          "rmse_rgb_0_255": 7.3613236000686415,
+          "max_abs_channel_0_255": 17
+        },
+        "soft_nose_core_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 126,
+          "pixels": 126,
+          "mae_rgb_0_255": 5.349206349206349,
+          "rmse_rgb_0_255": 6.025518924281817,
+          "max_abs_channel_0_255": 10
+        },
+        "opaque_neighbor_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 252,
+          "pixels": 252,
+          "mae_rgb_0_255": 6.25,
+          "rmse_rgb_0_255": 7.54063068390908,
+          "max_abs_channel_0_255": 14
+        },
+        "hairline": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 4689,
+          "pixels": 7440,
+          "mae_rgb_0_255": 3.531989247311828,
+          "rmse_rgb_0_255": 7.008002338341044,
+          "max_abs_channel_0_255": 35
+        }
+      },
+      "direction_top_on_off": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 185495,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.7721726707175925,
+          "rmse_rgb_0_255": 3.215894712980643,
+          "max_abs_channel_0_255": 110
+        },
+        "face": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 27093,
+          "pixels": 40200,
+          "mae_rgb_0_255": 3.635887230514096,
+          "rmse_rgb_0_255": 6.38028680401536,
+          "max_abs_channel_0_255": 72
+        },
+        "nose": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 1472,
+          "pixels": 1472,
+          "mae_rgb_0_255": 6.562726449275362,
+          "rmse_rgb_0_255": 8.065922344088714,
+          "max_abs_channel_0_255": 20
+        },
+        "soft_nose_core_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 126,
+          "pixels": 126,
+          "mae_rgb_0_255": 5.592592592592593,
+          "rmse_rgb_0_255": 5.981895082920528,
+          "max_abs_channel_0_255": 12
+        },
+        "opaque_neighbor_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 252,
+          "pixels": 252,
+          "mae_rgb_0_255": 5.558201058201059,
+          "rmse_rgb_0_255": 6.131495583888004,
+          "max_abs_channel_0_255": 18
+        },
+        "hairline": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 4117,
+          "pixels": 7440,
+          "mae_rgb_0_255": 0.9452060931899642,
+          "rmse_rgb_0_255": 1.6748053971371033,
+          "max_abs_channel_0_255": 9
+        }
+      },
+      "threshold_dark_lit": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 45685,
+          "pixels": 921600,
+          "mae_rgb_0_255": 0.8511317274305555,
+          "rmse_rgb_0_255": 5.1044806805335075,
+          "max_abs_channel_0_255": 47
+        },
+        "face": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 30275,
+          "pixels": 40200,
+          "mae_rgb_0_255": 17.915862354892205,
+          "rmse_rgb_0_255": 23.512350764530016,
+          "max_abs_channel_0_255": 47
+        },
+        "nose": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 1472,
+          "pixels": 1472,
+          "mae_rgb_0_255": 30.814990942028984,
+          "rmse_rgb_0_255": 31.223122499570543,
+          "max_abs_channel_0_255": 40
+        },
+        "soft_nose_core_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 126,
+          "pixels": 126,
+          "mae_rgb_0_255": 31.693121693121693,
+          "rmse_rgb_0_255": 32.30402861177325,
+          "max_abs_channel_0_255": 40
+        },
+        "opaque_neighbor_reference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 252,
+          "pixels": 252,
+          "mae_rgb_0_255": 30.64021164021164,
+          "rmse_rgb_0_255": 30.98472059020236,
+          "max_abs_channel_0_255": 38
+        },
+        "hairline": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 5185,
+          "pixels": 7440,
+          "mae_rgb_0_255": 17.316039426523297,
+          "rmse_rgb_0_255": 23.01332401973422,
+          "max_abs_channel_0_255": 39
+        }
+      }
+    },
+    "diag18": {
+      "regions": {
+        "face": {
+          "roi": [
+            550,
+            338,
+            750,
+            539
+          ],
+          "pixels": 40200,
+          "on_mean_rgb": [
+            54.14181592039801,
+            193.61253731343282,
+            68.34965174129353
+          ],
+          "off_mean_rgb": [
+            188.9084577114428,
+            98.96014925373134,
+            85.08256218905473
+          ],
+          "strict_green_on_pixels": 22521,
+          "strict_red_on_pixels": 658,
+          "strict_red_off_pixels": 23913,
+          "strict_green_to_red_pixels": 22513,
+          "strict_green_to_red_fraction": 0.5600248756218905,
+          "difference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 26863,
+            "pixels": 40200,
+            "mae_rgb_0_255": 82.07058043117745,
+            "rmse_rgb_0_255": 124.84684886548715,
+            "max_abs_channel_0_255": 236
+          }
+        },
+        "nose": {
+          "roi": [
+            663,
+            441,
+            695,
+            487
+          ],
+          "pixels": 1472,
+          "on_mean_rgb": [
+            0.6528532608695652,
+            227.55298913043478,
+            16.050271739130434
+          ],
+          "off_mean_rgb": [
+            233.1039402173913,
+            65.32608695652173,
+            44.447690217391305
+          ],
+          "strict_green_on_pixels": 1468,
+          "strict_red_on_pixels": 0,
+          "strict_red_off_pixels": 1467,
+          "strict_green_to_red_pixels": 1467,
+          "strict_green_to_red_fraction": 0.9966032608695652,
+          "difference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 1472,
+            "pixels": 1472,
+            "mae_rgb_0_255": 141.02513586956522,
+            "rmse_rgb_0_255": 164.60530650421885,
+            "max_abs_channel_0_255": 236
+          }
+        },
+        "soft_nose_core_reference": {
+          "roi": [
+            675,
+            458,
+            682,
+            476
+          ],
+          "pixels": 126,
+          "on_mean_rgb": [
+            2.738095238095238,
+            222.63492063492063,
+            18.047619047619047
+          ],
+          "off_mean_rgb": [
+            226.61904761904762,
+            62.20634920634921,
+            42.285714285714285
+          ],
+          "strict_green_on_pixels": 126,
+          "strict_red_on_pixels": 0,
+          "strict_red_off_pixels": 126,
+          "strict_green_to_red_pixels": 126,
+          "strict_green_to_red_fraction": 1.0,
+          "difference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 126,
+            "pixels": 126,
+            "mae_rgb_0_255": 136.18253968253967,
+            "rmse_rgb_0_255": 159.80723341529898,
+            "max_abs_channel_0_255": 235
+          }
+        },
+        "opaque_neighbor_reference": {
+          "roi": [
+            650,
+            458,
+            664,
+            476
+          ],
+          "pixels": 252,
+          "on_mean_rgb": [
+            0.04365079365079365,
+            229.015873015873,
+            15.357142857142858
+          ],
+          "off_mean_rgb": [
+            235.06746031746033,
+            65.98412698412699,
+            44.78968253968254
+          ],
+          "strict_green_on_pixels": 252,
+          "strict_red_on_pixels": 0,
+          "strict_red_off_pixels": 252,
+          "strict_green_to_red_pixels": 252,
+          "strict_green_to_red_fraction": 1.0,
+          "difference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 252,
+            "pixels": 252,
+            "mae_rgb_0_255": 142.49603174603175,
+            "rmse_rgb_0_255": 166.01422693544535,
+            "max_abs_channel_0_255": 236
+          }
+        },
+        "hairline": {
+          "roi": [
+            575,
+            342,
+            730,
+            390
+          ],
+          "pixels": 7440,
+          "on_mean_rgb": [
+            74.3505376344086,
+            202.19341397849462,
+            77.75698924731182
+          ],
+          "off_mean_rgb": [
+            202.16209677419354,
+            110.17137096774194,
+            93.77123655913978
+          ],
+          "strict_green_on_pixels": 3841,
+          "strict_red_on_pixels": 176,
+          "strict_red_off_pixels": 4428,
+          "strict_green_to_red_pixels": 3841,
+          "strict_green_to_red_fraction": 0.516263440860215,
+          "difference": {
+            "same_dimensions": true,
+            "pixel_equal": false,
+            "changed_pixels": 4711,
+            "pixels": 7440,
+            "mae_rgb_0_255": 78.62491039426523,
+            "rmse_rgb_0_255": 121.0851750779422,
+            "max_abs_channel_0_255": 236
+          }
+        },
+        "nose_sample_678_466": {
+          "on_rgb": [
+            2,
+            224,
+            17
+          ],
+          "off_rgb": [
+            228,
+            63,
+            43
+          ]
+        }
+      },
+      "strict_masks": {
+        "green": "G>180,R<60,B<60",
+        "red": "R>180,G<100,B<100"
+      },
+      "scope": "Fixed reference rectangles, not rendered material IDs. A color transition proves an observed response there; continuous alpha can combine opaque and inline layers. It does not prove all pixels/materials/kernels."
+    },
+    "legacy_unlit_ab": [
+      {
+        "reference_report": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_report.json",
+        "shots": {
+          "unlit_full": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0,
+            "camera_location_equal": true,
+            "camera_fov_equal": true,
+            "reference_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_full.png",
+              "png_sha256": "b593bd4c90e0203c4b118c36889d7d316bd855607502495be7bb82d97cbf6cf2",
+              "decoded_rgba8_sha256": "b655ffdfaa93ec452963fe41dfef81cc79cd556f72547c2e08fbd1b2d865e5ab",
+              "width": 1280,
+              "height": 720
+            },
+            "candidate_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_full.png",
+              "png_sha256": "b593bd4c90e0203c4b118c36889d7d316bd855607502495be7bb82d97cbf6cf2",
+              "decoded_rgba8_sha256": "b655ffdfaa93ec452963fe41dfef81cc79cd556f72547c2e08fbd1b2d865e5ab",
+              "width": 1280,
+              "height": 720
+            }
+          },
+          "unlit_face": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0,
+            "camera_location_equal": true,
+            "camera_fov_equal": true,
+            "reference_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_face.png",
+              "png_sha256": "a46d02d789c1710007d43d7fab009ace4c2832d6a6a9ca65dc75e8b059e194f2",
+              "decoded_rgba8_sha256": "3c8bc210aecda093ace055d178783dde88b8269cec5c08cfcc8ea5a43119a8b6",
+              "width": 1280,
+              "height": 720
+            },
+            "candidate_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_face.png",
+              "png_sha256": "a46d02d789c1710007d43d7fab009ace4c2832d6a6a9ca65dc75e8b059e194f2",
+              "decoded_rgba8_sha256": "3c8bc210aecda093ace055d178783dde88b8269cec5c08cfcc8ea5a43119a8b6",
+              "width": 1280,
+              "height": 720
+            }
+          },
+          "unlit_cloth": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0,
+            "camera_location_equal": true,
+            "camera_fov_equal": true,
+            "reference_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_cloth.png",
+              "png_sha256": "b59f15403a3c1b5a09a810ab9e8be141bc36e748a8826edf0eb3945f9b8a37e0",
+              "decoded_rgba8_sha256": "0686654ff865ed7c7a9a7d27496aedec74f47f6d03fa801a289263594df1916c",
+              "width": 1280,
+              "height": 720
+            },
+            "candidate_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_cloth.png",
+              "png_sha256": "b59f15403a3c1b5a09a810ab9e8be141bc36e748a8826edf0eb3945f9b8a37e0",
+              "decoded_rgba8_sha256": "0686654ff865ed7c7a9a7d27496aedec74f47f6d03fa801a289263594df1916c",
+              "width": 1280,
+              "height": 720
+            }
+          },
+          "unlit_hair": {
+            "same_dimensions": true,
+            "pixel_equal": true,
+            "changed_pixels": 0,
+            "pixels": 921600,
+            "mae_rgb_0_255": 0.0,
+            "rmse_rgb_0_255": 0.0,
+            "max_abs_channel_0_255": 0,
+            "camera_location_equal": true,
+            "camera_fov_equal": true,
+            "reference_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\after5\\after5_unlit_hair.png",
+              "png_sha256": "5c2441176864f5457a8d72e8cf1851471e7240d2ae3c07ee4a1f8396177ffa8c",
+              "decoded_rgba8_sha256": "d26caa2e2cf85084df2bccb58fa305d3802f3fdc6a055823f2c7ee25e69f591a",
+              "width": 1280,
+              "height": 720
+            },
+            "candidate_source": {
+              "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_hair.png",
+              "png_sha256": "5c2441176864f5457a8d72e8cf1851471e7240d2ae3c07ee4a1f8396177ffa8c",
+              "decoded_rgba8_sha256": "d26caa2e2cf85084df2bccb58fa305d3802f3fdc6a055823f2c7ee25e69f591a",
+              "width": 1280,
+              "height": 720
+            }
+          }
+        }
+      }
+    ],
+    "image_sources": {
+      "baseline": {
+        "facefix_top_direction_on_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\cause10\\cause10_facefix_top_direction_on_shadow_on_hair_on_face.png",
+          "png_sha256": "6fb928313608c2f682ae6c6ffde8b2e5adc8d16abc608ae12fa3b5fa97113053",
+          "decoded_rgba8_sha256": "2cc202df7a91165960cce4bbcff65f75846695032f8ad2742505e7db1858c7d3",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_top_direction_on_shadow_off_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\cause10\\cause10_facefix_top_direction_on_shadow_off_hair_on_face.png",
+          "png_sha256": "f928eea240169297eada34a7770b0ab0cb6944130a74cddff6df7dd3cc64f8bc",
+          "decoded_rgba8_sha256": "e9ba3383668c48201a9ad851ea6f78b3e3353da186245a2d878f21b0873eca30",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_generic_nose_shell_opacity_off_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\cause10\\cause10_facefix_generic_nose_shell_opacity_off_face.png",
+          "png_sha256": "ee88e1d2d9c4a1e53299385d521dec2bab5857eb3e2743f8e12681c1387bf4f1",
+          "decoded_rgba8_sha256": "2d0608adf9625bfeb9f9bdb5481ec2e055b572e3e0128359c4f644606ff8e5e2",
+          "width": 1280,
+          "height": 720
+        }
+      },
+      "candidate": {
+        "facefix_top_direction_on_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_top_direction_on_shadow_on_hair_on_face.png",
+          "png_sha256": "75bd06d3e8025a4785d480efa2f48baae9e815ae35b5a1d7d5af46cfee2b74d1",
+          "decoded_rgba8_sha256": "2f9f0f29a5387bb1cf15d77cca5ef511d4c3a966e04a1f39f7fc5ef2adc36242",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_top_direction_on_shadow_off_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_top_direction_on_shadow_off_hair_on_face.png",
+          "png_sha256": "224c956a860d239ea6e73f4b62d599017f984507f9bee51085cefb08bca1380f",
+          "decoded_rgba8_sha256": "f2a2be15b06bbb7d9fb84a1eef2b8816fe9db8a4e4366b9a318c1acfe4c39bee",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_generic_nose_shell_opacity_off_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_generic_nose_shell_opacity_off_face.png",
+          "png_sha256": "ee88e1d2d9c4a1e53299385d521dec2bab5857eb3e2743f8e12681c1387bf4f1",
+          "decoded_rgba8_sha256": "2d0608adf9625bfeb9f9bdb5481ec2e055b572e3e0128359c4f644606ff8e5e2",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_left_direction_on_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_left_direction_on_shadow_on_hair_on_face.png",
+          "png_sha256": "4df143ce13ce86472a57c9634c0823f900d9de734badb1da0e18b2d166f6abf7",
+          "decoded_rgba8_sha256": "17b55e8eb8ef3aaa438ac5f5857c212873af46e8812dc41fbdacce02b7b3f1d9",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_left_direction_off_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_left_direction_off_shadow_on_hair_on_face.png",
+          "png_sha256": "fd87300dbff312907ba39e04b86e2aa65b3527575d51df935cacf205939809fd",
+          "decoded_rgba8_sha256": "9d628cdae476a56d0bf9b48249c1a4fa13d30a8c3d21a7b032c4bd20fe68a270",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_right_direction_on_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_right_direction_on_shadow_on_hair_on_face.png",
+          "png_sha256": "2cbcf065127620ddaa875d1a5394ce7dff7a6f2f8b6342d45affb20cb3d3fb15",
+          "decoded_rgba8_sha256": "417d31588020dc40afc7cc8396a0885b2d9b1431c96bdd59c3f3f9257023bb94",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_right_direction_off_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_right_direction_off_shadow_on_hair_on_face.png",
+          "png_sha256": "7010dd39f37a88bf10001190197e919b7a856df365ca63033fd44ee44df8eb11",
+          "decoded_rgba8_sha256": "dca7bed0d58a063effa55fc73d29c6d824a584baea0ac5dadcfbcea1d1b35a2c",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_top_direction_off_shadow_on_hair_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_top_direction_off_shadow_on_hair_on_face.png",
+          "png_sha256": "b664405523f9a198f938c603d929231f5d83111f90cd9dce2d194d7a042d38ed",
+          "decoded_rgba8_sha256": "6f10d76b70a67106b0f6a33046c2c40d0dec79d85f8eec8a2e045402edc2b976",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_threshold_always_dark_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_threshold_always_dark_face.png",
+          "png_sha256": "1ddd3be5dd9238e3f3b634fc91a96cb6b64bb2efb52cfe87aeca32ea128d87b6",
+          "decoded_rgba8_sha256": "73276be4a81dbfb7accd07a8d840d129a70a46f8417af17215b76fde770c036d",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_threshold_always_lit_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_threshold_always_lit_face.png",
+          "png_sha256": "b1809163ed77be1a793ab0e7e4071afe1d835eda299dd53abd662238d215d520",
+          "decoded_rgba8_sha256": "132eb77bd004506dcde453b8ec857fa28bcbc0248312abdd8198db227068d13a",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_payload_sdf_on_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_payload_sdf_on_face.png",
+          "png_sha256": "38b2602f1d327c5991641f2f2640d4f9ad928c7b0c851e5d6f3c5b082c8a74e9",
+          "decoded_rgba8_sha256": "986f1c1fab4f9837ec2050f76c1171ef8f72a0518d70380efaf8ddef666c3cdc",
+          "width": 1280,
+          "height": 720
+        },
+        "facefix_payload_sdf_off_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_facefix_payload_sdf_off_face.png",
+          "png_sha256": "38ae14b685bd4565327db887d29f2525f63c2d0627df93e6b38627106a5cdc63",
+          "decoded_rgba8_sha256": "e1b15dd6b5311e23f0b5a83bf0f2a8a23c648d6f5ba31239101eee9e7c20b422",
+          "width": 1280,
+          "height": 720
+        },
+        "unlit_full": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_full.png",
+          "png_sha256": "b593bd4c90e0203c4b118c36889d7d316bd855607502495be7bb82d97cbf6cf2",
+          "decoded_rgba8_sha256": "b655ffdfaa93ec452963fe41dfef81cc79cd556f72547c2e08fbd1b2d865e5ab",
+          "width": 1280,
+          "height": 720
+        },
+        "unlit_face": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_face.png",
+          "png_sha256": "a46d02d789c1710007d43d7fab009ace4c2832d6a6a9ca65dc75e8b059e194f2",
+          "decoded_rgba8_sha256": "3c8bc210aecda093ace055d178783dde88b8269cec5c08cfcc8ea5a43119a8b6",
+          "width": 1280,
+          "height": 720
+        },
+        "unlit_cloth": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_cloth.png",
+          "png_sha256": "b59f15403a3c1b5a09a810ab9e8be141bc36e748a8826edf0eb3945f9b8a37e0",
+          "decoded_rgba8_sha256": "0686654ff865ed7c7a9a7d27496aedec74f47f6d03fa801a289263594df1916c",
+          "width": 1280,
+          "height": 720
+        },
+        "unlit_hair": {
+          "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final11\\final11_unlit_hair.png",
+          "png_sha256": "5c2441176864f5457a8d72e8cf1851471e7240d2ae3c07ee4a1f8396177ffa8c",
+          "decoded_rgba8_sha256": "d26caa2e2cf85084df2bccb58fa305d3802f3fdc6a055823f2c7ee25e69f591a",
+          "width": 1280,
+          "height": 720
+        }
+      }
+    },
+    "limits": [
+      "Measures actual report fields and decoded screenshot pixels only; no UE process or new capture was run by this script.",
+      "Fixed image rectangles are not material IDs; alpha mixing can obscure or combine packed/inline responses.",
+      "Source Opacity is a material scalar, not the resulting per-pixel alpha or an independently measured compositing weight.",
+      "Camera location/FOV and facefix global rotation are recorded, but full PP/exposure and per-image rotation are not.",
+      "CPU lifecycle checks and exit0 do not prove shader paths; declared diagnostic/threshold observations are separate checks.",
+      "Even all listed checks passing does not prove all GPU kernels, arbitrary meshes, lights or final Endfield image fidelity."
+    ]
+  },
+  "light_pairs": {
+    "schema": "mmd.native-light-pixel-observation.v1",
+    "report": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_report.json",
+    "wrapper_report": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\report.json",
+    "probe_failures": 0,
+    "protocol": 11,
+    "protocol_verified": true,
+    "all_material_kernel_verified": false,
+    "all_gpu_verified": false,
+    "pairs": {
+      "directional": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 115499,
+          "pixels": 921600,
+          "mae_rgb_0_255": 3.6286700665509257,
+          "rmse_rgb_0_255": 19.905400341262897,
+          "max_abs_channel_0_255": 223
+        },
+        "receiver_rectangle": [
+          550,
+          280,
+          710,
+          545
+        ],
+        "receiver_rgb_difference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 17399,
+          "pixels": 42400,
+          "mae_rgb_0_255": 28.161643081761007,
+          "rmse_rgb_0_255": 63.772854517188115,
+          "max_abs_channel_0_255": 223
+        },
+        "receiver_rec709_encoded_mean_luma_clear": 100.18617225,
+        "receiver_rec709_encoded_mean_luma_blocked": 71.99722705660378,
+        "receiver_encoded_luma_drop": 28.188945193396222,
+        "probe_center_mean_luma_clear": 73.99539230744094,
+        "probe_center_mean_luma_blocked": 59.99220069060924,
+        "probe_center_mean_luma_drop": 14.0031916168317,
+        "reported_camera_location_equal": true,
+        "reported_camera_fov_equal": true
+      },
+      "point": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 104359,
+          "pixels": 921600,
+          "mae_rgb_0_255": 5.99309425636574,
+          "rmse_rgb_0_255": 27.441324351976775,
+          "max_abs_channel_0_255": 241
+        },
+        "receiver_rectangle": [
+          550,
+          280,
+          710,
+          545
+        ],
+        "receiver_rgb_difference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 32623,
+          "pixels": 42400,
+          "mae_rgb_0_255": 66.37595911949686,
+          "rmse_rgb_0_255": 99.37974663320743,
+          "max_abs_channel_0_255": 241
+        },
+        "receiver_rec709_encoded_mean_luma_clear": 72.05374881132074,
+        "receiver_rec709_encoded_mean_luma_blocked": 4.602789358490567,
+        "receiver_encoded_luma_drop": 67.45095945283018,
+        "probe_center_mean_luma_clear": 52.29987037460649,
+        "probe_center_mean_luma_blocked": 25.35528250710761,
+        "probe_center_mean_luma_drop": 26.944587867498882,
+        "reported_camera_location_equal": true,
+        "reported_camera_fov_equal": true
+      },
+      "spot": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 90200,
+          "pixels": 921600,
+          "mae_rgb_0_255": 5.541837384259259,
+          "rmse_rgb_0_255": 26.169585769146284,
+          "max_abs_channel_0_255": 241
+        },
+        "receiver_rectangle": [
+          550,
+          280,
+          710,
+          545
+        ],
+        "receiver_rgb_difference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 32114,
+          "pixels": 42400,
+          "mae_rgb_0_255": 65.74497641509434,
+          "rmse_rgb_0_255": 98.76253455198523,
+          "max_abs_channel_0_255": 241
+        },
+        "receiver_rec709_encoded_mean_luma_clear": 71.35991433018867,
+        "receiver_rec709_encoded_mean_luma_blocked": 4.544391023584906,
+        "receiver_encoded_luma_drop": 66.81552330660377,
+        "probe_center_mean_luma_clear": 43.43825365184144,
+        "probe_center_mean_luma_blocked": 18.101396468524992,
+        "probe_center_mean_luma_drop": 25.33685718331645,
+        "reported_camera_location_equal": true,
+        "reported_camera_fov_equal": true
+      },
+      "rect": {
+        "full_image": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 225875,
+          "pixels": 921600,
+          "mae_rgb_0_255": 7.942963686342592,
+          "rmse_rgb_0_255": 33.84733098723577,
+          "max_abs_channel_0_255": 249
+        },
+        "receiver_rectangle": [
+          550,
+          280,
+          710,
+          545
+        ],
+        "receiver_rgb_difference": {
+          "same_dimensions": true,
+          "pixel_equal": false,
+          "changed_pixels": 41883,
+          "pixels": 42400,
+          "mae_rgb_0_255": 89.34786949685535,
+          "rmse_rgb_0_255": 123.67686343347384,
+          "max_abs_channel_0_255": 249
+        },
+        "receiver_rec709_encoded_mean_luma_clear": 93.33444741037735,
+        "receiver_rec709_encoded_mean_luma_blocked": 2.922145391509434,
+        "receiver_encoded_luma_drop": 90.41230201886792,
+        "probe_center_mean_luma_clear": 63.35007570558696,
+        "probe_center_mean_luma_blocked": 27.4109778547542,
+        "probe_center_mean_luma_drop": 35.93909785083276,
+        "reported_camera_location_equal": true,
+        "reported_camera_fov_equal": true
+      }
+    },
+    "image_sources": {
+      "backend_directional_clear_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_directional_clear_full.png",
+        "png_sha256": "9653f9166182aba73f1d0885cba82ae5be26335c5ce4d3e8723102f8e923858b",
+        "decoded_rgba8_sha256": "a60cc9ab8f2e09536d564b550d4987c54b4e1810d64562d686955ba9f5782fb8",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_directional_blocked_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_directional_blocked_full.png",
+        "png_sha256": "f4e0eddd0a608fed10caa0a395747937d71213bfad499b3e0346557f6458c805",
+        "decoded_rgba8_sha256": "e4ec38fa011dceafcf9ca818884962148f76600b2d1fea8646f76aac6e3aee72",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_point_clear_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_point_clear_full.png",
+        "png_sha256": "631f4bdb6149e62ff44c4b1cc5b33bf9a9eb5d17d45d1387a4c842a189ec8628",
+        "decoded_rgba8_sha256": "e4129dbb9ab3cbf8aeb96d31978ac3e9c77eec28d96df27932b9dbc4d415fd96",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_point_blocked_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_point_blocked_full.png",
+        "png_sha256": "6a21db464fbd2e23f9b57a0fcb6c3461504cf0798420989173854079104be96d",
+        "decoded_rgba8_sha256": "e13a33db45ca3908dc31c8c2038da67c0c71a2e220f82a302531d7807a111d47",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_spot_clear_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_spot_clear_full.png",
+        "png_sha256": "99ba2e14429eebf23457035e4d4bc9c13c2d4a00f62a3f58d59d0a314c07af2b",
+        "decoded_rgba8_sha256": "e2b3a550f4d3c4fd3358a580d7dee205f4569ae44511c5a813b4959a4ce425df",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_spot_blocked_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_spot_blocked_full.png",
+        "png_sha256": "bafc428688b3d591ba207455204141008855a25ffd6cd7d7df40a3ac758c10c9",
+        "decoded_rgba8_sha256": "38a30ebc240f2c23398839fcc625987b1ebc7ff4fb4077bc14a7efb425c7f03a",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_rect_clear_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_rect_clear_full.png",
+        "png_sha256": "cda7d6171556dbafd6780ffcd36b80b651cf1d0c433e25f11fe3b9e4a1998c4e",
+        "decoded_rgba8_sha256": "9b407a873fbf72082728c7314dff62cf58478443cf345978662b93438e3a41d2",
+        "width": 1280,
+        "height": 720
+      },
+      "backend_rect_blocked_full": {
+        "file": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11\\final-lights11_backend_rect_blocked_full.png",
+        "png_sha256": "45b2b5ca1f47f51f4c6e308767859194b9acc57d6f557b00433f5d3093b29fb6",
+        "decoded_rgba8_sha256": "c0f538fd0decdc4f452565b2510f7f050bc839bee133a7c10efe92c95cc44717",
+        "width": 1280,
+        "height": 720
+      }
+    },
+    "performance_warning_log": "D:\\projectGithub\\MMDUETools\\MMD\\Saved\\Phase2Reference\\Endfield2\\face-2026-10-16\\final-lights11.log",
+    "performance_warning_occurrences_including_summary_replay": [
+      "[2026.10.16-05.23.15:251][  0]LogRenderer: Warning: [VSM] Non-Nanite Marking Job Queue overflow. Performance may be affected. This occurs when many non-nanite meshes cover a large area of the shadow map.",
+      "[2026.10.16-05.23.17:571][  0]LogInit: Display: LogRenderer: Warning: [VSM] Non-Nanite Marking Job Queue overflow. Performance may be affected. This occurs when many non-nanite meshes cover a large area of the shadow map."
+    ],
+    "limits": [
+      "Actual PNG clear/blocked differences in four light fixtures; not an independent proof of every BSDF, shadow, GI, reflection or forward-light kernel.",
+      "Metrics use encoded 8-bit display pixels, not linear radiance or UE light units.",
+      "Visual review confirms the blocker itself is visible in blocked captures and overlaps the character for point/spot/rect. Differences combine screen occlusion and illumination/shadow changes; this is not a pure shadow-only control. The fixed receiver rectangle is not material/actor segmentation.",
+      "Camera location/FOV agree per pair; full postprocess/exposure and per-image rotation are not independently recorded.",
+      "The VSM queue overflow is a performance warning recorded by this run; no performance benchmark or additional rerun is claimed."
+    ]
+  },
+  "source_freeze_sha256": {
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldLighting.ush": "2678364e8b3de84aea380eb80a4f389ca686c4d8f90c8268af1955c561d05ec7",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNative.ush": "8c700273bc424e016998b4ee75d035c688f5cef196fb666ee47e93302f217453",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeBSDF.ush": "8b2b0cb7db6943cdcce34996905c6decc42e75420ca5cf279096845904194fa2",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeData.ush": "6b8e76d1992d2e08af833fef609d040179fdb534981bb7a49a4fa7c9de7e6d69",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeForwardLight.ush": "85a86d3a86c8af70ed2925e4e6051b33f7a512b77b95c745a414db0f923e13bd",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeForwardPayload.ush": "91fc34e91419cb0f5575fc78b71e9d87dd56cdb13203d1d202ac4c645596ba2c",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeIndirect.ush": "a779b1de08b9e71770d737f3462adea9c2ef30d09bc7c271a3cd0b261457a8bf",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeLegacy.ush": "c0b86226d6285a96adf1191789c7aa9f0c68166e56e1f63a2f073b04aed3db71",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativeLightCapture.ush": "1582cc2f3285cc292e3741a909bbaed86561ba490c5f6b6276dd968b8fc8da56",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldNativePayload.ush": "dfc1e547b91e778ed68d609b07e2bed643b89dbba437bc9f80250059a045ed4f",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldOutline.ush": "5ab3d95aa25e21c6fe459da3e91b74b47a7e5fdfe31d4a9317de915580e7b0d1",
+    "Plugins\\Ue5MMDTools\\Shaders\\Core\\TMMDEndfieldPhase2BRDF.ush": "02d5cac135b953724ec659b25a8fa40d822dc9cbd5c260d309d8844b172019b5",
+    "Plugins\\Ue5MMDTools\\Shaders\\Private\\MMDEndfieldNativeBackendProtocol.usf": "57a476b199289d23f81a743d3960570f867ba14ab11a42da203f30027b983c89",
+    "Plugins\\Ue5MMDTools\\Shaders\\TMMDShader\\TMMDEndfieldCharacter.usf": "03636ec51898a90f4c920767f6b7e72616cd5cf770401e578ae718d09e93862a",
+    "Plugins\\Ue5MMDTools\\Shaders\\TMMDShader\\TMMDEndfieldPhase2Character.usf": "466d108b35cf8c1ce4bd5dbcbed74d63f012695f0a5e3d6723c774d9e630fc50",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Public\\Editor\\MMDEndfieldFaceBinding.h": "e57b591d62c910f5363e29c65c26db24e754ae53e1929ed9547fe16e167930ae",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Public\\Editor\\MMDEndfieldFaceSdfBaker.h": "60161d6b2ca29e309d844c87efc0476256254a09b3f79067508c2881a6f3f21c",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldBakeSdfCommandlet.cpp": "55ade3c278846f81c2106ba9fc806d34c89cb69145fffdc181b448f2f4a1f261",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldBakeSdfCommandlet.h": "19b4a18bf587f4ef6d2095e4da78b3310103e36d7150b58672a4244839e0a2ec",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldBindSdfCommandlet.cpp": "f2d054a38cf47fc6f1f8429b15c859277b087e0f3893f052b9e03808bf726fc4",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldBindSdfCommandlet.h": "1f39ff1b2f1130e2ea4f87fcc210084170ead2393bdf8dfaad982d7cc4529078",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldFaceBinding.cpp": "2866541b0d31d2af393fbd461a913422e60c7e852cce6f7d381c1955106717eb",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldFaceSdfBaker.cpp": "522a556aa4f60527a970c1d7f3613940ac8e44a3c98e72b6c572c0143fd602ed",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldImportSampleCommandlet.cpp": "de9c3a671063c99e6f34ff5daf900daff8e24d4889877ddf84d359cd121ca4ba",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldImportSampleCommandlet.h": "01dd501764b8fafbee4b6b29ecebf237e43b7ba9284613080389ed81b1d0ae2d",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldNativeBackendFixtureCommandlet.cpp": "04277001c73e884cab0487a52f8ba9d94c7140dfaa67e2b3cf471930200abe5f",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldNativeBackendFixtureCommandlet.h": "b0998cf6e16796f439958cbded630f05a6e4166cf9df23b9ab970e2940e3fab8",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldNativeBackendProbeCommandlet.cpp": "cd2f996ef3b1eaccdbf089b15e76423bd4e4a19fc851eb43b428b120cbe422f1",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldNativeBackendProbeCommandlet.h": "637b774daf5521be66413dc5585827fd1434c8e9aa32eba390852be8db43b644",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldPhase2Commandlet.cpp": "bc4e5d8135663081d84221028f373f7a414764c7a6e762d45b1c3067c517a48f",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldPhase2Commandlet.h": "eb2ba773ff2074a00208bf2b90504615d570d01980c2dc4ecef0def8fe36ca4e",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldPresetsCommandlet.cpp": "acb1997f25f51db0856e0dcd005f4cf2df5314f64538a73f513557261064f67b",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldPresetsCommandlet.h": "62d2ae757527f8970ca70ed50a57462d66eca1392acdcf3a1244b1ed64b9ab1e",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldToonPresetsCommandlet.cpp": "f6bec1a75c8c8e6d6054337ce8f6d8f532cd9194f5f7ec182539861bec144ae2",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldToonPresetsCommandlet.h": "26b2229d90292ce637e7f8bf6ecf811d5ac9b53c4d4bb2c697781ade56d2502f",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldToonProbeCommandlet.cpp": "3950d923c07b8e4610858bf8ba4969b2cc15ee7007b838d795c5767ca53eb3f4",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDToolsEditor\\Private\\Editor\\MMDEndfieldToonProbeCommandlet.h": "16a3eb069d447dc4c80614ea0c8d6709d4d1ad8b558e849938f567d6ecd637e4",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Materials\\MaterialExpressionMMDEndfieldNativePayload.h": "a073d6dcda43457bae3e2b74ef115f50cf9a4de359e3fa5c17d561b1f9b60d98",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Rendering\\MMDEndfieldFaceData.h": "630c1dd29b3ba29d48927c9e266344899192e7a9120f40d77393ff91623949c1",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Rendering\\MMDEndfieldHeadFrame.h": "62494b3593ffea05dfaffee8e27087a25251101f5a7a2a2be1d6d9220ebcaf87",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Rendering\\MMDEndfieldNativeBackend.h": "5bcb5ffc2c0758d14c5593da59deb6a1928a57d2945c399b3d91015e6787d176",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Rendering\\MMDEndfieldNativeBackendValidationActor.h": "48e7c9a7f4891e3359e88242e609362d1bc5a302593112f60478ee4f37ddc24d",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Rendering\\MMDEndfieldNativeProfile.h": "d9a8b063c6f725a542f8ecbc2d993fa96c72b1b62ee8c24d73395b1725278a7b",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Rendering\\UMMDHeadBoneSubsystem.h": "e6437705636a92387b1ddf1fec7ec28a0457213eb0afcfe18f6dc84ef85544ff",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Public\\Stage\\MMDStageLibrary.h": "1e24eba262ef54cb56091cc26f5f865267331b07340e3b9a05b3a37dffb2cd23",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Materials\\MaterialExpressionMMDEndfieldNativePayload.cpp": "30b7711e10ad5404aeaddd4bbe1f1b6b2626c07caba6edd6030994a73183cb4c",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldFaceData.cpp": "cf2a76aee9ffccd78a748a47814f5bf6695a6851861a256d15b4c5a9e8938bc0",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldHeadFrame.cpp": "3f31274f2a671c15d6421cf862da6361fb4a61ece56be2ccdfcf9eee1e5c268e",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeBackend.cpp": "abd17d0b4c6d6cf6fc6fa079d26918f1048a0116a55119b77497b28fb1a63681",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeBackendProtocol.cpp": "cdc4762b0333666152f956e86a2b4d43ff86a86b6776cee1171201914abe7a56",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeBackendValidationActor.cpp": "f6cd11b971d3a3545a1f0c88c5eacd19a909eda5c1a2c17e65f1b816c7e14258",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeForwardPatch.inl": "fb327235f887057275b99eccd9805394ff257e07c60f404c54a9ca65a6d04578",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeIndirectPatch.inl": "40ff3a4743ea7a054001362623ed7398e9595e66540c562e0fc0b6944621b5ef",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeProfile.cpp": "089ac1a09658c4c602c6879798abf5c4977dc52caf4807557f08b5b5ac78e206",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\MMDEndfieldNativeRampData.inl": "a4f2c1565d4260089eefd7e66658aa6a4fe0fc9d5c1480768a33aafc6a583a0f",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Rendering\\UMMDHeadBoneSubsystem.cpp": "462cc1b649521cf4c76e45d7eee6145d0175f9a2fb79f15cc8059a7868191b72",
+    "Plugins\\Ue5MMDTools\\Source\\Ue5MMDTools\\Private\\Stage\\MMDStageLibrary.cpp": "22f49b81ec37891f1b2a92eb09e214e778d0b7ceff70cd7d8be195ef08e712aa"
+  },
+  "scope": "Actual final11 GPU observations for named captures and ROIs, not verification of every material/lighting kernel or final game reproduction quality.",
+  "new_cook_and_buildplugin_tested": false,
+  "native_renderer_warnings": [
+    {
+      "run": "final-lights11",
+      "message": "VSM Non-Nanite Marking Job Queue overflow; performance may be affected",
+      "log": "Saved/Phase2Reference/Endfield2/face-2026-10-16/final-lights11.log",
+      "log_sha256": "342045de6d9b5b656a5db4b809ac684db33f26fd8d236fe0ece5b5e1aa992b6b",
+      "interpretation": "Recorded warning; no performance or VSM capacity acceptance is claimed."
+    }
+  ],
+  "protected_files": {
+    "count": 2378,
+    "unchanged": 2373,
+    "intentional": [
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Presets\\EndfieldV2\\DA_Render_EndfieldV2.uasset",
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\M_MMD_EndfieldV2_Masked.uasset",
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\M_MMD_EndfieldV2_Opaque.uasset",
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\M_MMD_EndfieldV2_Translucent.uasset",
+      "D:\\projectGithub\\MMDUETools\\MMD\\Plugins\\Ue5MMDTools\\Content\\Stages\\Materials\\EndfieldV2\\Profiles\\T_EndfieldV2_OffsetLinear.uasset"
+    ],
+    "unexpected": []
+  },
+  "limits": [
+    "Forward supplies its selected directional light and local lights; transparent GI differs from opaque Lumen.",
+    "Fixed reference pose/current LOD and component yaw are not animated head-bone, Morph, cloth or dynamic LOD proof.",
+    "No nonuniform scale, mobile, MegaLights, path-tracing, CSM or cross-engine-version acceptance.",
+    "Automatic angular threshold field is not an original hand-painted or traced occlusion distance field.",
+    "85/90 degree grazing captures retain a pronounced nose arc and straight half-face boundary; art tuning remains.",
+    "Light clear/blocked images contain a visible blocker; their difference is not pure shadow-only evidence.",
+    "Full v11 Cook/BuildPlugin and performance remain unmeasured. Historical v8 package validation is not v11 validation."
+  ]
+}

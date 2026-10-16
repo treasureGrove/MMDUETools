@@ -68,7 +68,7 @@ namespace
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/Profiles/T_EndfieldV2_OffsetLinear"),
 		TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/M_MMD_EndfieldV2_Outline") };
 	constexpr const TCHAR* EndfieldToonTemplatePath = TEXT("/Ue5MMDTools/Stages/Presets/Endfield/DA_Render_Endfield.DA_Render_Endfield");
-	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=4");
+	constexpr const TCHAR* EndfieldToonGraphVersion = TEXT("EndfieldV2NativeToonGraph=5");
 	constexpr const TCHAR* EndfieldToonOutlineGraphVersion = TEXT("EndfieldV2SourceOutlineGraph=2");
 	constexpr int32 EndfieldToonMaterialCount = 3;
 	constexpr int32 EndfieldToonProfileCount = 6;
@@ -444,7 +444,7 @@ namespace
 		UMaterialExpressionVectorParameter* Head = EndfieldToonVector(Material,
 			UMMDHeadBoneSubsystem::ParamHeadPositionRadius, FLinearColor(0, 0, 0, 0));
 		UMaterialExpressionCustom* Normal = EndfieldToonAdd<UMaterialExpressionCustom>(Material);
-		Normal->Description = TEXT("独立高光法线、头空间漫反射方向与兼容 SDF");
+		Normal->Description = TEXT("独立高光法线、头部投影角阈值与通用方向回退");
 		Normal->Desc = EndfieldToonGraphVersion;
 		Normal->OutputType = CMOT_Float3;
 		Normal->Code = TEXT(
@@ -1095,7 +1095,7 @@ int32 UMMDEndfieldToonPresetsCommandlet::Main(const FString& Params)
 	Report->SetStringField(TEXT("unified_diffuse_notice"), TEXT("ToonUnifiedDiffuse 是可选实验开关，引擎默认 0；设为 1 的路径尚未通过视觉验收，生成与编译校验不要求启用。"));
 	Report->SetStringField(TEXT("candidate_notice"), TEXT("后端 Mode2 的 Skin/Hair/Cloth 使用客户端 RD 数据语义。Skin roughness=.742/specular=.454、Cloth roughness=.696 来自代表样本；Metal/Eye 和无贴图头发方向仍是通用近似，不代表原作完整复刻。"));
 	Report->SetStringField(TEXT("face_sdf_bridge"), TEXT("Mode2 + adaptive GBuffer 的自有 Skin 通过专用 CustomOutput 传递头空间方向和旋转，原生 Normal 独立保留高光/GI。自动 V4 是完整几何方向场（非遮挡距离场），四tap先解离散镜像再插值，未提供时用球面/几何法线。Mode0/1、fmt0和透明保持旧 threshold bridge/原生 Toon 回退。"));
-	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("默认保留脸面普通投影（FaceShadowSuppress=0），关闭角色接触阴影。P15 对照确认鼻灰点来自接触阴影，单独关闭已改善；普通投影和外部遮挡仍工作。可选 masked ShadowPassSwitch 的正常分支保持原 alpha，投影分支乘 1-SDF有效脸面mask*suppress；启用时也影响脸面对身体和场景的投射。无有效 SDF/head frame 时覆盖率=1；opaque/translucent 不使用此开关。"));
+	Report->SetStringField(TEXT("face_shadow_candidate"), TEXT("V5 阈值只控制主光明暗分区，不改变原生阴影接收或投射。默认 FaceShadowSuppress=0、关闭角色接触阴影。头发原生投影与脸部阈值是独立来源，需用 facefix 的 Hair-only 阴影代理对照诊断；不能把总 ShadowTerms 衰减称为仅关闭头发自投影。旧兼容 masked 路径保留可选 ShadowPassSwitch。"));
 	Report->SetStringField(TEXT("anisotropy_limit"), TEXT("本机 UE5.8 原生 Toon 不消费 Tangent 输入，各向异性方向只用引擎默认 basis，尚不能定制天使环。"));
 	Report->SetArrayField(TEXT("assets"), AssetReports);
 	Report->SetArrayField(TEXT("materials"), MaterialReports);

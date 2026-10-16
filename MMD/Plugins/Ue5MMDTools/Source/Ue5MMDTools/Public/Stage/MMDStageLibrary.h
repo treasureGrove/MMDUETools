@@ -26,6 +26,8 @@ public:
 	/** 仅按当前网格的槽名和原材质名分类；未识别的部位回退通用。 */
 	UFUNCTION(BlueprintPure, Category = "MMD|Materials")
 	static EMMDMaterialRole GetResolvedCharacterMaterialRole(USkeletalMeshComponent* Component, int32 MaterialIndex);
+	/** 返回同一分类器的原因，供自动附着层筛选复用排除规则。 */
+	static FString GetResolvedCharacterMaterialRoleReason(USkeletalMeshComponent* Component, int32 MaterialIndex);
 
 	/** 覆盖只属于当前组件和网格；已有预设只更新仍由它持有的 MID。 */
 	UFUNCTION(BlueprintCallable, Category = "MMD|Materials")

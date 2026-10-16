@@ -23,9 +23,9 @@ namespace
 {
 	constexpr TCHAR MMDEndfieldBackendSection[] = TEXT("Ue5MMDTools.EndfieldNativeBackend");
 	constexpr TCHAR MMDEndfieldBackendVirtualRoot[] = TEXT("/Engine/Private");
-	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v9-volume-rs2d");
+	constexpr TCHAR MMDEndfieldBackendPatchVersion[] = TEXT("endfield-native-bsdf-v11-forward-face");
 	// 修改 CustomOutput 名称、输出次序/类型/默认值或打包协议时同步此版本。
-	constexpr TCHAR MMDEndfieldBackendPayloadProtocol[] = TEXT("endfield-skin-payload-v4:GetMMDEndfieldNativePayload:direction4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:oct16-mask8-quat32");
+	constexpr TCHAR MMDEndfieldBackendPayloadProtocol[] = TEXT("endfield-skin-payload-v5:GetMMDEndfieldNativePayload:direction-or-threshold4=0,1,0,0:quaternion4=0,0,0,1:enabled1=0:values16-type1-mask7-quat32");
 	MMDEndfieldNativeBackend::FStatus MMDEndfieldBackendStatus;
 	bool MMDEndfieldBackendInitialized = false;
 	bool MMDEndfieldBackendAwaitingCookedProtocol = false;
@@ -54,6 +54,8 @@ namespace
 		{ TEXT("Private/ClusteredDeferredShadingPixelShader.usf"), TEXT("2D2DCA949116D453ECBEE7138E43F2A8AE8305D1"), true },
 		{ TEXT("Private/Substrate/SubstrateExport.ush"), TEXT("B3113DC6071E9CA010505517CA299C8FC7C6FF9B"), true },
 		{ TEXT("Private/BasePassPixelShader.usf"), TEXT("938DAE7F895A35382C0FB75902909E35E6ED9B21"), true },
+		{ TEXT("Private/Substrate/SubstrateForwardLighting.ush"), TEXT("EF84BDA4304CFD60FAFF3776865870A2D6C2E3B9"), true },
+		{ TEXT("Private/Substrate/SubstrateLightingCommon.ush"), TEXT("0584ED0DC8BBF39C91FF837C2FE4CAB3D77482F6"), true },
 		{ TEXT("Source/Runtime/Engine/Private/Rendering/ToonProfile.cpp"), TEXT("D53A66718C5C09DDB74687FBB8F2D14A49BA07F1"), false },
 		{ TEXT("Source/Runtime/Engine/Private/Materials/SubstrateTranslatorCommon.cpp"), TEXT("1031A237D3C0C97342484DC962987A568A5F4DA8"), false },
 	};
@@ -161,7 +163,7 @@ namespace
 		Json += TEXT(",\n  \"reason\": ") + MMDEndfieldBackendQuote(Status.Reason);
 		Json += TEXT(",\n  \"profile_isolation\": \"Only plugin-marked Endfield profiles use custom response and environment scales; all other Toon profiles evaluate native formulas.\"");
 		Json += TEXT(",\n  \"control_source\": \"Mode and indirect scales are encoded in marked profile alpha; the native shader kernel is shared across those controls.\"");
-		Json += TEXT(",\n  \"skin_payload_contract\": \"Adaptive format1 only, one Toon closure and one normal basis, connected anisotropy reservation with physical value zero, neutral PatternUVs, at least 24 bytes budget. CustomOutput Enabled=1 identifies Skin; direction oct16 plus mask8 reuses Pattern24, quaternion32 reuses the reserved anisotropy word. Disabled or unsupported variants keep native packing.\"");
+		Json += TEXT(",\n  \"skin_payload_contract\": \"Deferred: adaptive format1, one Toon closure and normal basis, neutral anisotropy and PatternUVs, at least 24 bytes budget; values16-type1-mask7 plus quaternion32. Desktop per-pixel forward: Mode2 Skin and same single-Toon shape, CustomOutput Enabled=1; payload5 stays inline without GBuffer export or new RT, original coverage/transmittance preserved. Other variants keep native packing.\"");
 		Json += TEXT(",\n  \"cook_contract\": \"Enable this plugin backend during Cook. Packaged runtime keeps profile markers disabled until the loaded global shader records the expected overlay protocol. Startup flags cannot authorize an unmarked Cook. This verifies one global shader only; all material/lighting kernels and behavior still require Cook provenance and image comparison.\"");
 		Json += TEXT(",\n  \"source_hashes\": {");
 		TArray<FString> Keys;
@@ -326,6 +328,7 @@ namespace
 	}
 
 	#include "MMDEndfieldNativeIndirectPatch.inl"
+	#include "MMDEndfieldNativeForwardPatch.inl"
 
 	bool MMDEndfieldBackendPatchPayloadRead(FString& Text)
 	{
@@ -369,7 +372,8 @@ namespace
 	{
 		const FString Anchor = TEXT("FSubstratePixelHeader SubstratePixelHeader = MaterialParameters.GetFrontSubstrateHeader();");
 		const FString Patch = Anchor + TEXT(R"TMMD(
-    #if !FORWARD_SHADING && SUBSTRATE_GBUFFER_FORMAT == 1 && MATERIAL_USES_ANISOTROPY && SUBSTRATE_FASTPATH == 0 && SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 0 && SUBSTRATE_MATERIAL_NUM_UINTS >= 6 && NUM_MATERIAL_OUTPUTS_GETMMDENDFIELDNATIVEPAYLOAD == 3
+    #if SUBSTRATE_OPAQUE_DEFERRED && SUBSTRATE_GBUFFER_FORMAT == 1 && MATERIAL_USES_ANISOTROPY && SUBSTRATE_FASTPATH == 0 && SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 0 && SUBSTRATE_MATERIAL_NUM_UINTS >= 6 && NUM_MATERIAL_OUTPUTS_GETMMDENDFIELDNATIVEPAYLOAD == 3
+    // BasePass 的 SUBSTRATE_INLINE_SHADING 恒为1，不能拿它区分延迟与前向路径。
     // 本轮只接单 Toon Skin；其它材质与简化/低预算变体保持原生布局。
     if (SubstrateStruct.MaxBytesPerPixel >= 24u
         && SubstratePixelHeader.SubstrateTree.BSDFCount == 1u && SubstratePixelHeader.SharedLocalBases.Count == 1u
@@ -524,7 +528,8 @@ namespace
 		const FString PluginShaderRoot = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
         const TCHAR* PluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"), TEXT("Core/TMMDEndfieldNativeData.ush"),
             TEXT("Core/TMMDEndfieldNativeLightCapture.ush"), TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
-            TEXT("Core/TMMDEndfieldNativePayload.ush"), TEXT("Private/MMDEndfieldNativeBackendProtocol.usf") };
+            TEXT("Core/TMMDEndfieldNativePayload.ush"), TEXT("Core/TMMDEndfieldNativeForwardPayload.ush"),
+            TEXT("Core/TMMDEndfieldNativeForwardLight.ush"), TEXT("Private/MMDEndfieldNativeBackendProtocol.usf") };
         FString PluginSignature = TEXT("compiled_payload_protocol=") + Status.CompiledPayloadProtocol + TEXT("\n");
         for (const TCHAR* Relative : PluginSources)
         {
@@ -569,6 +574,8 @@ namespace
         };
         if (!PreparePatch(TEXT("Substrate/SubstrateEvaluation.ush"), MMDEndfieldBackendPatchEvaluation)
             || !PreparePatch(TEXT("Substrate/SubstrateDeferredLighting.ush"), MMDEndfieldBackendPatchDeferred)
+            || !PreparePatch(TEXT("Substrate/SubstrateForwardLighting.ush"), MMDEndfieldBackendPatchForwardInlinePayload)
+            || !PreparePatch(TEXT("Substrate/SubstrateLightingCommon.ush"), MMDEndfieldBackendPatchForwardLightData)
             || !PreparePatch(TEXT("DiffuseIndirectComposite.usf"), MMDEndfieldBackendPatchIndirect)
             || !PreparePatch(TEXT("ReflectionEnvironmentPixelShader.usf"), MMDEndfieldBackendPatchReflection)
             || !PreparePatch(TEXT("ClusteredDeferredShadingPixelShader.usf"), MMDEndfieldBackendPatchClustered)

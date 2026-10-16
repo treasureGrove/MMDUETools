@@ -77,7 +77,10 @@ namespace
 		for (const FMMDGeneratedFaceSdfSlot& Binding : Data->Slots)
 		{
 			TArray<FString> Failures;
-			const bool bDirection = Data->Version == 4 && Binding.DirectionVersion == 4;
+			const bool bDirection = Data->Version == UMMDEndfieldFaceData::CurrentVersion
+				&& Binding.DirectionVersion == UMMDEndfieldFaceData::CurrentVersion;
+			if (!bDirection || Binding.UVChannel != -1 || Data->FrameVersion != 1)
+				Failures.Add(TEXT("不是有效的 V5 独立头部投影绑定，需重新烘焙"));
 			UTexture2D* Texture = bDirection ? Binding.DirectionTexture.Get() : Binding.Texture.Get();
 			const bool bValidSlot = Mesh->GetMaterials().IsValidIndex(Binding.MaterialIndex);
 			if (!bValidSlot) Failures.Add(TEXT("材质槽越界"));
@@ -103,7 +106,13 @@ namespace
 			Check->SetNumberField(TEXT("slot"), Binding.MaterialIndex);
 			Check->SetStringField(TEXT("slot_name"), Binding.MaterialSlotName.ToString());
 			Check->SetStringField(TEXT("texture"), Texture ? Texture->GetPathName() : TEXT("missing"));
-			Check->SetStringField(TEXT("encoding"), bDirection ? TEXT("head-local oct direction; discrete mirror; coverage") : TEXT("legacy fixed-elevation threshold"));
+			Check->SetBoolField(TEXT("forward_overlay"), Binding.bForwardOverlay);
+			Check->SetNumberField(TEXT("host_material_index"), Binding.HostMaterialIndex);
+			Check->SetStringField(TEXT("host_slot_name"), Binding.HostSlotName.ToString());
+			Check->SetNumberField(TEXT("overlay_validated_lods"), Binding.OverlayValidatedLODs);
+			Check->SetNumberField(TEXT("overlay_valid_vertex_ratio"), Binding.OverlayValidVertexRatio);
+			Check->SetNumberField(TEXT("overlay_valid_area_ratio"), Binding.OverlayValidAreaRatio);
+			Check->SetStringField(TEXT("encoding"), bDirection ? TEXT("projected head UV; left/right angular thresholds; front depth; coverage") : TEXT("legacy unsupported encoding"));
 			Check->SetBoolField(TEXT("passed"), Failures.IsEmpty());
 			Check->SetArrayField(TEXT("errors"), EndfieldBindSdfJsonStrings(Failures));
 			Checks.Add(MakeShared<FJsonValueObject>(Check));

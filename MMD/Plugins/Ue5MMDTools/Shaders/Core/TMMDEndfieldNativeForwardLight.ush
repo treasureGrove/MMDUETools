@@ -1,0 +1,49 @@
+#pragma once
+
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeLightCapture.ush"
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNativeBSDF.ush"
+
+// 在 SubstrateForwardLightingCommon 的原生 GetShadowTerms 后捕获；原生照明与阴影求值继续执行。
+struct TMMDEndfieldNativeForwardLight
+{
+    void Capture(inout FSubstrateBSDFContext context, FDeferredLightData light_data, float3 to_light,
+        float light_mask, float4 light_attenuation, float4 precomputed_shadow_factors,
+        float3 translated_world_position, float scene_depth, float dither)
+    {
+        // 此时引擎尚未定义 FORWARD_PER_PIXEL_SHADING，必须直接使用已存在的材质编译条件。
+        #if PIXELSHADER && !SHADING_PATH_MOBILE && SUBSTRATE_INLINE_SHADING && !MATERIAL_SHADINGMODEL_SINGLELAYERWATER && (FORWARD_SHADING || TRANSLUCENCY_LIGHTING_SURFACE_FORWARDSHADING)
+        // 只有 Apply 已验证的 Mode2 单 Toon Skin 能产生此 inline 载荷。
+        if (!context.BSDF.mmd_payload.valid) return;
+        TMMDEndfieldNativeBSDF response;
+        uint role;
+        float profile_id = TOON_PROFILEID(context.BSDF);
+        if (!response.IsEndfieldProfile(profile_id, role) || role != 1u
+            || response.ReadProfileControls(profile_id).x != 2.0) return;
+        // 原生 forward 局部灯传入原始 ToLight；只规范自有 inline Skin 的局部副本，不改未标记材质。
+        // 原始 ToLight 仍供 AreaLight、距离衰减和原生阴影使用；方向光原值保持。
+        if (light_data.bRadialLight)
+        {
+            float direction_length_squared = dot(context.L, context.L);
+            if (isfinite(direction_length_squared) && direction_length_squared > 0.000001)
+                context.SubstrateUpdateBSDFContext(response.SafeNormalize(context.L, context.N));
+        }
+
+        TMMDEndfieldNativeLightCapture capture;
+        TMMDEndfieldNativeLightData data = capture.Build(light_data, context.L, to_light, light_mask,
+            light_attenuation, precomputed_shadow_factors, translated_world_position, scene_depth,
+            dither, true, false);
+        // Forward 没有 LIGHT_SOURCE_SHAPE 宏；按其已选主方向光验证，不能将局部灯误当主光。
+        data.key_directional_light = false;
+        if (!light_data.bRadialLight && !light_data.bRectLight && ForwardLightStruct.HasDirectionalLight != 0u)
+        {
+            float3 key_direction = ForwardLightStruct.DirectionalLightDirection;
+            float light_length_squared = dot(light_data.Direction, light_data.Direction);
+            float key_length_squared = dot(key_direction, key_direction);
+            if (light_length_squared > 0.00000001 && key_length_squared > 0.00000001)
+                data.key_directional_light = dot(light_data.Direction, key_direction)
+                    * rsqrt(light_length_squared * key_length_squared) > 0.99999;
+        }
+        context.mmd_light_data = data;
+        #endif
+    }
+};
