@@ -1,0 +1,174 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Singapore",
+  "parser_package": "CUE4Parse 1.2.2.202610",
+  "game_adapter": "GAME_InfinityNikki (UE5.4 custom format)",
+  "key_provider_source": "https://github.com/NikkiTools/Whimstar/blob/e64ba491420d7c0a8846e8e550910536f4fc5e2a/Whimstar/ApiUtilities.cs",
+  "key_service_kind": "Third-party tool maintainer public unauthenticated API; keys excluded from this record",
+  "archive_counts": {
+    "registered": 197,
+    "mounted": 196,
+    "unmounted": 1,
+    "matched_required_guids": 5,
+    "index_entries_before_dedup": 1418066
+  },
+  "unmounted": [
+    "global.utoc"
+  ],
+  "configuration_files": [
+    {
+      "path": "X6Game/Config/DefaultEngine.ini",
+      "origin": "Default_Ini_m4_2816_2865_P.pak",
+      "bytes": 104484,
+      "sha256": "E2C4135855CFC84E055236000692FEBE767A600E9DA3EADDD87CB521D3EA66E4",
+      "readable_ini": true,
+      "prefix_hex": "5B55524C5D0D0A47616D654E",
+      "error": null
+    },
+    {
+      "path": "X6Game/Config/DefaultDeviceProfiles.ini",
+      "origin": "Default_Ini_m4_2816_2865_P.pak",
+      "bytes": 208037,
+      "sha256": "D660669391AF763719D18D71592778F0D04D939B38581EF49FC22B82DCC461E9",
+      "readable_ini": true,
+      "prefix_hex": "0D0A5B57696E646F77732044",
+      "error": null
+    },
+    {
+      "path": "X6Game/Config/DefaultGameUserSettings.ini",
+      "origin": "Default_Ini_m4_2816_2865_P.pak",
+      "bytes": 226929,
+      "sha256": "39F106799E7DA6F11972A4B8F77FCF317FA34ABFE0147A170EAC35C4FAFB0332",
+      "readable_ini": true,
+      "prefix_hex": "5B2F5363726970742F456E67",
+      "error": null
+    },
+    {
+      "path": "X6Game/Config/Windows/WindowsEngine.ini",
+      "origin": "Default_Ini_m4_2816_2865_P.pak",
+      "bytes": 4145,
+      "sha256": "B7AD73E9E06AE0789E2C7A9D17463008EDE672C16EAF50A221E8C7F9A2A60F81",
+      "readable_ini": true,
+      "prefix_hex": "5B2F5363726970742F456E67",
+      "error": null
+    },
+    {
+      "path": "Engine/Config/BaseEngine.ini",
+      "origin": "Default_Ini_m4_2816_2865_P.pak",
+      "bytes": 210325,
+      "sha256": "571AF603999F03561A86991C34746AE9E5B70EFE18E1F4B67883BB8BF4005405",
+      "readable_ini": true,
+      "prefix_hex": "5B53656374696F6E73546F53",
+      "error": null
+    },
+    {
+      "path": "Engine/Config/BaseScalability.ini",
+      "origin": "Default_Ini_2816_P.pak",
+      "bytes": 25595,
+      "sha256": "29F7E5B891A80C4FC0B3BA3DD003BC69908A005923FED26035678CC24B5619F0",
+      "readable_ini": true,
+      "prefix_hex": "0D0A0D0A0D0A5B5363616C61",
+      "error": null
+    }
+  ],
+  "observed_config": [
+    {
+      "file": "X6Game_Config_DefaultEngine.ini",
+      "line": 279,
+      "section": "[/Script/Engine.RendererSettings]",
+      "key": "r.SubsurfaceScattering",
+      "value": "True"
+    },
+    {
+      "file": "X6Game_Config_DefaultEngine.ini",
+      "line": 294,
+      "section": "[/Script/Engine.RendererSettings]",
+      "key": "r.DefaultFeature.Bloom",
+      "value": "True"
+    },
+    {
+      "file": "X6Game_Config_DefaultEngine.ini",
+      "line": 297,
+      "section": "[/Script/Engine.RendererSettings]",
+      "key": "r.DefaultFeature.AutoExposure",
+      "value": "True"
+    },
+    {
+      "file": "X6Game_Config_DefaultEngine.ini",
+      "line": 300,
+      "section": "[/Script/Engine.RendererSettings]",
+      "key": "r.UsePreExposure",
+      "value": "False"
+    },
+    {
+      "file": "X6Game_Config_DefaultEngine.ini",
+      "line": 378,
+      "section": "[/Script/Engine.RendererSettings]",
+      "key": "r.Subsurface.UsePreintegratedSkinDiffuse",
+      "value": "True"
+    },
+    {
+      "file": "X6Game_Config_DefaultEngine.ini",
+      "line": 469,
+      "section": "[/Script/Engine.RendererSettings]",
+      "key": "r.AllowEnlighten",
+      "value": "0"
+    },
+    {
+      "file": "X6Game_Config_Windows_WindowsEngine.ini",
+      "line": 12,
+      "section": "[ConsoleVariables]",
+      "key": "r.Tonemapper.Sharpen",
+      "value": "1"
+    },
+    {
+      "file": "X6Game_Config_Windows_WindowsEngine.ini",
+      "line": 18,
+      "section": "[ConsoleVariables]",
+      "key": "r.Lumen.HardwareRayTracing",
+      "value": "True"
+    },
+    {
+      "file": "X6Game_Config_Windows_WindowsEngine.ini",
+      "line": 19,
+      "section": "[ConsoleVariables]",
+      "key": "r.Lumen.HardwareRayTracing.LightingMode",
+      "value": "2"
+    },
+    {
+      "file": "X6Game_Config_Windows_WindowsEngine.ini",
+      "line": 21,
+      "section": "[ConsoleVariables]",
+      "key": "r.Lumen.Reflections.HardwareRayTracing",
+      "value": "0"
+    },
+    {
+      "file": "X6Game_Config_Windows_WindowsEngine.ini",
+      "line": 59,
+      "section": "[ConsoleVariables]",
+      "key": "r.Enlighten.FullyDisableEnlightenData",
+      "value": "1"
+    },
+    {
+      "file": "X6Game_Config_DefaultDeviceProfiles.ini",
+      "line": 87,
+      "section": "[Windows DeviceProfile]",
+      "key": "r.OIT.SortedPixels",
+      "value": "1"
+    },
+    {
+      "file": "X6Game_Config_DefaultDeviceProfiles.ini",
+      "line": 88,
+      "section": "[Windows DeviceProfile]",
+      "key": "r.OIT.WorksWithSLW",
+      "value": "1"
+    }
+  ],
+  "limits": [
+    "Configuration contents are static file evidence; no original game runtime observed.",
+    "UE settings merge with platform, device profile, user quality and runtime overrides; listed values do not prove a running frame used them.",
+    "Original skin/body/hair material property deserialization failed without matching .usmap.",
+    "No HLSL source found in mounted index; compiled ShaderArchive paths do not establish recovered shader logic.",
+    "No game shader, model, texture, key or full config file is distributed with the preset."
+  ]
+}

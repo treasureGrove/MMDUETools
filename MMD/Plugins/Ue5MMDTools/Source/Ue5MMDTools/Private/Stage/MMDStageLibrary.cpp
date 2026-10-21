@@ -312,7 +312,7 @@ namespace
 		// Opaque转Masked还依赖原生后端的逐材质裁剪修正，未激活时保留源投影。
 		if (!MMDEndfieldNativeBackend::GetStatus().bProfileMarkerAllowed
 			|| !IsValid(Material) || Material->GetBlendMode() != BLEND_Masked
-			|| !Material->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))) return false;
+			|| !MMDEndfieldNativeProfile::IsManagedParent(Material)) return false;
 		float Value = 0.0f;
 		// 两个参数共同标识保留不透明覆盖率的新图；旧父材质不能安全转换。
 		return Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("ToonShadowCastStrength")), Value)
@@ -384,7 +384,7 @@ namespace
 		UMaterialInterface* ForwardCandidate = FaceConfigured ? FaceConfigured : ToonConfigured;
 		const bool bForwardFaceLayer = bCanReplaceToon && Blend == BLEND_Translucent && DirectionBinding && DirectionBinding->bForwardOverlay
 			&& NativeBackend.bProfileMarkerAllowed && NativeBackend.Mode == 2
-			&& IsValid(ForwardCandidate) && ForwardCandidate->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))
+			&& MMDEndfieldNativeProfile::IsManagedParent(ForwardCandidate)
 			&& (Role == EMMDMaterialRole::Skin || (Role == EMMDMaterialRole::Generic && !State->RoleOverrides.Contains(MaterialIndex)));
 		if (bForwardFaceLayer)
 		{
@@ -420,9 +420,10 @@ namespace
 		{
 			UToonProfile* Profile = ToonSettings.ToonProfile.Get();
 			if (MMDEndfieldNativeBackend::GetStatus().bProfileMarkerAllowed
-				&& Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")))
+				&& MMDEndfieldNativeProfile::IsManagedParent(Parent))
 			{
-				Profile = MMDEndfieldNativeProfile::GetOrCreate(Profile, Role, &Preset->CharacterSkinLighting);
+				Profile = MMDEndfieldNativeProfile::GetOrCreate(Profile, Role, &Preset->CharacterSkinLighting,
+					MMDEndfieldNativeProfile::IsInfinityNikkiParent(Parent));
 			}
 			Material->ToonProfileOverride = Profile;
 			Material->bOverrideToonProfile = true;
@@ -440,7 +441,7 @@ namespace
 			Material->SetScalarParameterValue(TEXT("ToonShadowCastStrength"), bShadowCastControl ? ShadowCastStrength : 1.0f);
 			Material->SetScalarParameterValue(TEXT("ToonFaceShadowSuppress"), bShadowCastControl && bFaceShadowBinding ? FaceShadowSuppress : 0.0f);
 		}
-		if (Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")))
+		if (MMDEndfieldNativeProfile::IsManagedParent(Parent))
 		{
 			// 源 MID 可能带入旧开关；先中性重置，再让 shader 按脸部遮罩逐像素选择两组表面参数。
 			Material->SetScalarParameterValue(TEXT("ToonSkinEnabled"), 0.0f);
@@ -462,7 +463,7 @@ namespace
 		const MMDEndfieldNativeBackend::FStatus& Backend = MMDEndfieldNativeBackend::GetStatus();
 		const bool bNativePayload = bUseToon && Role == EMMDMaterialRole::Skin && Backend.bProfileMarkerAllowed
 			&& Backend.Mode == 2 && FormatVariable && FormatVariable->GetInt() == 1
-			&& Parent->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"))
+			&& MMDEndfieldNativeProfile::IsManagedParent(Parent)
 			&& (Configured->GetBlendMode() == BLEND_Opaque || Configured->GetBlendMode() == BLEND_Masked || bForwardFaceLayer);
 		Material->SetScalarParameterValue(TEXT("ToonNativePayloadEnabled"), bNativePayload ? 1.0f : 0.0f);
 		bool bFaceBound = false;

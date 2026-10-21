@@ -1,0 +1,35 @@
+// 本插件原创的柔肤与缎布近似；不是原作 shader，不需要模型配套贴图。
+struct TMMDInfinityNikkiResponse
+{
+    float BurleyDiffuse(float n_dot_l, float n_dot_v, float v_dot_h, float roughness)
+    {
+        float grazing_response = 0.5 + 2.0 * saturate(roughness) * v_dot_h * v_dot_h;
+        float light_scatter = 1.0 + (grazing_response - 1.0) * pow(1.0 - saturate(n_dot_l), 5.0);
+        float view_scatter = 1.0 + (grazing_response - 1.0) * pow(1.0 - saturate(n_dot_v), 5.0);
+        return light_scatter * view_scatter * saturate(n_dot_l) / 3.14159265;
+    }
+
+    float3 SkinDiffuse(float3 albedo, float signed_n_dot_l, float n_dot_v, float v_dot_h, float roughness)
+    {
+        float diffuse = BurleyDiffuse(saturate(signed_n_dot_l), n_dot_v, v_dot_h, roughness);
+        // 归一化包裹项只展宽明暗交界，不代表屏幕空间 SSS 或厚度透射。
+        float wrap = 0.28;
+        float soft_diffuse = saturate((signed_n_dot_l + wrap) / (1.0 + wrap))
+                           / ((1.0 + wrap) * 3.14159265);
+        float transition = 1.0 - smoothstep(0.0, 0.65, abs(signed_n_dot_l));
+        float3 scatter_tint = lerp(float3(1.0, 0.96, 0.92), float3(1.0, 0.64, 0.50), transition * 0.35);
+        return albedo * (diffuse * 0.80 + soft_diffuse * scatter_tint * 0.20);
+    }
+
+    float3 FabricSheen(float3 albedo, float n_dot_l, float n_dot_v, float n_dot_h, float roughness)
+    {
+        // Charlie 纤维分布；半球、可见度和粗糙度下限保证掠射不出现尖峰。
+        float inverse_roughness = rcp(clamp(roughness, 0.35, 0.95));
+        float sin_theta_squared = saturate(1.0 - n_dot_h * n_dot_h);
+        float distribution = (2.0 + inverse_roughness) * pow(max(sin_theta_squared, 1e-5), inverse_roughness * 0.5)
+                           / (2.0 * 3.14159265);
+        float visibility = rcp(max(4.0 * (n_dot_l + n_dot_v - n_dot_l * n_dot_v), 0.10));
+        float3 fiber_tint = lerp(float3(1.0, 1.0, 1.0), sqrt(saturate(albedo)), 0.45);
+        return fiber_tint * min(distribution * visibility, 2.0) * saturate(n_dot_l);
+    }
+};

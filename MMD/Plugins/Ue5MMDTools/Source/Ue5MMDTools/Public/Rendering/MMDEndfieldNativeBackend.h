@@ -5,7 +5,7 @@
 namespace MMDEndfieldNativeBackend
 {
 	// 同步 generated overlay marker 与版本命名的 shader binding；旧 Cook 必须拒绝路由。
-	inline constexpr uint32 CookedGlobalShaderProtocolVersion = 14u;
+	inline constexpr uint32 CookedGlobalShaderProtocolVersion = 15u;
 
 	struct UE5MMDTOOLS_API FStatus
 	{

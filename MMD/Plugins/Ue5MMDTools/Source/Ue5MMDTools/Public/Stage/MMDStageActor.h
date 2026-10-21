@@ -173,6 +173,7 @@ private:
 	TArray<float> MaterialEmissions;
 	TArray<float> AccentLightScales;
 	TArray<float> AccentLightOverrides;
+	TOptional<float> SourceAngleBeforePreset;
 	double ElapsedSeconds = 0.0;
 
 	UInstancedStaticMeshComponent* MakeGroup(const TCHAR* Name, UStaticMesh* Mesh, const FLinearColor& Color,

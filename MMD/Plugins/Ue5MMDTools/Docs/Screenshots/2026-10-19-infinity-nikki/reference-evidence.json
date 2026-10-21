@@ -1,0 +1,77 @@
+{
+  "captured_date": "2026-10-19",
+  "timezone": "Asia/Singapore",
+  "rea_version": "6.7.0",
+  "rea_evidence": {
+    "evidence_id": "ev_00f704f6101407de486d2542c9ebcc13eb66216c363e090981f4d0c7480dfc3a",
+    "operation": "inspect_pe_resources",
+    "subject": {
+      "name": "X6Game-Win64-Shipping.exe",
+      "digest": {
+        "sha256": "4bde53dad10f8dcb68c7588ce832b8508b8cd206fb55924d0f15fb4a3bf215f4"
+      },
+      "local_path": "E:\\Games\\Launchers\\InfinityNikki\\InfinityNikki Launcher\\InfinityNikki\\X6Game\\Binaries\\Win64\\X6Game-Win64-Shipping.exe",
+      "format": "pe",
+      "architecture": "x86_64"
+    },
+    "limitations": [
+      "Static PE32/PE32+ type/name/language resource inventory; payloads other than RT_GROUP_ICON remain opaque.",
+      "Icon candidates are resource-table relationships. Language fallback, image decoding and actual shell/window loading are not observed.",
+      "Exact shared byte ranges are retained; non-identical overlapping resource structures or payloads are rejected."
+    ]
+  },
+  "shader_package": {
+    "name": "Default_Shader_2816_P.pak",
+    "sha256": "3cb2c7dcb6eb82d13711fd4c7610db5319ccc738f841845d8eeb4e3eb86877e5",
+    "rea_result": "unsupported binary format",
+    "unrealpak_result": "Failed to find requested encryption key 00000000000000000000000000000000",
+    "scope": "Initial generic-tool attempt; superseded for config access by the successful game-specific parser in package-evidence.json"
+  },
+  "ordinary_shell_observations": {
+    "tool": "Python mmap; not REA decompilation",
+    "target_sha256": "4bde53dad10f8dcb68c7588ce832b8508b8cd206fb55924d0f15fb4a3bf215f4",
+    "utf16le_match_count": 237,
+    "selected": [
+      {
+        "offset": 149328800,
+        "text": "r.OIT.SortedPixelsMobile"
+      },
+      {
+        "offset": 149328952,
+        "text": "r.OIT.SortedPixels"
+      },
+      {
+        "offset": 149328992,
+        "text": "r.OIT.SortedPixels.Layers"
+      },
+      {
+        "offset": 149329048,
+        "text": "r.OIT.SortedPixels.Memoryless"
+      },
+      {
+        "offset": 149335984,
+        "text": "r.OIT.SortedPixels.Compact"
+      }
+    ],
+    "limitations": "Names present in executable do not establish runtime use or active settings; HairStrands/SkinCache can be stock engine strings."
+  },
+  "primary_reference": {
+    "url": "https://www.unrealengine.com/developer-interviews/behind-the-scenes-of-infinity-nikki-tracing-a-glamorous-turn-to-an-unreal-open-world/",
+    "published_date": "2024-08-23",
+    "accessed_date": "2026-10-19",
+    "scope": "Developer states PBR lighting, character self shadows and restrained post processing. This does not provide shader source or numeric material settings."
+  },
+  "unresolved": [
+    "No configured native decompiler provider in this REA installation.",
+    "Original shader bytecode, BRDF formulas and material parameters were not recovered.",
+    "No original game was launched or instrumented."
+  ],
+  "implementation_origin": "Original plugin approximation using existing shared geometric BRDF; no game shaders, textures or models copied.",
+  "package_followup": {
+    "status": "Six UE configuration files successfully decoded using CUE4Parse GAME_InfinityNikki",
+    "evidence": "package-evidence.json",
+    "mounted": 196,
+    "registered": 197,
+    "limitations": "Original material properties require a matching usmap; original shader logic has not been recovered."
+  }
+}

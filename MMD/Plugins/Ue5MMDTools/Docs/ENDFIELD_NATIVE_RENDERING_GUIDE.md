@@ -1,42 +1,18 @@
 # 终末地插件着色入门与维护
 
-更新日期：2026-10-16。适用版本：UE 5.8.3 / CL58210709。
+源码核对日期：2026-10-19。适用版本：UE 5.8.3 / CL58210709。全插件路径先读[当前渲染架构](RENDERING_ARCHITECTURE.md)。
 
-当前为 **Backend `endfield-native-bsdf-v14-cast-clean`／Cooked协议14／Graph7／Profile布局42**；payload5／FaceData5／Frame1保持。`cast4`生产实拍27图／156次槽检查／0失败，Editor全局shader协议14验证，本次目检鼻椭圆消失。mode0_final2与atlas64_final各8图／78次检查／0失败，均验证协议14；`EFCastClean16c` BuildOnly三配置通过。
+当前共享后端为 **`mmd-native-bsdf-v15-style-profiles`／Cooked协议15／Graph7／终末地Profile布局42**；payload5／FaceData5／Frame1保持。v15加入独立暖暖风格分支，终末地继续使用v14的着色响应、参数与资产；见[暖暖说明](INFINITY_NIKKI_NATIVE_RENDERING.md)。
 
-新版预设Hair投影覆盖0影响所有接收面，Face抑制只限有效coverage；原Opaque转Masked后主覆盖仍为1，带自有payload的Masked在BasePass恢复clip。全部自有Toon透明父保留连续alpha，取消强制masked投影；只处理Face透明父曾不足，cast3仍有椭圆，最终cast4才消失。脸部SDF分区与caster覆盖分开，身体／场景原生阴影接收保留。没有新增RT、代理角色或修改安装引擎，具体机制、研究边界和[本批原图](ENDFIELD_FACE_SHADOW_GUIDE.md#本批验证2026-10-16)见[脸部阴影说明](ENDFIELD_FACE_SHADOW_GUIDE.md)。
+UE 负责准备实际灯光、阴影和环境贡献，插件在既有渲染入口决定角色的响应。材质使用原生 Substrate Toon；不透明／Masked 经 BasePass 和 packed 材质缓冲进入延迟光照，透明 Skin／附脸层用 Surface Forward inline 载荷。旧 Unlit 材质是独立兼容路径，不能代表本后端。
 
-本批外部像素检查52项通过：鼻核心与同角度关阴影对照逐像素一致；场景遮挡块使右颊编码亮度201.892→.0689，四张Unlit与cast3相同。保护2,381项仅8个自有V2包有意变化。这不等于原厂算法或完整终末地画质验收；多模型／动画／LOD、发行包绘制、Cook与性能不能从本批参考姿势推导。下方v13及更早结果保留原版本日期。
+当前 Face V5、独立高光法线、Skin 颜色配方／局部暖红、Hair／Cloth 二维 RS 与投影覆盖控制分别见[Face V5](ENDFIELD_FACE_V5_GUIDE.md)、[皮肤材质](ENDFIELD_SKIN_MATERIAL_GUIDE.md)和[脸部阴影](ENDFIELD_FACE_SHADOW_GUIDE.md)。它们不代表真正空间 SSS、完整原作材质或全部动态形变已经验收。
 
-**UE 负责准备真实灯光、阴影和环境光，插件负责决定角色被照亮后是什么样子。** 这就是目前的方案。材质仍使用原生 Substrate Toon 的数据格式，光照计算入口已经接到插件自己的 `.ush`。
+Mode2 需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`，并满足后端、格式与材质门控；绑定时不足256会退回原曲线／Mode0。已有 tile／cube Profile 不支持运行中直接降 atlas 分辨率。
 
-shader 是计算像素颜色的程序，`.ush` 是保存这类代码的文件；材质负责提供底色、法线等输入。
+**已有验证保持原日期。** 2026-10-16 的 v14 `cast4` 为27图／156次槽检查／0失败，另有 Mode0／atlas64 回退及 BuildOnly 结果；见[当批原图](Screenshots/2026-10-16-endfield-cast-clean/README.md)和[分发说明](ENDFIELD_PLUGIN_DISTRIBUTION.md)。2026-10-19 的v15增补Editor构建与终末地原生预设8图／70次槽检查回归，源码配方与资产保持；见[新批记录](Screenshots/2026-10-19-infinity-nikki-native/README.md)。这不重现旧cast4完整范围，也未重跑Cook／发行构建。更早结果从CHANGELOG与日期归档查阅。
 
-历史皮肤版本（2026-10-16，v13）为 **`endfield-native-bsdf-v13-skin-redness`／Cooked协议13／Profile布局42**，payload5／Graph6／FaceData5／Frame1不变。v12的颜色LUT与视角响应继续保留，v13在Skin当前灯的漫反射明暗交界增加弱暖红窄带。它是插件原创风格化泛红，不是提取到的原作红边；没有空间扩散、厚度透射或新的RT／GBuffer／渲染pass。
-
-新版预设仍关闭两组静态肤色，`CharacterSkinLighting`新增强度 `.18`、NoL宽度 `.22`、按π归一化的角半宽 `.035`、RGB `(1,.4,.30)`。几何NoL与SDF连续角距离分别计算窄带，并受覆盖、弱NoV及原生阴影约束；`SurfaceShadow≤.1`关闭新项。灯色与衰减只在原生外层乘一次，独立高光和GI不变。强度0保留同参数v12响应，详见[皮肤说明](ENDFIELD_SKIN_MATERIAL_GUIDE.md#v13明暗交界的弱暖红)。
-
-v13最终 `Editor3`／`Game1`构建通过，`generate13`保存15包、七父材质真实编译21／40／29／21／40／29／40；17项静态边界检查通过。最终 `redness3` NativeBackendProbe为34图／156次槽检查／0失败，Mode0与启动atlas64各8图／78次检查／0失败，Editor协议13均验证。外部像素检查72／72通过，本批ROI与最终报告、图像SHA绑定并目检，见[v13原图与来源](Screenshots/2026-10-16-endfield-skin-redness/README.md)。以下v12结果保留原版本与日期。
-
-侧光右颊只出现小幅局部暖红：MAE1.30296，高于自身复拍噪声.20222，RGB平均变化约 `(+1.0911,-1.0911,-1.5356)`；背光未超噪声，不算新增效果。固定右颊的放块／关原生阴影对照支持该位置的遮挡与泛红门控；关闭原生阴影后，两档强度各自的放块／不放块整图RGB相同，零直射灯开／关也相同。它没有提供整张原生shadow mask，具体编码亮度和范围见[皮肤验证](ENDFIELD_SKIN_MATERIAL_GUIDE.md#维护与验证)。
-
-`EFSkinRedness16` BuildOnly三配置、包内容及源码检查通过，12份冻结Source／HLSL与发行包哈希匹配；保护2,381项中2,379保持，仅自有Preset和OffsetLinear变化。干净宿主、发行包角色绘制、Cook及性能未重跑；身体Skin、附加灯和Legacy未独立GPU实测，不把这些结果称为全部内核或真实SSS验收。
-
-**历史验证（2026-10-16，v12）**：最终 `Editor3`与`Game1`运行时模块构建成功，`generate12b`完成15包／七父材质，shader数21／40／29／21／40／29／40。`response3` Mode2为47图／195次检查／0失败，Mode0及启动时atlas64各为8图／78次检查／0失败；Editor全局shader编译反射的协议12验证通过。原PNG和14文件冻结来源见[v12归档](Screenshots/2026-10-16-endfield-skin-response/README.md)。`Game1`之后只有验证CPP／Legacy USH修正，未声称新Cooked运行。
-
-背光暖肤变化明显，侧光和视角变化较细微；主光0的开／关对照全部RGB逐字节一致。外部55项严格检查通过，背光白衣ROI的开关差异未超过自身复拍噪声，右颊／鼻部核心差异则明显高于该噪声；这不是画质评分，鼻梁硬边仍在。`.025`角柔化只作对照，默认仍为 `2/255`。失败修复与具体数据见[皮肤验证记录](ENDFIELD_SKIN_MATERIAL_GUIDE.md#维护与验证)。
-
-同日v12的 `EFSkinResponse16c` BuildOnly通过Editor Development／Game Development／Shipping及必需文件、皮肤源文件检查，14份冻结Source／Shader与当时发行包逐字节一致。`response3`与该版代码对应；[v12来源摘要](Screenshots/2026-10-16-endfield-skin-response/sources.json)保留依据。它没有重跑空白宿主、发行包角色绘制与Cook；v13的BuildOnly结果已在上方单列。
-
-2026-10-16较早的v11新增独立身体／脸部表面参数和Face三父材质，[当时的同机位实拍](Screenshots/2026-10-16-endfield-skin/README.md)只验证静态肤色准备。新皮肤响应没有真实空间SSS、邻域扩散或厚度透射；脸部RefineMask尚未接入，视角处理属于通用近似。
-
-v11建立的独立头部投影角阈值图与透明附脸层继续保留，[脸部V5说明](ENDFIELD_FACE_V5_GUIDE.md)解释坐标、贴图、刘海投影及维护入口。v9双暗层、Hair／Cloth二维高光及主辅光分工也保留，[2026-10-15实拍](Screenshots/2026-10-15-endfield-volume/README.md)属于历史验证。Mode2需在应用预设前设置 `r.Substrate.ToonProfile.Resolution=256`；绑定时不足256会退回原曲线／Mode0，已分配Profile后不支持运行中直接降低分辨率。v12空白宿主与完整Cook仍待独立重测。
-
-本批也核对了别人公开复刻的完整分工：[参考源码对照](ENDFIELD_REPRODUCTION_REFERENCE_AUDIT.md)。材质和逐灯入口保持，另补底色描边与[插件分发检查](ENDFIELD_PLUGIN_DISTRIBUTION.md)；完整眼睛、头发与屏幕效果仍逐项推进。
-
-2026-10-15已改用更复杂的YYB16th带翼款，按同一机位对比原生Toon与当前响应：[脸、头发、衣料实拍](Screenshots/2026-10-15-endfield-distribution/README.md)。独立插件构建、空白宿主四材质编译、正/普通Cook及指定Skin载荷绿红对照均已有实证；这些是基础验证，白布、翅膀与完整材质响应仍未达到终末地画质目标。
-
-先看下面两张示意图，再看实拍。需要改代码时，直接跳到[维护入口](#维护入口)。
+下方数据流图与代码入口说明现有机制；历史实拍明确标注捕获日期。
 
 ## 为什么从旧方案换过来
 
@@ -108,7 +84,7 @@ shader 中的 `mmd_light_data` 只是“这一次光照计算的参数包”，�
 
 这也不是“完全没有额外写入”：原生零 anisotropy 的像素可能跳过该32 bit word，新通道会写它，只是没有超出编译器预留预算。打包、读回和解码都有成本，目前未测净性能收益。
 
-## 本轮脸部与 ramp 改了什么
+## 脸部与 ramp 的现有实现
 
 ![2026-10-14 V4 方向载荷示意，现已增加 V5 阈值类型](Images/EndfieldNative/face-payload.svg)
 
@@ -130,7 +106,7 @@ Skin、Hair、Cloth的RD使用已有客户端完整256点数据。A决定明暗�
 
 Mode2要求 `r.Substrate.Experimental.ToonUnifiedDiffuse=0`，由每盏灯处理RD语义；统一漫反射后段尚未适配，会拒绝启用此模式。Profile atlas须在应用前设为至少256，插件没有改工程默认值；不得在已有tile／cube Profile运行中直接降为64来期待安全自动回退。
 
-本轮同镜头侧光、头发／衣料及packed读回原图见[2026-10-14画质迭代归档](Screenshots/2026-10-14-endfield-fidelity/README.md)。旧版鼻部、脸颊硬条块已明显减少；其余复刻项继续按清单推进，不以编译或图片数量判定终末地画质达标。
+历史同镜头侧光、头发／衣料及packed读回原图见[2026-10-14画质迭代归档](Screenshots/2026-10-14-endfield-fidelity/README.md)。这组图只记录当时版本；后续投影变化见[2026-10-16归档](Screenshots/2026-10-16-endfield-cast-clean/README.md)，不以编译或图片数量判定终末地画质达标。
 
 ## 看实拍理解 GI 接口
 

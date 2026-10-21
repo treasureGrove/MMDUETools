@@ -2,6 +2,8 @@
 
 Ue5MMDTools 是一个用于 Unreal Engine 5 的 MMD 导入和播放插件。插件可以把 PMX 模型、VMD 动作和表情数据转换到 UE 的原生资产流程中，方便在 UE 场景里预览、播放和继续制作。
 
+渲染与开发从[插件文档入口](MMD/Plugins/Ue5MMDTools/Docs/README.md)和[当前渲染架构](MMD/Plugins/Ue5MMDTools/Docs/RENDERING_ARCHITECTURE.md)开始；终末地 V2 已使用原生 Substrate 延迟光照，旧 Unlit 材质是独立的兼容路径。
+
 完整展示页和演示视频：
 
 https://treasureGrove.github.io/MMDUETools/

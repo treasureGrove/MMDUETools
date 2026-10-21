@@ -1253,6 +1253,12 @@ void AMMDStageActor::ConfigureLighting()
 		}
 		GardenSkyLight->SetIntensity(bGarden ? 0.28f : 0.0f);
 		GardenSkyLight->SetVisibility(bGarden);
+		if (bGarden && RenderPreset && RenderPreset->bOverrideSkyLight)
+		{
+			GardenSkyLight->SetLightColor(RenderPreset->SkyLightColor);
+			GardenSkyLight->SetIntensity(SafeScalar(RenderPreset->SkyLightIntensity, 0.28f, 0.0f, 10.0f));
+			GardenSkyLight->SetLowerHemisphereColor(RenderPreset->SkyLightLowerHemisphereColor);
+		}
 	}
 	const FRotator DefaultKey(-38.0f, 40.0f, 0.0f);
 	const FRotator DefaultFill(-20.0f, 140.0f, 0.0f);
@@ -1266,6 +1272,24 @@ void AMMDStageActor::ConfigureLighting()
 	KeyLight->SetSpecularScale(Theme == EMMDStageTheme::SakuraTheater ? 0.28f : 1.0f);
 	FillLight->SetSpecularScale(Theme == EMMDStageTheme::SakuraTheater ? 0.12f : 1.0f);
 	RimLight->SetSpecularScale(Theme == EMMDStageTheme::SakuraTheater ? 0.16f : 1.0f);
+	// 显式覆盖才改变旧主题配方；退出该预设时恢复源角，避免在同一舞台上串用。
+	const bool bLightShape = RenderPreset && RenderPreset->bOverrideLightShape;
+	if (bLightShape)
+	{
+		if (!SourceAngleBeforePreset.IsSet()) SourceAngleBeforePreset = KeyLight->LightSourceAngle;
+		KeyLight->SetLightSourceAngle(SafeScalar(RenderPreset->KeyLightSourceAngle, 0.5357f, 0.0f, 10.0f));
+	}
+	else if (SourceAngleBeforePreset.IsSet())
+	{
+		KeyLight->SetLightSourceAngle(SourceAngleBeforePreset.GetValue());
+		SourceAngleBeforePreset.Reset();
+	}
+	if (bLightShape)
+	{
+		KeyLight->SetSpecularScale(SafeScalar(RenderPreset->KeyLightSpecularScale, 1.0f, 0.0f, 1.0f));
+		FillLight->SetSpecularScale(SafeScalar(RenderPreset->FillLightSpecularScale, 1.0f, 0.0f, 1.0f));
+		RimLight->SetSpecularScale(SafeScalar(RenderPreset->RimLightSpecularScale, 1.0f, 0.0f, 1.0f));
+	}
 	if (KeyLight->ContactShadowLength != 0.08f || KeyLight->ContactShadowLengthInWS)
 	{
 		KeyLight->ContactShadowLength = 0.08f;

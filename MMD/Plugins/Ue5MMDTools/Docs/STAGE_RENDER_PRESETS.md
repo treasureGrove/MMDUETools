@@ -1,5 +1,7 @@
 # 舞台与角色渲染预设使用说明
 
+**适用范围更正（2026-10-19）**：本文描述舞台及 Reference／旧 Unlit 预设。下文“尚未接入 GBuffer”等限制仅属于这些材质，不适用于已接入原生 Substrate 后端的终末地 V2。全项目路径先读[当前架构](RENDERING_ARCHITECTURE.md)。
+
 本文说明当前 `AMMDStageActor`、`UMMDStageRenderPreset` 和 Reference 角色材质的实际用法。资产根目录均为 `/Ue5MMDTools/Stages/`。
 
 ## 动态舞台

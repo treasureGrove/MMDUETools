@@ -1,11 +1,20 @@
 #pragma once
 
 #include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldSkinResponse.ush"
+#include "/Plugin/Ue5MMDTools/Core/TMMDInfinityNikkiNative.ush"
 
 // 仅由原生 BSDF 后端 include；需在 FSubstrateBSDFContext 与原生 Toon 函数定义之后。
 // Profile alpha 控制模式：0 保真透传，1 阴影诊断，2 客户端 RD 语义与几何高光响应。
 struct TMMDEndfieldNativeBSDF
 {
+    bool IsInfinityNikkiProfile(float profile_id)
+    {
+        uint width = uint(View.ToonProfileTextureSizeAndInvSize.x);
+        if (width < 16u) return false;
+        float style = View.ToonProfileTexture.Load(int4(int(round(float(width - 1u) * 0.6875)),
+            TOON_PROFILE_DIFFUSE_RAMP_Y, int(round(profile_id)), 0)).a;
+        return abs(style - 24.0) < 0.01;
+    }
     bool IsEndfieldProfile(float profile_id, out uint role)
     {
         role = 0u;
@@ -423,6 +432,13 @@ struct TMMDEndfieldNativeBSDF
                 validation.SpecularPathValue = 0.0;
                 validation.IntegratedSpecularValue = 0.0;
                 return validation;
+            }
+            if (IsInfinityNikkiProfile(TOON_PROFILEID(bsdf_context.BSDF)))
+            {
+                FSubstrateEvaluateToonResult result = EvaluateNative(bsdf_context, shadow_terms, area_light, is_rect_light, apply_diffuse_ramp);
+                TMMDInfinityNikkiNative nikki;
+                nikki.Evaluate(bsdf_context, shadow_terms, area_light, is_rect_light, role, result);
+                return result;
             }
             return EvaluateToonResponse(bsdf_context, shadow_terms, area_light, specular_area_light,
                 is_rect_light, apply_diffuse_ramp, diffuse_normal, specular_normal);

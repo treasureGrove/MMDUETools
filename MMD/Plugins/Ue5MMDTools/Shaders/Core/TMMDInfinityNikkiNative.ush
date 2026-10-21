@@ -1,0 +1,102 @@
+#pragma once
+#include "/Plugin/Ue5MMDTools/Core/TMMDInfinityNikkiResponse.ush"
+
+// 在原生逐灯入口计算暖暖方向的独立响应，不读取 LightDataRT 或终末地 RD/RS。
+struct TMMDInfinityNikkiNative
+{
+    float3 SafeNormalize(float3 value, float3 fallback)
+    {
+        float length_squared = dot(value, value);
+        return length_squared > 1e-6 ? value * rsqrt(length_squared) : fallback;
+    }
+
+    float AnisotropicDistribution(float3 normal, float3 tangent, float3 H, float along, float across)
+    {
+        float3 bitangent = cross(normal, tangent);
+        float3 projected = float3(dot(tangent, H) / along, dot(bitangent, H) / across, dot(normal, H));
+        float denominator = max(dot(projected, projected), 1e-4);
+        return rcp(3.14159265 * along * across * denominator * denominator);
+    }
+
+    float3 EvaluateGGX(FSubstrateBSDFContext context, FAreaLight area_light, bool is_rect_light,
+        float roughness, float3 f0)
+    {
+        roughness = clamp(roughness, 0.08, 0.95);
+        if (is_rect_light)
+            return RectGGXApproxLTC(roughness, f0, 1.0, context.N, context.V, area_light.Rect, area_light.Texture);
+        BxDFContext bxdf = context.Context;
+        SphereMaxNoH(bxdf, area_light.SphereSinAlpha, true);
+        float alpha_squared = Pow4(roughness);
+        float area_energy = EnergyNormalization(alpha_squared, bxdf.VoH, area_light);
+        float distribution = D_GGX(alpha_squared, saturate(bxdf.NoH)) * area_energy;
+        float visibility = Vis_SmithJoint(alpha_squared, max(saturate(bxdf.NoV), 0.001), saturate(area_light.NoL));
+        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - saturate(bxdf.VoH), 5.0);
+        return distribution * visibility * fresnel;
+    }
+
+    void Evaluate(FSubstrateBSDFContext context, FShadowTerms shadow_terms, FAreaLight area_light,
+        bool is_rect_light, uint role, inout FSubstrateEvaluateToonResult result)
+    {
+        TMMDInfinityNikkiResponse response;
+        float3 normal = context.N;
+        if (role == 1u && context.BSDF.mmd_payload.valid && !context.BSDF.mmd_payload.has_face_sdf)
+        {
+            TMMDEndfieldNativePayload payload;
+            normal = payload.ToWorldDirection(context.BSDF.mmd_payload);
+        }
+        float3 H = SafeNormalize(context.V + context.L, normal);
+        float n_dot_v = saturate(dot(normal, context.V));
+        float n_dot_l = saturate(dot(normal, context.L));
+        float n_dot_h = saturate(dot(normal, H));
+        float v_dot_h = saturate(dot(context.V, H));
+        float roughness = clamp(TOON_ROUGHNESS(context.BSDF), 0.08, 0.95);
+        float3 albedo = max(TOON_BASECOLOR(context.BSDF), 0.0);
+        float metallic = saturate(TOON_METALLIC(context.BSDF));
+        float3 f0 = ComputeF0(TOON_SPECULAR(context.BSDF), albedo, metallic);
+        float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - v_dot_h, 5.0);
+        float3 energy = (1.0 - fresnel) * (1.0 - metallic);
+        float shadow = saturate(shadow_terms.SurfaceShadow);
+        float3 diffuse = role == 1u
+            ? response.SkinDiffuse(albedo, dot(normal, context.L), n_dot_v, v_dot_h, roughness)
+            : albedo * response.BurleyDiffuse(n_dot_l, n_dot_v, v_dot_h, roughness);
+        float sheen_weight = role == 3u ? 0.16 : 0.0;
+        result.DiffuseColor = albedo * energy * (1.0 - sheen_weight);
+        result.DiffusePathValue = diffuse * energy * (1.0 - sheen_weight) * shadow;
+        result.IntegratedDiffuseValue = area_light.Falloff * area_light.FalloffColor * result.DiffusePathValue;
+        result.DiffusePDF = n_dot_l / 3.14159265;
+        // 不经过 Toon 高光色带；直接保留分布、可见度、Fresnel及面积光积分。
+        float3 specular = EvaluateGGX(context, area_light, is_rect_light, roughness, f0);
+        if (role == 1u)
+        {
+            float3 broad = EvaluateGGX(context, area_light, is_rect_light, max(roughness, 0.44), f0);
+            float3 surface = EvaluateGGX(context, area_light, is_rect_light, max(roughness * 0.58, 0.16), f0);
+            specular = broad * 0.78 + surface * 0.22;
+        }
+        result.SpecularPathValue = specular;
+        // LTC已经包含面积、距离和余弦积分，不能再次乘NoL或Falloff。
+        result.IntegratedSpecularValue = is_rect_light ? shadow * specular
+            : area_light.Falloff * area_light.FalloffColor * shadow * saturate(area_light.NoL) * specular;
+        if (role == 3u)
+        {
+            float3 sheen = response.FabricSheen(albedo, n_dot_l, n_dot_v, n_dot_h, roughness) * sheen_weight;
+            result.SpecularPathValue += sheen;
+            result.IntegratedSpecularValue += area_light.Falloff * area_light.FalloffColor * shadow * sheen;
+        }
+        if (role == 2u && !is_rect_light)
+        {
+            float3 flow = float3(0.0, 0.0, 1.0);
+            float3 tangent = SafeNormalize(flow - normal * dot(flow, normal), context.X);
+            float along = max(roughness * roughness * 0.45, 0.06);
+            float across = max(roughness * 1.25, 0.24);
+            float distribution = AnisotropicDistribution(normal, tangent, H, along, across);
+            float3 shifted_half = SafeNormalize(H + tangent * 0.12, H);
+            float secondary = AnisotropicDistribution(normal, tangent, shifted_half, along * 1.8, across);
+            float visibility = rcp(max(4.0 * (n_dot_l + n_dot_v - n_dot_l * n_dot_v), 0.12));
+            float3 fiber_color = lerp(float3(1.0, 1.0, 1.0), sqrt(saturate(albedo)), 0.40);
+            float3 hair_specular = fresnel * fiber_color * (distribution * 0.72 + secondary * 0.28) * visibility;
+            result.SpecularPathValue = hair_specular;
+            result.IntegratedSpecularValue = area_light.Falloff * area_light.FalloffColor * shadow * n_dot_l * hair_specular;
+        }
+        result.ToonDataShadowNoL = n_dot_l;
+    }
+};

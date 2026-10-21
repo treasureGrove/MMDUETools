@@ -1,0 +1,62 @@
+{
+  "captured_on": "2026-10-19",
+  "timezone": "Asia/Singapore",
+  "engine": "UE 5.8.3 CL58210709",
+  "rhi": "D3D12 SM6",
+  "images": [
+    {
+      "file": "hero_dress.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/nikki_dress_lumen/screenshots/nikki_dress_lumen_toon_full.png",
+      "captured_at": "2026-10-19T17:23:18.158595+08:00",
+      "sha256": "f9c9f582087451fbb593f6555afeebf35c7a4520d2460e6f20736c339999e911",
+      "kind": "actual_engine_capture",
+      "processing": "none; original probe PNG copied byte-for-byte"
+    },
+    {
+      "file": "face_native.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/nikki_lumen_final/screenshots/nikki_lumen_final_toon_face.png",
+      "captured_at": "2026-10-19T17:22:28.871531+08:00",
+      "sha256": "5ce9aafa4842d0199e47f4a906b4a6cb0afbffd5196431e1331392f16f73adc5",
+      "kind": "actual_engine_capture",
+      "processing": "none; original probe PNG copied byte-for-byte"
+    },
+    {
+      "file": "shadow_directional_clear.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/nikki/screenshots/nikki_backend_directional_clear_full.png",
+      "captured_at": "2026-10-19T17:17:36.763363+08:00",
+      "sha256": "c307d86edaf1e875aa804671c9fc4670590aaab7af21d6512f8402f0311a1bf0",
+      "kind": "actual_engine_capture",
+      "processing": "none; original probe PNG copied byte-for-byte"
+    },
+    {
+      "file": "shadow_directional_blocked.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/nikki/screenshots/nikki_backend_directional_blocked_full.png",
+      "captured_at": "2026-10-19T17:17:36.942923+08:00",
+      "sha256": "8bdad44febfd537b83cd9f7a68637576cf3fee63dc68420c19c2fc298500508a",
+      "kind": "actual_engine_capture",
+      "processing": "none; original probe PNG copied byte-for-byte"
+    },
+    {
+      "file": "endfield_regression.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/endfield/screenshots/endfield_toon_face.png",
+      "captured_at": "2026-10-19T17:18:14.518783+08:00",
+      "sha256": "0bb905ea2ae8d32f25085e6869472c9a77757287121416373405af9462bacf0b",
+      "kind": "actual_engine_capture",
+      "processing": "none; original probe PNG copied byte-for-byte"
+    }
+  ],
+  "source_sha256": {
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDInfinityNikkiNative.ush": "fff76d6b2b2b9491162c088142ad764ef88674eae2e09ccff2f6401f7889bc26",
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDInfinityNikkiResponse.ush": "cb2ddbb913b1320aae893f04d9a5f4eff09a289a3d390f028fe773c63ad64c30",
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldNativeBSDF.ush": "8c0f9896f4aea12f5b965df6921486980908e19a47d8890ee530a63d39b32f47",
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldNativeLegacy.ush": "4b65af107422fad6e26bb0eeebb7fbefe1bb9b25ea0ebc6fd5c6b932e5dac187",
+    "Plugins/Ue5MMDTools/Shaders/Private/MMDEndfieldNativeBackendProtocol.usf": "7c4af7f000946f8748fb6791124fd05fe016a80d832c8b26d97165c96379dd9d",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp": "4d9e9b38175746465b7505222fabf022af7b0de1913b9b56fcbdf619b40e8038",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackendProtocol.cpp": "02edb920e82526ea5cb2bf1d2b53b7befa03ac3709a017081eacc29940f6b80f",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeProfile.cpp": "86929c98bbac2c7d2228a9549418b8ac80dfb599b694aba3cdce45e85518e766",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp": "77bfb951fc2c3a78fdb9cee82097761205051997aa476fcf5eedb0b0b540f793",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDInfinityNikkiPresetsCommandlet.cpp": "b34958338c98e24816691aa99c128be325066388b7766269ca18b64fc6641d0f",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp": "4a0196b476de32569fdef62103e82e6494c48a677dad2f11a792564d59e88264",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldNativeBackendProbeCommandlet.cpp": "57a919b0b845e2fac5d2f32baaf8e924eefd762056ba0ed451888ab65ba061f8"
+  }
+}

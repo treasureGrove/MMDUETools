@@ -942,6 +942,14 @@ namespace
 		Rig.Capture->bAlwaysPersistRenderingState = true;
 		Rig.Capture->PostProcessBlendWeight = 1.0f;
 		ToonProbeApplyBasePostProcess(Rig, Preset);
+		if (bLumenTracking)
+		{
+			// SceneCapture 默认关闭 Lumen；只有显式测试选项才覆盖，保持既有基线不变。
+			Rig.PostProcess.bOverride_DynamicGlobalIlluminationMethod = true;
+			Rig.PostProcess.DynamicGlobalIlluminationMethod = EDynamicGlobalIlluminationMethod::Lumen;
+			Rig.PostProcess.bOverride_ReflectionMethod = true;
+			Rig.PostProcess.ReflectionMethod = EReflectionMethod::Lumen;
+		}
 		Rig.Scene->AddComponent(Rig.Capture.Get(), Rig.Capture->GetComponentTransform());
 		Rig.Stage->EvaluateStageAtTime(0.0f);
 		ToonProbeSetShot(Rig, EToonProbeShot::Hero);
@@ -1157,13 +1165,13 @@ namespace
 		Item->SetNumberField(TEXT("overlay_max_matched_depth_error"), Binding ? Binding->OverlayMaxMatchedDepthError : 0.0f);
 	}
 
-	FString ToonProbeNativeSurfaceParentPath(EBlendMode Blend, bool bFace)
+	FString ToonProbeNativeSurfaceParentPath(EBlendMode Blend, bool bFace, bool bInfinityNikki = false)
 	{
 		const TCHAR* Suffix = Blend == BLEND_Opaque ? TEXT("Opaque") : Blend == BLEND_Masked ? TEXT("Masked")
 			: Blend == BLEND_Translucent ? TEXT("Translucent") : nullptr;
 		if (!Suffix) return FString();
-		const FString Name = FString::Printf(TEXT("M_MMD_EndfieldV2_%s%s"), bFace ? TEXT("Face_") : TEXT(""), Suffix);
-		return FString::Printf(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/%s.%s"), *Name, *Name);
+		const FString Name = FString::Printf(TEXT("M_MMD_%s_%s%s"), bInfinityNikki ? TEXT("InfinityNikki") : TEXT("EndfieldV2"), bFace ? TEXT("Face_") : TEXT(""), Suffix);
+		return FString::Printf(TEXT("/Ue5MMDTools/Stages/Materials/%s/%s.%s"), bInfinityNikki ? TEXT("InfinityNikki") : TEXT("EndfieldV2"), *Name, *Name);
 	}
 
 	void ToonProbeValidateSlots(FToonProbeRig& Rig, FToonProbeLog& Log, const FString& Label)
@@ -1251,9 +1259,10 @@ namespace
 				const EMMDMaterialRole Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Rig.Character.Get(), Slot);
 				const EBlendMode Blend = MID->GetBlendMode();
 				const FString ActualParent = MID->Parent ? MID->Parent->GetPathName() : FString();
-				const bool bNativeNamespace = ActualParent.StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"));
-				const FString OrdinaryParent = ToonProbeNativeSurfaceParentPath(Blend, false);
-				const FString FaceParent = ToonProbeNativeSurfaceParentPath(Blend, true);
+				const bool bInfinityNikki = ActualParent.StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/InfinityNikki/"));
+				const bool bNativeNamespace = bInfinityNikki || ActualParent.StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/"));
+				const FString OrdinaryParent = ToonProbeNativeSurfaceParentPath(Blend, false, bInfinityNikki);
+				const FString FaceParent = ToonProbeNativeSurfaceParentPath(Blend, true, bInfinityNikki);
 				const bool bNativeParent = !OrdinaryParent.IsEmpty() && (ActualParent == OrdinaryParent || ActualParent == FaceParent);
 				const UMMDStageMaterialState* RoleState = Cast<UMMDStageMaterialState>(Rig.Character->GetAssetUserDataOfClass(UMMDStageMaterialState::StaticClass()));
 				if (bNativeNamespace)
@@ -1275,6 +1284,18 @@ namespace
 				}
 				const bool bForwardOverlay = DirectionBinding && DirectionBinding->bForwardOverlay && Blend == BLEND_Translucent;
 				const MMDEndfieldNativeBackend::FStatus& Backend = MMDEndfieldNativeBackend::GetStatus();
+				if (bNativeParent && Backend.bProfileMarkerAllowed)
+				{
+					const UToonProfile* Profile = MID->ToonProfileOverride;
+					const float Style = !Profile ? 0.0f : Profile->Settings.DiffuseRamp.ExternalCurve
+						? Profile->Settings.DiffuseRamp.ExternalCurve->FloatCurves[3].Eval(0.6875f)
+						: Profile->Settings.DiffuseRamp.ColorCurves[3].Eval(0.6875f);
+					const bool bStyleMatches = bInfinityNikki ? FMath::IsNearlyEqual(Style,24.0f) : !FMath::IsNearlyEqual(Style,24.0f);
+					Item->SetStringField(TEXT("native_style"), bInfinityNikki ? TEXT("infinity_nikki") : TEXT("endfield"));
+					Item->SetNumberField(TEXT("native_style_marker"), Style);
+					Item->SetBoolField(TEXT("native_style_marker_matches"), bStyleMatches);
+					if (!bStyleMatches) ++Log.Failures;
+				}
 				bValidateForwardOverlayRole = bNativeParent && Substrate::IsToonProfileEnabled() && Backend.bProfileMarkerAllowed
 					&& Backend.Mode == 2 && bForwardOverlay && (!RoleState || !RoleState->RoleOverrides.Contains(Slot));
 				const bool bExpectedPayload = bNativeParent && Substrate::IsSubstrateEnabled() && Role == EMMDMaterialRole::Skin
@@ -1858,10 +1879,41 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	Rig.Frames = Frames;
 	Rig.bFitSampleCamera = FParse::Param(*Params, TEXT("FitSampleCamera"));
 	Report->SetBoolField(TEXT("fit_sample_camera"), Rig.bFitSampleCamera);
-	if (!ToonProbeBuildRig(Rig, EndfieldPreset, Sample, bLumenTracking, Error))
+	const bool bNikkiPreset = NativePreset.IsValid() && NativePreset->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Presets/DA_Render_InfinityNikki."));
+	if (!ToonProbeBuildRig(Rig, bNikkiPreset ? NativePreset.Get() : EndfieldPreset, Sample, bLumenTracking, Error))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[ToonProbe] %s"), *Error);
 		return 1;
+	}
+	if (bNikkiPreset && FParse::Param(*Params, TEXT("LightingRestore")))
+	{
+		TStrongObjectPtr<UMMDStageRenderPreset> Other(LoadObject<UMMDStageRenderPreset>(nullptr,
+			TEXT("/Ue5MMDTools/Stages/Presets/EndfieldV2/DA_Render_EndfieldV2.DA_Render_EndfieldV2")));
+		bool bRestored = Other.IsValid() && !Other->bOverrideLightShape && !Other->bOverrideSkyLight;
+		if (bRestored)
+		{
+			Rig.Stage->ApplyStageRenderPreset(Other.Get());
+			const float OriginalAngle = Rig.Stage->KeyLight->LightSourceAngle;
+			Rig.Stage->KeyLight->SetLightSourceAngle(1.7f);
+			Rig.Stage->ApplyStageRenderPreset(Other.Get());
+			bRestored &= FMath::IsNearlyEqual(Rig.Stage->KeyLight->LightSourceAngle,1.7f);
+			const float OriginalSpecular = Rig.Stage->KeyLight->SpecularScale;
+			const FLinearColor OriginalSky = Rig.Stage->GardenSkyLight->GetLightColor();
+			const float OriginalSkyIntensity = Rig.Stage->GardenSkyLight->Intensity;
+			Rig.Stage->ApplyStageRenderPreset(NativePreset.Get());
+			bRestored &= FMath::IsNearlyEqual(Rig.Stage->KeyLight->LightSourceAngle,NativePreset->KeyLightSourceAngle)
+				&& FMath::IsNearlyEqual(Rig.Stage->KeyLight->SpecularScale,NativePreset->KeyLightSpecularScale)
+				&& Rig.Stage->GardenSkyLight->GetLightColor().Equals(FLinearColor(NativePreset->SkyLightColor.ToFColor(true)),0.0001f);
+			Rig.Stage->ApplyStageRenderPreset(Other.Get());
+			bRestored &= FMath::IsNearlyEqual(Rig.Stage->KeyLight->LightSourceAngle,1.7f)
+				&& FMath::IsNearlyEqual(Rig.Stage->KeyLight->SpecularScale,OriginalSpecular)
+				&& Rig.Stage->GardenSkyLight->GetLightColor().Equals(OriginalSky,0.0001f)
+				&& FMath::IsNearlyEqual(Rig.Stage->GardenSkyLight->Intensity,OriginalSkyIntensity);
+			Rig.Stage->KeyLight->SetLightSourceAngle(OriginalAngle);
+			Rig.Stage->ApplyStageRenderPreset(NativePreset.Get());
+		}
+		Report->SetBoolField(TEXT("lighting_preset_restore_verified"),bRestored);
+		if (!bRestored) ++Log.Failures;
 	}
 	ToonProbeApplyPreset(Rig, EndfieldPreset);
 	ToonProbeSetLights(Rig, true, true, true);
@@ -4608,7 +4660,7 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 	if (ToonProbeHasExp(Exps, TEXT("lighting")) && bCanToon)
 	{
 		struct FLightingVariant { const TCHAR* Name; TArray<FString> Disabled; bool bRayTracing; };
-		const TArray<FLightingVariant> LightingVariants =
+		TArray<FLightingVariant> LightingVariants =
 		{
 			{ TEXT("rt0_all"), {}, false },
 			{ TEXT("rt1_all"), {}, true },
@@ -4618,6 +4670,8 @@ int32 UMMDEndfieldToonProbeCommandlet::Main(const FString& Params)
 			{ TEXT("rt1_noao"), { TEXT("AmbientOcclusion"), TEXT("LumenShortRangeAmbientOcclusion") }, true },
 			{ TEXT("rt1_nosky"), { TEXT("SkyLighting") }, true },
 		};
+		// 显式 Lumen 实拍补同条件复拍，避免把时域噪声误记为微弱材质响应。
+		if (bLumenTracking) LightingVariants.Insert({ TEXT("rt1_all_repeat"), {}, true }, 2);
 		for (int32 Setup = 0; Setup < 2; ++Setup)
 		{
 			// Setup 0：默认三盏灯；Setup 1：关掉三盏直射灯，只剩天空 + GI，间接光贡献最容易看出。

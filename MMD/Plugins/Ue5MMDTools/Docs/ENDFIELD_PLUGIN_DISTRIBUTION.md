@@ -2,7 +2,9 @@
 
 适配范围：**UE 5.8.3 / CL58210709，Win64 桌面延迟渲染**。实际运行验证为D3D12 SM6。最近核查日期：2026-10-16。这是一份固定引擎版本的插件适配，不是跨版本自定义 ShadingModel API。
 
-**当前源码版本**：Backend `endfield-native-bsdf-v14-cast-clean`／Cooked协议14／Graph7／Profile布局42；payload5／FaceData5／Frame1保持。七父材质／15包范围保留，皮肤原创LUT与泛红不改；没有新RT、GBuffer字段或修改安装引擎。
+**当前源码版本（2026-10-19）**：共享后端 `mmd-native-bsdf-v15-style-profiles`／Cooked协议15／Graph7／终末地Profile布局42；payload5／FaceData5／Frame1保持。v15增加独立暖暖分支及两份必需USH，终末地七父材质／15包与既有着色响应保持；没有新RT、GBuffer字段或修改安装引擎。旧Cooked库必须重Cook；本轮尚未验证完整BuildPlugin／Cooked／Shipping，不能沿用下面v14的分发结果。
+
+## 历史验证：v14（2026-10-16）
 
 本批通过材质ShadowReplace控制Hair对所有接收面的投影、有效Face coverage投影，并保留原Opaque主覆盖、自有Masked BasePass裁剪及透明连续alpha；所有自有Toon透明父取消强制masked投影。生产实拍 `cast4` 为27图／156次槽检查／0失败，Editor协议14验证，本次目检鼻椭圆消失；mode0_final2及atlas64_final各8图／78次检查／0失败，均验证协议14。外部52项检查通过，场景遮挡块的右颊亮度201.892→.0689，鼻核心与同角ShadowOff一致，四张Unlit与cast3相同。机制及范围见[脸部阴影说明](ENDFIELD_FACE_SHADOW_GUIDE.md)。
 

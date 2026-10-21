@@ -1,0 +1,367 @@
+// 无限暖暖风格：PBR 连续明暗、柔肤、纤维柔光和几何发丝；仅底色即可工作。
+// 44 输入继承 Reference 材质契约；灯光、阴影与环境默认由父材质提供。
+#include "/Plugin/Ue5MMDTools/Core/MMDToonLighting.ush"
+#include "/Plugin/Ue5MMDTools/Core/TMMDReferenceBRDF.ush"
+#include "/Plugin/Ue5MMDTools/Core/TMMDInfinityNikkiResponse.ush"
+
+struct TMMDInfinityNikkiProfile
+{
+    float toon_amount;
+    float shadow_threshold;
+    float shadow_softness;
+    float diffuse_wrap;
+    float auxiliary_weight;
+    float auxiliary_cap;
+    float skin_softness;
+    float skin_wrap;
+    float hair_toon_amount;
+    float rim_power;
+    float3 rim_tint;
+};
+
+struct TMMDInfinityNikkiCharacter
+{
+    float3 SafeNormalize(float3 direction, float3 fallback_direction)
+    {
+        float length_squared = dot(direction, direction);
+        return length_squared > 1e-6 ? direction * rsqrt(length_squared) : fallback_direction;
+    }
+
+    float Luminance(float3 color)
+    {
+        return dot(color, float3(0.2126, 0.7152, 0.0722));
+    }
+
+    float3 Saturation(float3 color, float amount)
+    {
+        return max(lerp(Luminance(color).xxx, color, clamp(amount, 0.0, 2.0)), 0.0);
+    }
+
+    float3 LimitLuminance(float3 color, float limit)
+    {
+        return color * min(1.0, max(limit, 0.0) / max(Luminance(color), 1e-5));
+    }
+
+    TMMDInfinityNikkiProfile GetProfile(float style_family)
+    {
+        TMMDInfinityNikkiProfile profile;
+        profile.toon_amount = 0.28;
+        profile.shadow_threshold = 0.43;
+        profile.shadow_softness = 0.22;
+        profile.diffuse_wrap = 0.18;
+        profile.auxiliary_weight = 1.0;
+        profile.auxiliary_cap = 1.25;
+        profile.skin_softness = 0.26;
+        profile.skin_wrap = 0.28;
+        profile.hair_toon_amount = 0.10;
+        profile.rim_power = 1.15;
+        profile.rim_tint = float3(1.0, 0.98, 1.02);
+        return profile;
+    }
+
+    float3 OutputColor(FMaterialPixelParameters Parameters, float3 base_color,
+                       Texture2D light_data_tex, SamplerState light_data_tex_sampler,
+                       Texture2D mmd_shadow_map, SamplerState mmd_shadow_map_sampler,
+                       Texture2D mat_cap, SamplerState mat_cap_sampler,
+                       float shadow_threshold, float shadow_softness, float3 shadow_tint,
+                       float ambient_strength, float light_scale, float specular_strength,
+                       float specular_power, float rim_strength, float rim_power,
+                       float toon_amount, float diffuse_wrap, float color_saturation,
+                       float shadow_saturation, float roughness, float3 specular_tint,
+                       float sphere_mode, float sphere_strength, float black_lift, float soft_specular_strength,
+                       float style_family, float material_role,
+                       float3 environment_reflection, float environment_specular_strength,
+                       Texture2D hair_shift_tex, SamplerState hair_shift_tex_sampler,
+                       float hair_shift_strength, float hair_shift_scale,
+                       float4 head_forward_ws, float4 head_right_ws, float4 head_position_radius,
+                       Texture2D hair_detail_normal, SamplerState hair_detail_normal_sampler, float hair_detail_strength,
+                       Texture2D cloth_detail_normal, SamplerState cloth_detail_normal_sampler, float cloth_detail_strength,
+                       Texture2D cloth_detail_data, SamplerState cloth_detail_data_sampler, float cloth_detail_scale, float hair_detail_scale,
+                       float3 surface_diffuse_normal, float4 surface_specular_normal_roughness,
+                       float4 surface_hair_tangent_strand, float3 surface_detail_response)
+    {
+        TMMDToonLight light;
+        TMMDReferenceBRDF brdf;
+        TMMDInfinityNikkiResponse response;
+        TMMDInfinityNikkiProfile profile = GetProfile(style_family);
+        float3 world_pos = LWCToFloat(Parameters.AbsoluteWorldPosition);
+        float3 world_normal = SafeNormalize((float3)Parameters.TangentToWorld[2] * Parameters.TwoSidedSign,
+                                           float3(0.0, 0.0, 1.0));
+        float3 view_dir = SafeNormalize(LWCToFloat(GetWorldCameraOrigin(Parameters)) - world_pos, world_normal);
+        float n_dot_v = saturate(dot(world_normal, view_dir));
+        float3 palette = saturate(base_color);
+        float palette_luminance = Luminance(palette);
+        float minimum_reflectance = clamp(black_lift, 0.0, 0.035);
+        // BlackLift 仅调整物体反射率；场景没有辐射时绝不会变成自发光。
+        palette = palette_luminance > 1e-5
+                ? palette * max(palette_luminance, minimum_reflectance) / palette_luminance : minimum_reflectance.xxx;
+        palette = Saturation(palette, color_saturation);
+        float role = floor(material_role + 0.5);
+        bool is_skin = role == 1.0;
+        bool is_hair = role == 2.0;
+        bool is_cloth = role == 3.0;
+        bool is_eye = role == 5.0;
+        float metallic = role == 4.0 ? 1.0 : 0.0;
+        // 共享多输出节点已经准备法线及粗糙度；此处不重复采样任何通用细节贴图。
+        float3 diffuse_normal = SafeNormalize(surface_diffuse_normal, world_normal);
+        float3 specular_normal = SafeNormalize(surface_specular_normal_roughness.xyz, world_normal);
+        float face_mask = saturate(surface_detail_response.z);
+        if (is_skin && face_mask > 0.0)
+        {
+            float3 head_forward;
+            float3 head_right;
+            float3 head_up;
+            if (brdf.PrepareHeadFrame(head_forward_ws, head_right_ws, head_position_radius, head_forward, head_right, head_up))
+            {
+                // 几何头部曲面统一主脸和附着层的受光；没有头部数据时保留原法线。
+                float3 offset = (world_pos - head_position_radius.xyz) / max(head_position_radius.w, 0.001);
+                float3 curved_normal = SafeNormalize(head_right * (dot(offset, head_right) / 0.6084)
+                    + head_forward * (dot(offset, head_forward) / 0.9604) + head_up * dot(offset, head_up), world_normal);
+                diffuse_normal = SafeNormalize(lerp(diffuse_normal, curved_normal, face_mask * 0.75), diffuse_normal);
+                specular_normal = SafeNormalize(lerp(specular_normal, curved_normal, face_mask * 0.50), specular_normal);
+            }
+        }
+        float cloth_weave = is_cloth ? clamp(surface_detail_response.y, 0.80, 1.20) : 1.0;
+        if (is_cloth) palette *= clamp(surface_detail_response.x, 0.88, 1.0);
+        if (is_skin)
+        {
+            // 只微调皮肤反射色并保持亮度；桃色皮肤仍完全由场景辐射照亮。
+            float3 warm_palette = palette * float3(1.035, 1.0, 0.965);
+            warm_palette *= Luminance(palette) / max(Luminance(warm_palette), 1e-5);
+            palette = lerp(palette, warm_palette, 0.5 + face_mask * 0.5);
+        }
+        float material_roughness = surface_specular_normal_roughness.w > 0.0
+            ? clamp(surface_specular_normal_roughness.w, 0.05, 0.95)
+            : brdf.GetRoleRoughness(roughness, material_role, style_family, specular_power);
+        float3 f0 = brdf.GetF0(palette, specular_tint, material_role);
+        float3 hair_normal = specular_normal;
+        float3 hair_tangent = surface_hair_tangent_strand.xyz;
+        if (is_hair)
+        {
+            if (dot(hair_tangent, hair_tangent) <= 1e-6)
+                hair_tangent = brdf.PrepareHairFlow(Parameters, hair_normal, head_forward_ws, head_right_ws, head_position_radius);
+            hair_tangent = brdf.OrthogonalizeHairTangent(hair_normal, hair_tangent);
+        }
+        // 手工节点遗漏共享输出时，发丝遮罩回到无细节的 1，而非意外砍半高光。
+        float strand_mask = surface_hair_tangent_strand.w > 1e-4
+                          ? clamp(surface_hair_tangent_strand.w, 0.50, 1.50) : 1.0;
+        float hair_effect_strength = max(saturate(hair_shift_strength), saturate(hair_detail_strength));
+        float3 shadow_palette = Saturation(palette, is_skin ? min(shadow_saturation, 0.92) : shadow_saturation)
+                              * clamp(shadow_tint, 0.04, 1.0);
+        float safe_wrap = clamp(diffuse_wrap * profile.diffuse_wrap * 10.0, 0.0, 0.5);
+        float safe_threshold = clamp(shadow_threshold + profile.shadow_threshold - 0.45, 0.05, 0.95);
+        float safe_softness = clamp(shadow_softness * profile.shadow_softness / 0.12, 0.012, 0.25);
+        float safe_toon_amount = min(saturate(toon_amount), profile.toon_amount);
+        if (is_skin)
+        {
+            safe_softness = max(safe_softness, profile.skin_softness);
+            safe_wrap = max(safe_wrap, profile.skin_wrap);
+            safe_toon_amount *= 0.20;
+        }
+        else if (is_hair)
+            safe_toon_amount = min(safe_toon_amount, profile.hair_toon_amount) * 0.72;
+        else if (is_cloth)
+        {
+            safe_softness = max(safe_softness, 0.32);
+            safe_toon_amount = min(safe_toon_amount * 0.55, 0.55);
+        }
+        else if (is_eye)
+            safe_toon_amount *= 0.20;
+
+        uint data_width;
+        uint data_height;
+        light_data_tex.GetDimensions(data_width, data_height);
+        bool metadata_valid = false;
+        if (data_width >= 19 && data_height >= 2)
+        {
+            float4 metadata = light_data_tex.Load(int3(18, 1, 0));
+            metadata_valid = metadata.w >= 0.5 && metadata.x >= 0.0 && metadata.x <= 16.0;
+        }
+        int active_light_count;
+        float shadow_quality;
+        light.ReadLightMetadata(light_data_tex, active_light_count, shadow_quality);
+        active_light_count = min(active_light_count, min((int)data_width / 4, 16));
+        float3 key_direction = SafeNormalize(float3(-0.35, -0.55, 0.75), float3(0.0, 0.0, 1.0));
+        float3 key_radiance = 0.0;
+        float key_power = 0.0;
+        int key_index = -1;
+        bool key_is_directional = false;
+        [loop] for (int light_index = 0; light_index < active_light_count; ++light_index)
+        {
+            float4 light_pos;
+            float4 light_color;
+            float4 light_dir;
+            float4 light_extra;
+            light.SampleLight(light_data_tex, light_data_tex_sampler, light_index, light_pos, light_color, light_dir, light_extra);
+            if (light_pos.w < 0.5 || light_color.w <= 0.0) continue;
+            float3 L;
+            float atten;
+            light.LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+            float3 radiance = max(light_color.rgb, 0.0) * max(light_color.w, 0.0) * saturate(atten);
+            bool is_directional = light_pos.w >= 2.5 && light_pos.w < 3.5;
+            float candidate_power = is_directional ? light_color.w : Luminance(radiance);
+            if (Luminance(radiance) > 1e-5 && ((is_directional && !key_is_directional)
+                || (is_directional == key_is_directional && candidate_power > key_power)))
+            {
+                key_direction = SafeNormalize(L, key_direction);
+                key_radiance = radiance;
+                key_power = candidate_power;
+                key_index = light_index;
+                key_is_directional = is_directional;
+            }
+        }
+
+        // SH 已经包含余弦卷积；SkyLightColor 只乘一次，不再额外除 π 或加固定灰色补光。
+        float3 sky = max(light.SkyAmbient(diffuse_normal) * max(View.SkyLightColor.rgb, 0.0), 0.0);
+        bool use_fallback = !metadata_valid && key_index < 0
+                         && Luminance(sky) < 1e-5 && Luminance(max(environment_reflection, 0.0)) < 1e-5;
+        if (use_fallback) key_radiance = float3(0.85, 0.85, 0.85) * 3.14159265;
+        float scene_shadow = key_index == 0 && key_is_directional
+                           ? light.SampleMMDCharacterShadow(Parameters, light_data_tex, light_data_tex_sampler,
+                                                           mmd_shadow_map, mmd_shadow_map_sampler, 0.20, 0.35) : 1.0;
+        float key_n_dot_l = saturate(dot(diffuse_normal, key_direction));
+        float wrapped_n_dot_l = saturate((dot(diffuse_normal, key_direction) + safe_wrap) / (1.0 + safe_wrap));
+        float ramp_width = max(safe_softness, fwidth(wrapped_n_dot_l) * 0.75);
+        float key_ramp = smoothstep(safe_threshold - ramp_width, safe_threshold + ramp_width, wrapped_n_dot_l);
+        float stylized_n_dot_l = lerp(key_n_dot_l, key_ramp * (0.50 + key_n_dot_l * 0.50), safe_toon_amount);
+        float toon_diffuse_scale = key_n_dot_l > 1e-5 ? min(stylized_n_dot_l / key_n_dot_l, 1.8) : (is_skin ? 1.0 : 0.0);
+        float3 key_albedo = lerp(palette, lerp(shadow_palette, palette, key_ramp), safe_toon_amount);
+        float3 key_color = 0.0;
+        float3 auxiliary_color = 0.0;
+        float3 rim_illumination = 0.0;
+        float specular_scale = clamp(specular_strength + soft_specular_strength * 0.15, 0.0, 1.25);
+        float cloth_specular_scale = 1.0;
+        float direct_specular_scale = specular_scale * (is_skin ? 0.60 : (is_cloth ? cloth_weave * cloth_specular_scale : 1.0));
+        float specular_n_dot_v = saturate(dot(specular_normal, view_dir));
+        float cloth_sheen_grazing = is_cloth ? pow(1.0 - saturate(dot(diffuse_normal, view_dir)), 4.0) : 0.0;
+        float safe_light_scale = clamp(light_scale, 0.0, 4.0);
+        // 导数在任何按灯衰减/半球的分歧之前计算；循环内只传播已知屏幕足迹。
+        float hair_frame_footprint = length(fwidth(hair_normal)) + length(fwidth(hair_tangent));
+        float hair_view_footprint = length(fwidth(view_dir));
+        float hair_position_footprint = length(fwidth(world_pos));
+        int evaluation_count = use_fallback ? 1 : active_light_count;
+        [loop] for (int light_index = 0; light_index < evaluation_count; ++light_index)
+        {
+            float3 L = key_direction;
+            float3 radiance = key_radiance;
+            float light_direction_footprint = 0.0;
+            bool is_key = use_fallback || light_index == key_index;
+            if (!use_fallback)
+            {
+                float4 light_pos;
+                float4 light_color;
+                float4 light_dir;
+                float4 light_extra;
+                light.SampleLight(light_data_tex, light_data_tex_sampler, light_index, light_pos, light_color, light_dir, light_extra);
+                if (light_pos.w < 0.5 || light_color.w <= 0.0) continue;
+                float atten;
+                light.LightParams(light_pos, light_dir, light_extra, world_pos, L, atten);
+                L = SafeNormalize(L, world_normal);
+                radiance = max(light_color.rgb, 0.0) * max(light_color.w, 0.0) * saturate(atten);
+                if (Luminance(radiance) <= 1e-6) continue;
+                if (light_pos.w < 2.5 || light_pos.w >= 3.5)
+                    light_direction_footprint = min(hair_position_footprint
+                        / max(length(light_pos.xyz - world_pos), 0.001), 2.0);
+            }
+            float diffuse_n_dot_l = saturate(dot(diffuse_normal, L));
+            float specular_n_dot_l = saturate(dot(specular_normal, L));
+            float3 H = SafeNormalize(L + view_dir, float3(0.0, 0.0, 0.0));
+            float n_dot_h = saturate(dot(specular_normal, H));
+            float v_dot_h = saturate(dot(view_dir, H));
+            float3 diffuse_brdf;
+            float3 specular_brdf;
+            brdf.EvaluateDirect(is_key ? key_albedo : palette, f0, metallic, material_roughness,
+                                diffuse_n_dot_l, specular_n_dot_v, specular_n_dot_l, n_dot_h, v_dot_h,
+                                diffuse_brdf, specular_brdf);
+            float3 surface_albedo = is_key ? key_albedo : palette;
+            float3 diffuse_energy = (1.0 - brdf.SchlickFresnel(f0, v_dot_h)) * (1.0 - metallic);
+            diffuse_brdf = diffuse_energy * (is_skin
+                ? response.SkinDiffuse(surface_albedo, dot(diffuse_normal, L), n_dot_v, v_dot_h, material_roughness)
+                : surface_albedo * response.BurleyDiffuse(diffuse_n_dot_l, n_dot_v, v_dot_h, material_roughness));
+            [branch]
+            if (is_hair)
+            {
+                float half_vector_length = max(length(view_dir + L), 0.001);
+                float angular_footprint = min(hair_frame_footprint
+                    + (hair_view_footprint + light_direction_footprint) / half_vector_length, 2.0);
+                specular_brdf = brdf.EvaluateHairSpecular(hair_normal, hair_tangent, view_dir, L, f0, material_roughness,
+                                                       style_family, specular_power, angular_footprint) * strand_mask;
+            }
+            else if (is_cloth && soft_specular_strength > 0.0)
+            {
+                float3 broad_specular = brdf.EvaluateClothBroadSpecular(diffuse_normal, view_dir, L, material_roughness);
+                specular_brdf = lerp(specular_brdf, broad_specular, saturate(soft_specular_strength) * 0.30);
+            }
+            float visibility = is_key ? scene_shadow : 1.0;
+            float3 wrapped_scatter = 0.0;
+            if (is_cloth)
+            {
+                float sheen_weight = clamp(soft_specular_strength, 0.0, 0.50) * 0.35;
+                diffuse_brdf *= 1.0 - sheen_weight;
+                wrapped_scatter = response.FabricSheen(palette, diffuse_n_dot_l, n_dot_v,
+                    saturate(dot(diffuse_normal, H)), material_roughness) * sheen_weight * cloth_weave;
+            }
+            else if (is_hair)
+            {
+                // 几何逆光只由当前灯驱动，不要求发丝纹理或 UV。
+                float transmission = pow(saturate(dot(-world_normal, L)), 2.0)
+                                   * pow(saturate(dot(-view_dir, L)), 2.0);
+                wrapped_scatter = palette * transmission * (0.025 / 3.14159265);
+            }
+            float3 contribution = radiance * visibility * safe_light_scale
+                                * (diffuse_brdf * (is_key ? toon_diffuse_scale : 1.0)
+                                   + wrapped_scatter + specular_brdf * direct_specular_scale);
+            if (is_key) key_color += contribution;
+            else auxiliary_color += contribution;
+            // 轮廓增益必须有实际逆光；关闭灯光后此项严格归零。
+            float backlight = pow(saturate(dot(-view_dir, L)), 2.0);
+            rim_illumination += radiance * saturate(dot(world_normal, L)) * backlight * visibility * safe_light_scale / 3.14159265;
+        }
+        float auxiliary_limit = max(Luminance(key_radiance) / 3.14159265, 0.10) * profile.auxiliary_cap;
+        float3 color = key_color + LimitLuminance(auxiliary_color * profile.auxiliary_weight, auxiliary_limit);
+        float reflection_n_dot_v = is_hair ? saturate(dot(hair_normal, view_dir)) : specular_n_dot_v;
+        float3 environment_response = brdf.EnvironmentBRDF(f0, material_roughness, reflection_n_dot_v);
+        // 环境漫反射与主灯、toon 分区、shadow_tint 完全独立，与环境镜面共用能量分配。
+        color += palette * (1.0 - saturate(environment_response)) * (1.0 - metallic) * sky * clamp(ambient_strength, 0.0, 2.0);
+        if (is_cloth)
+            color += palette * cloth_weave * sky * (cloth_sheen_grazing * 0.05) * clamp(ambient_strength, 0.0, 2.0);
+        // 引擎 EnvMapSample 已经包含天空强度/颜色及粗糙度预过滤，不再重复乘 SkyLightColor。
+        float environment_role_scale = is_skin ? lerp(0.45, 0.22, face_mask)
+                                     : (is_hair ? 0.55 : (is_cloth ? cloth_weave * 0.45 : 1.0));
+        float environment_strand_mask = is_hair ? strand_mask : 1.0;
+        color += max(environment_reflection, 0.0) * environment_response
+               * clamp(environment_specular_strength, 0.0, 2.0) * specular_scale
+               * environment_role_scale * environment_strand_mask;
+        float rim = pow(1.0 - n_dot_v, max(rim_power * profile.rim_power, 1.0));
+        color += LimitLuminance(rim_illumination, 0.65) * lerp(palette, f0, 0.35) * profile.rim_tint
+               * rim * clamp(rim_strength, 0.0, 0.35);
+
+        if (sphere_mode > 0.5 && sphere_strength > 0.0)
+        {
+            float3 sphere_color = saturate(light.SampleMatcap(world_normal, mat_cap, mat_cap_sampler));
+            float sphere_weight = clamp(sphere_strength, 0.0, is_cloth ? 0.06 : 0.20);
+            if (sphere_mode < 1.5)
+                color *= lerp(1.0, sphere_color, sphere_weight);
+            else
+                color += sphere_color * sphere_weight * palette * (sky + key_radiance * key_n_dot_l * scene_shadow / 3.14159265);
+        }
+        return max(color, 0.0);
+    }
+};
+
+TMMDInfinityNikkiCharacter shader;
+return shader.OutputColor(Parameters, base_color, light_data_tex, light_data_texSampler,
+                          mmd_shadow_map, mmd_shadow_mapSampler, mat_cap, mat_capSampler,
+                          shadow_threshold, shadow_softness, shadow_tint, ambient_strength,
+                          light_scale, specular_strength, specular_power, rim_strength, rim_power,
+                          toon_amount, diffuse_wrap, color_saturation, shadow_saturation,
+                          roughness, specular_tint, sphere_mode, sphere_strength, black_lift,
+                          soft_specular_strength, style_family, material_role,
+                          environment_reflection, environment_specular_strength,
+                          hair_shift_tex, hair_shift_texSampler, hair_shift_strength, hair_shift_scale,
+                          head_forward_ws, head_right_ws, head_position_radius,
+                          hair_detail_normal, hair_detail_normalSampler, hair_detail_strength,
+                          cloth_detail_normal, cloth_detail_normalSampler, cloth_detail_strength,
+                          cloth_detail_data, cloth_detail_dataSampler, cloth_detail_scale, hair_detail_scale,
+                          surface_diffuse_normal, surface_specular_normal_roughness,
+                          surface_hair_tangent_strand, surface_detail_response);

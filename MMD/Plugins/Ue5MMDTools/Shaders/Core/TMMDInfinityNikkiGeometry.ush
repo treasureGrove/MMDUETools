@@ -1,0 +1,39 @@
+#include "/Plugin/Ue5MMDTools/Core/TMMDEndfieldNative.ush"
+
+// 共享头框架与投射覆盖，暖暖只传连续几何法线，不使用终末地角阈值作为受光分区。
+struct TMMDInfinityNikkiGeometry
+{
+    float3 PrepareSurface(float3 world_pos, float3 mesh_normal, float4 head_position_radius,
+        float3 head_forward, float3 head_right, float sphere_blend, float2 surface_uv,
+        Texture2D sdf_tex, SamplerState sdf_sampler, float sdf_enabled, float ramp_boundary, float shadow_suppress,
+        Texture2D direction_tex, SamplerState direction_sampler, float direction_enabled, float direction_version,
+        float payload_enabled, float specular_sphere_blend, out float2 pattern_uv, out float face_mask,
+        out float shadow_coverage, out float4 face_direction, out float4 head_quaternion)
+    {
+        TMMDEndfieldNative geometry;
+        float3 source_normal = geometry.PrepareSurface(world_pos, mesh_normal, head_position_radius,
+            head_forward, head_right, sphere_blend, surface_uv, sdf_tex, sdf_sampler, sdf_enabled,
+            ramp_boundary, shadow_suppress, direction_tex, direction_sampler, direction_enabled,
+            direction_version, payload_enabled, specular_sphere_blend, pattern_uv, face_mask,
+            shadow_coverage, face_direction, head_quaternion);
+        if (sphere_blend <= 0.0 || head_position_radius.w <= 0.0
+            || dot(head_forward, head_forward) < 1e-6) return source_normal;
+
+        float3 forward = geometry.SafeNormalize(head_forward, float3(0.0, 1.0, 0.0));
+        float3 right = geometry.SafeNormalize(head_right - forward * dot(head_right, forward), float3(1.0, 0.0, 0.0));
+        float3 up = geometry.SafeNormalize(cross(right, forward), float3(0.0, 0.0, 1.0));
+        float head_mask = 1.0 - smoothstep(1.5, 2.0, length(world_pos - head_position_radius.xyz) / head_position_radius.w);
+        float3 diffuse_normal = geometry.SphereNormal(world_pos, mesh_normal, head_position_radius, sphere_blend);
+        // 主脸与反向法线附层使用同一代理；高光/GI仍保留连续头部曲面。
+        float3 surface_normal = geometry.SphereNormal(world_pos, mesh_normal, head_position_radius,
+            max(specular_sphere_blend, saturate(sphere_blend + 0.08)));
+        face_mask = max(face_mask, head_mask);
+        if (payload_enabled == 1.0)
+        {
+            float3 local_normal = float3(dot(diffuse_normal, right), dot(diffuse_normal, forward), dot(diffuse_normal, up));
+            face_direction = float4(local_normal, head_mask);
+            head_quaternion = geometry.FrameQuaternion(right, forward, up);
+        }
+        return surface_normal;
+    }
+};

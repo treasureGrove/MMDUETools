@@ -1,0 +1,426 @@
+{
+  "date": "2026-10-19",
+  "runs": {
+    "polish_face": {
+      "success": true,
+      "image_count": 59,
+      "slot_check_count": 105,
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "errors": [],
+      "report_sha256": "c4da475ca5a9707a1fe279d54ca5cf4993c510a377e8329e88f4979935d01dd2"
+    },
+    "polish_dress": {
+      "success": true,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "errors": [],
+      "report_sha256": "e472da62ccd08444ee5977422ae0bee76277f4cd07ad07da273b95c51658a9bf"
+    },
+    "polish_motion": {
+      "success": true,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "errors": [],
+      "report_sha256": "b2c3a1d20565aeb6cb6017667da375cdba4955aba5f34c146f34d8e6098feeb9"
+    },
+    "endfield_regression": {
+      "success": true,
+      "image_count": 8,
+      "slot_check_count": 70,
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "errors": [],
+      "report_sha256": "b701e81378303b66a66980b9a50c89f68ec25f218be7df151f75dc184d828d7d"
+    },
+    "lighting_restore": {
+      "success": true,
+      "image_count": 8,
+      "slot_check_count": 70,
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "errors": [],
+      "report_sha256": "bbc685dd9ecba81337b845870ffc2e04d6191973dab139d2d4f711e3ab1a94e1"
+    }
+  },
+  "endfield_pixel_regression": [
+    {
+      "mode": "toon",
+      "roi": "cheek",
+      "xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "mae_rgb8": 0.001610305958132045,
+      "max_rgb8": 1.0,
+      "before_sha256": "0bb905ea2ae8d32f25085e6869472c9a77757287121416373405af9462bacf0b",
+      "after_sha256": "ab7976360f2de40777733259c265285f3d617514727da2a8bb0677516ed708e6"
+    },
+    {
+      "mode": "toon",
+      "roi": "facecore",
+      "xyxy": [
+        580,
+        440,
+        725,
+        520
+      ],
+      "mae_rgb8": 0.006379310344827587,
+      "max_rgb8": 10.0,
+      "before_sha256": "0bb905ea2ae8d32f25085e6869472c9a77757287121416373405af9462bacf0b",
+      "after_sha256": "ab7976360f2de40777733259c265285f3d617514727da2a8bb0677516ed708e6"
+    },
+    {
+      "mode": "toon",
+      "roi": "hair",
+      "xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "mae_rgb8": 0.0015584415584415584,
+      "max_rgb8": 1.0,
+      "before_sha256": "0bb905ea2ae8d32f25085e6869472c9a77757287121416373405af9462bacf0b",
+      "after_sha256": "ab7976360f2de40777733259c265285f3d617514727da2a8bb0677516ed708e6"
+    },
+    {
+      "mode": "toon",
+      "roi": "torso",
+      "xyxy": [
+        590,
+        640,
+        640,
+        700
+      ],
+      "mae_rgb8": 0.0,
+      "max_rgb8": 0.0,
+      "before_sha256": "0bb905ea2ae8d32f25085e6869472c9a77757287121416373405af9462bacf0b",
+      "after_sha256": "ab7976360f2de40777733259c265285f3d617514727da2a8bb0677516ed708e6"
+    },
+    {
+      "mode": "unlit",
+      "roi": "cheek",
+      "xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "mae_rgb8": 0.0,
+      "max_rgb8": 0.0,
+      "before_sha256": "ed4c2d30e9d20420704bbcbe45e1a3676395d57744ade3ca2db247f00233352b",
+      "after_sha256": "22bd507511a5e11e248dc1d5ff3ddded99b488fa13af51c2555b2758ab2f8717"
+    },
+    {
+      "mode": "unlit",
+      "roi": "facecore",
+      "xyxy": [
+        580,
+        440,
+        725,
+        520
+      ],
+      "mae_rgb8": 0.0038505747126436783,
+      "max_rgb8": 9.0,
+      "before_sha256": "ed4c2d30e9d20420704bbcbe45e1a3676395d57744ade3ca2db247f00233352b",
+      "after_sha256": "22bd507511a5e11e248dc1d5ff3ddded99b488fa13af51c2555b2758ab2f8717"
+    },
+    {
+      "mode": "unlit",
+      "roi": "hair",
+      "xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "mae_rgb8": 0.0,
+      "max_rgb8": 0.0,
+      "before_sha256": "ed4c2d30e9d20420704bbcbe45e1a3676395d57744ade3ca2db247f00233352b",
+      "after_sha256": "22bd507511a5e11e248dc1d5ff3ddded99b488fa13af51c2555b2758ab2f8717"
+    },
+    {
+      "mode": "unlit",
+      "roi": "torso",
+      "xyxy": [
+        590,
+        640,
+        640,
+        700
+      ],
+      "mae_rgb8": 0.0,
+      "max_rgb8": 0.0,
+      "before_sha256": "ed4c2d30e9d20420704bbcbe45e1a3676395d57744ade3ca2db247f00233352b",
+      "after_sha256": "22bd507511a5e11e248dc1d5ff3ddded99b488fa13af51c2555b2758ab2f8717"
+    }
+  ],
+  "nikki_before_after": [
+    {
+      "shot": "face",
+      "roi": "nose",
+      "xyxy": [
+        665,
+        463,
+        689,
+        493
+      ],
+      "before_mean_rgb": [
+        183.2097222222222,
+        172.45277777777778,
+        171.35555555555555
+      ],
+      "after_mean_rgb": [
+        223.025,
+        212.72222222222223,
+        207.14583333333334
+      ],
+      "after_clipped_all_channels_fraction": 0.0,
+      "mae_rgb8": 38.625,
+      "before_sha256": "5ce9aafa4842d0199e47f4a906b4a6cb0afbffd5196431e1331392f16f73adc5",
+      "after_sha256": "8cd2d028b8bd0453b73b744be4d6cff1c82b4638d5a6eedb9dff67d94187eeeb"
+    },
+    {
+      "shot": "face",
+      "roi": "cheek",
+      "xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "before_mean_rgb": [
+        180.10628019323673,
+        172.0305958132045,
+        174.67632850241546
+      ],
+      "after_mean_rgb": [
+        195.25925925925927,
+        184.72785829307568,
+        180.57004830917873
+      ],
+      "after_clipped_all_channels_fraction": 0.0,
+      "mae_rgb8": 11.56575415995706,
+      "before_sha256": "5ce9aafa4842d0199e47f4a906b4a6cb0afbffd5196431e1331392f16f73adc5",
+      "after_sha256": "8cd2d028b8bd0453b73b744be4d6cff1c82b4638d5a6eedb9dff67d94187eeeb"
+    },
+    {
+      "shot": "face",
+      "roi": "forehead",
+      "xyxy": [
+        625,
+        342,
+        649,
+        370
+      ],
+      "before_mean_rgb": [
+        126.45982142857143,
+        142.05208333333334,
+        148.07142857142858
+      ],
+      "after_mean_rgb": [
+        140.2797619047619,
+        156.11160714285714,
+        155.19791666666666
+      ],
+      "after_clipped_all_channels_fraction": 0.0,
+      "mae_rgb8": 11.958333333333334,
+      "before_sha256": "5ce9aafa4842d0199e47f4a906b4a6cb0afbffd5196431e1331392f16f73adc5",
+      "after_sha256": "8cd2d028b8bd0453b73b744be4d6cff1c82b4638d5a6eedb9dff67d94187eeeb"
+    },
+    {
+      "shot": "dress_eyes",
+      "roi": "left_iris",
+      "xyxy": [
+        579,
+        408,
+        612,
+        438
+      ],
+      "before_mean_rgb": [
+        97.55858585858586,
+        127.44040404040405,
+        141.92222222222222
+      ],
+      "after_mean_rgb": [
+        119.30606060606061,
+        137.82222222222222,
+        139.55151515151516
+      ],
+      "after_clipped_all_channels_fraction": 0.0,
+      "mae_rgb8": 17.184848484848484,
+      "before_sha256": "308529a1c5f469a515e8a1a413b8d857162faa9e59beef0e35170836b07cf5ae",
+      "after_sha256": "f15f92233e8f9120ef962c830ab6ee18fe35299e9311486a9f1f9afb94e761c2"
+    },
+    {
+      "shot": "dress_eyes",
+      "roi": "right_iris",
+      "xyxy": [
+        704,
+        405,
+        727,
+        437
+      ],
+      "before_mean_rgb": [
+        134.43478260869566,
+        160.04483695652175,
+        164.0258152173913
+      ],
+      "after_mean_rgb": [
+        202.1100543478261,
+        205.79347826086956,
+        200.1508152173913
+      ],
+      "after_clipped_all_channels_fraction": 0.03260869565217391,
+      "mae_rgb8": 50.20289855072464,
+      "before_sha256": "308529a1c5f469a515e8a1a413b8d857162faa9e59beef0e35170836b07cf5ae",
+      "after_sha256": "f15f92233e8f9120ef962c830ab6ee18fe35299e9311486a9f1f9afb94e761c2"
+    }
+  ],
+  "lighting_response": [
+    {
+      "direct_setup": 0,
+      "surface": "cheek",
+      "variant": "nogi",
+      "mae_rgb8": 2.123456790123457,
+      "repeat_noise_mae_rgb8": 0.4095544820182501,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 0,
+      "surface": "cheek",
+      "variant": "noreflect",
+      "mae_rgb8": 0.2694578636607622,
+      "repeat_noise_mae_rgb8": 0.4095544820182501,
+      "above_3x_noise": false
+    },
+    {
+      "direct_setup": 0,
+      "surface": "cheek",
+      "variant": "nosky",
+      "mae_rgb8": 22.920021470746107,
+      "repeat_noise_mae_rgb8": 0.4095544820182501,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 0,
+      "surface": "hair",
+      "variant": "nogi",
+      "mae_rgb8": 1.3046753246753247,
+      "repeat_noise_mae_rgb8": 0.2636363636363636,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 0,
+      "surface": "hair",
+      "variant": "noreflect",
+      "mae_rgb8": 1.4959307359307359,
+      "repeat_noise_mae_rgb8": 0.2636363636363636,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 0,
+      "surface": "hair",
+      "variant": "nosky",
+      "mae_rgb8": 26.73212121212121,
+      "repeat_noise_mae_rgb8": 0.2636363636363636,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 1,
+      "surface": "cheek",
+      "variant": "nogi",
+      "mae_rgb8": 6.672034353193774,
+      "repeat_noise_mae_rgb8": 0.7761674718196457,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 1,
+      "surface": "cheek",
+      "variant": "noreflect",
+      "mae_rgb8": 0.6752549651100376,
+      "repeat_noise_mae_rgb8": 0.7761674718196457,
+      "above_3x_noise": false
+    },
+    {
+      "direct_setup": 1,
+      "surface": "cheek",
+      "variant": "nosky",
+      "mae_rgb8": 105.8894256575416,
+      "repeat_noise_mae_rgb8": 0.7761674718196457,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 1,
+      "surface": "hair",
+      "variant": "nogi",
+      "mae_rgb8": 4.146839826839827,
+      "repeat_noise_mae_rgb8": 0.4533333333333333,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 1,
+      "surface": "hair",
+      "variant": "noreflect",
+      "mae_rgb8": 3.0814718614718615,
+      "repeat_noise_mae_rgb8": 0.4533333333333333,
+      "above_3x_noise": true
+    },
+    {
+      "direct_setup": 1,
+      "surface": "hair",
+      "variant": "nosky",
+      "mae_rgb8": 96.62277056277057,
+      "repeat_noise_mae_rgb8": 0.4533333333333333,
+      "above_3x_noise": true
+    }
+  ],
+  "protected_file_count": 516,
+  "protected_changed": [],
+  "lighting_preset_restore_verified": true,
+  "scope": {
+    "all_material_kernels_verified": false,
+    "visual_accepted": false,
+    "notes": [
+      "Before/after Nikki includes both material and preset-lighting changes.",
+      "Endfield ROI comparison uses the same reference pose, camera, preset and non-Lumen capture settings; full-frame shadow noise is not zero.",
+      "No spatial SSS, original OIT, full Cooked/Shipping or performance validation."
+    ]
+  },
+  "validated_image_count": 91,
+  "validated_slot_check_count": 401,
+  "before_after_scope": "Nikki images use the same model, pose and camera but both shader and preset lighting changed; this does not isolate a single BRDF parameter.",
+  "intermediate_attempts": [
+    {
+      "path": "Saved/InfinityNikkiPolish/polish_face/capture.json",
+      "status": "draws passed, visual rejected internally: excessive gloss; not counted in final results"
+    },
+    {
+      "path": "Saved/InfinityNikkiPolish/final/polish_face/capture.json",
+      "status": "draws passed; diffuse normal blend increased from .92 to 1 afterward; not counted in final results"
+    }
+  ],
+  "generation_report": {
+    "path": "Saved/InfinityNikkiValidation/20261019-192609-040/presets.json",
+    "sha256": "c665de328c5a1dd994f88d6131d46d4624aad87ae61020ee65fcca575bd906a0",
+    "owned_packages_written": 13
+  },
+  "final_editor_build": {
+    "path": "Saved/InfinityNikkiPolish/build-04.log",
+    "sha256": "83ce9026f0f8f79a5775fa8c559528920e931eec7cd95ef500d68bf6e7a1ab7b",
+    "success": true
+  },
+  "endfield_bsdf_unchanged_before_polish": true,
+  "repeat_generation": {
+    "success": true,
+    "written_count": 0,
+    "report": "Saved/InfinityNikkiValidation/20261019-193647-728/presets.json",
+    "report_sha256": "d5712d275960c747ea09c2f168a248783beaf95b5b9341b71cb749c8c2a3653d"
+  }
+}

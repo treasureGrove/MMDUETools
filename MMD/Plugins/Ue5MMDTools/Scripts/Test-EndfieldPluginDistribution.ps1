@@ -50,7 +50,7 @@ if ($version.MajorVersion -ne 5 -or $version.MinorVersion -ne 8 -or $version.Pat
 }
 New-Item -ItemType Directory -Path $output_root | Out-Null
 $package_dir = Join-Path $output_root 'Ue5MMDTools'
-$report = [ordered]@{ schema='mmd.endfield.plugin-distribution.v1'; captured_at=(Get-Date).ToString('o'); plugin=$plugin_file; engine=$engine_root; expected_backend_patch='endfield-native-bsdf-v14-cast-clean'; expected_global_shader_protocol=14; expected_graph_version=7; expected_face_data_version=5; expected_skin_profile_layout=42; build_plugin_verified=$false; payload_files_verified=$false; skin_response_sources_verified=$false; clean_host_adapter_verified=$false; rendering_verified=$false; cooked_runtime_verified=$false }
+$report = [ordered]@{ schema='mmd.endfield.plugin-distribution.v1'; captured_at=(Get-Date).ToString('o'); plugin=$plugin_file; engine=$engine_root; expected_backend_patch='mmd-native-bsdf-v15-style-profiles'; expected_global_shader_protocol=15; expected_graph_version=7; expected_face_data_version=5; expected_skin_profile_layout=42; build_plugin_verified=$false; payload_files_verified=$false; skin_response_sources_verified=$false; clean_host_adapter_verified=$false; rendering_verified=$false; cooked_runtime_verified=$false }
 function Save-Report { $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output_root 'distribution.json') -Encoding utf8 }
 try {
     & (Join-Path $engine_root 'Engine/Build/BatchFiles/RunUAT.bat') BuildPlugin "-Plugin=$plugin_file" "-Package=$package_dir" -TargetPlatforms=Win64 -HostPlatforms=Win64 -WaitForUATMutex -UTF8Output *> (Join-Path $output_root 'build-plugin.log')
@@ -64,6 +64,8 @@ try {
         'ThirdParty/Bullet/lib/BulletSoftBody.lib', 'ThirdParty/Bullet/lib/LinearMath.lib',
         'Source/Ue5MMDTools/Ue5MMDTools.Build.cs',
         'Shaders/Core/TMMDEndfieldNativePayload.ush', 'Shaders/Core/TMMDEndfieldNativeBSDF.ush',
+        'Shaders/Core/TMMDInfinityNikkiNative.ush', 'Shaders/Core/TMMDInfinityNikkiResponse.ush',
+        'Shaders/Core/TMMDInfinityNikkiGeometry.ush',
         'Shaders/Core/TMMDEndfieldSkinMaterial.ush',
         'Shaders/Core/TMMDEndfieldSkinResponse.ush',
         'Source/Ue5MMDTools/Private/Rendering/MMDEndfieldSkinLutData.inl',

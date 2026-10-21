@@ -38,7 +38,7 @@ struct UE5MMDTOOLS_API FMMDStageToonRoleSettings
 	float Anisotropy = 0.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1"))
 	float SphereBlend = 0.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "自有材质阴影分支的投影覆盖强度；0关闭该部位向所有接收者的阴影贴图投影，仍接收场景阴影。仅支持受控的 EndfieldV2 遮罩父材质，缺少支持时保留原生投影。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "自有材质阴影分支的投影覆盖强度；0关闭该部位向所有接收者的阴影贴图投影，仍接收场景阴影。仅支持受控的原生遮罩父材质，缺少支持时保留原生投影。"))
 	float ShadowCastStrength = 1.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Toon", meta = (ClampMin = "0", ClampMax = "1", ToolTip = "有效自动 SDF 脸面在阴影贴图中的投影抑制；仍接收头发和场景阴影。1 关闭这些脸面的投影，也影响它们对身体和场景的投影。"))
 	float FaceShadowSuppress = 0.0f;
@@ -208,6 +208,25 @@ public:
 	float RimLightIntensity = 1.80f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (ClampMin = "0", ClampMax = "10"))
 	float AccentLightIntensity = 0.7f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting")
+	bool bOverrideLightShape = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideLightShape", ClampMin = "0", ClampMax = "10"))
+	float KeyLightSourceAngle = 0.5357f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideLightShape", ClampMin = "0", ClampMax = "1"))
+	float KeyLightSpecularScale = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideLightShape", ClampMin = "0", ClampMax = "1"))
+	float FillLightSpecularScale = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideLightShape", ClampMin = "0", ClampMax = "1"))
+	float RimLightSpecularScale = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting")
+	bool bOverrideSkyLight = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideSkyLight", HideAlphaChannel))
+	FLinearColor SkyLightColor = FLinearColor::White;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideSkyLight", ClampMin = "0", ClampMax = "10"))
+	float SkyLightIntensity = 0.28f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|Lighting", meta = (EditCondition = "bOverrideSkyLight", HideAlphaChannel))
+	FLinearColor SkyLightLowerHemisphereColor = FLinearColor(0.06f, 0.035f, 0.025f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MMD|PostProcess", meta = (ClampMin = "-4", ClampMax = "4"))
 	float ExposureBias = 0.25f;

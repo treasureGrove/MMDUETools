@@ -1,3 +1,7 @@
+# 渲染架构入口
+
+2026-10-19：先读 [当前渲染架构](Plugins/Ue5MMDTools/Docs/RENDERING_ARCHITECTURE.md)。终末地 V2 与迁移后的暖暖共用 Substrate packed 材质缓冲、延迟逐灯及原生 GI／阴影入口，风格响应与 Profile 独立；Reference／旧材质的 Unlit 兼容路径单独存在。共享后端现为v15／Cooked协议15，旧暖暖实验已被用户否决，不能引用其截图当作新结果。父目录 AGENTS 的旧 LightDataRT 全局摘要已替换，历史交接不作为当前架构或会话授权。
+
 # AI Model Routing
 
 This repository uses the following routing rules for any future AI/LLM task selection.

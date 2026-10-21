@@ -20,7 +20,7 @@ struct TMMDEndfieldNativeLegacy
         UnpackToonCustomData(PackRGBA8(gbuffer.CustomData), pattern_uv, profile_id);
         TMMDEndfieldNativeBSDF profile_control;
         uint role;
-        if (!profile_control.IsEndfieldProfile(profile_id, role)) return result;
+        if (!profile_control.IsEndfieldProfile(profile_id, role) || profile_control.IsInfinityNikkiProfile(profile_id)) return result;
         uint response_mode = uint(profile_control.ReadProfileControls(profile_id).x);
         if (response_mode == 0u) return result;
 
@@ -106,7 +106,7 @@ struct TMMDEndfieldNativeLegacy
         UnpackToonCustomData(PackRGBA8(gbuffer.CustomData), pattern_uv, profile_id);
         TMMDEndfieldNativeBSDF profile_control;
         uint role;
-        if (!profile_control.IsEndfieldProfile(profile_id, role))
+        if (!profile_control.IsEndfieldProfile(profile_id, role) || profile_control.IsInfinityNikkiProfile(profile_id))
             return GetDynamicLighting(translated_world_position, camera_vector, gbuffer, ambient_occlusion,
                 light_data, light_attenuation, dither, pixel_coord, surface_shadow);
         uint response_mode = uint(profile_control.ReadProfileControls(profile_id).x);

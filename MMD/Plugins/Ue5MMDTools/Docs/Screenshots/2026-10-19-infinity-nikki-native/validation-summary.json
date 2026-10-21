@@ -1,0 +1,903 @@
+{
+  "captured_at": "2026-10-19",
+  "protected_file_count": 516,
+  "protected_changed": [],
+  "runs": {
+    "nikki": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 55,
+      "slot_check_count": 105,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {
+        "infinity_nikki": 70
+      },
+      "probe_failures": 0,
+      "report_sha256": "0d1b1e5a5e3b75afd13e6b383081880950de7a32795fc5da15e1742485b5cbfe"
+    },
+    "nikki_mode0": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 8,
+      "slot_check_count": 70,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {
+        "infinity_nikki": 35
+      },
+      "probe_failures": 0,
+      "report_sha256": "e224216351a6c43eddd20aada8040a0d167f74e5d4210957ff31e3a1a33ce934"
+    },
+    "endfield": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 8,
+      "slot_check_count": 70,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {
+        "endfield": 35
+      },
+      "probe_failures": 0,
+      "report_sha256": "e7a207a0020288a7074981184ceb774d2f502aa938fac67faa49d55a3dd94a0b"
+    },
+    "nikki_dress": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {
+        "infinity_nikki": 39
+      },
+      "probe_failures": 0,
+      "report_sha256": "5e37608e338f7601b9f8f0b5a863500f5a4b591152fbd8e795e1efce3847e247"
+    },
+    "nikki_lumen_final": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 44,
+      "slot_check_count": 70,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {
+        "infinity_nikki": 35
+      },
+      "probe_failures": 0,
+      "report_sha256": "da8c9dc54f9bf7d43e989dee96ac8509e1e5411583ce11448d3e4e42d7163dfe"
+    },
+    "nikki_dress_lumen": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 8,
+      "slot_check_count": 78,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {
+        "infinity_nikki": 39
+      },
+      "probe_failures": 0,
+      "report_sha256": "8d869a6af2a35d0d794d1322030be6955b4839d7d3652bbf72f9f4187d80ce86"
+    },
+    "nikki_lumen_noise": {
+      "success": true,
+      "draw_verified": true,
+      "image_count": 40,
+      "slot_check_count": 35,
+      "errors": [],
+      "global_shader_protocol": 15,
+      "global_shader_protocol_verified": true,
+      "styles": {},
+      "probe_failures": 0,
+      "report_sha256": "435255ac62e03ded288b0f9ece50a81e788c0dfa66bb159849bc0dcbca98c3af"
+    }
+  },
+  "pixel_checks": [
+    {
+      "name": "directional_shadow_torso",
+      "roi_xyxy": [
+        620,
+        200,
+        650,
+        250
+      ],
+      "a_luma_srgb8": 18.383383600000002,
+      "b_luma_srgb8": 16.243310666666666,
+      "mae_rgb8": 2.1508889198303223,
+      "changed_pixel_fraction": 0.4246666666666667
+    },
+    {
+      "name": "directional_shadow_face",
+      "roi_xyxy": [
+        645,
+        125,
+        665,
+        142
+      ],
+      "a_luma_srgb8": 124.81796705882354,
+      "b_luma_srgb8": 12.52434411764706,
+      "mae_rgb8": 111.57549285888672,
+      "changed_pixel_fraction": 0.9882352941176471
+    },
+    {
+      "name": "point_shadow_torso",
+      "roi_xyxy": [
+        620,
+        200,
+        650,
+        250
+      ],
+      "a_luma_srgb8": 84.08974666666667,
+      "b_luma_srgb8": 0.05299213333333334,
+      "mae_rgb8": 84.56177520751953,
+      "changed_pixel_fraction": 0.9286666666666666
+    },
+    {
+      "name": "point_shadow_face",
+      "roi_xyxy": [
+        645,
+        125,
+        665,
+        142
+      ],
+      "a_luma_srgb8": 192.63520294117646,
+      "b_luma_srgb8": 2.25951,
+      "mae_rgb8": 189.5009765625,
+      "changed_pixel_fraction": 1.0
+    },
+    {
+      "name": "spot_shadow_torso",
+      "roi_xyxy": [
+        620,
+        200,
+        650,
+        250
+      ],
+      "a_luma_srgb8": 84.090094,
+      "b_luma_srgb8": 0.052,
+      "mae_rgb8": 84.5628890991211,
+      "changed_pixel_fraction": 0.9353333333333333
+    },
+    {
+      "name": "spot_shadow_face",
+      "roi_xyxy": [
+        645,
+        125,
+        665,
+        142
+      ],
+      "a_luma_srgb8": 192.62784235294117,
+      "b_luma_srgb8": 2.25951,
+      "mae_rgb8": 189.49510192871094,
+      "changed_pixel_fraction": 1.0
+    },
+    {
+      "name": "rect_shadow_torso",
+      "roi_xyxy": [
+        620,
+        200,
+        650,
+        250
+      ],
+      "a_luma_srgb8": 122.42037546666667,
+      "b_luma_srgb8": 0.052,
+      "mae_rgb8": 122.85111236572266,
+      "changed_pixel_fraction": 0.9993333333333333
+    },
+    {
+      "name": "rect_shadow_face",
+      "roi_xyxy": [
+        645,
+        125,
+        665,
+        142
+      ],
+      "a_luma_srgb8": 227.49488058823528,
+      "b_luma_srgb8": 0.03235294117647059,
+      "mae_rgb8": 226.9705810546875,
+      "changed_pixel_fraction": 1.0
+    },
+    {
+      "name": "light0_nogi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 173.92784895330112,
+      "b_luma_srgb8": 173.9290006441224,
+      "mae_rgb8": 0.0005367686389945447,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "light0_nolumengi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 173.92784895330112,
+      "b_luma_srgb8": 173.9290006441224,
+      "mae_rgb8": 0.0005367686389945447,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "light0_noreflect_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 173.92784895330112,
+      "b_luma_srgb8": 173.9290006441224,
+      "mae_rgb8": 0.0005367686389945447,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "light0_noao_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 173.92784895330112,
+      "b_luma_srgb8": 175.4480074074074,
+      "mae_rgb8": 1.585614562034607,
+      "changed_pixel_fraction": 0.8438003220611916
+    },
+    {
+      "name": "light0_nosky_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 173.92784895330112,
+      "b_luma_srgb8": 161.04347826086956,
+      "mae_rgb8": 13.534621238708496,
+      "changed_pixel_fraction": 1.0
+    },
+    {
+      "name": "light1_nogi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 102.65076457326892,
+      "b_luma_srgb8": 102.65076457326892,
+      "mae_rgb8": 0.0,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "light1_nolumengi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 102.65076457326892,
+      "b_luma_srgb8": 102.65076457326892,
+      "mae_rgb8": 0.0,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "light1_noreflect_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 102.65076457326892,
+      "b_luma_srgb8": 102.65076457326892,
+      "mae_rgb8": 0.0,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "light1_noao_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 102.65076457326892,
+      "b_luma_srgb8": 107.96066859903381,
+      "mae_rgb8": 5.3972086906433105,
+      "changed_pixel_fraction": 1.0
+    },
+    {
+      "name": "light1_nosky_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 102.65076457326892,
+      "b_luma_srgb8": 23.761084057971015,
+      "mae_rgb8": 81.43370819091797,
+      "changed_pixel_fraction": 1.0
+    },
+    {
+      "name": "mode2_vs_mode0_face",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 173.9439140096618,
+      "b_luma_srgb8": 177.09137037037038,
+      "mae_rgb8": 3.1497583389282227,
+      "changed_pixel_fraction": 1.0,
+      "a_sha256": "b50a0aacb2341d4bc0f21e21ed1af4607d8dfc1a68713fa4999ca3e169109ded",
+      "b_sha256": "23ec2953143b70649b55ec82fb6aca52e511e9b13d2df398bcdde4c3e4f23ead"
+    },
+    {
+      "name": "mode2_vs_mode0_hair",
+      "roi_xyxy": [
+        550,
+        310,
+        580,
+        345
+      ],
+      "a_luma_srgb8": 166.1846779047619,
+      "b_luma_srgb8": 170.42066095238093,
+      "mae_rgb8": 4.348254203796387,
+      "changed_pixel_fraction": 1.0,
+      "a_sha256": "a53815f1abf79fc5477a1557c3b752b76602b8cfa88530faa51d4d69ad2feae5",
+      "b_sha256": "e67205247ab0a18e3aca315b0e564c9c4a5f33be73d7f5dbdb810f92324837da"
+    },
+    {
+      "name": "mode2_vs_mode0_cloth",
+      "roi_xyxy": [
+        560,
+        300,
+        610,
+        360
+      ],
+      "a_luma_srgb8": 46.117449533333335,
+      "b_luma_srgb8": 49.34887333333333,
+      "mae_rgb8": 3.216777801513672,
+      "changed_pixel_fraction": 1.0,
+      "a_sha256": "e3755612d0e95740f05e83f1b1ad539ea71d7fa788ef8e513b10a4c669745d55",
+      "b_sha256": "8cd28dd7904c464613bbdfbc5e56185103c1322dc9cdab75b5a6292b37040fa1"
+    },
+    {
+      "name": "lumen_light0_repeat_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 174.4470499194847,
+      "b_luma_srgb8": 174.44559452495972,
+      "mae_rgb8": 0.30703166127204895,
+      "changed_pixel_fraction": 0.037037037037037035
+    },
+    {
+      "name": "lumen_light0_nogi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 174.4470499194847,
+      "b_luma_srgb8": 173.94655136876005,
+      "mae_rgb8": 1.4997316598892212,
+      "changed_pixel_fraction": 0.6473429951690821,
+      "repeat_noise_mae_rgb8": 0.30703166127204895,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_nolumengi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 174.4470499194847,
+      "b_luma_srgb8": 173.9450573268921,
+      "mae_rgb8": 1.4986580610275269,
+      "changed_pixel_fraction": 0.6473429951690821,
+      "repeat_noise_mae_rgb8": 0.30703166127204895,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_noreflect_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 174.4470499194847,
+      "b_luma_srgb8": 174.45373075684378,
+      "mae_rgb8": 0.027375200763344765,
+      "changed_pixel_fraction": 0.0,
+      "repeat_noise_mae_rgb8": 0.30703166127204895,
+      "exceeds_3x_repeat_noise": false
+    },
+    {
+      "name": "lumen_light0_noao_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 174.4470499194847,
+      "b_luma_srgb8": 175.2278731078905,
+      "mae_rgb8": 0.873322606086731,
+      "changed_pixel_fraction": 0.1819645732689211,
+      "repeat_noise_mae_rgb8": 0.30703166127204895,
+      "exceeds_3x_repeat_noise": false
+    },
+    {
+      "name": "lumen_light0_nosky_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 174.4470499194847,
+      "b_luma_srgb8": 163.53528502415458,
+      "mae_rgb8": 11.48416519165039,
+      "changed_pixel_fraction": 1.0,
+      "repeat_noise_mae_rgb8": 0.30703166127204895,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_repeat_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 169.7104935064935,
+      "b_luma_srgb8": 169.70443599999996,
+      "mae_rgb8": 0.1469264030456543,
+      "changed_pixel_fraction": 0.0049350649350649355
+    },
+    {
+      "name": "lumen_light0_nogi_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 169.7104935064935,
+      "b_luma_srgb8": 169.54630644155841,
+      "mae_rgb8": 0.7269263863563538,
+      "changed_pixel_fraction": 0.17012987012987013,
+      "repeat_noise_mae_rgb8": 0.1469264030456543,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_nolumengi_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 169.7104935064935,
+      "b_luma_srgb8": 169.54483864935062,
+      "mae_rgb8": 0.7370562553405762,
+      "changed_pixel_fraction": 0.18363636363636363,
+      "repeat_noise_mae_rgb8": 0.1469264030456543,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_noreflect_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 169.7104935064935,
+      "b_luma_srgb8": 169.19867267532467,
+      "mae_rgb8": 0.7360172867774963,
+      "changed_pixel_fraction": 0.18935064935064935,
+      "repeat_noise_mae_rgb8": 0.1469264030456543,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_noao_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 169.7104935064935,
+      "b_luma_srgb8": 169.92790072727271,
+      "mae_rgb8": 0.3006926476955414,
+      "changed_pixel_fraction": 0.045454545454545456,
+      "repeat_noise_mae_rgb8": 0.1469264030456543,
+      "exceeds_3x_repeat_noise": false
+    },
+    {
+      "name": "lumen_light0_nosky_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 169.7104935064935,
+      "b_luma_srgb8": 158.5557264935065,
+      "mae_rgb8": 11.751602172851562,
+      "changed_pixel_fraction": 1.0,
+      "repeat_noise_mae_rgb8": 0.1469264030456543,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light0_unlit_nogi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 219.39810048309178,
+      "b_luma_srgb8": 219.39810048309178,
+      "mae_rgb8": 0.0,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "name": "lumen_light1_repeat_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 97.36301191626409,
+      "b_luma_srgb8": 97.36868727858293,
+      "mae_rgb8": 0.7418142557144165,
+      "changed_pixel_fraction": 0.19806763285024154
+    },
+    {
+      "name": "lumen_light1_nogi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 97.36301191626409,
+      "b_luma_srgb8": 102.62923961352655,
+      "mae_rgb8": 5.397745609283447,
+      "changed_pixel_fraction": 0.8985507246376812,
+      "repeat_noise_mae_rgb8": 0.7418142557144165,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_nolumengi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 97.36301191626409,
+      "b_luma_srgb8": 102.62751304347826,
+      "mae_rgb8": 5.395598411560059,
+      "changed_pixel_fraction": 0.8985507246376812,
+      "repeat_noise_mae_rgb8": 0.7418142557144165,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_noreflect_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 97.36301191626409,
+      "b_luma_srgb8": 97.39512624798711,
+      "mae_rgb8": 0.06924315541982651,
+      "changed_pixel_fraction": 0.01932367149758454,
+      "repeat_noise_mae_rgb8": 0.7418142557144165,
+      "exceeds_3x_repeat_noise": false
+    },
+    {
+      "name": "lumen_light1_noao_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 97.36301191626409,
+      "b_luma_srgb8": 99.28506312399355,
+      "mae_rgb8": 2.1513688564300537,
+      "changed_pixel_fraction": 0.33172302737520126,
+      "repeat_noise_mae_rgb8": 0.7418142557144165,
+      "exceeds_3x_repeat_noise": false
+    },
+    {
+      "name": "lumen_light1_nosky_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 97.36301191626409,
+      "b_luma_srgb8": 27.35318872785829,
+      "mae_rgb8": 72.40311431884766,
+      "changed_pixel_fraction": 1.0,
+      "repeat_noise_mae_rgb8": 0.7418142557144165,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_repeat_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 95.40875122077922,
+      "b_luma_srgb8": 95.42754109090907,
+      "mae_rgb8": 0.38155844807624817,
+      "changed_pixel_fraction": 0.05272727272727273
+    },
+    {
+      "name": "lumen_light1_nogi_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 95.40875122077922,
+      "b_luma_srgb8": 98.62714457142856,
+      "mae_rgb8": 3.232034683227539,
+      "changed_pixel_fraction": 0.8348051948051948,
+      "repeat_noise_mae_rgb8": 0.38155844807624817,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_nolumengi_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 95.40875122077922,
+      "b_luma_srgb8": 98.6140201038961,
+      "mae_rgb8": 3.2206926345825195,
+      "changed_pixel_fraction": 0.8298701298701299,
+      "repeat_noise_mae_rgb8": 0.38155844807624817,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_noreflect_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 95.40875122077922,
+      "b_luma_srgb8": 93.3869297142857,
+      "mae_rgb8": 2.547619104385376,
+      "changed_pixel_fraction": 0.5215584415584416,
+      "repeat_noise_mae_rgb8": 0.38155844807624817,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_noao_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 95.40875122077922,
+      "b_luma_srgb8": 96.10696555844156,
+      "mae_rgb8": 0.8797402381896973,
+      "changed_pixel_fraction": 0.19324675324675325,
+      "repeat_noise_mae_rgb8": 0.38155844807624817,
+      "exceeds_3x_repeat_noise": false
+    },
+    {
+      "name": "lumen_light1_nosky_hair",
+      "roi_xyxy": [
+        535,
+        270,
+        590,
+        340
+      ],
+      "a_luma_srgb8": 95.40875122077922,
+      "b_luma_srgb8": 23.949823272727272,
+      "mae_rgb8": 73.54666900634766,
+      "changed_pixel_fraction": 1.0,
+      "repeat_noise_mae_rgb8": 0.38155844807624817,
+      "exceeds_3x_repeat_noise": true
+    },
+    {
+      "name": "lumen_light1_unlit_nogi_cheek",
+      "roi_xyxy": [
+        585,
+        467,
+        612,
+        490
+      ],
+      "a_luma_srgb8": 100.2260267310789,
+      "b_luma_srgb8": 100.2260267310789,
+      "mae_rgb8": 0.0,
+      "changed_pixel_fraction": 0.0
+    }
+  ],
+  "image_hashes": {
+    "nikki/nikki_backend_directional_clear_full.png": "c307d86edaf1e875aa804671c9fc4670590aaab7af21d6512f8402f0311a1bf0",
+    "nikki/nikki_backend_directional_blocked_full.png": "8bdad44febfd537b83cd9f7a68637576cf3fee63dc68420c19c2fc298500508a",
+    "nikki/nikki_backend_point_clear_full.png": "1f32cde6bed3c8f22014b2d3af4f944088f4b3854f378f6de01f96be9cea74d2",
+    "nikki/nikki_backend_point_blocked_full.png": "07282ebcd58d75d1bc85768976b573005fc0e865162d9037c55f4ecf80e19542",
+    "nikki/nikki_backend_spot_clear_full.png": "0a43fd98345fe69d69794a8403f854c038f673d618e08b04cb1681e1d44144b1",
+    "nikki/nikki_backend_spot_blocked_full.png": "de0fc006909da24ee71cb0db5a9fa30578633811875a38447ede1208291ac0d6",
+    "nikki/nikki_backend_rect_clear_full.png": "7d11f9b3461ea484568278e5432bf13b87e1459333ed0f7454ae9a5a5dabe069",
+    "nikki/nikki_backend_rect_blocked_full.png": "2695b767609d8e631bed39fc72e83e7963c569cb60ae1139e9fcb7f58c72c499",
+    "nikki/nikki_light0_toon_rt1_all_face.png": "213b4c45d493dd7e512831bc82f0b321b1bee170e602fabb7a9fc9d534dabdc8",
+    "nikki/nikki_light0_toon_rt1_nogi_face.png": "767c61253b7ad7de35331ca6af8e080ab483b1931318aeb4c5089697ac8308b5",
+    "nikki/nikki_light0_toon_rt1_nolumengi_face.png": "47756425ee1be300a30d49cc904e59130d620325d3fb3f213568d8ac97f9319c",
+    "nikki/nikki_light0_toon_rt1_noreflect_face.png": "5b05d77b96fec16d62a98f895350346b0200028581fc00931fbea528dd68cac6",
+    "nikki/nikki_light0_toon_rt1_noao_face.png": "b8bba6c2489a70ef42aef2011e4a44f9783e162310bf727ceef395b6aafa4926",
+    "nikki/nikki_light0_toon_rt1_nosky_face.png": "c35bf3476ec9004ed254eea383b997e6be285a925fd44dc17cea3967c102ce6b",
+    "nikki/nikki_light1_toon_rt1_all_face.png": "5c5dcd4ffd697cefb34758a71692edfad968115fecd08988914ae1f012e7adc1",
+    "nikki/nikki_light1_toon_rt1_nogi_face.png": "5c5dcd4ffd697cefb34758a71692edfad968115fecd08988914ae1f012e7adc1",
+    "nikki/nikki_light1_toon_rt1_nolumengi_face.png": "5c5dcd4ffd697cefb34758a71692edfad968115fecd08988914ae1f012e7adc1",
+    "nikki/nikki_light1_toon_rt1_noreflect_face.png": "5c5dcd4ffd697cefb34758a71692edfad968115fecd08988914ae1f012e7adc1",
+    "nikki/nikki_light1_toon_rt1_noao_face.png": "5a800dd694ed13f0155e26b3a2b06613fa063f151559171fa380c74ec284e0b5",
+    "nikki/nikki_light1_toon_rt1_nosky_face.png": "b9650438cae95e4c3be5fad4eb743677182ab9991213057a1b41240a13b9a4ee",
+    "nikki/nikki_toon_face.png": "b50a0aacb2341d4bc0f21e21ed1af4607d8dfc1a68713fa4999ca3e169109ded",
+    "nikki_mode0/nikki_mode0_toon_face.png": "23ec2953143b70649b55ec82fb6aca52e511e9b13d2df398bcdde4c3e4f23ead",
+    "nikki/nikki_toon_hair.png": "a53815f1abf79fc5477a1557c3b752b76602b8cfa88530faa51d4d69ad2feae5",
+    "nikki_mode0/nikki_mode0_toon_hair.png": "e67205247ab0a18e3aca315b0e564c9c4a5f33be73d7f5dbdb810f92324837da",
+    "nikki/nikki_toon_cloth.png": "e3755612d0e95740f05e83f1b1ad539ea71d7fa788ef8e513b10a4c669745d55",
+    "nikki_mode0/nikki_mode0_toon_cloth.png": "8cd28dd7904c464613bbdfbc5e56185103c1322dc9cdab75b5a6292b37040fa1",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_all_face.png": "c9e6788b123df56b05ab984a3250d4f8d000e795d1ba1f1f68d52a7aa5bbd654",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_all_repeat_face.png": "d9bf255d78c9314b200012d2bac3d85f28fbcc8ae86ca162da3629916df0c3fa",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_nogi_face.png": "a7d215176632d0e9671f3b1362b97ffcb5c3e5dbca869c7136f9407873785261",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_nolumengi_face.png": "69cd0233a9cdba7ccf714ed4b195b240ab30e18a8689398ca44f901c1eafd2a6",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_noreflect_face.png": "c7a2280b8ffd8275cb308266a20eae2ba9ab08bf4adb26215d60e2cd1af1d0b7",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_noao_face.png": "3c1db61f4b2c8015ed9e494ee01e80d21312365816bba600e94a7899624c89c6",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_toon_rt1_nosky_face.png": "7ace0cf5be83a308a76aca194a06d81897aca085cd2d7a5d7b61b112e2509e33",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_unlit_rt1_all_face.png": "b87f70cf9afedb3daf4d981922a122fdc1adcab58032d166376cc8841f78ee06",
+    "nikki_lumen_noise/nikki_lumen_noise_light0_unlit_rt1_nogi_face.png": "0182e973c2d57fea7063fc47dc9e38327d930ccd0074f1d0e64c77a8c78383c9",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_all_face.png": "f8a55b41c5ae8b5eb6d29e288a22d36ae25a3895b7003e88899f08b6b320cd55",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_all_repeat_face.png": "b3d9f0bf07f00816528d4afbd86927542b716b326890d2d6bac4642970af53f9",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_nogi_face.png": "b2b38170c7d191b4ffc307327805c3c9d4a90853a3ce7f9916922f1c315e2785",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_nolumengi_face.png": "cde3c3a10ec732ecde6e0129d7b646323c37bd0507149ff7d2dc31797284cc55",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_noreflect_face.png": "83783df60c1deb687bda08dc43b417508ee44ead2234c822f9c40732fc6bb7ab",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_noao_face.png": "105a53bf2bad8cd21ad676ca12799232b57822e3e6dc4666596cfa430aa5c9ee",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_toon_rt1_nosky_face.png": "f58d39f7912fbc5430accb3d32f5b03cb34a8110d90a90d2dac23a73055096c6",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_unlit_rt1_all_face.png": "786a2e03821cbddb5468f6d43a61b074a259a00481eb1212ddb9cfdb4b663e68",
+    "nikki_lumen_noise/nikki_lumen_noise_light1_unlit_rt1_nogi_face.png": "9878f4a78582fafce0d34a00a467c59db0f14f2b4a103e135fdfbd0791cd487c"
+  },
+  "limitations": [
+    "ROI values use tonemapped sRGB8 pixels, not linear irradiance.",
+    "No matched v14 GPU baseline: Endfield source/asset invariants plus v15 draw regression do not prove pixel identity.",
+    "No visual acceptance, performance, full Cooked or Shipping validation."
+  ],
+  "visual_acceptance": {
+    "accepted": false,
+    "reason": "Original game shader/BRDF not recovered; spatial SSS, OIT and eye/transparent garment fidelity remain incomplete."
+  },
+  "final_editor_build": {
+    "report": "Saved/InfinityNikkiValidation/native-build-06.log",
+    "success": true,
+    "sha256": "c92630ee27bdf7531e893220f25adb986569043085f6d5442cc967e2ff842441"
+  },
+  "generation": {
+    "initial_written_count": 13,
+    "material_shader_counts": [
+      21,
+      40,
+      29,
+      21,
+      40,
+      29
+    ],
+    "repeat_written_count": 0,
+    "report_sha256": "7a6c21c527dd8ff0f6b91de9b5f950bb547200d93de49c22ef994c1b561ebc49",
+    "wrapper_final": {
+      "success": true,
+      "written_count": 0,
+      "report": "Saved/InfinityNikkiValidation/20261019-172845-378/presets.json",
+      "report_sha256": "7a6c21c527dd8ff0f6b91de9b5f950bb547200d93de49c22ef994c1b561ebc49"
+    }
+  },
+  "endfield_formula_audit": [
+    {
+      "function": "IsEndfieldProfile",
+      "identical": true,
+      "sha256": "87046120816411ba953e1d6d62d321d880112265e351a10a679debf7b2a0075a"
+    },
+    {
+      "function": "ReadProfileControls",
+      "identical": true,
+      "sha256": "20181beafdde357748c4923c9cb667a754d58a378f5e00ceeb9c7136e956e444"
+    },
+    {
+      "function": "EvaluateNative",
+      "identical": true,
+      "sha256": "3371e0900247f9c92ada9aad9fe1f45fe350b855a28efb6258d4fafffa7453d5"
+    },
+    {
+      "function": "BuildSpecularContext",
+      "identical": true,
+      "sha256": "acfc7b42de137b641d0d7ebf54d406371c979956fa0bc3705f186824e70a1a00"
+    },
+    {
+      "function": "EvaluateSpecular",
+      "identical": true,
+      "sha256": "289680d4219e3025efa57e5de277f9e80aaea1429bf4b1d05404712cf48b5163"
+    },
+    {
+      "function": "ApplyAdditionalDiffuse",
+      "identical": true,
+      "sha256": "33f0e1c93dd2d8327d209b8fbf55b39fa72e07a15cdc12bcd4bc7e0f945aa69f"
+    },
+    {
+      "function": "EvaluateToonResponse",
+      "identical": true,
+      "sha256": "eb42ea7ee923f28577ff7c9d99f00c4622c5806d999f3b6e84de5d9a2198c475"
+    },
+    {
+      "function": "ApplyEnvironment",
+      "identical": true,
+      "sha256": "5f52ff0208635665385d70b2ea38e4ac9a6e370ac054760eb42d52c604d7b4bd"
+    },
+    {
+      "data": "MMDEndfieldNativeRampData.inl",
+      "identical": true
+    },
+    {
+      "data": "MMDEndfieldSkinLutData.inl",
+      "identical": true
+    }
+  ],
+  "excluded_attempts": [
+    {
+      "report": "Saved/InfinityNikkiValidation/20261019-171341-429/capture.json",
+      "reason": "55 draws and 105 slots passed, but overall failure: protocol reflection still expected legacy parameter name; fixed CPU and USF markers and reran."
+    },
+    {
+      "report": "Saved/InfinityNikkiValidation/native-final/nikki_lumen/capture.json",
+      "reason": "Lumen primitive tracking alone did not override SceneCapture GI/reflection defaults; not accepted as Lumen validation."
+    }
+  ],
+  "validated_image_count": 171,
+  "validated_slot_check_count": 506
+}

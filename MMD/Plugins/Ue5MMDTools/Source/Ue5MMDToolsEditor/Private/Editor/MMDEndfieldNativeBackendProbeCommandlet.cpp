@@ -73,6 +73,8 @@ namespace
 	}
 
 	const TCHAR* EndfieldBackendProbePluginSources[] = { TEXT("Core/TMMDEndfieldNativeBSDF.ush"),
+		TEXT("Core/TMMDInfinityNikkiNative.ush"), TEXT("Core/TMMDInfinityNikkiResponse.ush"),
+		TEXT("Core/TMMDInfinityNikkiGeometry.ush"),
 		TEXT("Core/TMMDEndfieldNativeData.ush"), TEXT("Core/TMMDEndfieldNativeLightCapture.ush"),
 		TEXT("Core/TMMDEndfieldNativeIndirect.ush"), TEXT("Core/TMMDEndfieldNativeLegacy.ush"),
 		TEXT("Core/TMMDEndfieldNativePayload.ush"), TEXT("Private/MMDEndfieldNativeBackendProtocol.usf") };

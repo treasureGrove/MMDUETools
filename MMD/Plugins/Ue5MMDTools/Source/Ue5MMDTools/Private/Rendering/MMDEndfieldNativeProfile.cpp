@@ -240,8 +240,19 @@ namespace MMDEndfieldNativeProfile
         }
     }
 
+    bool IsInfinityNikkiParent(const UObject* material)
+    {
+        return IsValid(material) && material->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/InfinityNikki/"));
+    }
+
+    bool IsManagedParent(const UObject* material)
+    {
+        return IsInfinityNikkiParent(material) || (IsValid(material)
+            && material->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")));
+    }
+
     bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role, bool apply_client_ramps,
-        const FMMDStageSkinLightingSettings* skin_settings)
+        const FMMDStageSkinLightingSettings* skin_settings, bool infinity_nikki)
     {
         if (!IsValid(profile) || !profile->HasAnyFlags(RF_Transient) || static_cast<uint8>(role) > 5) return false;
         check(IsInGameThread());
@@ -264,9 +275,9 @@ namespace MMDEndfieldNativeProfile
         profile->Settings.DiffuseRamp = original->diffuse_ramp;
         profile->Settings.SpecularRamp = original->specular_ramp;
         const FNativeProfileOptions options = GetNativeProfileOptions();
-        const bool use_skin_cube = apply_client_ramps && options.mode == 2 && role == EMMDMaterialRole::Skin;
+        const bool use_skin_cube = !infinity_nikki && apply_client_ramps && options.mode == 2 && role == EMMDMaterialRole::Skin;
         const FSkinLightingMetadata skin_metadata = GetSkinLightingMetadata(role == EMMDMaterialRole::Skin ? skin_settings : nullptr);
-        if (apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role), use_skin_cube, skin_metadata);
+        if (!infinity_nikki && apply_client_ramps && options.mode == 2) ApplyClientRamps(profile, SelectClientRamps(role), use_skin_cube, skin_metadata);
         FRichCurve* alpha_curve = &profile->Settings.DiffuseRamp.ColorCurves[3];
         if (UCurveLinearColor* source_curve = profile->Settings.DiffuseRamp.ExternalCurve)
         {
@@ -305,11 +316,17 @@ namespace MMDEndfieldNativeProfile
                 alpha.SetKeyInterpMode(alpha.AddKey(center + 1.0f / 256.0f, skin_metadata.values[index]), RCIM_Linear);
             }
         }
+        if (infinity_nikki)
+        {
+            // 位于镜面 GI 与诊断平台之间，正值24不会与旧配方的插值值混淆。
+            for (float position : {0.65625f, 0.6875f, 0.71875f})
+                alpha.SetKeyInterpMode(alpha.AddKey(position, 24.0f), RCIM_Linear);
+        }
         return true;
     }
 
     UToonProfile* GetOrCreate(UToonProfile* source, EMMDMaterialRole role,
-        const FMMDStageSkinLightingSettings* skin_settings)
+        const FMMDStageSkinLightingSettings* skin_settings, bool infinity_nikki)
     {
         if (!IsValid(source) || static_cast<uint8>(role) > 5) return source;
         check(IsInGameThread());
@@ -338,7 +355,7 @@ namespace MMDEndfieldNativeProfile
         {
             if (!iterator.Value().IsValid()) iterator.RemoveCurrent();
         }
-        const FString role_key = BuildRoleCacheKey(role, skin_settings);
+        const FString role_key = BuildRoleCacheKey(role, skin_settings) + (infinity_nikki ? TEXT(":nikki1") : TEXT(""));
         if (const TWeakObjectPtr<UToonProfile>* existing = roles.Find(role_key))
         {
             if (existing->IsValid()) return existing->Get();
@@ -348,7 +365,7 @@ namespace MMDEndfieldNativeProfile
         profile->SetFlags(RF_Transient);
         profile->ClearFlags(RF_Public | RF_Standalone);
         profile->Guid = FGuid::NewGuid();
-        if (!MarkTransient(profile, role, true, skin_settings)) return source;
+        if (!MarkTransient(profile, role, true, skin_settings, infinity_nikki)) return source;
         roles.Add(role_key, profile);
         // MID 的 ToonProfileOverride 强引用负责副本生命周期，缓存只持弱引用。
         return profile;

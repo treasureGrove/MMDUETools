@@ -1,0 +1,201 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Singapore",
+  "engine": "UE 5.8.3",
+  "rhi": "D3D12 / PCD3D_SM6",
+  "editor_build": {
+    "success": true,
+    "log": "Saved/InfinityNikkiValidation/build-03.log"
+  },
+  "source_signature": "715abf83ff57098e984587e3d785603b",
+  "generation": {
+    "success": true,
+    "written_count": 4,
+    "main_inputs": 44,
+    "materials": [
+      {
+        "asset": "/Ue5MMDTools/Stages/Materials/M_MMD_InfinityNikki_Opaque.M_MMD_InfinityNikki_Opaque",
+        "shader_count": 21,
+        "main_inputs": 44,
+        "passed": true,
+        "errors": []
+      },
+      {
+        "asset": "/Ue5MMDTools/Stages/Materials/M_MMD_InfinityNikki_Masked.M_MMD_InfinityNikki_Masked",
+        "shader_count": 40,
+        "main_inputs": 44,
+        "passed": true,
+        "errors": []
+      },
+      {
+        "asset": "/Ue5MMDTools/Stages/Materials/M_MMD_InfinityNikki_Translucent.M_MMD_InfinityNikki_Translucent",
+        "shader_count": 37,
+        "main_inputs": 44,
+        "passed": true,
+        "errors": []
+      }
+    ]
+  },
+  "idempotence": {
+    "success": true,
+    "written_count": 0,
+    "source_signature": "715abf83ff57098e984587e3d785603b"
+  },
+  "capture_runs": [
+    {
+      "run": "20261019-153118-173",
+      "report": "Saved/InfinityNikkiValidation/20261019-153118-173/capture.json",
+      "report_sha256": "EF5831141630FFFDBBD81743B1F4A6965EA4C1C28C2B498D495E01791E68142E",
+      "success": true,
+      "failed": 0,
+      "character": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Model/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC.MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC",
+      "animation": "/Game/MMDModels/MMDBackgroundValidation_4FD3659F477C742E2AD04DBB9FBD88EC/Animation/MMDStagePreview8s.MMDStagePreview8s",
+      "slot_count": 35,
+      "roles": {
+        "Generic": 5,
+        "Skin": 5,
+        "Hair": 3,
+        "Cloth": 16,
+        "Metal": 4,
+        "Eye": 2
+      },
+      "capture_count": 12,
+      "validation_mode": "source_slots",
+      "gpu_lighting": true,
+      "roles_passed": true,
+      "masked_hair": true,
+      "source_snapshot_unchanged": true,
+      "environment": true,
+      "environment_face_luminance_srgb255": 101.0254615440142,
+      "lights_off_face_luminance_srgb255": 0.04480974025974026,
+      "physics_changed_bones": 177,
+      "animated_bones_changed": 337,
+      "restored": true,
+      "scene_shadow": "No main view: custom shadow basis is invalid; native stage shadows and character fallback remain active"
+    },
+    {
+      "run": "20261019-153217-806",
+      "report": "Saved/InfinityNikkiValidation/20261019-153217-806/capture.json",
+      "report_sha256": "0C63AE130EF31159501BE875835FDA577D89611F2B04AF255DDECF7A59AB241F",
+      "success": true,
+      "failed": 0,
+      "character": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Model/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95.MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95",
+      "animation": "/Game/MMDModels/MMDBackgroundValidation_YYB16thWing_D1E806A44E33873C9F0515A953702D95/Animation/CH4NGE.CH4NGE",
+      "slot_count": 39,
+      "roles": {
+        "Generic": 12,
+        "Skin": 5,
+        "Hair": 6,
+        "Cloth": 14,
+        "Metal": 0,
+        "Eye": 2
+      },
+      "capture_count": 12,
+      "validation_mode": "source_slots",
+      "gpu_lighting": true,
+      "roles_passed": true,
+      "masked_hair": true,
+      "source_snapshot_unchanged": true,
+      "environment": true,
+      "environment_face_luminance_srgb255": 66.29983549783552,
+      "lights_off_face_luminance_srgb255": 0.044733044733044736,
+      "physics_changed_bones": 307,
+      "animated_bones_changed": 520,
+      "restored": true,
+      "scene_shadow": "No main view: custom shadow basis is invalid; native stage shadows and character fallback remain active"
+    }
+  ],
+  "protected": {
+    "count": 516,
+    "changed": [],
+    "includes": "Existing tracked plugin content assets and the user-maintained Face shader"
+  },
+  "files": [
+    {
+      "path": "Shaders/Core/TMMDInfinityNikkiResponse.ush",
+      "sha256": "CB2DDBB913B1320AAE893F04D9A5F4EFF09A289A3D390F028FE773C63AD64C30"
+    },
+    {
+      "path": "Shaders/TMMDShader/TMMDInfinityNikkiCharacter.usf",
+      "sha256": "AF2025F0E352FE21079F6D1CB414BDCFDE108FBF4DAA333BB2C7288AB45872CF"
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDInfinityNikkiPresetsCommandlet.cpp",
+      "sha256": "33E4834C437E22E4D328BEEE73C87551718B2DA2BE666F3DA56E4147C93E2774"
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDInfinityNikkiPresetsCommandlet.h",
+      "sha256": "356E4AD7AF322C1770029D02120F5717A9424237A6D19751337AEEB77D7854E2"
+    },
+    {
+      "path": "Source/Ue5MMDToolsEditor/Private/Editor/MMDStagePresetsCommandlet.cpp",
+      "sha256": "6E332BB44177BAC41464E6F6494FA74B00ED011F9D2DCD5B6B2EEC55C04816D5"
+    },
+    {
+      "path": "Scripts/Invoke-InfinityNikkiPresets.ps1",
+      "sha256": "417F5F98FA10C182E35307FF946B05AAF7A3F9A12C79D65F60CBD2D8D6643D31"
+    },
+    {
+      "path": "Content/Stages/Materials/M_MMD_InfinityNikki_Opaque.uasset",
+      "sha256": "A14CCF465144A526801BCBD3DE5F5BB8AB4A59EB9FA258899DFEE1AEDB182A11"
+    },
+    {
+      "path": "Content/Stages/Materials/M_MMD_InfinityNikki_Masked.uasset",
+      "sha256": "CD76453317BC8B2319B749D65E56863A326A6FD684440053E1327D853272BBC8"
+    },
+    {
+      "path": "Content/Stages/Materials/M_MMD_InfinityNikki_Translucent.uasset",
+      "sha256": "0FF6A61C61D7499206787963C53ECB126E11E9CFE98B5B2DBC3D893297F2F165"
+    },
+    {
+      "path": "Content/Stages/Presets/DA_Render_InfinityNikki.uasset",
+      "sha256": "AA2C7A24C521B0F828927C51FEE7F746497C521BFECF351F9BA9A7C6DFAAB4E6"
+    }
+  ],
+  "archived_images": [
+    {
+      "file": "InfinityNikki_hero.png",
+      "sha256": "13478116802470DE5A3816D16CD89D72C54FF2020AD27F7A39D4E94C0619E94E",
+      "bytes": 1398402,
+      "source": "Saved/InfinityNikkiValidation/20261019-153118-173/screenshots/InfinityNikki_hero.png",
+      "captured_date": "2026-10-19",
+      "generated_image": false
+    },
+    {
+      "file": "InfinityNikki_face.png",
+      "sha256": "080F8F0A934BD59500AC42C4D1FF122ABE496A1C5040BC74AE49AC16C7149946",
+      "bytes": 1059018,
+      "source": "Saved/InfinityNikkiValidation/20261019-153118-173/screenshots/InfinityNikki_face.png",
+      "captured_date": "2026-10-19",
+      "generated_image": false
+    },
+    {
+      "file": "InfinityNikki_cloth.png",
+      "sha256": "05795A131EAF1E47FA4CE386C41FE44BC96A09CD5E202E16292BE4D06A92188A",
+      "bytes": 1103846,
+      "source": "Saved/InfinityNikkiValidation/20261019-153118-173/screenshots/InfinityNikki_cloth.png",
+      "captured_date": "2026-10-19",
+      "generated_image": false
+    },
+    {
+      "file": "InfinityNikki_lights_off.png",
+      "sha256": "EC67AEFD1B1CA8B37FF3FA98BF08FBC66D12E6B23A621AE37BF56973B888C149",
+      "bytes": 634040,
+      "source": "Saved/InfinityNikkiValidation/20261019-153118-173/screenshots/InfinityNikki_lights_off.png",
+      "captured_date": "2026-10-19",
+      "generated_image": false
+    }
+  ],
+  "limits": [
+    "Static configuration evidence is not an observed game runtime.",
+    "Original shader logic and exact material parameters were not recovered.",
+    "Offscreen captures have no valid main-view custom shadow basis; main-view character occlusion is not validated by these captures.",
+    "No Cook, Shipping game, clean-host distribution or GPU performance validation in this batch."
+  ],
+  "visual_acceptance": {
+    "accepted": false,
+    "date": "2026-10-19",
+    "reason": "User rejected visual similarity. This experiment used legacy Unlit Reference parents instead of the existing EndfieldV2 native Substrate backend.",
+    "functional_results_are_visual_acceptance": false
+  }
+}

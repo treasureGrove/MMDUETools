@@ -13,7 +13,11 @@ namespace MMDEndfieldNativeProfile
     // Diffuse alpha 的 t=.25/.40625/.5625 仍保存 mode/漫反射GI倍率/镜面GI倍率；RD alpha 放在 Specular alpha。
     // Cook 夹具用 false 保留源曲线载体，运行时 GetOrCreate 才按请求模式替换曲线。
     UE5MMDTOOLS_API bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role, bool apply_client_ramps = true,
-        const FMMDStageSkinLightingSettings* skin_settings = nullptr);
+        const FMMDStageSkinLightingSettings* skin_settings = nullptr, bool infinity_nikki = false);
     UE5MMDTOOLS_API UToonProfile* GetOrCreate(UToonProfile* source, EMMDMaterialRole role,
-        const FMMDStageSkinLightingSettings* skin_settings = nullptr);
+        const FMMDStageSkinLightingSettings* skin_settings = nullptr, bool infinity_nikki = false);
+
+    // 两个风格共用原生材质／载荷链，配方在瞬态 Profile 中隔离。
+    UE5MMDTOOLS_API bool IsManagedParent(const UObject* material);
+    UE5MMDTOOLS_API bool IsInfinityNikkiParent(const UObject* material);
 }

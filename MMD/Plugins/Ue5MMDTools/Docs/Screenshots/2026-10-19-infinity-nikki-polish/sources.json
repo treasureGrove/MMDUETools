@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Asia/Singapore",
+  "engine": "UE5.8.3 CL58210709 / D3D12 SM6",
+  "images": [
+    {
+      "file": "before_face.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/nikki_lumen_final/screenshots/nikki_lumen_final_toon_face.png",
+      "sha256": "5ce9aafa4842d0199e47f4a906b4a6cb0afbffd5196431e1331392f16f73adc5",
+      "captured_at": "2026-10-19T17:22:28.871531+08:00",
+      "kind": "actual_engine_capture",
+      "processing": "Original probe PNG copied byte-for-byte; no generative edits."
+    },
+    {
+      "file": "after_face.png",
+      "source": "Saved/InfinityNikkiPolish/round3/polish_face/screenshots/polish_face_toon_face.png",
+      "sha256": "8cd2d028b8bd0453b73b744be4d6cff1c82b4638d5a6eedb9dff67d94187eeeb",
+      "captured_at": "2026-10-19T19:30:20.801412+08:00",
+      "kind": "actual_engine_capture",
+      "processing": "Original probe PNG copied byte-for-byte; no generative edits."
+    },
+    {
+      "file": "before_dress_face.png",
+      "source": "Saved/InfinityNikkiValidation/native-final/nikki_dress_lumen/screenshots/nikki_dress_lumen_toon_face.png",
+      "sha256": "308529a1c5f469a515e8a1a413b8d857162faa9e59beef0e35170836b07cf5ae",
+      "captured_at": "2026-10-19T17:23:18.964948+08:00",
+      "kind": "actual_engine_capture",
+      "processing": "Original probe PNG copied byte-for-byte; no generative edits."
+    },
+    {
+      "file": "after_dress_face.png",
+      "source": "Saved/InfinityNikkiPolish/round3/polish_dress/screenshots/polish_dress_toon_face.png",
+      "sha256": "f15f92233e8f9120ef962c830ab6ee18fe35299e9311486a9f1f9afb94e761c2",
+      "captured_at": "2026-10-19T19:31:10.963892+08:00",
+      "kind": "actual_engine_capture",
+      "processing": "Original probe PNG copied byte-for-byte; no generative edits."
+    },
+    {
+      "file": "after_cloth.png",
+      "source": "Saved/InfinityNikkiPolish/round3/polish_face/screenshots/polish_face_toon_cloth.png",
+      "sha256": "842c9bf1bde9d04e7f4749a41f04b6e01833892fa330ee31f8a797d78ca9df14",
+      "captured_at": "2026-10-19T19:30:21.356504+08:00",
+      "kind": "actual_engine_capture",
+      "processing": "Original probe PNG copied byte-for-byte; no generative edits."
+    },
+    {
+      "file": "after_motion.png",
+      "source": "Saved/InfinityNikkiPolish/round3/polish_motion/screenshots/polish_motion_toon_full.png",
+      "sha256": "f50d4edeb2672bd48d2a4967bb6a90005523938f910b60091e6a768059ce3913",
+      "captured_at": "2026-10-19T19:31:33.487464+08:00",
+      "kind": "actual_engine_capture",
+      "processing": "Original probe PNG copied byte-for-byte; no generative edits."
+    }
+  ],
+  "source_sha256": {
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDInfinityNikkiNative.ush": "c75d73b7a53ea912db5715f69ff2e10079df52b8e282f25b315415d41144b61d",
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDInfinityNikkiGeometry.ush": "4848a06a82a994ebc6a653aa93033338d81ed8c987470716ad8d867cc0d6d5ae",
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDInfinityNikkiResponse.ush": "cb2ddbb913b1320aae893f04d9a5f4eff09a289a3d390f028fe773c63ad64c30",
+    "Plugins/Ue5MMDTools/Shaders/Core/TMMDEndfieldNativeBSDF.ush": "8c0f9896f4aea12f5b965df6921486980908e19a47d8890ee530a63d39b32f47",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Stage/MMDStageActor.cpp": "bf73d294794b3210439021034cf1660f659559ebaef938b1ee754e49e7bc6682",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Public/Stage/MMDStageActor.h": "36c68c53834374a65c81cfbb970614fa9eb88237302c181ab067e04d966e87cc",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Public/Stage/MMDStageRenderPreset.h": "9bb260c4dd7d8d0d9196413efa49c19f2733290dbf39ae10de182c5a0f8509f2",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp": "c20f09ad2230e8fbdb84876998f6abd457b1aa1ad9ae85851430caaa435d552b",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDInfinityNikkiPresetsCommandlet.cpp": "bfded049a8dea123a3ef98af15818fd6b850bbd9c017153d95826752a79b25d4",
+    "Plugins/Ue5MMDTools/Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonProbeCommandlet.cpp": "9926b5467f308669fdd55b1d18e49f0d590c42be0b98f5e9a8abd598f24794dd"
+  }
+}

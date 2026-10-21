@@ -504,7 +504,7 @@ namespace
 		}
 	};
 
-	bool LoadCharacterSample(FCharacterSample& Sample, FString& Error)
+	bool LoadCharacterSample(FCharacterSample& Sample, FString& Error, bool bAllowAnimationGeneration = true, const FString& SampleName = FString())
 	{
 		const FString ImportRoot = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BackgroundValidation/ImportedAssets"));
 		TArray<FString> Manifests;
@@ -512,6 +512,7 @@ namespace
 		FDateTime LatestTime = FDateTime::MinValue();
 		for (const FString& ManifestPath : Manifests)
 		{
+			if (!SampleName.IsEmpty() && FPaths::GetCleanFilename(FPaths::GetPath(ManifestPath)) != SampleName) continue;
 			FString Json;
 			TSharedPtr<FJsonObject> Manifest;
 			if (!FFileHelper::LoadFileToString(Json, *ManifestPath)
@@ -534,7 +535,9 @@ namespace
 		}
 		if (Sample.Mount.IsEmpty())
 		{
-			Error = TEXT("No Saved/BackgroundValidation character import was found; run import validation before screenshots");
+			Error = SampleName.IsEmpty()
+				? TEXT("No Saved/BackgroundValidation character import was found; run import validation before screenshots")
+				: TEXT("Requested Saved/BackgroundValidation character sample was not found: ") + SampleName;
 			return false;
 		}
 		FPackageName::RegisterMountPoint(Sample.Mount, Sample.Directory);
@@ -543,21 +546,29 @@ namespace
 		{
 			Sample.Animation.Reset(LoadObject<UAnimSequence>(nullptr, *Sample.AnimationPath));
 		}
-		if (!Sample.Mesh.IsValid() || !Sample.Animation.IsValid())
+		if (!Sample.Mesh.IsValid())
 		{
 			Error = TEXT("Sandbox character mesh or its VMD animation could not be loaded");
 			return false;
 		}
-		// 回归样本只有动作前两秒；另做 Saved 内的八秒预览，展示真正的舞蹈姿态。
-		if (!Sample.SourceVMDPath.IsEmpty() && FPaths::FileExists(Sample.SourceVMDPath))
+		const bool bSourceVMDExists = !Sample.SourceVMDPath.IsEmpty() && FPaths::FileExists(Sample.SourceVMDPath);
+		const FString CachedPackage = Sample.Mount + TEXT("Animation/MMDStagePreview8s");
+		FString CachedFilename;
+		if (FPackageName::TryConvertLongPackageNameToFilename(CachedPackage, CachedFilename, FPackageName::GetAssetPackageExtension()))
 		{
-			const FString CachedPackage = Sample.Mount + TEXT("Animation/MMDStagePreview8s");
-			FString CachedFilename;
-			if (FPackageName::TryConvertLongPackageNameToFilename(CachedPackage, CachedFilename, FPackageName::GetAssetPackageExtension())
-				&& FPaths::FileExists(CachedFilename)
-				&& IFileManager::Get().GetTimeStamp(*CachedFilename) >= IFileManager::Get().GetTimeStamp(*Sample.SourceVMDPath))
+			TArray<FString> CachedFiles;
+			IFileManager::Get().FindFiles(CachedFiles, *(FPaths::GetPath(CachedFilename) / TEXT("MMDStagePreview8s*.uasset")), true, false);
+			const FString CachedDirectory = FPaths::GetPath(CachedFilename);
+			CachedFiles.Sort([&CachedDirectory](const FString& A, const FString& B)
 			{
-				TStrongObjectPtr<UAnimSequence> Cached(LoadObject<UAnimSequence>(nullptr, *StagePresetsObjectPath(CachedPackage)));
+				return IFileManager::Get().GetTimeStamp(*(CachedDirectory / A)) > IFileManager::Get().GetTimeStamp(*(CachedDirectory / B));
+			});
+			for (const FString& CacheFile : CachedFiles)
+			{
+				if (bSourceVMDExists && IFileManager::Get().GetTimeStamp(*(CachedDirectory / CacheFile))
+					< IFileManager::Get().GetTimeStamp(*Sample.SourceVMDPath)) continue;
+				const FString CandidatePackage = Sample.Mount + TEXT("Animation/") + FPaths::GetBaseFilename(CacheFile);
+				TStrongObjectPtr<UAnimSequence> Cached(LoadObject<UAnimSequence>(nullptr, *StagePresetsObjectPath(CandidatePackage)));
 				if (Cached.IsValid())
 				{
 					Cached->WaitOnExistingCompression();
@@ -572,6 +583,17 @@ namespace
 					}
 				}
 			}
+		}
+		if (!Sample.Animation.IsValid())
+		{
+			Error = TEXT("Sandbox character mesh or its VMD animation could not be loaded");
+			return false;
+		}
+		// 独立预设实拍可复用合格缓存，缺少缓存时保留原动作，不生成或保存。
+		if (!bAllowAnimationGeneration) return true;
+		// 回归样本只有动作前两秒；另做 Saved 内的八秒预览，展示真正的舞蹈姿态。
+		if (bSourceVMDExists)
+		{
 			TVMDParser Parser;
 			if (!Parser.ParseVMDFile(Sample.SourceVMDPath))
 			{
@@ -756,7 +778,7 @@ namespace
 	}
 
 	TSharedRef<FJsonObject> CapturePreset(const FStageDefinition& Definition, UMMDStageRenderPreset* Preset,
-		const FCharacterSample& Sample, const FString& ScreenshotDirectory, bool bComparison = false)
+		const FCharacterSample& Sample, const FString& ScreenshotDirectory, bool bComparison = false, bool bStrictFixture = true)
 	{
 		TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();
 		Result->SetStringField(TEXT("name"), Definition.Name);
@@ -765,6 +787,8 @@ namespace
 		Result->SetStringField(TEXT("animation"), Sample.AnimationPath);
 		Result->SetBoolField(TEXT("character_saved_into_plugin"), false);
 		Result->SetBoolField(TEXT("controlled_material_comparison"), bComparison);
+		Result->SetStringField(TEXT("material_validation_mode"), bStrictFixture ? TEXT("fixed_fixture") : TEXT("source_slots"));
+		Result->SetBoolField(TEXT("fixed_material_fixture_tested"), bStrictFixture);
 		FPreviewScene::ConstructionValues Values;
 		Values.SetCreateDefaultLighting(false).SetEditor(true).SetCreatePhysicsScene(false).SetTransactional(false);
 		FPreviewScene Scene(Values);
@@ -811,6 +835,8 @@ namespace
 		Character->SetAnimation(Sample.Animation.Get());
 		Character->SetUpdateAnimationInEditor(true);
 		const TArray<TObjectPtr<UMaterialInterface>> OriginalOverrides = Character->OverrideMaterials;
+		TArray<TObjectPtr<UMaterialInterface>> OriginalMaterials;
+		for (int32 Slot = 0; Slot < Character->GetNumMaterials(); ++Slot) OriginalMaterials.Add(Character->GetMaterial(Slot));
 		const bool bOriginalShadowInclude = Character->ComponentTags.Contains(FName(TEXT("MMDShadowInclude")));
 		const bool bOriginalShadowExclude = Character->ComponentTags.Contains(FName(TEXT("MMDShadowExclude")));
 		const bool bCharacterPreset = Stage->ApplyCharacterRenderPreset(Character.Get(), true);
@@ -830,6 +856,9 @@ namespace
 		int32 RoleCounts[6] = {};
 		int32 HairSlot = INDEX_NONE;
 		int32 ClothSlot = INDEX_NONE;
+		bool bAllRoleSlotsValid = RoleState && RoleState->SourceMesh == Sample.Mesh.Get() && !OriginalMaterials.IsEmpty()
+			&& RoleState->SourceMaterials.Num() == OriginalMaterials.Num() && RoleState->ResolvedRoles.Num() == OriginalMaterials.Num()
+			&& RoleState->RoleReasons.Num() == OriginalMaterials.Num();
 		TArray<TSharedPtr<FJsonValue>> RoleItems;
 		if (RoleState)
 		{
@@ -845,6 +874,17 @@ namespace
 				Item->SetStringField(TEXT("reason"), RoleState->RoleReasons.IsValidIndex(Slot) ? RoleState->RoleReasons[Slot] : TEXT("missing"));
 				Item->SetStringField(TEXT("material"), RoleState->SourceMaterials.IsValidIndex(Slot) && RoleState->SourceMaterials[Slot]
 					? RoleState->SourceMaterials[Slot]->GetPathName() : TEXT("missing"));
+				UMaterialInterface* Applied = Character->GetMaterial(Slot);
+				float MaterialRole = -1.0f;
+				const bool bSlotValid = Role >= 0 && Role < 6 && RoleState->SourceMaterials.IsValidIndex(Slot)
+					&& OriginalMaterials.IsValidIndex(Slot) && OriginalMaterials[Slot]
+					&& RoleState->SourceMaterials[Slot] == OriginalMaterials[Slot]
+					&& UMMDStageLibrary::GetResolvedCharacterMaterialRole(Character.Get(), Slot) == RoleState->ResolvedRoles[Slot]
+					&& Applied && Applied->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("MaterialRole")), MaterialRole)
+					&& MaterialRole == static_cast<float>(Role);
+				Item->SetNumberField(TEXT("applied_role_value"), MaterialRole);
+				Item->SetBoolField(TEXT("source_slot_passed"), bSlotValid);
+				bAllRoleSlotsValid &= bSlotValid;
 				RoleItems.Add(MakeShared<FJsonValueObject>(Item));
 			}
 		}
@@ -864,34 +904,44 @@ namespace
 		}
 		Result->SetObjectField(TEXT("cloth_shader_parameters"), ClothParameters);
 		Result->SetNumberField(TEXT("film_toe"), Preset->FilmToe);
-		const bool bRolesValid = RoleState && RoleCounts[1] > 0 && RoleCounts[2] > 0 && RoleCounts[3] > 0 && RoleCounts[4] > 0 && RoleCounts[5] > 0;
+		const bool bRolesValid = bStrictFixture
+			? RoleState && RoleCounts[1] > 0 && RoleCounts[2] > 0 && RoleCounts[3] > 0 && RoleCounts[4] > 0 && RoleCounts[5] > 0
+			: bAllRoleSlotsValid;
+		const int32 RoleOverrideSlot = HairSlot != INDEX_NONE || bStrictFixture ? HairSlot : (OriginalMaterials.IsEmpty() ? INDEX_NONE : 0);
+		const EMMDMaterialRole OriginalRole = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Character.Get(), RoleOverrideSlot);
+		const EMMDMaterialRole OverrideTarget = OriginalRole == EMMDMaterialRole::Metal ? EMMDMaterialRole::Hair : EMMDMaterialRole::Metal;
 		float OverrideRole = -1.0f;
 		float ClearedRole = -1.0f;
-		const bool bOverrideSet = HairSlot != INDEX_NONE && UMMDStageLibrary::SetCharacterMaterialRoleOverride(Character.Get(), HairSlot, EMMDMaterialRole::Metal);
-		UMaterialInterface* OverrideMaterial = HairSlot != INDEX_NONE ? Character->GetMaterial(HairSlot) : nullptr;
+		const bool bOverrideSet = RoleOverrideSlot != INDEX_NONE && UMMDStageLibrary::SetCharacterMaterialRoleOverride(Character.Get(), RoleOverrideSlot, OverrideTarget);
+		UMaterialInterface* OverrideMaterial = RoleOverrideSlot != INDEX_NONE ? Character->GetMaterial(RoleOverrideSlot) : nullptr;
 		const bool bOverrideValue = OverrideMaterial && OverrideMaterial->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("MaterialRole")), OverrideRole)
-			&& OverrideRole == 4.0f;
-		const bool bOverrideCleared = HairSlot != INDEX_NONE && UMMDStageLibrary::ClearCharacterMaterialRoleOverride(Character.Get(), HairSlot);
-		UMaterialInterface* ClearedMaterial = HairSlot != INDEX_NONE ? Character->GetMaterial(HairSlot) : nullptr;
+			&& OverrideRole == static_cast<float>(OverrideTarget);
+		const bool bOverrideCleared = RoleOverrideSlot != INDEX_NONE && UMMDStageLibrary::ClearCharacterMaterialRoleOverride(Character.Get(), RoleOverrideSlot);
+		UMaterialInterface* ClearedMaterial = RoleOverrideSlot != INDEX_NONE ? Character->GetMaterial(RoleOverrideSlot) : nullptr;
 		const bool bClearedValue = ClearedMaterial && ClearedMaterial->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("MaterialRole")), ClearedRole)
-			&& ClearedRole == 2.0f;
+			&& ClearedRole == static_cast<float>(OriginalRole);
 		const bool bRoleOverridePassed = bOverrideSet && bOverrideValue && bOverrideCleared && bClearedValue
-			&& UMMDStageLibrary::GetResolvedCharacterMaterialRole(Character.Get(), HairSlot) == EMMDMaterialRole::Hair;
+			&& UMMDStageLibrary::GetResolvedCharacterMaterialRole(Character.Get(), RoleOverrideSlot) == OriginalRole;
 		Result->SetBoolField(TEXT("material_roles_passed"), bRolesValid);
 		Result->SetBoolField(TEXT("role_override_clear_passed"), bRoleOverridePassed);
-		Result->SetNumberField(TEXT("role_override_slot"), HairSlot);
+		Result->SetNumberField(TEXT("role_override_slot"), RoleOverrideSlot);
 		Result->SetNumberField(TEXT("role_override_mid_value"), OverrideRole);
 		Result->SetNumberField(TEXT("role_clear_mid_value"), ClearedRole);
-		// 用真实导入槽验证可逆深度策略；软阴影层和整体淡出继续保持源透明语义。
+		// 固定样本保留严格断言；独立入口按实际源槽验证透明语义与可逆深度策略。
 		struct FMaskedHairFixtureSlot
 		{
-			const TCHAR* Name;
+			FString Name;
 			EMMDMaterialRole Role;
 			EBlendMode SourceBlend;
 			float SourceAlpha;
 			bool bDepthHair;
+			int32 Slot = INDEX_NONE;
+			FLinearColor SourceBase = FLinearColor::White;
+			float SourceOpacity = 1.0f;
+			bool bSourceBaseRead = false;
+			bool bSourceOpacityRead = false;
 		};
-		const FMaskedHairFixtureSlot HairFixtureSlots[] =
+		TArray<FMaskedHairFixtureSlot> HairFixtureSlots =
 		{
 			{ TEXT("Hair01"), EMMDMaterialRole::Hair, BLEND_Translucent, 1.0f, true },
 			{ TEXT("Hair03"), EMMDMaterialRole::Hair, BLEND_Translucent, 1.0f, true },
@@ -905,9 +955,65 @@ namespace
 		};
 		const TArray<TObjectPtr<UMaterialInterface>> SourceSnapshot = RoleState ? RoleState->SourceMaterials : TArray<TObjectPtr<UMaterialInterface>>();
 		const TArray<TObjectPtr<UMaterialInterface>> OverrideSnapshot = RoleState ? RoleState->SourceOverrides : TArray<TObjectPtr<UMaterialInterface>>();
+		if (!bStrictFixture)
+		{
+			HairFixtureSlots.Reset();
+			for (int32 Slot = 0; Slot < OriginalMaterials.Num(); ++Slot)
+			{
+				UMaterialInterface* Source = SourceSnapshot.IsValidIndex(Slot) ? SourceSnapshot[Slot].Get() : nullptr;
+				FMaskedHairFixtureSlot Fixture;
+				Fixture.Name = Sample.Mesh->GetMaterials().IsValidIndex(Slot)
+					? Sample.Mesh->GetMaterials()[Slot].MaterialSlotName.ToString() : FString::FromInt(Slot);
+				Fixture.Slot = Slot;
+				Fixture.Role = UMMDStageLibrary::GetResolvedCharacterMaterialRole(Character.Get(), Slot);
+				Fixture.SourceBlend = Source ? Source->GetBlendMode() : BLEND_Opaque;
+				Fixture.bSourceBaseRead = Source && (Source->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("DiffuseColor")), Fixture.SourceBase)
+					|| Source->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), Fixture.SourceBase));
+				Fixture.SourceAlpha = Fixture.SourceBase.A;
+				Fixture.SourceOpacity = Fixture.SourceBase.A;
+				Fixture.bSourceOpacityRead = Source && Source->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Fixture.SourceOpacity);
+				Fixture.bDepthHair = Fixture.SourceBlend == BLEND_Translucent && Fixture.Role == EMMDMaterialRole::Hair
+					&& FMath::IsFinite(Fixture.SourceBase.A) && FMath::IsFinite(Fixture.SourceOpacity)
+					&& Fixture.SourceBase.A >= 0.999f && Fixture.SourceOpacity >= 0.999f;
+				HairFixtureSlots.Add(MoveTemp(Fixture));
+			}
+		}
 		TArray<int32> HairFixtureSlotIndices;
 		TArray<TSharedPtr<FJsonValue>> HairDepthItems;
-		bool bMaskedHairDepthPassed = RoleState && GetDefault<UMMDStageRenderPreset>()->bUseMaskedHair && Preset->bUseMaskedHair;
+		bool bMaskedHairDepthPassed = RoleState && (bStrictFixture
+			? GetDefault<UMMDStageRenderPreset>()->bUseMaskedHair && Preset->bUseMaskedHair
+			: bAllRoleSlotsValid && HairFixtureSlots.Num() == OriginalMaterials.Num());
+		const auto ExpectedMaterialBlend = [bStrictFixture](const FMaskedHairFixtureSlot& Fixture, bool bMaskedHair)
+		{
+			if (bMaskedHair && Fixture.bDepthHair) return BLEND_Masked;
+			if (bStrictFixture) return Fixture.SourceBlend;
+			if (Fixture.SourceBlend == BLEND_Translucent || Fixture.SourceBlend == BLEND_Additive || Fixture.SourceBlend == BLEND_AlphaComposite)
+				return BLEND_Translucent;
+			return Fixture.SourceBlend == BLEND_Masked ? BLEND_Masked : BLEND_Opaque;
+		};
+		const auto SourceSemanticsMatch = [bStrictFixture](const FMaskedHairFixtureSlot& Fixture, UMaterialInterface* Source,
+			const FLinearColor& SourceBase, float SourceOpacity, bool bSourceBaseRead, bool bSourceOpacityRead)
+		{
+			if (!Source || Source->GetBlendMode() != Fixture.SourceBlend) return false;
+			return bStrictFixture
+				? bSourceBaseRead && bSourceOpacityRead && FMath::IsNearlyEqual(SourceBase.A, Fixture.SourceAlpha) && FMath::IsNearlyEqual(SourceOpacity, Fixture.SourceAlpha)
+				: bSourceBaseRead == Fixture.bSourceBaseRead && bSourceOpacityRead == Fixture.bSourceOpacityRead
+					&& SourceBase.Equals(Fixture.SourceBase) && FMath::IsNearlyEqual(SourceOpacity, Fixture.SourceOpacity);
+		};
+		const auto AppliedInputsMatch = [bStrictFixture](const FMaskedHairFixtureSlot& Fixture, UMaterialInterface* Applied)
+		{
+			if (bStrictFixture) return true;
+			FLinearColor AppliedBase;
+			float AppliedOpacity = -1.0f, AppliedRole = -1.0f;
+			return Applied && Applied->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), AppliedBase)
+				&& AppliedBase.Equals(Fixture.SourceBase)
+				&& Applied->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), AppliedOpacity)
+				&& FMath::IsNearlyEqual(AppliedOpacity, FMath::Clamp(Fixture.SourceOpacity, 0.0f, 1.0f))
+				&& Applied->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("MaterialRole")), AppliedRole)
+				&& AppliedRole == static_cast<float>(Fixture.Role);
+		};
+		const TCHAR* InitialPhase = bStrictFixture ? TEXT("enabled") : TEXT("initial");
+		const TCHAR* TogglePhase = bStrictFixture ? TEXT("disabled") : TEXT("toggled");
 		const auto RecordMaterialBlend = [&](int32 Slot, const TSharedRef<FJsonObject>& Item, const TCHAR* Phase) -> UMaterialInterface*
 		{
 			UMaterialInterface* Material = Slot != INDEX_NONE ? Character->GetMaterial(Slot) : nullptr;
@@ -923,8 +1029,8 @@ namespace
 		};
 		for (const FMaskedHairFixtureSlot& Fixture : HairFixtureSlots)
 		{
-			int32 Slot = INDEX_NONE;
-			for (int32 Index = 0; Index < Sample.Mesh->GetMaterials().Num(); ++Index)
+			int32 Slot = Fixture.Slot;
+			for (int32 Index = 0; bStrictFixture && Index < Sample.Mesh->GetMaterials().Num(); ++Index)
 			{
 				const FSkeletalMaterial& MaterialSlot = Sample.Mesh->GetMaterials()[Index];
 				UMaterialInterface* Source = SourceSnapshot.IsValidIndex(Index) ? SourceSnapshot[Index].Get() : nullptr;
@@ -953,15 +1059,16 @@ namespace
 			Item->SetNumberField(TEXT("source_opacity"), SourceOpacity);
 			Item->SetBoolField(TEXT("source_base_read"), bSourceBaseRead);
 			Item->SetBoolField(TEXT("source_opacity_read"), bSourceOpacityRead);
-			const EBlendMode ExpectedBlend = Fixture.bDepthHair ? BLEND_Masked : Fixture.SourceBlend;
-			Item->SetNumberField(TEXT("expected_enabled_blend"), static_cast<int32>(ExpectedBlend));
-			UMaterialInterface* Applied = RecordMaterialBlend(Slot, Item, TEXT("enabled"));
+			const EBlendMode ExpectedBlend = ExpectedMaterialBlend(Fixture, Preset->bUseMaskedHair);
+			Item->SetNumberField(FString(TEXT("expected_")) + InitialPhase + TEXT("_blend"), static_cast<int32>(ExpectedBlend));
+			UMaterialInterface* Applied = RecordMaterialBlend(Slot, Item, InitialPhase);
 			const bool bParentMatches = MatchesExpectedParent(Applied, ExpectedBlend, Preset);
-			Item->SetBoolField(TEXT("enabled_parent_matches"), bParentMatches);
-			const bool bSlotPassed = Source && bSourceBaseRead && bSourceOpacityRead && Source->GetBlendMode() == Fixture.SourceBlend
-				&& FMath::IsNearlyEqual(SourceBase.A, Fixture.SourceAlpha) && FMath::IsNearlyEqual(SourceOpacity, Fixture.SourceAlpha)
-				&& Role == Fixture.Role && Applied && Applied->GetBlendMode() == ExpectedBlend && bParentMatches;
-			Item->SetBoolField(TEXT("enabled_passed"), bSlotPassed);
+			Item->SetBoolField(FString(InitialPhase) + TEXT("_parent_matches"), bParentMatches);
+			const bool bInputsMatch = AppliedInputsMatch(Fixture, Applied);
+			Item->SetBoolField(FString(InitialPhase) + TEXT("_inputs_match"), bInputsMatch);
+			const bool bSlotPassed = SourceSemanticsMatch(Fixture, Source, SourceBase, SourceOpacity, bSourceBaseRead, bSourceOpacityRead)
+				&& Role == Fixture.Role && Applied && Applied->GetBlendMode() == ExpectedBlend && bParentMatches && bInputsMatch;
+			Item->SetBoolField(FString(InitialPhase) + TEXT("_passed"), bSlotPassed);
 			bMaskedHairDepthPassed &= bSlotPassed;
 			HairDepthItems.Add(MakeShared<FJsonValueObject>(Item));
 		}
@@ -971,17 +1078,21 @@ namespace
 		{
 			HairFadePreset->SetFlags(RF_Transient);
 			HairFadePreset->ClearFlags(RF_Public | RF_Standalone);
-			HairFadePreset->bUseMaskedHair = false;
+			HairFadePreset->bUseMaskedHair = bStrictFixture ? false : !Preset->bUseMaskedHair;
 			bHairFadeApplied = UMMDStageLibrary::ApplyCharacterRenderPreset(Character.Get(), HairFadePreset.Get(), true);
 		}
 		for (int32 Index = 0; Index < HairDepthItems.Num(); ++Index)
 		{
 			const TSharedRef<FJsonObject> Item = HairDepthItems[Index]->AsObject().ToSharedRef();
-			UMaterialInterface* Applied = RecordMaterialBlend(HairFixtureSlotIndices[Index], Item, TEXT("disabled"));
-			const bool bParentMatches = HairFadePreset.IsValid() && MatchesExpectedParent(Applied, HairFixtureSlots[Index].SourceBlend, HairFadePreset.Get());
-			Item->SetBoolField(TEXT("disabled_parent_matches"), bParentMatches);
-			const bool bSlotPassed = bHairFadeApplied && Applied && Applied->GetBlendMode() == HairFixtureSlots[Index].SourceBlend && bParentMatches;
-			Item->SetBoolField(TEXT("disabled_passed"), bSlotPassed);
+			UMaterialInterface* Applied = RecordMaterialBlend(HairFixtureSlotIndices[Index], Item, TogglePhase);
+			const EBlendMode ExpectedBlend = ExpectedMaterialBlend(HairFixtureSlots[Index], HairFadePreset.IsValid() && HairFadePreset->bUseMaskedHair);
+			const bool bParentMatches = HairFadePreset.IsValid() && MatchesExpectedParent(Applied, ExpectedBlend, HairFadePreset.Get());
+			Item->SetNumberField(FString(TEXT("expected_")) + TogglePhase + TEXT("_blend"), static_cast<int32>(ExpectedBlend));
+			Item->SetBoolField(FString(TogglePhase) + TEXT("_parent_matches"), bParentMatches);
+			const bool bInputsMatch = AppliedInputsMatch(HairFixtureSlots[Index], Applied);
+			Item->SetBoolField(FString(TogglePhase) + TEXT("_inputs_match"), bInputsMatch);
+			const bool bSlotPassed = bHairFadeApplied && Applied && Applied->GetBlendMode() == ExpectedBlend && bParentMatches && bInputsMatch;
+			Item->SetBoolField(FString(TogglePhase) + TEXT("_passed"), bSlotPassed);
 			bMaskedHairDepthPassed &= bSlotPassed;
 		}
 		// 恢复原预设后再截图，不让验证副本改变后续姿势和风格对比。
@@ -990,30 +1101,34 @@ namespace
 		{
 			const TSharedRef<FJsonObject> Item = HairDepthItems[Index]->AsObject().ToSharedRef();
 			UMaterialInterface* Applied = RecordMaterialBlend(HairFixtureSlotIndices[Index], Item, TEXT("restored"));
-			const EBlendMode ExpectedBlend = HairFixtureSlots[Index].bDepthHair ? BLEND_Masked : HairFixtureSlots[Index].SourceBlend;
+			const EBlendMode ExpectedBlend = ExpectedMaterialBlend(HairFixtureSlots[Index], Preset->bUseMaskedHair);
 			const bool bParentMatches = MatchesExpectedParent(Applied, ExpectedBlend, Preset);
 			UMaterialInterface* Source = SourceSnapshot.IsValidIndex(HairFixtureSlotIndices[Index]) ? SourceSnapshot[HairFixtureSlotIndices[Index]].Get() : nullptr;
 			FLinearColor SourceBase = FLinearColor::White;
 			const bool bSourceBaseRead = Source && (Source->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("DiffuseColor")), SourceBase)
 				|| Source->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("BaseColor")), SourceBase));
 			float SourceOpacity = SourceBase.A;
-			const bool bSourceUnchanged = Source && Source->GetBlendMode() == HairFixtureSlots[Index].SourceBlend && bSourceBaseRead
-				&& Source->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), SourceOpacity)
-				&& FMath::IsNearlyEqual(SourceBase.A, HairFixtureSlots[Index].SourceAlpha) && FMath::IsNearlyEqual(SourceOpacity, HairFixtureSlots[Index].SourceAlpha);
+			const bool bSourceOpacityRead = Source && Source->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), SourceOpacity);
+			const bool bSourceUnchanged = SourceSemanticsMatch(HairFixtureSlots[Index], Source, SourceBase, SourceOpacity, bSourceBaseRead, bSourceOpacityRead);
 			float RestoredRole = -1.0f;
 			const bool bRoleRestored = Applied && Applied->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("MaterialRole")), RestoredRole)
 				&& RestoredRole == static_cast<float>(HairFixtureSlots[Index].Role);
 			Item->SetBoolField(TEXT("restored_parent_matches"), bParentMatches);
 			Item->SetBoolField(TEXT("source_semantics_unchanged"), bSourceUnchanged);
 			Item->SetNumberField(TEXT("restored_role_value"), RestoredRole);
-			const bool bSlotPassed = bHairPresetRestored && Applied && Applied->GetBlendMode() == ExpectedBlend && bParentMatches && bSourceUnchanged && bRoleRestored;
+			const bool bInputsMatch = AppliedInputsMatch(HairFixtureSlots[Index], Applied);
+			Item->SetBoolField(TEXT("restored_inputs_match"), bInputsMatch);
+			const bool bSlotPassed = bHairPresetRestored && Applied && Applied->GetBlendMode() == ExpectedBlend && bParentMatches && bSourceUnchanged && bRoleRestored && bInputsMatch;
 			Item->SetBoolField(TEXT("restored_passed"), bSlotPassed);
 			bMaskedHairDepthPassed &= bSlotPassed;
 		}
-		const bool bHairSourceSnapshotUnchanged = RoleState && RoleState->SourceMaterials == SourceSnapshot && RoleState->SourceOverrides == OverrideSnapshot;
+		const bool bHairSourceSnapshotUnchanged = RoleState && RoleState->SourceMesh == Sample.Mesh.Get()
+			&& RoleState->SourceMaterials == SourceSnapshot && RoleState->SourceOverrides == OverrideSnapshot;
 		bMaskedHairDepthPassed &= bHairSourceSnapshotUnchanged;
 		Result->SetBoolField(TEXT("masked_hair_depth_enabled"), Preset->bUseMaskedHair);
-		Result->SetBoolField(TEXT("masked_hair_depth_disabled_applied"), bHairFadeApplied);
+		Result->SetBoolField(TEXT("masked_hair_depth_toggle_applied"), bHairFadeApplied);
+		Result->SetBoolField(TEXT("masked_hair_depth_toggled_enabled"), HairFadePreset.IsValid() && HairFadePreset->bUseMaskedHair);
+		Result->SetBoolField(TEXT("masked_hair_depth_disabled_applied"), Preset->bUseMaskedHair || bStrictFixture ? bHairFadeApplied : bCharacterPreset);
 		Result->SetBoolField(TEXT("masked_hair_depth_original_restored"), bHairPresetRestored);
 		Result->SetBoolField(TEXT("masked_hair_source_snapshot_unchanged"), bHairSourceSnapshotUnchanged);
 		Result->SetArrayField(TEXT("masked_hair_depth_slots"), HairDepthItems);
@@ -1327,7 +1442,8 @@ namespace
 			if (HeadIndex != INDEX_NONE)
 			{
 				// 头骨跟随近景用于检查脸颊过渡；两个实际 VMD 姿态分别正视和抬头。
-				const float FaceTimes[] = { 2.6f, 7.0f };
+				const float FaceTimes[] = { bStrictFixture ? 2.6f : Sample.BeautyAnimationTime,
+					bStrictFixture ? 7.0f : Sample.MotionAnimationTime };
 				for (int32 PoseIndex = 0; PoseIndex < UE_ARRAY_COUNT(FaceTimes); ++PoseIndex)
 				{
 					EvaluateCharacter(FaceTimes[PoseIndex]);
@@ -1382,6 +1498,7 @@ namespace
 					{
 						const TArray<FColor> WithDetails = Pixels;
 						TArray<FVector2f> OriginalStrengths;
+						bool bDetailsEnabled = false;
 						for (int32 Slot = 0; Slot < Character->GetNumMaterials(); ++Slot)
 						{
 							FVector2f Strengths(-1.0f, -1.0f);
@@ -1393,6 +1510,7 @@ namespace
 									Material->SetScalarParameterValue(TEXT("ClothDetailStrength"), 0.0f);
 							}
 							OriginalStrengths.Add(Strengths);
+							bDetailsEnabled |= Strengths.X > 0.0f || Strengths.Y > 0.0f;
 						}
 						const FString DetailOffFilename = FPaths::Combine(ScreenshotDirectory, FString(Definition.ImageName) + TEXT("_face_details_off.png"));
 						const bool bDetailOffSaved = SaveCapture(Capture.Get(), DetailOffFilename, Pixels, Error);
@@ -1403,9 +1521,12 @@ namespace
 						DetailOffItem->SetStringField(TEXT("output"), DetailOffFilename);
 						DetailOffItem->SetStringField(TEXT("framing"), TEXT("face_details_off"));
 						DetailOffItem->SetNumberField(TEXT("detail_changed_pixels"), DetailChangedPixels);
-						DetailOffItem->SetBoolField(TEXT("passed"), bDetailOffSaved && DetailChangedPixels > 1000);
+						DetailOffItem->SetBoolField(TEXT("details_enabled"), bDetailsEnabled);
+						// 默认无细节贴图的预设不要求关掉零强度后产生变化。
+						const bool bDetailResponsePassed = bDetailOffSaved && (!bDetailsEnabled || DetailChangedPixels > 1000);
+						DetailOffItem->SetBoolField(TEXT("passed"), bDetailResponsePassed);
 						Captures.Add(MakeShared<FJsonValueObject>(DetailOffItem));
-						bPassed &= bDetailOffSaved && DetailChangedPixels > 1000;
+						bPassed &= bDetailResponsePassed;
 						for (int32 Slot = 0; Slot < Character->GetNumMaterials(); ++Slot)
 							if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Character->GetMaterial(Slot)))
 							{
@@ -1593,9 +1714,14 @@ namespace
 		TArray<TSharedPtr<FJsonValue>> Files;
 		for (const TSharedPtr<FJsonValue>& Value : Captures) Files.Add(MakeShared<FJsonValueString>(Value->AsObject()->GetStringField(TEXT("output"))));
 		Result->SetArrayField(TEXT("files"), Files);
-		const bool bRestored = Stage->RestoreCharacterMaterials(Character.Get()) && Character->OverrideMaterials == OriginalOverrides
+		const bool bRestoreCalled = Stage->RestoreCharacterMaterials(Character.Get());
+		bool bSourceSlotsRestored = Character->GetSkeletalMeshAsset() == Sample.Mesh.Get() && Character->GetNumMaterials() == OriginalMaterials.Num();
+		for (int32 Slot = 0; Slot < OriginalMaterials.Num(); ++Slot)
+			bSourceSlotsRestored &= Character->GetMaterial(Slot) == OriginalMaterials[Slot];
+		const bool bRestored = bRestoreCalled && Character->OverrideMaterials == OriginalOverrides && bSourceSlotsRestored
 			&& Character->ComponentTags.Contains(FName(TEXT("MMDShadowInclude"))) == bOriginalShadowInclude
 			&& Character->ComponentTags.Contains(FName(TEXT("MMDShadowExclude"))) == bOriginalShadowExclude;
+		Result->SetBoolField(TEXT("original_mesh_and_material_slots_restored"), bSourceSlotsRestored);
 		Result->SetBoolField(TEXT("original_materials_restored"), bRestored);
 		bPassed &= bRestored && bSelfShadowTogglePassed;
 		Result->SetBoolField(TEXT("passed"), bPassed);
@@ -1605,6 +1731,136 @@ namespace
 		World->DestroyActor(CharacterOwner);
 		World->DestroyActor(Stage);
 		return Result;
+	}
+
+	int32 CaptureExistingPreset(const FString& Params, const FString& PresetAsset)
+	{
+		FString ReportPath = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BackgroundValidation/Stages/preset_capture.json"));
+		FString ScreenshotDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("BackgroundValidation/Stages/screenshots"));
+		FParse::Value(*Params, TEXT("Report="), ReportPath);
+		FParse::Value(*Params, TEXT("ScreenshotDir="), ScreenshotDirectory);
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(ReportPath), true);
+		IFileManager::Get().MakeDirectory(*ScreenshotDirectory, true);
+		TArray<FString> Errors;
+		TArray<TSharedPtr<FJsonValue>> Captures;
+		const FString Package = FPackageName::ObjectPathToPackageName(PresetAsset);
+		TStrongObjectPtr<UMMDStageRenderPreset> Preset;
+		if (!Package.StartsWith(TEXT("/Ue5MMDTools/Stages/Presets/")) || !FPackageName::IsValidLongPackageName(Package))
+			Errors.Add(TEXT("PresetAsset 必须位于 /Ue5MMDTools/Stages/Presets/，且是有效资产路径"));
+		else
+		{
+			UMMDStageRenderPreset* Source = LoadObject<UMMDStageRenderPreset>(nullptr, *StagePresetsObjectPath(Package));
+			if (!Source) Errors.Add(TEXT("无法加载指定舞台预设：") + PresetAsset);
+			else
+			{
+				// 原截图流程会临时切换阴影选项，故只对内存副本执行。
+				Preset.Reset(DuplicateObject<UMMDStageRenderPreset>(Source, GetTransientPackage()));
+				Preset->SetFlags(RF_Transient);
+				Preset->ClearFlags(RF_Public | RF_Standalone);
+			}
+		}
+		FString CaptureName = FPackageName::GetLongPackageAssetName(Package);
+		CaptureName.RemoveFromStart(TEXT("DA_Render_"));
+		FParse::Value(*Params, TEXT("CaptureName="), CaptureName);
+		FString CharacterSampleName;
+		FParse::Value(*Params, TEXT("CharacterSample="), CharacterSampleName);
+		bool bValidName = !CaptureName.IsEmpty() && CaptureName.Len() <= 80;
+		for (TCHAR Character : CaptureName)
+			bValidName &= FChar::IsAlnum(Character) || Character == TEXT('_') || Character == TEXT('-');
+		if (!bValidName) Errors.Add(TEXT("CaptureName 仅支持不超过 80 字符的字母、数字、下划线和短横线"));
+		if (FParse::Param(*Params, TEXT("Generate"))) Errors.Add(TEXT("PresetAsset 实拍为只读入口，不接受 -Generate"));
+		if (!FApp::CanEverRender() || GUsingNullRHI || !GShaderCompilingManager)
+			Errors.Add(TEXT("实拍需要 -AllowCommandletRendering -RenderOffscreen 与真实 RHI"));
+		if (Errors.IsEmpty())
+		{
+			TArray<UMaterialInterface*> Parents = { Preset->CharacterMaterialOpaque.Get(), Preset->CharacterMaterialMasked.Get(),
+				Preset->CharacterMaterialTranslucent.Get() };
+			for (UMaterialInterface* Parent : Parents)
+			{
+				UMaterial* Material = Parent ? Parent->GetMaterial() : nullptr;
+				if (!Material) Errors.Add(TEXT("指定预设的三种角色父材质必须完整"));
+				else Material->ForceRecompileForRendering(EMaterialShaderPrecompileMode::Default);
+			}
+			FAssetCompilingManager::Get().FinishAllCompilation();
+			GShaderCompilingManager->FinishAllCompilation();
+			FlushRenderingCommands();
+			for (UMaterialInterface* Parent : Parents)
+			{
+				UMaterial* Material = Parent ? Parent->GetMaterial() : nullptr;
+				const FMaterialResource* Resource = Material ? Material->GetMaterialResource(GMaxRHIShaderPlatform) : nullptr;
+				const FMaterialShaderMap* Map = Resource ? Resource->GetGameThreadShaderMap() : nullptr;
+				if (!Resource || Resource->GetCompileErrors().Num() > 0 || !Resource->IsCompilationFinished()
+					|| !Map || !Map->CompiledSuccessfully() || !Map->IsCompilationFinalized() || !Map->IsValidForRendering(false))
+					Errors.Add(TEXT("指定预设的角色父材质尚未成功编译：") + (Parent ? Parent->GetPathName() : TEXT("null")));
+			}
+		}
+		if (Errors.IsEmpty())
+		{
+			FCharacterSample Sample;
+			FString Error;
+			UMMDAnimeLightDataSubsystem* Lights = UMMDAnimeLightDataSubsystem::Get();
+			TStrongObjectPtr<UTextureRenderTarget2D> OriginalTarget(Lights ? Lights->GetLightDataRenderTarget() : nullptr);
+			TStrongObjectPtr<UTextureRenderTarget2D> SharedTarget(LoadObject<UTextureRenderTarget2D>(nullptr,
+				TEXT("/Ue5MMDTools/Rendering/LightDataRT.LightDataRT")));
+			const int32 Width = SharedTarget.IsValid() ? SharedTarget->SizeX : 0;
+			const int32 Height = SharedTarget.IsValid() ? SharedTarget->SizeY : 0;
+			const ETextureRenderTargetFormat Format = SharedTarget.IsValid() ? SharedTarget->RenderTargetFormat.GetValue() : RTF_RGBA32f;
+			const bool bUAV = SharedTarget.IsValid() && SharedTarget->bCanCreateUAV;
+			const bool bDirty = SharedTarget.IsValid() && SharedTarget->GetOutermost()->IsDirty();
+			ON_SCOPE_EXIT
+			{
+				if (Lights) Lights->SetLightDataRenderTarget(OriginalTarget.Get());
+				if (SharedTarget.IsValid())
+				{
+					SharedTarget->RenderTargetFormat = Format;
+					SharedTarget->bCanCreateUAV = bUAV;
+					SharedTarget->InitAutoFormat(Width, Height);
+					SharedTarget->UpdateResourceImmediate(true);
+					if (!bDirty) SharedTarget->GetOutermost()->SetDirtyFlag(false);
+				}
+				FlushRenderingCommands();
+			};
+			if (!Lights || !SharedTarget.IsValid() || Lights->HasPreviewLightOverride())
+				Errors.Add(TEXT("LightData 子系统不可用，或已有预览灯光覆盖"));
+			else if (!LoadCharacterSample(Sample, Error, false, CharacterSampleName)) Errors.Add(Error);
+			else
+			{
+				Lights->SetLightDataRenderTarget(SharedTarget.Get());
+				FVector4f EmptyShadowData[18];
+				for (FVector4f& Vector : EmptyShadowData) Vector = FVector4f(0, 0, 0, 0);
+				Lights->SetShadowCameraData(EmptyShadowData);
+				const FString DisplayName = Preset->DisplayName.ToString();
+				const FStageDefinition Definition = { *CaptureName, *CaptureName, *DisplayName, Preset->Theme, false };
+				TSharedRef<FJsonObject> Capture = CapturePreset(Definition, Preset.Get(), Sample, ScreenshotDirectory, false, false);
+				Capture->SetStringField(TEXT("preset"), StagePresetsObjectPath(Package));
+				Captures.Add(MakeShared<FJsonValueObject>(Capture));
+			}
+		}
+		int32 Failed = Errors.Num();
+		for (const TSharedPtr<FJsonValue>& Capture : Captures)
+			if (!Capture->AsObject()->GetBoolField(TEXT("passed"))) ++Failed;
+		const bool bSuccess = Failed == 0 && Captures.Num() == 1;
+		TSharedRef<FJsonObject> Report = MakeShared<FJsonObject>();
+		Report->SetBoolField(TEXT("success"), bSuccess);
+		Report->SetBoolField(TEXT("generated"), false);
+		Report->SetBoolField(TEXT("read_only_assets"), true);
+		Report->SetNumberField(TEXT("passed"), bSuccess ? 1 : 0);
+		Report->SetNumberField(TEXT("failed"), Failed);
+		Report->SetStringField(TEXT("preset"), PresetAsset);
+		Report->SetStringField(TEXT("shader_platform"), LegacyShaderPlatformToShaderFormat(GMaxRHIShaderPlatform).ToString());
+		Report->SetArrayField(TEXT("screenshots"), Captures);
+		Report->SetArrayField(TEXT("capture_groups"), Captures);
+		TArray<TSharedPtr<FJsonValue>> JsonErrors;
+		for (const FString& Error : Errors)
+		{
+			JsonErrors.Add(MakeShared<FJsonValueString>(Error));
+			UE_LOG(LogTemp, Error, TEXT("[MMDStagePresetCapture] %s"), *Error);
+		}
+		Report->SetArrayField(TEXT("errors"), JsonErrors);
+		FString Json;
+		FJsonSerializer::Serialize(Report, TJsonWriterFactory<>::Create(&Json));
+		if (!FFileHelper::SaveStringToFile(Json, *ReportPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM)) return 1;
+		return bSuccess ? 0 : 1;
 	}
 }
 
@@ -1618,6 +1874,12 @@ UMMDStagePresetsCommandlet::UMMDStagePresetsCommandlet()
 
 int32 UMMDStagePresetsCommandlet::Main(const FString& Params)
 {
+	FString PresetAsset;
+	if (Params.Contains(TEXT("PresetAsset="), ESearchCase::IgnoreCase))
+	{
+		FParse::Value(*Params, TEXT("PresetAsset="), PresetAsset);
+		return CaptureExistingPreset(Params, PresetAsset);
+	}
 	const bool bGenerate = FParse::Param(*Params, TEXT("Generate"));
 	// 独立开关：只截终末地一套，完全不进入上面七套预设与对比流程。
 	const bool bEndfieldCapture = FParse::Param(*Params, TEXT("EndfieldCapture"));
