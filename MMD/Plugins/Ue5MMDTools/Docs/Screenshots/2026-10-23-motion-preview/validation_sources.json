@@ -1,0 +1,53 @@
+{
+  "capture_type": "Actual Unreal Slate + D3D12 viewport, not generated concept art",
+  "engine": "UE 5.8.3 CL58210709",
+  "backend": "native mode 2, Substrate enabled",
+  "fixture": "Read-only existing cached MMDBackgroundValidation_D1A85F1C4A4468A7A9ACECA4A57F0550, 35 material slots, 178 rigid bodies",
+  "build": "Saved/UIValidation/motion-build-final-stdout.txt",
+  "report": "Saved/UIValidation/motion-native-final-report/index.json",
+  "report_sha256": "40d7fac046be9662761d1725d2ea6d626bda4f84e8cdc7373e1e219186832d17",
+  "tests": [
+    {
+      "test": "Ue5MMDTools.UI.MotionPreview",
+      "state": "Success",
+      "duration_seconds": 5.954211235046387,
+      "warnings": 163,
+      "errors": 0
+    },
+    {
+      "test": "Ue5MMDTools.UI.PresetWorkflow",
+      "state": "Success",
+      "duration_seconds": 0.7051401138305664,
+      "warnings": 74,
+      "errors": 0
+    }
+  ],
+  "screenshots": {
+    "idle_full_body.png": {
+      "capture_time": "2026-10-23T15:19:08.136476+08:00",
+      "source": "Saved/UIValidation/motion_0.png",
+      "sha256": "91465e3a0b13e7331440f42069ffd64856e57f3869a64e3b1a6c05c5aca1ae29"
+    },
+    "wave_upper_body.png": {
+      "capture_time": "2026-10-23T15:19:09.027785+08:00",
+      "source": "Saved/UIValidation/motion_1.png",
+      "sha256": "e251cfc85d278be024e7080007dafb790dfbd0982e65c6f9a299def7c79f2fb8"
+    },
+    "wave_next_frame.png": {
+      "capture_time": "2026-10-23T15:19:09.923286+08:00",
+      "source": "Saved/UIValidation/motion_2.png",
+      "sha256": "049ba99312307893b5994c5a9fce4c97e89ea8921f3600d1666c02e74589cf6b"
+    },
+    "face_narrow.png": {
+      "capture_time": "2026-10-23T15:19:10.789957+08:00",
+      "source": "Saved/UIValidation/motion_3.png",
+      "sha256": "490294fdfc821a8f3d25e2602c8e5494ae0cf739694441e37359263f25529702"
+    }
+  },
+  "original_vmds": {
+    "Studio_Idle.vmd": "636ece0015f3e0fb68100b511688094c67737c7039520b81e9b17198519b2168",
+    "Studio_Portrait.vmd": "f456570c4197ff07e4292ed95203c55331a54c22c1b3eda4f869d9850cbcf9d9",
+    "Studio_Relaxed.vmd": "b79977f5bedcbae4b55d3b9b8ed3f535dfccac42d4950aa871dfc9e7ebd1d036",
+    "Studio_Wave.vmd": "74380eb38f6e4fa7db8cb846861e0c92463df5a5ee58790186b3f58a3de8c8b9"
+  }
+}

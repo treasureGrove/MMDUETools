@@ -105,6 +105,14 @@ void UMMDAnimeLightDataSubsystem::SetPreviewLightOverride(const TArray<FVector4f
 		InData.Num(), InData.Num() / 4);
 }
 
+void UMMDAnimeLightDataSubsystem::SetPreviewLightOverrideFromWorld(UWorld* World, const FVector* CameraPosition)
+{
+	if (!IsValid(World)) return;
+	TArray<FVector4f> Data;
+	CollectLights(World, Data, CameraPosition);
+	SetPreviewLightOverride(Data);
+}
+
 void UMMDAnimeLightDataSubsystem::ClearPreviewLightOverride()
 {
 	if (PreviewLightOverrideData.Num() > 0)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Animation/CurveSequence.h"
 #include "UI/MMDToolPanelWidget.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Widgets/SCompoundWidget.h"
@@ -15,7 +16,11 @@ class UMaterialInterface;
 class UMeshComponent;
 class USkeletalMesh;
 class USkeletalMeshComponent;
+class UMMDStageRenderPreset;
+class SWidgetSwitcher;
 struct FAssetData;
+struct FMMDPreviewMovieRequest;
+struct FMMDPreviewMovieJob;
 
 struct FMMDMaterialPresetUndoEntry
 {
@@ -39,6 +44,7 @@ public:
     SLATE_END_ARGS()
 
     void Construct(const FArguments &InArgs);
+    virtual ~MMDImportSetting() override;
 
     void ShowImportProgress(const FString &Message,EMMDMessageType Type = EMMDMessageType::Info);
 
@@ -48,6 +54,21 @@ public:
     static void RegisterInstance(const TSharedRef<MMDImportSetting>& InstanceRef);
 
 private:
+    friend class FMMDToolPanelPresetTest;
+    friend class FMMDToolPanelMotionTest;
+    friend class FMMDToolPanelExperienceTest;
+    friend class FMMDDisplaySceneTest;
+    friend class FMMDPresetClickAuditTest;
+    friend class FMMDImportStateTest;
+    friend class FMMDPreviewMovieTest;
+
+    FReply SelectWorkflowPage(int32 Index);
+    bool AreUIAnimationsEnabled() const { return bUIAnimationsEnabled; }
+    void SetUIAnimationsEnabled(bool bEnabled, bool bSavePreference = true);
+    float GetNavigationPosition() const;
+    float GetPageTransitionAlpha() const;
+    float GetStatusTransitionAlpha() const;
+
     /** 导入模型按钮点击事件 */
     FReply OnImportModelClicked();
 
@@ -65,9 +86,34 @@ private:
 
     FReply OnUndoShaderPresetClicked();
 
+    TSharedRef<SWidget> BuildRenderPresetPanel();
+    TSharedRef<SWidget> BuildScenePresetPanel();
+    TSharedRef<SWidget> BuildMotionPresetPanel();
+    TSharedRef<SWidget> BuildPreviewControls();
+    TSharedRef<SWidget> BuildPreviewMovieControls();
+    bool BuildPreviewMovieRequest(FMMDPreviewMovieRequest& OutRequest, FString& OutError) const;
+    FReply StartPreviewMovie();
+    FReply CancelPreviewMovie();
+    FReply ApplyRenderPreset(const FString& PresetPath, bool bForceRefresh = false);
+    FReply RestoreRenderPreset();
+    FReply PlaceStagePreset(const FString& PresetName);
+    FReply OpenPresetMap(const FString& PackagePath);
+    TArray<USkeletalMeshComponent*> GetRenderPresetTargets() const;
+    FText GetRenderPresetTargetText() const;
+    bool IsRenderPresetApplied(const FString& PresetPath) const;
+    void SuspendLevelPresetPreviews(UWorld* World);
+    void ResumeLevelPresetPreviews(UWorld* World);
+
     void LoadSelectedMMDActor();
 
     bool SetCurrentMMDActorClass(UClass* ActorClass, const FString& DisplayName);
+
+    uint64 BeginModelImport(AActor* Actor);
+    bool AdoptImportedActorClass(uint64 RequestRevision, UClass* ActorClass, const FString& DisplayName);
+    bool IsAnimationCompatibleWithCurrentModel(const UAnimSequence* Animation) const;
+    bool ShouldFilterAnimationForCurrentModel(const FAssetData& AssetData) const;
+    bool SelectProductionAnimation(UAnimSequence* Animation, bool bForPhysicsBake);
+    bool UseBakedAnimationResult(UAnimSequence* Animation, uint64 RequestRevision);
 
     UClass* PickMMDActorClassFromContentBrowser();
 
@@ -138,14 +184,30 @@ private:
 private:
     /** 关联的视口面板 */
     TSharedPtr<MMDViewPanel> ViewPanel;
+    TSharedPtr<FMMDPreviewMovieJob> PreviewMovieJob;
 
     /** 状态文本显示 */
     TSharedPtr<STextBlock> StatusText;
+    TSharedPtr<STextBlock> StatusTypeText;
+    FString CurrentStatusMessage;
+    EMMDMessageType CurrentStatusType = EMMDMessageType::Info;
+    bool bUIAnimationsEnabled = true;
+    float NavigationStart = 0.0f;
+    float NavigationTarget = 0.0f;
+    FCurveSequence PageTransition{0.0f, 0.18f, ECurveEaseFunction::CubicOut};
+    FCurveSequence StatusTransition{0.0f, 0.2f, ECurveEaseFunction::CubicOut};
     TStrongObjectPtr<UMMDToolPanelWidget> ToolPanelWidget;
 
     /** 选中的模型/动画文本 */
     TSharedPtr<STextBlock> SelectedModelText;
     TSharedPtr<STextBlock> SelectedAnimText;
+    TSharedPtr<SWidgetSwitcher> WorkflowSwitcher;
+    bool bApplyPresetToLevelSelection = false;
+    FString CustomRenderPresetPath;
+    TMap<TWeakObjectPtr<USkeletalMeshComponent>, TStrongObjectPtr<UMMDStageRenderPreset>> LevelPresetPreviews;
+    TSet<TWeakObjectPtr<USkeletalMeshComponent>> SuspendedLevelPresetPreviews;
+    FDelegateHandle PreSaveWorldHandle;
+    FDelegateHandle PostSaveWorldHandle;
 
     void SetSelectedModelTextUI(const FText& Text);
     void SetSelectedAnimTextUI(const FText& Text);
@@ -156,6 +218,7 @@ private:
     TWeakObjectPtr<AActor> ComposerActor;
     TWeakObjectPtr<AActor> LastImportedMMDActor;
     TWeakObjectPtr<UClass> LastLoadedMMDActorClass;
+    uint64 ModelSelectionRevision = 0;
     TWeakObjectPtr<USkeletalMeshComponent> ComposerSkeletalMeshComponent;
     TWeakObjectPtr<UAnimSequence> ComposerAnimSequence;
     TWeakObjectPtr<ULevelSequence> ComposerCameraSequence;

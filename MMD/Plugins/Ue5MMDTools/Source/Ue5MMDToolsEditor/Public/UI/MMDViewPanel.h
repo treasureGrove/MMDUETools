@@ -5,6 +5,8 @@
 #include "PreviewScene.h"
 #include "EditorViewportClient.h"
 #include "AMMDActor.h"
+#include "UObject/StrongObjectPtr.h"
+#include "UI/MMDStudioDisplayStyle.h"
 
 class FEditorModeTools; // forward declare editor type
 class UPoseableMeshComponent;
@@ -12,8 +14,12 @@ class UAnimSequence;
 class UMaterialInterface;
 class UPostProcessComponent;
 class UStaticMeshComponent;
+class AMMDStageActor;
+class UMMDStageRenderPreset;
+class FMMDStudioDisplayScene;
 struct FReferenceSkeleton;
 enum class EMMDLightingEnvironment : uint8;
+enum class EMMDPreviewView : uint8 { FullBody, UpperBody, Face, Side, Back, Scene };
 
 class UE5MMDTOOLSEDITOR_API MMDViewPanel : public SEditorViewport
 {
@@ -27,11 +33,45 @@ public:
 	void LoadMMDModel(const FString &FilePath);
 
 	void ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh);
-	void SetPreviewAnimation(class UAnimSequence* AnimSequence);
+	bool SetPreviewAnimation(class UAnimSequence* AnimSequence);
+	bool PlayBuiltinMotion(FName Preset, FText& OutMessage);
+	void ClearPreviewAnimation();
+	FName GetBuiltinMotion() const { return CurrentBuiltinMotion; }
+	bool HasPreviewAnimation() const;
+	bool IsPreviewPlaying() const;
+	bool HasPreviewModel() const;
+	bool HasPreviewPhysics() const;
+	bool IsPreviewPoseHeld() const { return bPreviewPoseHeld; }
+	float GetPreviewPlaybackSpeed() const { return PreviewPlaybackSpeed; }
+	void SetPreviewPoseHeld(bool bHeld);
+	void SetPreviewPlaybackSpeed(float Speed);
+	void RestartPreviewAnimation();
+	void BeginPreviewScrub();
+	void EndPreviewScrub();
+	FText GetPreviewPlaybackStatus() const;
+	TOptional<EMMDPreviewView> GetPreviewView() const { return CurrentPreviewView; }
+	void ClearPreviewViewSelection() { CurrentPreviewView.Reset(); }
+	bool HandlePreviewShortcut(FKey Key);
+	bool IsPreviewPhysicsEnabled() const { return bPreviewPhysicsEnabled; }
+	FText GetPreviewPhysicsStatus() const;
+	FText GetPreviewAnimationLabel() const;
+	float GetPreviewTime() const;
+	float GetPreviewDuration() const;
+	float GetPreviewFrameInterval() const;
+	bool GetProductionCamera(FVector& OutLocation, FRotator& OutRotation, double& OutHorizontalFOV, FIntPoint& OutSize) const;
+	void StepPreviewFrame(int32 Direction);
+	void SeekPreviewAnimation(float Time);
+	void SetPreviewView(EMMDPreviewView View, bool bInstant = false);
 	void SetPreviewPlaying(bool bPlaying);
 	void SetPreviewPhysicsEnabled(bool bEnabled);
 	void ResetPreviewPhysics();
 	int32 ApplyLightingEnvironment(EMMDLightingEnvironment Environment);
+	bool PreviewStageEnvironment(UMMDStageRenderPreset* Preset);
+	bool PreviewDisplayScene(EMMDStudioDisplayStyle Style);
+	TOptional<EMMDStudioDisplayStyle> GetDisplaySceneStyle() const;
+	FText GetLookDevDescription() const;
+	EMMDLightingEnvironment GetLightingEnvironment() const;
+	UMMDStageRenderPreset* GetStagePreviewPreset() const;
 	void ClearLightingEnvironment();
 	bool CreatePreviewActor(UClass* ActorClass);
 	AActor* GetPreviewActor() const { return PreviewActor; }
@@ -59,6 +99,14 @@ protected:
 #endif
 
 private:
+	friend class FMMDToolPanelPresetTest;
+	friend class FMMDToolPanelMotionTest;
+	friend class FMMDDisplaySceneTest;
+	USkeletalMeshComponent* GetPreviewMeshComponent() const;
+	FFrameRate GetPreviewFrameRate() const;
+	void ResetPreviewMotionState();
+	void RefreshPreviewEnvironment();
+	void DestroyStagePreview();
 	void ImportModelClicked();
 
 	TSharedPtr<FPreviewScene> PreviewScene;
@@ -67,6 +115,7 @@ private:
 	FVector WidgetLocation;
 
 	AActor* PreviewActor = nullptr;
+	TWeakObjectPtr<AMMDStageActor> PreviewStageActor;
 	UPoseableMeshComponent* PhysicsBakePreviewComponent = nullptr;
 	EMMDLightingEnvironment CurrentLightingEnvironment;
 	UStaticMeshComponent* PreviewFloorComponent = nullptr;
@@ -74,6 +123,15 @@ private:
 	AActor* PreviewHDRIBackdropActor = nullptr;
 	UStaticMeshComponent* PreviewSkyboxComponent = nullptr;
 	UPostProcessComponent* PreviewPostProcessComponent = nullptr;
+	TSharedPtr<FMMDStudioDisplayScene> StudioDisplayScene;
+	TMap<FName, TStrongObjectPtr<UAnimSequence>> BuiltinMotions;
+	FName CurrentBuiltinMotion;
+	bool bPreviewPhysicsEnabled = true;
+	bool bPreviewPoseHeld = false;
+	bool bPreviewScrubbing = false;
+	bool bPreviewScrubWasPlaying = false;
+	float PreviewPlaybackSpeed = 1.0f;
+	TOptional<EMMDPreviewView> CurrentPreviewView;
 
 	void SyncPreviewStageToEnvironment(EMMDLightingEnvironment Environment);
 

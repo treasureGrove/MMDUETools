@@ -1,0 +1,461 @@
+{
+  "captured_date": "2026-10-25",
+  "timezone": "Asia/Singapore",
+  "batch": "StudioCollection; white Studio default plus four optional studio presets",
+  "engine": "UE 5.8.3 / CL58210709",
+  "rhi": "D3D12 (SM6)",
+  "source_type": "Actual engine Slate screenshots; no newly generated images or Fab assets",
+  "build": {
+    "result": "Succeeded",
+    "execution_seconds": 7.3167502,
+    "source": {
+      "source": "Saved/StudioCollection/2026-10-25/build2.log",
+      "source_last_write_utc": "2026-10-25T07:22:56.710211+00:00",
+      "bytes": 8617,
+      "sha256": "F2BC375F9173E2393D15A23C47A6F1A5E358D5FD4062136B286686608C6A092C"
+    }
+  },
+  "ui_report": {
+    "source": "Saved/StudioCollection/2026-10-25/run2/report/index.json",
+    "source_last_write_utc": "2026-10-25T07:24:18.392417+00:00",
+    "bytes": 148491,
+    "sha256": "F32E787548FABBF25AFCD0B089F4C16754992E26A16B4671B129EE132C3017E8"
+  },
+  "ui_engine_log": "Saved/StudioCollection/2026-10-25/run2/engine.log",
+  "ui_tests": [
+    {
+      "name": "Ue5MMDTools.UI.DisplayScenes",
+      "state": "Success",
+      "duration_seconds": 11.27358627319336,
+      "warnings": 120,
+      "errors": 0
+    },
+    {
+      "name": "Ue5MMDTools.UI.Experience",
+      "state": "Success",
+      "duration_seconds": 2.6298530101776123,
+      "warnings": 29,
+      "errors": 0
+    },
+    {
+      "name": "Ue5MMDTools.UI.FrameStepping",
+      "state": "Success",
+      "duration_seconds": 0.007937498390674591,
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "name": "Ue5MMDTools.UI.MotionPreview",
+      "state": "Success",
+      "duration_seconds": 1.8280820846557617,
+      "warnings": 161,
+      "errors": 0
+    },
+    {
+      "name": "Ue5MMDTools.UI.PresetWorkflow",
+      "state": "Success",
+      "duration_seconds": 0.8708661198616028,
+      "warnings": 70,
+      "errors": 0
+    },
+    {
+      "name": "Ue5MMDTools.UI.PreviewFraming",
+      "state": "Success",
+      "duration_seconds": 0.005347799509763718,
+      "warnings": 0,
+      "errors": 0
+    }
+  ],
+  "ui_total_warnings": 380,
+  "default_style": "Studio",
+  "legacy_cloud_styles": [
+    "SkyGlass",
+    "VioletStage",
+    "WarmAtelier"
+  ],
+  "legacy_cloud_section_initially_collapsed": true,
+  "validation_scope": [
+    "Default original Studio and eight registered styles",
+    "Four generated studio geometries: triangle winding and outward vertex normals",
+    "Scene and lighting matching, fixed exposure, component reuse, model/playback state preservation",
+    "Actual Slate card clicks, hidden legacy cloud section and five representative panel captures"
+  ],
+  "visual_review": "Five panels, four new viewports and five movie frame-15 captures inspected. Original Studio appearance preserved and earlier black geometry faces resolved in these views. Some thin edges still have intermittent dark samples; no claim of perfect edges, all-view quality, rapid-dance ghosting validation or user aesthetic approval.",
+  "movie_status": "Five final movies report success and representative frame 15 inspected; no independent-process editable asset reload performed in this batch.",
+  "artifacts": [
+    {
+      "file": "display_Studio.png",
+      "style": "Studio",
+      "capture_kind": "run2 actual full Slate panel",
+      "antialiasing": "Project SMAA",
+      "source": "Saved/UIValidation/display_Studio.png",
+      "source_last_write_utc": "2026-10-25T07:24:06.188613+00:00",
+      "bytes": 316039,
+      "sha256": "0D2B04272BB41ED9158188D4F73C0412C60C1D3A05204B6B7A33D146BAC52739",
+      "width": 1280,
+      "height": 688
+    },
+    {
+      "file": "display_RoseStudio.png",
+      "style": "RoseStudio",
+      "capture_kind": "run2 actual full Slate panel",
+      "antialiasing": "Project SMAA",
+      "source": "Saved/UIValidation/display_RoseStudio.png",
+      "source_last_write_utc": "2026-10-25T07:24:07.074033+00:00",
+      "bytes": 333185,
+      "sha256": "9F8599CD45FA01D3817963475E9DC11249FE34FEDB84085D03275EE960267098",
+      "width": 1280,
+      "height": 688
+    },
+    {
+      "file": "display_SlateGallery.png",
+      "style": "SlateGallery",
+      "capture_kind": "run2 actual full Slate panel",
+      "antialiasing": "Project SMAA",
+      "source": "Saved/UIValidation/display_SlateGallery.png",
+      "source_last_write_utc": "2026-10-25T07:24:07.889194+00:00",
+      "bytes": 320293,
+      "sha256": "F3668C9DBC597834435A0F1DF3CBC2624012C24B49F38B4385F07C5C908CB7AF",
+      "width": 1280,
+      "height": 688
+    },
+    {
+      "file": "display_PearlAtrium.png",
+      "style": "PearlAtrium",
+      "capture_kind": "run2 actual full Slate panel",
+      "antialiasing": "Project SMAA",
+      "source": "Saved/UIValidation/display_PearlAtrium.png",
+      "source_last_write_utc": "2026-10-25T07:24:08.707388+00:00",
+      "bytes": 367041,
+      "sha256": "936BFD8E87E6F11943B9E175880FBAA0C887BDC1CDF5CB2846EB3850C032AF82",
+      "width": 1280,
+      "height": 688
+    },
+    {
+      "file": "display_LilacStudio.png",
+      "style": "LilacStudio",
+      "capture_kind": "run2 actual full Slate panel",
+      "antialiasing": "Project SMAA",
+      "source": "Saved/UIValidation/display_LilacStudio.png",
+      "source_last_write_utc": "2026-10-25T07:24:09.530158+00:00",
+      "bytes": 350869,
+      "sha256": "5047835A0A3A270F841C289D19C3E9A8D9FFE9B9E70CCB9629235CDDF53653E7",
+      "width": 1280,
+      "height": 688
+    },
+    {
+      "file": "render_Studio.png",
+      "style": "Studio",
+      "capture_kind": "Movie source frame 15 at 0.5 seconds",
+      "antialiasing": "Component-local TAA",
+      "source": "Saved/StudioCollection/2026-10-25/movie-Studio/frames/frame_000015.png",
+      "source_last_write_utc": "2026-10-25T07:27:15.503223+00:00",
+      "bytes": 1031691,
+      "sha256": "AE2AEEFE02D879EBAF6047134D3E3906424D13E81137610004462554147D6A45",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "render_RoseStudio.png",
+      "style": "RoseStudio",
+      "capture_kind": "Movie source frame 15 at 0.5 seconds",
+      "antialiasing": "Component-local TAA",
+      "source": "Saved/StudioCollection/2026-10-25/movie-RoseStudio/frames/frame_000015.png",
+      "source_last_write_utc": "2026-10-25T07:27:37.919668+00:00",
+      "bytes": 1041669,
+      "sha256": "27D968BE7D5BBEEF29346796019F6DA710175E5D9E8C59579F393EE24ABE9C82",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "render_SlateGallery.png",
+      "style": "SlateGallery",
+      "capture_kind": "Movie source frame 15 at 0.5 seconds",
+      "antialiasing": "Component-local TAA",
+      "source": "Saved/StudioCollection/2026-10-25/movie-SlateGallery/frames/frame_000015.png",
+      "source_last_write_utc": "2026-10-25T07:27:58.799572+00:00",
+      "bytes": 1065562,
+      "sha256": "B70A738DDA09ACCFA995512D38A7889C5DA339A154D25F36194FE591DC6F2A4B",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "render_PearlAtrium.png",
+      "style": "PearlAtrium",
+      "capture_kind": "Movie source frame 15 at 0.5 seconds",
+      "antialiasing": "Component-local TAA",
+      "source": "Saved/StudioCollection/2026-10-25/movie-PearlAtrium/frames/frame_000015.png",
+      "source_last_write_utc": "2026-10-25T07:28:19.546427+00:00",
+      "bytes": 1037034,
+      "sha256": "1DCFF6A42C2E42B6DD629F8FBF285C859347CA9A082671AFAAB9F606F7E59385",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "render_LilacStudio.png",
+      "style": "LilacStudio",
+      "capture_kind": "Movie source frame 15 at 0.5 seconds",
+      "antialiasing": "Component-local TAA",
+      "source": "Saved/StudioCollection/2026-10-25/movie-LilacStudio/frames/frame_000015.png",
+      "source_last_write_utc": "2026-10-25T07:28:40.545254+00:00",
+      "bytes": 1068787,
+      "sha256": "4B252025A1CF7EC1D8CB265637926B4D78382B7C68FA8BFA07323A79137D9665",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "file": "studio-collection.mp4",
+      "capture_kind": "Original-speed lossless stream concatenation of five 1-second MP4s",
+      "antialiasing": "Component-local TAA",
+      "source": "Saved/StudioCollection/2026-10-25/studio-collection.mp4",
+      "source_last_write_utc": "2026-10-25T07:40:49.200871+00:00",
+      "bytes": 618547,
+      "sha256": "9083B6B7BA764E55EFEC73332FC8B19CD51AD09AAE72C744533BF76D0D047EF4"
+    }
+  ],
+  "movies": [
+    {
+      "id": "Studio",
+      "completed_at": "2026-10-25T15:27:20.2664350+08:00",
+      "report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-Studio/report.json",
+        "source_last_write_utc": "2026-10-25T07:27:16.936530+00:00",
+        "bytes": 37753,
+        "sha256": "CAC7E64937494959717F8FFD87FEEE1088D0FE56F3CBDF1E14E990F95AA36694"
+      },
+      "production_report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-Studio/production.json",
+        "source_last_write_utc": "2026-10-25T07:27:20.272437+00:00",
+        "bytes": 378,
+        "sha256": "2BA8B0D69EA600869233A138E4B71B5E14719962F9FA8046AFA12DE94F0EE157"
+      },
+      "source_mp4": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-Studio/mmd_movie.mp4",
+        "source_last_write_utc": "2026-10-25T07:27:19.387869+00:00",
+        "bytes": 111029,
+        "sha256": "FBA5205530425F2406376EC31CC78DA8C50AD0CB9C389AAFD7D5497AB471D85D"
+      },
+      "result": {
+        "success": true,
+        "frames": 30,
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "duration_seconds": 1,
+        "stage_preset": "Studio",
+        "lighting": "Studio3Point",
+        "exposure": "Manual EV0; physical camera exposure disabled",
+        "physics_steps": 118,
+        "warmup_seconds": 1,
+        "capture_antialiasing": "TAA",
+        "capture_antialiasing_scope": "Component-local view extension; native output resolution",
+        "capture_history_warmup_frames": 12,
+        "capture_initial_history_reused": true,
+        "source_asset_dirty_flags_unchanged": true,
+        "saved_editable_assets": true,
+        "elapsed_seconds": 11.82170669734478,
+        "import_warning_count": 73,
+        "unmatched_bone_tracks": 55,
+        "unmatched_morph_tracks": 18
+      },
+      "invocation_note": "Root launched the host script without a -Stage argument; the resulting report confirms stage_preset=Studio and lighting=Studio3Point."
+    },
+    {
+      "id": "RoseStudio",
+      "completed_at": "2026-10-25T15:27:42.2650534+08:00",
+      "report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-RoseStudio/report.json",
+        "source_last_write_utc": "2026-10-25T07:27:39.335650+00:00",
+        "bytes": 37781,
+        "sha256": "FF10D43288DA90DEACA2EB41A6D4D54E04F184A08833E9660B7530CE6CF62A2D"
+      },
+      "production_report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-RoseStudio/production.json",
+        "source_last_write_utc": "2026-10-25T07:27:42.270059+00:00",
+        "bytes": 390,
+        "sha256": "7556A63254757EEDF595355755E76CC97FB900BD783B40066B21BF64E417737C"
+      },
+      "source_mp4": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-RoseStudio/mmd_movie.mp4",
+        "source_last_write_utc": "2026-10-25T07:27:41.392343+00:00",
+        "bytes": 118883,
+        "sha256": "F1E55F59BA31BDF2896AC77407462D055818392A88FB3DAFEBAA56B06E99E6ED"
+      },
+      "result": {
+        "success": true,
+        "frames": 30,
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "duration_seconds": 1,
+        "stage_preset": "RoseStudio",
+        "lighting": "DisplayRoseStudio",
+        "exposure": "Manual EV0; physical camera exposure disabled",
+        "physics_steps": 118,
+        "warmup_seconds": 1,
+        "capture_antialiasing": "TAA",
+        "capture_antialiasing_scope": "Component-local view extension; native output resolution",
+        "capture_history_warmup_frames": 12,
+        "capture_initial_history_reused": true,
+        "source_asset_dirty_flags_unchanged": true,
+        "saved_editable_assets": true,
+        "elapsed_seconds": 11.435743398964405,
+        "import_warning_count": 73,
+        "unmatched_bone_tracks": 55,
+        "unmatched_morph_tracks": 18
+      }
+    },
+    {
+      "id": "SlateGallery",
+      "completed_at": "2026-10-25T15:28:03.0232384+08:00",
+      "report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-SlateGallery/report.json",
+        "source_last_write_utc": "2026-10-25T07:28:00.193105+00:00",
+        "bytes": 37793,
+        "sha256": "9A9EE2B2C9383529A1FA73EA6D3CF97D1FA12D19FA7EE4A615DD55A6033B48A9"
+      },
+      "production_report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-SlateGallery/production.json",
+        "source_last_write_utc": "2026-10-25T07:28:03.028192+00:00",
+        "bytes": 392,
+        "sha256": "A93EC8C1547DAC632F5828F5AFCE3ED20DA3CF8594C6A45042B820C3AEFB4818"
+      },
+      "source_mp4": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-SlateGallery/mmd_movie.mp4",
+        "source_last_write_utc": "2026-10-25T07:28:02.165789+00:00",
+        "bytes": 128441,
+        "sha256": "80AC02EAF164CB2AD258353D18BA5331FC959709912EC5C7E2513F975F2D1860"
+      },
+      "result": {
+        "success": true,
+        "frames": 30,
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "duration_seconds": 1,
+        "stage_preset": "SlateGallery",
+        "lighting": "DisplaySlateGallery",
+        "exposure": "Manual EV0; physical camera exposure disabled",
+        "physics_steps": 118,
+        "warmup_seconds": 1,
+        "capture_antialiasing": "TAA",
+        "capture_antialiasing_scope": "Component-local view extension; native output resolution",
+        "capture_history_warmup_frames": 12,
+        "capture_initial_history_reused": true,
+        "source_asset_dirty_flags_unchanged": true,
+        "saved_editable_assets": true,
+        "elapsed_seconds": 10.568522300571203,
+        "import_warning_count": 73,
+        "unmatched_bone_tracks": 55,
+        "unmatched_morph_tracks": 18
+      }
+    },
+    {
+      "id": "PearlAtrium",
+      "completed_at": "2026-10-25T15:28:23.8339415+08:00",
+      "report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-PearlAtrium/report.json",
+        "source_last_write_utc": "2026-10-25T07:28:20.963516+00:00",
+        "bytes": 37789,
+        "sha256": "B38EC1746501F17654E04A9D8F57C54BE4054E7A3D1FDC8AE701A10DDF23CF01"
+      },
+      "production_report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-PearlAtrium/production.json",
+        "source_last_write_utc": "2026-10-25T07:28:23.838461+00:00",
+        "bytes": 391,
+        "sha256": "D49C4DB99E46B207A0DC634C5AC468A11E78043EBCF495A6A76D4051ED2EF0B7"
+      },
+      "source_mp4": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-PearlAtrium/mmd_movie.mp4",
+        "source_last_write_utc": "2026-10-25T07:28:22.946608+00:00",
+        "bytes": 129094,
+        "sha256": "A7DC50E379A88A988B2095E6CCDE0FBB594B882A6228CE63FDBBFE64890D0DA0"
+      },
+      "result": {
+        "success": true,
+        "frames": 30,
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "duration_seconds": 1,
+        "stage_preset": "PearlAtrium",
+        "lighting": "DisplayPearlAtrium",
+        "exposure": "Manual EV0; physical camera exposure disabled",
+        "physics_steps": 118,
+        "warmup_seconds": 1,
+        "capture_antialiasing": "TAA",
+        "capture_antialiasing_scope": "Component-local view extension; native output resolution",
+        "capture_history_warmup_frames": 12,
+        "capture_initial_history_reused": true,
+        "source_asset_dirty_flags_unchanged": true,
+        "saved_editable_assets": true,
+        "elapsed_seconds": 10.67493849992752,
+        "import_warning_count": 73,
+        "unmatched_bone_tracks": 55,
+        "unmatched_morph_tracks": 18
+      }
+    },
+    {
+      "id": "LilacStudio",
+      "completed_at": "2026-10-25T15:28:44.8514177+08:00",
+      "report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-LilacStudio/report.json",
+        "source_last_write_utc": "2026-10-25T07:28:41.967784+00:00",
+        "bytes": 37791,
+        "sha256": "257D866F67172CF46C419FC034C8581710751234319B6DB598DD6FD2DD2705A3"
+      },
+      "production_report": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-LilacStudio/production.json",
+        "source_last_write_utc": "2026-10-25T07:28:44.856422+00:00",
+        "bytes": 383,
+        "sha256": "92388202B9FD4EDFEF6EC35F83F32F4BAD4EA459308CACD4534D20439B9F2030"
+      },
+      "source_mp4": {
+        "source": "Saved/StudioCollection/2026-10-25/movie-LilacStudio/mmd_movie.mp4",
+        "source_last_write_utc": "2026-10-25T07:28:43.982262+00:00",
+        "bytes": 134353,
+        "sha256": "DCDB6C41277B861927103CF56376E86FC7059B1EC2BFFFAEE6F80D2212A52B14"
+      },
+      "result": {
+        "success": true,
+        "frames": 30,
+        "width": 1280,
+        "height": 720,
+        "fps": 30,
+        "duration_seconds": 1,
+        "stage_preset": "LilacStudio",
+        "lighting": "DisplayLilacStudio",
+        "exposure": "Manual EV0; physical camera exposure disabled",
+        "physics_steps": 118,
+        "warmup_seconds": 1,
+        "capture_antialiasing": "TAA",
+        "capture_antialiasing_scope": "Component-local view extension; native output resolution",
+        "capture_history_warmup_frames": 12,
+        "capture_initial_history_reused": true,
+        "source_asset_dirty_flags_unchanged": true,
+        "saved_editable_assets": true,
+        "elapsed_seconds": 10.916116900742054,
+        "import_warning_count": 73,
+        "unmatched_bone_tracks": 55,
+        "unmatched_morph_tracks": 18
+      }
+    }
+  ],
+  "combined_video": {
+    "order": [
+      "Studio",
+      "RoseStudio",
+      "SlateGallery",
+      "PearlAtrium",
+      "LilacStudio"
+    ],
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "frames": 150,
+    "duration_seconds": 5.0,
+    "processing": "ffmpeg concat demuxer with stream copy; no scaling, retiming, interpolation or second video encode",
+    "audio": false,
+    "full_decode_success": true
+  }
+}

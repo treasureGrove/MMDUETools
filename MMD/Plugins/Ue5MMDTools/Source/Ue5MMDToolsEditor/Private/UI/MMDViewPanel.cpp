@@ -1,6 +1,12 @@
 #include "MMDViewPanel.h"
+#include "UI/MMDToolPanelStyle.h"
+#include "UI/MMDPreviewFraming.h"
+#include "Editor/MMDStudioDisplayScene.h"
+#include "Stage/MMDStageActor.h"
+#include "Stage/MMDStageRenderPreset.h"
 #include "Ue5MMDTools.h"
 #include "EditorViewportClient.h"
+#include "Settings/LevelEditorViewportSettings.h"
 #include "SEditorViewport.h"
 #include "UnrealWidget.h"
 #include "Editor.h"
@@ -45,10 +51,34 @@
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
 #include "UObject/UnrealType.h"
+#include "Import/MMDModelDataAsset.h"
+#include "TMMDMeshBuilder.h"
+#include "TVMDParser.h"
+#include "Interfaces/IPluginManager.h"
+#include "Widgets/Layout/SWrapBox.h"
+#include "Widgets/Input/SComboButton.h"
 
 class FMMDViewportClient : public FEditorViewportClient
 {
 public:
+	TWeakPtr<MMDViewPanel> OwnerPanel;
+	void StopCameraTransition()
+	{
+		CameraElapsed = 1.0f;
+		GetViewTransform().TransitionToLocation(GetViewLocation(), TWeakPtr<SWidget>(), true);
+	}
+	void FrameCamera(const FVector& Location, const FVector& Target, bool bInstant)
+	{
+		StopCameraTransition();
+		CameraStart = GetViewLocation();
+		CameraStartRotation = GetViewRotation().Quaternion();
+		CameraEnd = Location;
+		CameraEndRotation = (Target - Location).Rotation().Quaternion();
+		SetLookAtLocation(Target);
+		CameraElapsed = bInstant ? 1.0f : 0.0f;
+		if (bInstant) { SetViewLocation(Location); SetViewRotation(CameraEndRotation.Rotator()); }
+		Invalidate();
+	}
     FMMDViewportClient(FEditorModeTools* InModeTools, FPreviewScene *InPreviewScene, const TWeakPtr<SEditorViewport> &InEditorViewportWidget)
         : FEditorViewportClient(InModeTools, InPreviewScene, InEditorViewportWidget), PreviewScene(InPreviewScene), SelectedActor(nullptr)
     {
@@ -57,7 +87,7 @@ public:
         // 关键：启用编辑器/后处理/选择描边相关的 ShowFlag（保持兼容）
         EngineShowFlags.SetEditor(true);
         EngineShowFlags.SetPostProcessing(true);
-		// 使用 UE 默认自动曝光，不在插件视口里锁定摄影参数。
+		// 曝光交给所选环境的后处理；默认影棚固定，舞台保留自己的配方。
 		ExposureSettings.bFixed = false;
         // 设置默认视角
         SetViewLocation(FVector(300, 300, 300));
@@ -92,12 +122,39 @@ public:
 	virtual void Tick(float DeltaSeconds) override
 	{
 		FEditorViewportClient::Tick(DeltaSeconds);
+		const FIntPoint ViewportSize = Viewport ? Viewport->GetSizeXY() : FIntPoint::ZeroValue;
+		if (ViewportSize.X > 0 && ViewportSize.Y > 0 && ViewportSize != LastViewportSize)
+		{
+			LastViewportSize = ViewportSize;
+			if (const TSharedPtr<MMDViewPanel> Panel = OwnerPanel.Pin())
+			{
+				const TOptional<EMMDPreviewView> SelectedView = Panel->GetPreviewView();
+				// 只在有效视口尺寸改变时重新取景，手动机位与逐帧姿态不触发重置。
+				if (SelectedView.IsSet() && (Panel->HasPreviewModel() || Panel->GetStagePreviewPreset()))
+				{
+					Panel->SetPreviewView(SelectedView.GetValue(), true);
+				}
+			}
+		}
+		if (CameraElapsed < 0.3f)
+		{
+			CameraElapsed += FMath::Max(DeltaSeconds, 0.0f);
+			const float Alpha = FMath::SmoothStep(0.0f, 0.3f, CameraElapsed);
+			SetViewLocation(FMath::Lerp(CameraStart, CameraEnd, Alpha));
+			SetViewRotation(FQuat::Slerp(CameraStartRotation, CameraEndRotation, Alpha).Rotator());
+			Invalidate();
+		}
 		if (UWorld* World = PreviewScene ? PreviewScene->GetWorld() : nullptr)
 		{
 			if (FMath::IsFinite(DeltaSeconds) && DeltaSeconds > 0.0f)
 				World->Tick(LEVELTICK_All, FMath::Min(DeltaSeconds, 1.0f / 15.0f));
+			// 基础预览场景需要显式更新天空和反射捕获，否则切换布光后环境仍可能全黑。
+			PreviewScene->UpdateCaptureContents();
 		}
 	}
+	float CameraElapsed = 1.0f;
+	FVector CameraStart, CameraEnd;
+	FQuat CameraStartRotation, CameraEndRotation;
 
     // 从资源生成Actor
     bool SpawnActorFromAsset(UStaticMesh *StaticMesh, float MouseX, float MouseY)
@@ -340,6 +397,24 @@ public:
     // 重写输入处理 - 确保右键总是用于视角控制，滚轮控制速度
     virtual bool InputKey(const FInputKeyEventArgs &EventArgs) override
     {
+        const bool bCameraNavigation = EventArgs.Key == EKeys::RightMouseButton || EventArgs.Key == EKeys::MiddleMouseButton
+            || EventArgs.Key == EKeys::MouseScrollUp || EventArgs.Key == EKeys::MouseScrollDown
+            || (EventArgs.Key == EKeys::LeftMouseButton && IsAltPressed());
+        // 播放快捷键不打断切镜头；仅手动相机操作接管当前过渡。
+        if (bCameraNavigation && (EventArgs.Event == IE_Pressed || EventArgs.Event == IE_Repeat))
+        {
+            StopCameraTransition();
+            if (auto Panel = OwnerPanel.Pin()) Panel->ClearPreviewViewSelection();
+        }
+		if (EventArgs.Event == IE_Pressed)
+		{
+			if (auto Panel = OwnerPanel.Pin())
+			{
+				const bool bMouseLooking = EventArgs.Viewport && EventArgs.Viewport->KeyState(EKeys::RightMouseButton);
+				if (!bMouseLooking && !IsAltPressed() && !IsCtrlPressed() && !IsShiftPressed() && !IsCmdPressed()
+					&& Panel->HandlePreviewShortcut(EventArgs.Key)) return true;
+			}
+		}
         // 右键相关操作总是用于视角控制，不传递给Widget系统
         if (EventArgs.Key == EKeys::RightMouseButton)
         {
@@ -350,7 +425,7 @@ public:
         if (EventArgs.Event == IE_Pressed && (EventArgs.Key == EKeys::MouseScrollUp || EventArgs.Key == EKeys::MouseScrollDown))
         {
             // 检查Shift键是否被按下 - 使用Viewport检查
-            if (EventArgs.Viewport && EventArgs.Viewport->KeyState(EKeys::LeftShift) || EventArgs.Viewport->KeyState(EKeys::RightShift))
+            if (EventArgs.Viewport && (EventArgs.Viewport->KeyState(EKeys::LeftShift) || EventArgs.Viewport->KeyState(EKeys::RightShift)))
             {
                 if (EventArgs.Key == EKeys::MouseScrollUp)
                 {
@@ -366,7 +441,8 @@ public:
 
         // 处理键盘快捷键
         bool bHandled = false;
-        if (EventArgs.Event == IE_Pressed && SelectedActor)
+        if (EventArgs.Event == IE_Pressed && SelectedActor
+			&& !(EventArgs.Viewport && EventArgs.Viewport->KeyState(EKeys::RightMouseButton)))
         {
             if (EventArgs.Key == EKeys::W)
             {
@@ -443,6 +519,7 @@ public:
     virtual bool IsLevelEditorClient() const override { return true; }
 
 private:
+    FIntPoint LastViewportSize = FIntPoint::ZeroValue;
     FPreviewScene *PreviewScene;
     AActor *SelectedActor;
     FVector WidgetLocation;
@@ -460,7 +537,8 @@ void MMDViewPanel::Construct(const FArguments &InArgs)
 	PreviewCVS.SetEditor(true)
 		.SetCreateDefaultLighting(true)
 		.SetLightBrightness(0.0f)
-		.SetSkyBrightness(0.0f);
+		.SetSkyBrightness(0.0f)
+		.AllowLumenPrimitiveTrackingInPreviewWorld(true);
 	PreviewScene = MakeShared<FPreviewScene>(PreviewCVS);
 
 	if (UDirectionalLightComponent* DefaultLight = PreviewScene->DirectionalLight)
@@ -472,7 +550,7 @@ void MMDViewPanel::Construct(const FArguments &InArgs)
 		Sky->SetVisibility(false);
     }
 
-    // 搭建影棚舞台（与光照环境 map 相同的 Cube 地面+墙），切场景时灯光/相机都会围绕它。
+	// 默认进入晴空露台；校准影棚仍可在场景页单独选择。
     BuildPreviewStage();
 
     // create local ModeTools instance as shared, required because FEditorViewportClient's ctor calls AsShared()
@@ -485,7 +563,10 @@ void MMDViewPanel::Construct(const FArguments &InArgs)
 
 MMDViewPanel::~MMDViewPanel()
 {
+	if (GEditor && IsValid(PreviewActor) && GEditor->GetSelectedActors()->IsSelected(PreviewActor))
+		GEditor->SelectActor(PreviewActor, false, true);
 	ClearLightingEnvironment();
+	StudioDisplayScene.Reset();
 	EndPhysicsBakePreview();
     LocalModeTools.Reset();
 }
@@ -494,8 +575,16 @@ TSharedRef<FEditorViewportClient> MMDViewPanel::MakeEditorViewportClient()
 {
 	// SEditorViewport 已通过 SNew/SAssignNew 建立 shared 引用，此处 SharedThis(this) 安全（引擎标准做法）。
 	CustomViewportClient = MakeShared<FMMDViewportClient>(LocalModeTools.Get(), PreviewScene.Get(), SharedThis(this));
+	static_cast<FMMDViewportClient*>(CustomViewportClient.Get())->OwnerPanel = SharedThis(this);
 	CustomViewportClient->ExposureSettings.bFixed = false;
 	CustomViewportClient->EngineShowFlags.SetEyeAdaptation(true);
+	CustomViewportClient->EngineShowFlags.SetSelectionOutline(false);
+	CustomViewportClient->EngineShowFlags.SetBillboardSprites(false);
+	CustomViewportClient->EngineShowFlags.SetLightRadius(false);
+	CustomViewportClient->EngineShowFlags.SetVolumes(false);
+	CustomViewportClient->ViewFOV = 35.0f;
+	CustomViewportClient->FOVAngle = 35.0f;
+	CustomViewportClient->SetWidgetMode(UE::Widget::WM_None);
 	CustomViewportClient->EngineShowFlags.SetBloom(false);
 	CustomViewportClient->EngineShowFlags.SetMotionBlur(false);
 	CustomViewportClient->EngineShowFlags.SetDepthOfField(false);
@@ -508,75 +597,45 @@ TSharedPtr<SWidget> MMDViewPanel::BuildViewportToolbar()
 TSharedPtr<SWidget> MMDViewPanel::MakeViewportToolbar()
 #endif
 {
-    // 创建工具栏
-    return SNew(SHorizontalBox) + SHorizontalBox::Slot().AutoWidth().Padding(2.0f)[SNew(SButton).Text(FText::FromString(TEXT("Move (W)"))).OnClicked_Lambda([this]()
-                                                                                                                                                            {
-                if (CustomViewportClient.IsValid())
-                {
-                    CustomViewportClient->SetWidgetMode(UE::Widget::WM_Translate);
-                }
-                return FReply::Handled(); })] +
-           SHorizontalBox::Slot()
-               .AutoWidth()
-               .Padding(2.0f)
-                   [SNew(SButton)
-                        .Text(FText::FromString(TEXT("Rotate (E)")))
-                        .OnClicked_Lambda([this]()
-                                          {
-                if (CustomViewportClient.IsValid())
-                {
-                    CustomViewportClient->SetWidgetMode(UE::Widget::WM_Rotate);
-                }
-                return FReply::Handled(); })] +
-           SHorizontalBox::Slot()
-               .AutoWidth()
-               .Padding(2.0f)
-                   [SNew(SButton)
-                        .Text(FText::FromString(TEXT("Scale (R)")))
-                        .OnClicked_Lambda([this]()
-                                          {
-                if (CustomViewportClient.IsValid())
-                {
-                    CustomViewportClient->SetWidgetMode(UE::Widget::WM_Scale);
-                }
-                return FReply::Handled(); })] +
-           SHorizontalBox::Slot()
-               .FillWidth(1.0f) // 占据剩余空间，将速度控制推到右边
-           + SHorizontalBox::Slot()
-                 .AutoWidth()
-                 .Padding(5.0f, 2.0f)
-                     [SNew(SHorizontalBox) + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2.0f)[SNew(STextBlock).Text(FText::FromString(TEXT("Camera Speed:")))] + SHorizontalBox::Slot().AutoWidth().Padding(2.0f)[SNew(SSpinBox<float>).MinValue(0.1f).MaxValue(16.0f).Value_Lambda([this]() -> float
-                                                                                                                                                                                                                                                                                                          {
-                        if (CustomViewportClient.IsValid())
-                        {
-                            return static_cast<FMMDViewportClient*>(CustomViewportClient.Get())->GetCameraSpeed();
-                        }
-                        return 4.0f; })
-                                                                                                                                                                                                                                            .OnValueChanged_Lambda([this](float NewValue)
-                                                                                                                                                                                                                                                                   {
-                        if (CustomViewportClient.IsValid())
-                        {
-                            static_cast<FMMDViewportClient*>(CustomViewportClient.Get())->SetCameraSpeed(NewValue);
-                        } })
-                                                                                                                                                                                                                                            .Delta(0.1f)
-                                                                                                                                                                                                                                            .MinDesiredWidth(60.0f)]] +
-           SHorizontalBox::Slot()
-               .AutoWidth()
-               .Padding(10.0f, 2.0f)
-                   [SNew(SButton)
-                        .Text(FText::FromString(TEXT("Import Model")))
-                        .OnClicked_Lambda([this]()
-                                          {
-                ImportModelClicked();
-                return FReply::Handled(); })] +
-           SHorizontalBox::Slot()
-               .AutoWidth()
-               .Padding(2.0f)
-                   [SNew(SButton)
-                        .Text(FText::FromString(TEXT("Add Test Cube")))
-                        .OnClicked_Lambda([this]()
-                                          {
-                return FReply::Handled(); })];
+	TSharedRef<SWrapBox> Toolbar = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(3, 4));
+	const TCHAR* Labels[] = { TEXT("全身"), TEXT("半身"), TEXT("面部"), TEXT("侧面"), TEXT("背面") };
+	for (int32 Index = 0; Index < 5; ++Index)
+	{
+		const auto View = static_cast<EMMDPreviewView>(Index);
+		Toolbar->AddSlot()
+		[SNew(SButton).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).Text(FText::FromString(Labels[Index]))
+			.ButtonColorAndOpacity_Lambda([this, View]() { return CurrentPreviewView.IsSet() && CurrentPreviewView.GetValue() == View ? MMDPanelStyle::AccentSoft : FLinearColor::White; })
+			.ToolTipText(FText::FromString(FString::Printf(TEXT("%s机位 · 快捷键 %d"), Labels[Index], Index + 1)))
+			.IsEnabled_Lambda([this]() { return GetPreviewMeshComponent() != nullptr; })
+			.OnClicked_Lambda([this, View]() { SetPreviewView(View); return FReply::Handled(); })];
+	}
+	Toolbar->AddSlot().Padding(FMargin(5, 0, 0, 0))
+	[SNew(SButton).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).Text(FText::FromString(TEXT("场景机位")))
+		.ButtonColorAndOpacity_Lambda([this]() { return CurrentPreviewView == EMMDPreviewView::Scene ? MMDPanelStyle::AccentSoft : FLinearColor::White; })
+		.ToolTipText(FText::FromString(TEXT("恢复当前场景的默认构图")))
+		.OnClicked_Lambda([this]() { ResetPreviewCamera(); return FReply::Handled(); })];
+	Toolbar->AddSlot().Padding(FMargin(5, 0, 0, 0))
+	[SNew(SComboButton).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text)
+		.ButtonContent()[SNew(STextBlock).Text(FText::FromString(TEXT("编辑"))).ColorAndOpacity(MMDPanelStyle::Text)]
+		.OnGetMenuContent_Lambda([this]()
+		{
+			FMenuBuilder Menu(true, nullptr);
+			const TCHAR* Labels[] = { TEXT("隐藏手柄"), TEXT("移动 W"), TEXT("旋转 E"), TEXT("缩放 R") };
+			const UE::Widget::EWidgetMode Modes[] = { UE::Widget::WM_None, UE::Widget::WM_Translate, UE::Widget::WM_Rotate, UE::Widget::WM_Scale };
+			for (int32 Index = 0; Index < 4; ++Index)
+			{
+				const auto Mode = Modes[Index];
+				Menu.AddMenuEntry(FText::FromString(Labels[Index]), FText(), FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([this, Mode]()
+				{
+					if (CustomViewportClient.IsValid()) CustomViewportClient->SetWidgetMode(Mode);
+				})));
+			}
+			Menu.AddMenuSeparator();
+			Menu.AddMenuEntry(FText::FromString(TEXT("恢复原始姿态")), FText::FromString(TEXT("清除预览动作，停止动作和物理。可重新点预设恢复。")),
+				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([this]() { ClearPreviewAnimation(); })));
+			return Menu.MakeWidget();
+		})];
+	return Toolbar;
 }
 
 
@@ -673,6 +732,7 @@ bool MMDViewPanel::CreatePreviewActor(UClass* InActorClass)
     }
 
     PreviewActor = NewActor;
+	ResetPreviewMotionState();
     {
         TArray<UPrimitiveComponent*> PrimComps;
         PreviewActor->GetComponents<UPrimitiveComponent>(PrimComps);
@@ -703,7 +763,9 @@ bool MMDViewPanel::CreatePreviewActor(UClass* InActorClass)
     }
 
 	UE_LOG(LogTemp, Verbose, TEXT("CreatePreviewActor: Success %s"), *PreviewActor->GetName());
-	ApplyLightingEnvironment(CurrentLightingEnvironment);
+	RefreshPreviewEnvironment();
+	FText MotionMessage;
+	PlayBuiltinMotion(TEXT("Idle"), MotionMessage);
 	return true;
 }
 
@@ -865,6 +927,8 @@ void MMDViewPanel::ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh)
 	}
 
 	PreviewActor = SkelActor;
+	ResetPreviewMotionState();
+	SkelActor->SetActorLabel(SkeletalMesh->GetName());
 
 	if (USkeletalMeshComponent* SkelComp = SkelActor->GetSkeletalMeshComponent())
 	{
@@ -882,10 +946,12 @@ void MMDViewPanel::ShowImportedSkeletalMesh(class USkeletalMesh* SkeletalMesh)
 		VC->FocusViewportOnBox(FBox::BuildAABB(Bounds.Origin, Bounds.BoxExtent));
 		VC->Invalidate();
 	}
-	ApplyLightingEnvironment(CurrentLightingEnvironment);
+	RefreshPreviewEnvironment();
+	FText MotionMessage;
+	PlayBuiltinMotion(TEXT("Idle"), MotionMessage);
 }
 
-void MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
+bool MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
 {
 	USkeletalMeshComponent* SkelComp = nullptr;
 	if (IsValid(PreviewActor))
@@ -894,15 +960,25 @@ void MMDViewPanel::SetPreviewAnimation(class UAnimSequence* AnimSequence)
 	}
 	if (!SkelComp || !AnimSequence)
 	{
-		return;
+		return false;
 	}
 
-	if (!UMMDPhysicsPlaybackAnimInstance::PlayMMDAnimation(SkelComp, AnimSequence)) return;
+	const bool bHadAnimation = HasPreviewAnimation();
+	const bool bWasPlaying = !bHadAnimation || (bPreviewScrubbing ? bPreviewScrubWasPlaying : IsPreviewPlaying());
+	const float RelativeTime = GetPreviewDuration() > 0 ? GetPreviewTime() / GetPreviewDuration() : 0;
+	auto* Playback = UMMDPhysicsPlaybackAnimInstance::PlayMMDAnimation(SkelComp, AnimSequence, true, bPreviewPhysicsEnabled);
+	if (!Playback) return false;
+	bPreviewScrubbing = false;
+	Playback->SetPlayRate(bPreviewPoseHeld ? 0.0f : PreviewPlaybackSpeed);
+	if (bPreviewPoseHeld && bHadAnimation) Playback->SeekMMDAnimation(RelativeTime * Playback->GetLength());
+	Playback->SetPlaying(bWasPlaying);
+	CurrentBuiltinMotion = NAME_None;
 
 	if (CustomViewportClient.IsValid())
 	{
 		CustomViewportClient->Invalidate();
 	}
+	return true;
 }
 
 void MMDViewPanel::SetPreviewPlaying(bool bPlaying)
@@ -913,6 +989,7 @@ void MMDViewPanel::SetPreviewPlaying(bool bPlaying)
 
 void MMDViewPanel::SetPreviewPhysicsEnabled(bool bEnabled)
 {
+	bPreviewPhysicsEnabled = bEnabled;
 	USkeletalMeshComponent* Component = IsValid(PreviewActor) ? PreviewActor->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
 	if (UMMDPhysicsPlaybackAnimInstance* Instance = Component ? Cast<UMMDPhysicsPlaybackAnimInstance>(Component->GetAnimInstance()) : nullptr)
 		Instance->SetPhysicsEnabled(bEnabled);
@@ -927,6 +1004,8 @@ void MMDViewPanel::ResetPreviewPhysics()
 
 int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment)
 {
+	const bool bWasStagePreview = PreviewStageActor.IsValid();
+	DestroyStagePreview();
 	CurrentLightingEnvironment = Environment;
 	SyncPreviewStageToEnvironment(Environment);
 	int32 Count = 0;
@@ -947,6 +1026,7 @@ int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment
 			const float Radius = FMath::Max(ModelBounds.GetExtent().Size(), 1.0f);
 			Scale = Radius / 100.0f; // 标准 MMD 模型半径约 100cm
 		}
+		if (StudioDisplayScene) StudioDisplayScene->UpdateBounds(ModelBounds);
 
 		Count = UMMDLightingEnvironmentLibrary::ApplyLightingEnvironmentToPreviewScaled(
 			PreviewScene.Get(), Environment, Center, Scale);
@@ -967,6 +1047,7 @@ int32 MMDViewPanel::ApplyLightingEnvironment(EMMDLightingEnvironment Environment
 			CustomViewportClient->Invalidate();
 		}
 	}
+	if (bWasStagePreview) ResetPreviewCamera();
 	return Count;
 }
 
@@ -989,12 +1070,104 @@ void MMDViewPanel::ClearLightingEnvironment()
 	}
 }
 
+namespace
+{
+	double GetPreviewHorizontalFov(const FEditorViewportClient& Client, double Aspect)
+	{
+		const auto Constraint = GetDefault<ULevelEditorViewportSettings>()->AspectRatioAxisConstraint;
+		const bool bMaintainX = Constraint == AspectRatio_MaintainXFOV || (Constraint == AspectRatio_MajorAxisFOV && Aspect > 1.0);
+		if (bMaintainX) return Client.ViewFOV;
+		// 与编辑器保持纵向 FOV 时的投影一致，不改用户的全局视口偏好。
+		const double ReferenceAspect = Client.AspectRatio > 0.0f ? Client.AspectRatio : 1.0;
+		return FMath::RadiansToDegrees(2.0 * FMath::Atan(FMath::Tan(FMath::DegreesToRadians(Client.ViewFOV * 0.5)) * Aspect / ReferenceAspect));
+	}
+}
+
+bool MMDViewPanel::GetProductionCamera(FVector& OutLocation, FRotator& OutRotation, double& OutHorizontalFOV, FIntPoint& OutSize) const
+{
+	if (!CustomViewportClient.IsValid() || !CustomViewportClient->Viewport || !CustomViewportClient->IsPerspective()) return false;
+	const FIntPoint Size = CustomViewportClient->Viewport->GetSizeXY();
+	if (Size.X <= 0 || Size.Y <= 0) return false;
+	const double Aspect = double(Size.X) / Size.Y;
+	const int32 Height = FMath::Clamp(FMath::RoundToInt(FMath::Min(720.0, 3840.0 / Aspect) * 0.5) * 2, 180, 2160);
+	const int32 Width = FMath::Clamp(FMath::RoundToInt(Height * Aspect * 0.5) * 2, 320, 3840);
+	if (FMath::Abs(double(Width) / Height / Aspect - 1.0) > 0.01) return false;
+	OutSize = FIntPoint(Width, Height);
+	OutLocation = CustomViewportClient->GetViewLocation();
+	OutRotation = CustomViewportClient->GetViewRotation();
+	OutHorizontalFOV = GetPreviewHorizontalFov(*CustomViewportClient, Aspect);
+	return !OutLocation.ContainsNaN() && !OutRotation.ContainsNaN() && FMath::IsFinite(OutHorizontalFOV)
+		&& OutHorizontalFOV >= 1.0 && OutHorizontalFOV <= 170.0;
+}
+
+void MMDViewPanel::SetPreviewView(EMMDPreviewView View, bool bInstant)
+{
+	if (View == EMMDPreviewView::Scene) { ResetPreviewCamera(); return; }
+	USkeletalMeshComponent* Component = GetPreviewMeshComponent();
+	USkeletalMesh* Mesh = Component ? Component->GetSkeletalMeshAsset() : nullptr;
+	if (!Mesh || !CustomViewportClient.IsValid()) return;
+	CurrentPreviewView = View;
+	const FBoxSphereBounds Bounds = Mesh->GetBounds().TransformBy(Component->GetComponentTransform());
+	const float Height = FMath::Max(Bounds.BoxExtent.Z * 2.0f, 1.0f);
+	FVector Target = Bounds.Origin;
+	float Radius = Bounds.SphereRadius;
+	FVector Direction(0, 1, 0);
+	if (View == EMMDPreviewView::UpperBody)
+	{
+		Target.Z += Height * 0.22f;
+		Radius = Height * 0.33f;
+	}
+	if (View == EMMDPreviewView::Face)
+	{
+		Target.Z += Height * 0.38f;
+		Radius = Height * 0.105f;
+		FName Head;
+		if (const auto* Data = Mesh->GetAssetUserData<UMMDSkeletalMeshUserData>(); Data && Data->ModelDataAsset)
+			for (const auto& Bone : Data->ModelDataAsset->Bones)
+				if (Bone.NameJP == TEXT("頭") || Bone.NameEN.Equals(TEXT("head"), ESearchCase::IgnoreCase)) { Head = Bone.UEBoneName; break; }
+		if (Head.IsNone())
+			for (FName Candidate : { FName(TEXT("頭")), FName(TEXT("head")) })
+				if (Component->GetBoneIndex(Candidate) != INDEX_NONE) { Head = Candidate; break; }
+		if (!Head.IsNone() && Component->GetBoneIndex(Head) != INDEX_NONE)
+			Target = Component->GetBoneLocation(Head) + FVector(0, 0, Height * 0.045f);
+	}
+	if (View == EMMDPreviewView::Side) Direction = FVector(1, 0.12f, 0).GetSafeNormal();
+	if (View == EMMDPreviewView::Back) Direction = FVector(0, -1, 0);
+	Direction = Component->GetComponentTransform().TransformVectorNoScale(Direction).GetSafeNormal();
+	const FIntPoint Size = CustomViewportClient->Viewport ? CustomViewportClient->Viewport->GetSizeXY() : FIntPoint(1280, 720);
+	const float Aspect = Size.X > 0 && Size.Y > 0 ? float(Size.X) / Size.Y : 16.0f / 9.0f;
+	CustomViewportClient->ViewFOV = CustomViewportClient->FOVAngle = 35.0f;
+	const float HalfFov = FMath::Atan(FMath::Tan(FMath::DegreesToRadians(17.5f)) / FMath::Max(Aspect, 1.0f));
+	const bool bWholeBody = View == EMMDPreviewView::FullBody || View == EMMDPreviewView::Side || View == EMMDPreviewView::Back;
+	const double Distance = bWholeBody
+		? MMDGetBoundsFramingDistance(FBox::BuildAABB(Bounds.Origin, Bounds.BoxExtent), Direction, Aspect,
+			GetPreviewHorizontalFov(*CustomViewportClient, Aspect), 1.18, CustomViewportClient->GetNearClipPlane())
+		: Radius / FMath::Sin(HalfFov) * 1.08f;
+	CustomViewportClient->SetWidgetMode(UE::Widget::WM_None);
+	static_cast<FMMDViewportClient*>(CustomViewportClient.Get())->FrameCamera(Target + Direction * Distance, Target, bInstant);
+}
+
 void MMDViewPanel::ResetPreviewCamera()
 {
+	CurrentPreviewView = EMMDPreviewView::Scene;
+	if (CustomViewportClient.IsValid()) static_cast<FMMDViewportClient*>(CustomViewportClient.Get())->StopCameraTransition();
 	if (!CustomViewportClient.IsValid())
 	{
 		return;
 	}
+	if (const AMMDStageActor* Stage = PreviewStageActor.Get())
+	{
+		// 与 MMDStagePresetsCommandlet 保存的舞台主镜头一致，避开庭院立柱等前景。
+		const bool bGarden = Stage->Theme == EMMDStageTheme::SakuraTheater;
+		const FVector Location = Stage->GetActorTransform().TransformPosition(bGarden ? FVector(65, -440, 145) : FVector(0, -900, 285));
+		const FVector Target = Stage->GetActorTransform().TransformPosition(bGarden ? FVector(0, -5, 75) : FVector(0, 150, 170));
+		CustomViewportClient->ViewFOV = CustomViewportClient->FOVAngle = bGarden ? 50.0f : 55.0f;
+		CustomViewportClient->SetViewLocation(Location);
+		CustomViewportClient->SetViewRotation((Target - Location).Rotation());
+		CustomViewportClient->Invalidate();
+		return;
+	}
+	CustomViewportClient->ViewFOV = CustomViewportClient->FOVAngle = 35.0f;
 
 	// 以当前预览模型包围盒为取景基准；无模型时看向舞台中央（原点）。
 	FBox ModelBounds(ForceInit);
@@ -1012,8 +1185,10 @@ void MMDViewPanel::ResetPreviewCamera()
 	if (ModelBounds.IsValid)
 	{
 		LookAt = ModelBounds.GetCenter();
-		const float Radius = FMath::Max(ModelBounds.GetExtent().Size(), 1.0f);
-		Dist = FMath::Max(Radius * 3.0f, 400.0f);
+		const FIntPoint Size = CustomViewportClient->Viewport ? CustomViewportClient->Viewport->GetSizeXY() : FIntPoint::ZeroValue;
+		const double Aspect = Size.X > 0 && Size.Y > 0 ? double(Size.X) / Size.Y : 16.0 / 9.0;
+		Dist = MMDGetBoundsFramingDistance(ModelBounds, FVector(0, 1, 0), Aspect,
+			GetPreviewHorizontalFov(*CustomViewportClient, Aspect), 1.18, CustomViewportClient->GetNearClipPlane());
 	}
 
 	// 相机在模型正前方（Y+ 方向，UE 中 Y=前），forward 朝 -Y 平视模型。
@@ -1090,6 +1265,7 @@ void MMDViewPanel::BuildPreviewStage()
 		FVector(0.0f, 0.0f, -5.0f), FVector(12.0f, 12.0f, 0.1f));
 	PreviewBackdropComponent = CreateStageComponent(
 		FVector(0.0f, -420.0f, 220.0f), FVector(12.0f, 0.1f, 4.5f));
+	StudioDisplayScene = MakeShared<FMMDStudioDisplayScene>(*PreviewScene, FBox(ForceInit));
 
 	// 与 Content LookDev map 使用同一个 HDRIBackdrop Blueprint；关闭其 Skylight，只保留可见穹顶。
 	UClass* HDRIBackdropClass = LoadClass<AActor>(nullptr,
@@ -1111,7 +1287,7 @@ void MMDViewPanel::BuildPreviewStage()
 			}
 			if (FFloatProperty* IntensityProperty = FindFProperty<FFloatProperty>(HDRIBackdropClass, TEXT("Intensity")))
 			{
-				IntensityProperty->SetPropertyValue_InContainer(PreviewHDRIBackdropActor, 1000.0f);
+				IntensityProperty->SetPropertyValue_InContainer(PreviewHDRIBackdropActor, 1.0f);
 			}
 			if (FFloatProperty* SizeProperty = FindFProperty<FFloatProperty>(HDRIBackdropClass, TEXT("Size")))
 			{
@@ -1147,35 +1323,143 @@ void MMDViewPanel::BuildPreviewStage()
 		PreviewPostProcessComponent->bUnbound = true;
 		PreviewPostProcessComponent->Priority = 100.0f;
 		PreviewPostProcessComponent->BlendWeight = 1.0f;
-		UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(PreviewPostProcessComponent->Settings);
+		UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(PreviewPostProcessComponent->Settings, CurrentLightingEnvironment);
 		PreviewScene->AddComponent(PreviewPostProcessComponent, FTransform::Identity);
 	}
 
 	SyncPreviewStageToEnvironment(CurrentLightingEnvironment);
-	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] Panel LookDev 已同步（18%% 灰地面、背景、Skybox、默认曝光）"));
+	UE_LOG(LogTemp, Log, TEXT("[MMDViewPanel] 默认浅色展示台与 LookDev 环境已同步"));
+}
+
+void MMDViewPanel::DestroyStagePreview()
+{
+	if (AMMDStageActor* Stage = PreviewStageActor.Get()) Stage->Destroy();
+	PreviewStageActor.Reset();
+}
+
+UMMDStageRenderPreset* MMDViewPanel::GetStagePreviewPreset() const
+{
+	const AMMDStageActor* Stage = PreviewStageActor.Get();
+	return Stage ? Stage->RenderPreset.Get() : nullptr;
+}
+
+EMMDLightingEnvironment MMDViewPanel::GetLightingEnvironment() const
+{
+	return PreviewStageActor.IsValid() ? EMMDLightingEnvironment::None : CurrentLightingEnvironment;
+}
+
+TOptional<EMMDStudioDisplayStyle> MMDViewPanel::GetDisplaySceneStyle() const
+{
+	if (PreviewStageActor.IsValid()) return {};
+	for (const auto Style : FMMDStudioDisplayScene::GetStyles())
+	{
+		if (FMMDStudioDisplayScene::GetLightingEnvironment(Style) == CurrentLightingEnvironment) return Style;
+	}
+	return {};
+}
+
+bool MMDViewPanel::PreviewDisplayScene(EMMDStudioDisplayStyle Style)
+{
+	bool bKnownStyle = false;
+	for (const auto Candidate : FMMDStudioDisplayScene::GetStyles()) bKnownStyle |= Candidate == Style;
+	if (!bKnownStyle || !PreviewScene.IsValid() || !StudioDisplayScene || !StudioDisplayScene->IsValid()) return false;
+	if (GetDisplaySceneStyle() == Style && StudioDisplayScene->GetStyle() == Style) return true;
+	return ApplyLightingEnvironment(FMMDStudioDisplayScene::GetLightingEnvironment(Style)) > 0;
+}
+
+FText MMDViewPanel::GetLookDevDescription() const
+{
+	if (const UMMDStageRenderPreset* Preset = GetStagePreviewPreset())
+		return FText::FromString(TEXT("LOOKDEV  /  ") + Preset->DisplayName.ToString() + TEXT(" · 舞台原配灯光 / 后处理"));
+	if (const TOptional<EMMDStudioDisplayStyle> Style = GetDisplaySceneStyle(); Style.IsSet())
+		return FText::FromString(TEXT("展示场景  /  ") + FMMDStudioDisplayScene::GetDisplayName(Style.GetValue()) + TEXT(" · 配套光照 / 固定曝光"));
+	return FText::FromString(TEXT("LOOKDEV  /  ") + UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(CurrentLightingEnvironment)
+		+ (CurrentLightingEnvironment == EMMDLightingEnvironment::Studio3Point ? TEXT(" · 中性影棚 / 固定曝光") : TEXT(" · 环境布光 / 自动曝光")));
+}
+
+bool MMDViewPanel::PreviewStageEnvironment(UMMDStageRenderPreset* Preset)
+{
+	if (!IsValid(Preset) || !PreviewScene.IsValid() || !PreviewScene->GetWorld()) return false;
+	AMMDStageActor* Stage = PreviewStageActor.Get();
+	if (!Stage)
+	{
+		FActorSpawnParameters Params;
+		Params.ObjectFlags |= RF_Transient;
+		Params.bDeferConstruction = true;
+		Stage = PreviewScene->GetWorld()->SpawnActor<AMMDStageActor>(AMMDStageActor::StaticClass(), FTransform::Identity, Params);
+		if (!Stage) return false;
+		Stage->RenderPreset = Preset;
+		Stage->bPreviewAnimation = false;
+		Stage->bAnimate = false;
+		Stage->FinishSpawning(FTransform::Identity);
+		PreviewStageActor = Stage;
+	}
+	else Stage->ApplyStageRenderPreset(Preset);
+	UMMDLightingEnvironmentLibrary::ClearLightingEnvironmentFromPreview(PreviewScene.Get());
+	ResetPreviewCamera();
+	RefreshPreviewEnvironment();
+	return true;
+}
+
+void MMDViewPanel::RefreshPreviewEnvironment()
+{
+	if (!PreviewStageActor.IsValid())
+	{
+		ApplyLightingEnvironment(CurrentLightingEnvironment);
+		return;
+	}
+	SyncPreviewStageToEnvironment(EMMDLightingEnvironment::None);
+	if (UMMDAnimeLightDataSubsystem* Subsystem = UMMDAnimeLightDataSubsystem::Get())
+	{
+		const FVector Camera = CustomViewportClient->GetViewLocation();
+		Subsystem->SetPreviewLightOverrideFromWorld(PreviewScene->GetWorld(), &Camera);
+	}
+	PreviewScene->UpdateCaptureContents();
+	if (CustomViewportClient.IsValid())
+	{
+		CustomViewportClient->EngineShowFlags.SetBloom(true);
+		CustomViewportClient->Invalidate();
+	}
 }
 
 void MMDViewPanel::SyncPreviewStageToEnvironment(EMMDLightingEnvironment Environment)
 {
-	const bool bUseHDRI = Environment == EMMDLightingEnvironment::Daylight ||
-		Environment == EMMDLightingEnvironment::OvercastSoft ||
-		Environment == EMMDLightingEnvironment::GoldenHour;
-
-	if (PreviewFloorComponent)
+	const bool bStage = PreviewStageActor.IsValid();
+	if (CustomViewportClient.IsValid()) CustomViewportClient->EngineShowFlags.SetBloom(bStage);
+	const bool bUseHDRI = !bStage && (Environment == EMMDLightingEnvironment::Daylight ||
+		Environment == EMMDLightingEnvironment::OvercastSoft || Environment == EMMDLightingEnvironment::GoldenHour);
+	const TOptional<EMMDStudioDisplayStyle> DisplayStyle = GetDisplaySceneStyle();
+	const bool bStudioDisplay = !bStage && DisplayStyle.IsSet() && StudioDisplayScene && StudioDisplayScene->IsValid();
+	if (StudioDisplayScene)
 	{
-		PreviewFloorComponent->SetVisibility(true);
+		if (bStudioDisplay) StudioDisplayScene->SetStyle(DisplayStyle.GetValue());
+		StudioDisplayScene->SetVisible(bStudioDisplay);
 	}
-	if (PreviewBackdropComponent)
+	if (PreviewFloorComponent) PreviewFloorComponent->SetVisibility(!bStage && !bStudioDisplay);
+	if (PreviewBackdropComponent) PreviewBackdropComponent->SetVisibility(!bStage && !bUseHDRI && !bStudioDisplay);
+	if (PreviewPostProcessComponent)
 	{
-		PreviewBackdropComponent->SetVisibility(!bUseHDRI);
+		PreviewPostProcessComponent->bEnabled = !bStage;
+		if (!bStage) UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(PreviewPostProcessComponent->Settings, Environment);
 	}
 	if (PreviewSkyboxComponent)
 	{
 		PreviewSkyboxComponent->SetHiddenInGame(!bUseHDRI, true);
 		PreviewSkyboxComponent->SetVisibility(bUseHDRI, true);
-	}
-	if (PreviewPostProcessComponent)
-	{
-		UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(PreviewPostProcessComponent->Settings);
+		FString CubemapPath;
+		float Rotation = 0;
+		float Intensity = 0;
+		if (bUseHDRI && UMMDLightingEnvironmentLibrary::GetEnvironmentSky(Environment, CubemapPath, Rotation, &Intensity))
+		{
+			for (int32 Index = 0; Index < PreviewSkyboxComponent->GetNumMaterials(); ++Index)
+			{
+				if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(PreviewSkyboxComponent->GetMaterial(Index)))
+				{
+					Material->SetTextureParameterValue(TEXT("HDRI_Map"), LoadObject<UTextureCube>(nullptr, *CubemapPath));
+					Material->SetScalarParameterValue(TEXT("HDRI_Angle"), Rotation / 360.0f);
+					Material->SetScalarParameterValue(TEXT("Intensity"), Intensity);
+				}
+			}
+		}
 	}
 }

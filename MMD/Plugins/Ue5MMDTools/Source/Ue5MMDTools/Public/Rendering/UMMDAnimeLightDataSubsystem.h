@@ -75,6 +75,8 @@ public:
 	 *  所以预览视口切光照环境时，直接把打包好的数据推给子系统覆盖 LightDataRT，
 	 *  让预览里的 MMD 材质读到正确的环境灯光。 */
 	void SetPreviewLightOverride(const TArray<FVector4f>& InData);
+	/** 从预览世界实际存在的灯光生成覆盖，供舞台 LookDev 使用。 */
+	void SetPreviewLightOverrideFromWorld(UWorld* World, const FVector* CameraPosition = nullptr);
 
 	/** 清除预览灯光覆盖，恢复从 GWorld 收集主世界灯光。 */
 	void ClearPreviewLightOverride();

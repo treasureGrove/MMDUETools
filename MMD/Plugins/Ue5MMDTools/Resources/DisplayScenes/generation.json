@@ -1,0 +1,49 @@
+{
+  "generation_date": "2026-10-25",
+  "timezone": "Asia/Singapore",
+  "tool": "built-in image_gen.imagegen",
+  "mode": "generate",
+  "reference_images": [],
+  "asset_type": "Generated sky-only panorama texture; not an engine screenshot or Fab asset",
+  "projection_requested": "360 by 180 degree equirectangular, 2:1",
+  "processing": "Original PNG files copied byte-for-byte; no image edits, resizing or color adjustments.",
+  "validation": "All three copied PNGs inspected with view_image. Actual output is 1774x887, not the requested 2048x1024. Exact 2:1 aspect ratio verified. Generated horizon placement deviates from the equator; seamless spherical projection and pole/edge continuity remain unverified and need engine integration review.",
+  "assets": [
+    {
+      "file": "sky_day.png",
+      "original_path": "C:/Users/admin/.codex/generated_images/01a17188-405b-74c3-92dd-c4e8214873df/exec-5a09c879-6f0d-4534-882e-dfb46b104efb.png",
+      "prompt": "Use case: stylized-concept.\nAsset type: production sky-only environment texture for an Unreal Engine / Unity spherical sky dome, not a poster or a scene mockup.\nProjection and size: exact 2:1 image, 2048 x 1024 pixels, full 360-degree longitude by 180-degree latitude equirectangular (latitude-longitude) panorama. The equatorial horizon is a perfectly level subtle line at exactly 50% image height. Left and right edges must join seamlessly with continuous cloud forms and matching colors. The poles must be calm and low detail to avoid pinching. No fisheye, no cubemap cross, no perspective frame. The upper hemisphere is open sky; the lower hemisphere is only extremely soft distant atmospheric haze and a nearly featureless muted sea-color field, no near-ground detail. Only a very faint remote sea horizon, no visible waves or islands.\nArt direction: polished high-end anime 3D game sky texture, painterly cloud detail with believable soft volumetric forms, elegant restrained color depth, readable smooth value gradients, enough sky brightness for a character presentation environment. A quiet central upper area so a 3D character and physical platform can be added in-engine.\nHard constraints: sky and distant atmospheric horizon only. No people, characters, faces, animals, text, letters, numbers, logos, watermarks, frame, UI, platforms, floor, terrain, mountains, forest, trees, architecture, buildings, roof, columns, railing, floating island, ornamental props or nearby objects. No dramatic central focal object, no oversaturated concept-art nebula, no bloom glare, no lens flare.\nPrimary request: a clean bright late-morning azure sky above a remote hazy sea, for an elegant anime sky terrace. Gentle clear soft-blue sky, large delicately detailed white cumulus clouds clustered low in the sky just above the horizon, with subtle lavender-gray cloud undersides and sunlit cream edges. The central upper sky remains spacious, nearly cloudless and blue. Barely visible pale turquoise maritime haze on the horizon. Moderate contrast; calm, fresh and luminous without blown-out white.",
+      "transparent_background": false,
+      "width": 1774,
+      "height": 887,
+      "bytes": 1725855,
+      "sha256": "86C5460DEA9C85D69BA37CEDDA3FEF18A5721DDA7B23F49F2F0F3B7654CA09B6",
+      "generated_file_last_write_utc": "2026-10-25T06:02:35.934113+00:00",
+      "visual_review": "Flat-image inspection: clean open blue upper sky, detailed low white clouds, diffuse distant sea; no characters, text or near-field geometry. Horizon is approximately V=0.63 rather than requested 0.50."
+    },
+    {
+      "file": "sky_twilight.png",
+      "original_path": "C:/Users/admin/.codex/generated_images/01a17188-405b-74c3-92dd-c4e8214873df/exec-f1df8d43-47d1-47d4-9a97-bd08bcb273b4.png",
+      "prompt": "Use case: stylized-concept.\nAsset type: production sky-only environment texture for an Unreal Engine / Unity spherical sky dome, not a poster or a scene mockup.\nProjection and size: exact 2:1 image, 2048 x 1024 pixels, full 360-degree longitude by 180-degree latitude equirectangular (latitude-longitude) panorama. The equatorial horizon is a perfectly level subtle line at exactly 50% image height. Left and right edges must join seamlessly with continuous cloud forms and matching colors. The poles must be calm and low detail to avoid pinching. No fisheye, no cubemap cross, no perspective frame. The upper hemisphere is open sky; the lower hemisphere is only extremely soft distant atmospheric haze and a nearly featureless muted sea-color field, no near-ground detail. Only a very faint remote sea horizon, no visible waves or islands.\nArt direction: polished high-end anime 3D game sky texture, painterly cloud detail with believable soft volumetric forms, elegant restrained color depth, readable smooth value gradients, enough sky brightness for a character presentation environment. A quiet central upper area so a 3D character and physical platform can be added in-engine.\nHard constraints: sky and distant atmospheric horizon only. No people, characters, faces, animals, text, letters, numbers, logos, watermarks, frame, UI, platforms, floor, terrain, mountains, forest, trees, architecture, buildings, roof, columns, railing, floating island, ornamental props or nearby objects. No dramatic central focal object, no oversaturated concept-art nebula, no bloom glare, no lens flare.\nPrimary request: a luminous early-evening twilight sky for an elegant anime starlight terrace. Rich but restrained twilight blue transitioning to soft violet; very thin dusty-pink and pale-gold cloud wisps close to the horizon. Sparse tiny distant stars, only a few, with no galaxy or nebula. A small faint moon is off to one side (around 75% panorama width), never centered. Keep the entire scene gently luminous and readable, never black or ominous; graceful dusk, not deep night, with delicate atmospheric layers.",
+      "transparent_background": false,
+      "width": 1774,
+      "height": 887,
+      "bytes": 1716745,
+      "sha256": "D8F07922D61761BD60DBD11D37F17361D369E77497B9A084C92BC1A475368CB1",
+      "generated_file_last_write_utc": "2026-10-25T06:02:54.807777+00:00",
+      "visual_review": "Flat-image inspection: blue-violet twilight, sparse stars, small moon off to the right, pink-gold horizon; no characters, text or near-field geometry. Horizon is approximately V=0.56 rather than requested 0.50."
+    },
+    {
+      "file": "sky_warm.png",
+      "original_path": "C:/Users/admin/.codex/generated_images/01a17188-405b-74c3-92dd-c4e8214873df/exec-8117e4fc-a524-42a6-ab6e-ae3787398111.png",
+      "prompt": "Use case: stylized-concept.\nAsset type: production sky-only environment texture for an Unreal Engine / Unity spherical sky dome, not a poster or a scene mockup.\nProjection and size: exact 2:1 image, 2048 x 1024 pixels, full 360-degree longitude by 180-degree latitude equirectangular (latitude-longitude) panorama. The equatorial horizon is a perfectly level subtle line at exactly 50% image height. Left and right edges must join seamlessly with continuous cloud forms and matching colors. The poles must be calm and low detail to avoid pinching. No fisheye, no cubemap cross, no perspective frame. The upper hemisphere is open sky; the lower hemisphere is only extremely soft distant atmospheric haze and a nearly featureless muted sea-color field, no near-ground detail. Only a very faint remote sea horizon, no visible waves or islands.\nArt direction: polished high-end anime 3D game sky texture, painterly cloud detail with believable soft volumetric forms, elegant restrained color depth, readable smooth value gradients, enough sky brightness for a character presentation environment. A quiet central upper area so a 3D character and physical platform can be added in-engine.\nHard constraints: sky and distant atmospheric horizon only. No people, characters, faces, animals, text, letters, numbers, logos, watermarks, frame, UI, platforms, floor, terrain, mountains, forest, trees, architecture, buildings, roof, columns, railing, floating island, ornamental props or nearby objects. No dramatic central focal object, no oversaturated concept-art nebula, no bloom glare, no lens flare.\nPrimary request: a refined warm late-afternoon sky for an elegant anime light gallery. Warm pale-apricot light around a soft golden remote horizon; the quiet upper sky transitions through creamy pale blue and very gentle lavender. Delicate thin cloud layers with soft buttery highlights. Airy, calm, tasteful and bright with subtle warm/cool balance. No orange-red blazing sunset, no strong red or saturated yellow, no giant sun disk.",
+      "transparent_background": false,
+      "width": 1774,
+      "height": 887,
+      "bytes": 1709345,
+      "sha256": "3DBE1B35076EFD9E2EB5432C973224B9661C1D16AF3A6353B5D5E237EC61C937",
+      "generated_file_last_write_utc": "2026-10-25T06:03:12.628494+00:00",
+      "visual_review": "Flat-image inspection: warm pale-gold/apricot horizon and blue-lavender upper sky, soft clouds; no characters, text or near-field geometry. Horizon is approximately V=0.57 rather than requested 0.50."
+    }
+  ]
+}

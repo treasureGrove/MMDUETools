@@ -24,6 +24,7 @@ struct FMMDPhysicsPlaybackProxy : public FAnimSingleNodeInstanceProxy
 	{
 		FAnimSingleNodeInstanceProxy::PreUpdate(Instance, IsPlaying() ? DeltaSeconds : 0.0f);
 		UMMDPhysicsPlaybackAnimInstance* Playback = CastChecked<UMMDPhysicsPlaybackAnimInstance>(Instance);
+		AnimationLength = Playback->GetLength();
 		USkeletalMeshComponent* Component = Playback->GetSkelMeshComponent();
 		if (Component && Playback->PhysicsSourceMesh != Component->GetSkeletalMeshAsset())
 		{
@@ -60,7 +61,11 @@ struct FMMDPhysicsPlaybackProxy : public FAnimSingleNodeInstanceProxy
 		const float PlaybackTime = GetCurrentTime();
 		const float ExpectedAdvance = FMath::Abs(GetDeltaSeconds() * GetPlayRate());
 		// 工作线程发现时间跳转时透传本帧，下次 PreUpdate 在游戏线程重建刚体。
-		if (bHasPreviousTime && FMath::Abs(PlaybackTime - PreviousTime) > ExpectedAdvance + 0.002f)
+		float TimeDistance = FMath::Abs(PlaybackTime - PreviousTime);
+		// 连续循环跨过片尾不是跳帧，不应每次循环重建物理世界。
+		if (IsLooping() && AnimationLength > 0.0f)
+			TimeDistance = FMath::Min(TimeDistance, FMath::Abs(TimeDistance - AnimationLength));
+		if (bHasPreviousTime && TimeDistance > ExpectedAdvance + 0.002f)
 		{
 			bPendingReset = true;
 			LastPhysicsTransforms.Reset();
@@ -112,6 +117,7 @@ struct FMMDPhysicsPlaybackProxy : public FAnimSingleNodeInstanceProxy
 	bool bPendingReset = false;
 	bool bHasPreviousTime = false;
 	float PreviousTime = 0.0f;
+	float AnimationLength = 0.0f;
 	int32 CachedBoneCount = 0;
 };
 

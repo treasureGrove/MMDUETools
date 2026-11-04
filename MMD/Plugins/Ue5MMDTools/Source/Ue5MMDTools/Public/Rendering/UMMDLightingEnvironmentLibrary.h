@@ -40,6 +40,13 @@ enum class EMMDLightingEnvironment : uint8
 	RimSilhouette   = 6 UMETA(DisplayName = "轮廓剪影（特殊）"),
 	GoldenHour      = 7 UMETA(DisplayName = "黄金时刻（特殊）"),
 	HorrorGreen     = 8 UMETA(DisplayName = "恐怖绿光（特殊）"),
+	DisplaySkyGlass = 9 UMETA(DisplayName = "晴空露台（展示）"),
+	DisplayVioletStage = 10 UMETA(DisplayName = "暮色星台（展示）"),
+	DisplayWarmAtelier = 11 UMETA(DisplayName = "暖光画廊（展示）"),
+	DisplayRoseStudio = 12 UMETA(DisplayName = "樱雾柔光（展示）"),
+	DisplaySlateGallery = 13 UMETA(DisplayName = "深蓝展厅（展示）"),
+	DisplayPearlAtrium = 14 UMETA(DisplayName = "珍珠回廊（展示）"),
+	DisplayLilacStudio = 15 UMETA(DisplayName = "薰紫摄影棚（展示）"),
 };
 
 UCLASS()
@@ -67,8 +74,8 @@ public:
 	/** 清除之前通过 ApplyLightingEnvironmentToPreview 加到该预览场景的环境光组件。 */
 	static void ClearLightingEnvironmentFromPreview(FPreviewScene* PreviewScene);
 
-	/** 写入 Panel LookDev 的中性后处理设置，曝光保持 UE 默认。 */
-	static void ConfigureLookDevPostProcess(FPostProcessSettings& Settings);
+	/** 写入中性后处理；三点布光与展示配方固定 EV0，其余环境沿用工程曝光。 */
+	static void ConfigureLookDevPostProcess(FPostProcessSettings& Settings, EMMDLightingEnvironment Environment = EMMDLightingEnvironment::None);
 
 	/** 把光照环境打包成 LightDataRT 第 0 行布局的灯光数据（MaxLights*4 个 float4，16 盏灯）。
 	 *  预览场景的灯是孤儿组件，GWorld 扫描收集不到，需用本函数打包后经
@@ -82,6 +89,9 @@ public:
 	/** 预设的中文显示名（用于 UI 下拉/按钮）。 */
 	UFUNCTION(BlueprintPure, Category = "MMD Tools|Lighting")
 	static FString GetEnvironmentDisplayName(EMMDLightingEnvironment Environment);
+
+	/** 可见背景与实际天光共用同一配方；无天光环境返回 false。 */
+	static bool GetEnvironmentSky(EMMDLightingEnvironment Environment, FString& OutCubemapPath, float& OutRotation, float* OutIntensity = nullptr);
 
 	/** 是否为"特殊"风格化环境（区别于标准参考环境）。 */
 	UFUNCTION(BlueprintPure, Category = "MMD Tools|Lighting")

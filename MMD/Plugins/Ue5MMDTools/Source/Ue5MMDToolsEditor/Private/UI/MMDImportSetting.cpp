@@ -1,9 +1,16 @@
 #include "MMDImportSetting.h"
 #include "MMDViewPanel.h"
+#include "UI/MMDToolPanelStyle.h"
+#include "UI/SMMDStudioMark.h"
+#include "UI/SMMDAnimatedButton.h"
+#include "UI/SMMDTabIndicator.h"
+#include "HAL/PlatformApplicationMisc.h"
+#include "Misc/ConfigCacheIni.h"
 #include "UI/MMDToolPanelWidget.h"
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Input/SButton.h"
@@ -28,6 +35,8 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSplitter.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
+#include "Widgets/Layout/SExpandableArea.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
@@ -38,7 +47,10 @@
 #include "TPMXParser.h"
 #include "TVMDParser.h"
 #include "MMDPhysicsSimulator.h"
+#include "Import/MMDModelDataAsset.h"
+#include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "Animation/AnimData/IAnimationDataController.h"
 #include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/AnimData/CurveIdentifier.h"
@@ -66,6 +78,7 @@
 #include "AMMDActor.h"
 #include "AMMDLevelSequenceActor.h"
 #include "MovieScene.h"
+#include "MovieSceneTimeHelpers.h"
 #include "MovieSceneObjectBindingID.h"
 #include "MovieScenePossessable.h"
 #include "MovieSceneSpawnable.h"
@@ -87,9 +100,13 @@
 #include "Tracks/MovieSceneSpawnTrack.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Misc/PackageName.h"
 #include "ScopedTransaction.h"
 #endif // WITH_EDITOR
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
+#include "Misc/AutomationTest.h"
+#endif
 
 namespace
 {
@@ -399,7 +416,7 @@ static UBlueprint* CreateMMDLevelSequenceActorBlueprint(ULevelSequence* LevelSeq
 #endif
 
 // Define helper now (was accidentally removed)
-static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& FolderPath, const FString& AssetName, bool bReplaceInLevel)
+static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& FolderPath, const FString& AssetName, bool bFocusAsset)
 {
 	if (!TargetActor)
 	{
@@ -470,7 +487,7 @@ static UBlueprint* SaveMMDBlueprintAsset(AActor* TargetActor, const FString& Fol
 	}
 
 	// 7) 保存并关注蓝图
-	FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(NewBP);
+	if (bFocusAsset) FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(NewBP);
 	return NewBP;
 #else
 	UE_LOG(LogTemp, Error, TEXT("SaveActorInstanceAsBlueprint: editor-only function"));
@@ -886,17 +903,6 @@ static FString GetMMDModelAnimationFolder(UClass* ActorClass)
 	return FString();
 }
 
-static bool ShouldFilterAnimationOutsideCurrentMMDModel(const FAssetData& AssetData, UClass* ActorClass)
-{
-	const FString AnimationFolder = GetMMDModelAnimationFolder(ActorClass);
-	return !AnimationFolder.IsEmpty() && !AssetData.PackagePath.ToString().StartsWith(AnimationFolder);
-}
-
-static bool ShouldFilterAnimationOutsideFolder(const FAssetData& AssetData, const FString& AnimationFolder)
-{
-	return !AnimationFolder.IsEmpty() && !AssetData.PackagePath.ToString().StartsWith(AnimationFolder);
-}
-
 static bool TryGetSelectedAnimationTarget(FMMDSelectedAnimationTarget& OutTarget, FString& OutError)
 {
 	OutTarget = FMMDSelectedAnimationTarget{};
@@ -980,6 +986,43 @@ static void ConvertPMXPhysicsToAnimNodeData(const PMXDatas& PMXData, TArray<FMMD
 		JointData.SpringPosition = Joint.SpringPos;
 		JointData.SpringRotation = Joint.SpringRot;
 	}
+}
+
+static bool GetMMDPhysicsBakeData(USkeletalMesh* SkeletalMesh, const FString& SourcePMXFilePath,
+	TArray<FMMDPhysicsRigidBodyData>& OutRigids, TArray<FMMDPhysicsJointData>& OutJoints, FString& OutError)
+{
+	OutRigids.Reset();
+	OutJoints.Reset();
+	OutError.Reset();
+	// 已导入的模型数据随资产保存，移动工程后不应再依赖原始 PMX 路径。
+	const UMMDSkeletalMeshUserData* UserData = SkeletalMesh
+		? Cast<UMMDSkeletalMeshUserData>(SkeletalMesh->GetAssetUserDataOfClass(UMMDSkeletalMeshUserData::StaticClass()))
+		: nullptr;
+	if (UserData && UserData->ModelDataAsset && !UserData->ModelDataAsset->Rigids.IsEmpty())
+	{
+		OutRigids = UserData->ModelDataAsset->Rigids;
+		OutJoints = UserData->ModelDataAsset->Joints;
+		return true;
+	}
+
+	if (SourcePMXFilePath.IsEmpty() || !FPaths::FileExists(SourcePMXFilePath))
+	{
+		OutError = TEXT("The model has no saved rigid body data and no valid source PMX file for physics bake.");
+		return false;
+	}
+	const PMXDatas* ParsedPMX = TMMDMeshBuilder::GetOrParsePMXData(SourcePMXFilePath);
+	if (!ParsedPMX)
+	{
+		OutError = TEXT("Failed to parse PMX physics data.");
+		return false;
+	}
+	ConvertPMXPhysicsToAnimNodeData(*ParsedPMX, OutRigids, OutJoints);
+	if (OutRigids.IsEmpty())
+	{
+		OutError = TEXT("The model has no rigid body data to bake.");
+		return false;
+	}
+	return true;
 }
 
 static bool BuildLocalTransformsFromAnimSequence(UAnimSequence* AnimSequence, const FReferenceSkeleton& RefSkeleton, float BakeFrameRate, int32 NumKeys, TArray<TArray<FTransform>>& OutLocalTransforms, FString& OutError)
@@ -1172,375 +1215,255 @@ void MMDImportSetting::RegisterInstance(const TSharedRef<MMDImportSetting>& Inst
 
 namespace
 {
-	// ===== 二次元主题配色（马卡龙 + 深紫底）=====
-	const FLinearColor GMMDColorPink   = FLinearColor(1.00f, 0.42f, 0.62f, 1.0f);  // 樱花粉
-	const FLinearColor GMMDColorBlue   = FLinearColor(0.35f, 0.72f, 1.00f, 1.0f);  // 天蓝
-	const FLinearColor GMMDColorMint   = FLinearColor(0.24f, 0.90f, 0.78f, 1.0f);  // 薄荷
-	const FLinearColor GMMDColorPurple = FLinearColor(0.66f, 0.47f, 1.00f, 1.0f);  // 紫
+	const FLinearColor GMMDColorBlue = MMDPanelStyle::Text;
+	const FLinearColor GMMDColorMint = MMDPanelStyle::Text;
+	const FLinearColor GMMDPanelBG = MMDPanelStyle::Canvas;
+	const FLinearColor GMMDSectionBG = MMDPanelStyle::Panel;
+	const FLinearColor GMMDTextDim = MMDPanelStyle::Muted;
 
-	const FLinearColor GMMDPanelBG   = FLinearColor(0.10f, 0.07f, 0.16f, 1.0f);   // 深紫底
-	const FLinearColor GMMDSectionBG = FLinearColor(0.14f, 0.10f, 0.22f, 1.0f);   // 分区底
-	const FLinearColor GMMDHeaderBG  = FLinearColor(0.17f, 0.12f, 0.27f, 1.0f);   // 顶栏/状态栏底
-	const FLinearColor GMMDTextDim   = FLinearColor(0.72f, 0.68f, 0.85f, 1.0f);   // 灰紫文字
-	const FLinearColor GMMDTextBright= FLinearColor(0.96f, 0.95f, 1.00f, 1.0f);   // 亮文字
+	const FButtonStyle& MMDGetPrimaryButtonStyle() { return *MMDPanelStyle::Primary(); }
+	const FButtonStyle& MMDGetSecondaryButtonStyle() { return *MMDPanelStyle::Secondary(); }
+	const FButtonStyle& MMDGetAccentButtonStyle() { return *MMDPanelStyle::Primary(); }
+	const FButtonStyle& MMDGetWarnButtonStyle() { return *MMDPanelStyle::Secondary(); }
 
-	// 二次元大圆角
-	constexpr float GMMDRadius = 10.0f;
-
-	// 按钮样式工厂：普通/悬停/按下 三态 + 大圆角
-	FButtonStyle MMDMakeButtonStyle(const FLinearColor& Normal, const FLinearColor& Hovered, const FLinearColor& Pressed)
+	TSharedRef<SWidget> MMDMakeButton(const FText& Label, const FButtonStyle& Style, FOnClicked Handler, TAttribute<bool> MotionEnabled)
 	{
-		FButtonStyle S;
-		S.SetNormal(FSlateRoundedBoxBrush(Normal, GMMDRadius));
-		S.SetHovered(FSlateRoundedBoxBrush(Hovered, GMMDRadius));
-		S.SetPressed(FSlateRoundedBoxBrush(Pressed, GMMDRadius));
-		S.SetDisabled(FSlateRoundedBoxBrush(FLinearColor(0.20f, 0.17f, 0.28f, 1.0f), GMMDRadius));
-		S.SetNormalPadding(FMargin(14.0f, 7.0f));
-		S.SetPressedPadding(FMargin(14.0f, 8.0f, 14.0f, 6.0f));
-		return S;
-	}
-
-	const FButtonStyle& MMDGetPrimaryButtonStyle()
-	{
-		static const FButtonStyle Style = MMDMakeButtonStyle(
-			FLinearColor(0.85f, 0.28f, 0.52f, 1.0f),   // 樱花粉（加深，白字可读）
-			FLinearColor(0.95f, 0.40f, 0.64f, 1.0f),
-			FLinearColor(0.70f, 0.22f, 0.42f, 1.0f));
-		return Style;
-	}
-
-	const FButtonStyle& MMDGetSecondaryButtonStyle()
-	{
-		static const FButtonStyle Style = MMDMakeButtonStyle(
-			FLinearColor(0.30f, 0.42f, 0.78f, 1.0f),   // 蓝紫
-			FLinearColor(0.42f, 0.56f, 0.92f, 1.0f),
-			FLinearColor(0.22f, 0.32f, 0.62f, 1.0f));
-		return Style;
-	}
-
-	const FButtonStyle& MMDGetAccentButtonStyle()
-	{
-		static const FButtonStyle Style = MMDMakeButtonStyle(
-			FLinearColor(0.08f, 0.50f, 0.42f, 1.0f),   // 薄荷绿（加深，白字可读）
-			FLinearColor(0.14f, 0.64f, 0.54f, 1.0f),
-			FLinearColor(0.05f, 0.40f, 0.34f, 1.0f));
-		return Style;
-	}
-
-	const FButtonStyle& MMDGetWarnButtonStyle()
-	{
-		static const FButtonStyle Style = MMDMakeButtonStyle(
-			FLinearColor(0.82f, 0.30f, 0.42f, 1.0f),   // 红（清除）
-			FLinearColor(0.95f, 0.42f, 0.54f, 1.0f),
-			FLinearColor(0.66f, 0.22f, 0.32f, 1.0f));
-		return Style;
-	}
-
-	TSharedRef<SWidget> MMDMakeButton(const FText& Label, const FButtonStyle& Style, FOnClicked Handler, const FLinearColor& TextColor = FLinearColor::White)
-	{
-		return SNew(SButton)
-			.ButtonStyle(&Style)
-			.OnClicked(Handler)
-			.HAlign(HAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(Label)
-				.ColorAndOpacity(FSlateColor(TextColor))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-			];
+		const FLinearColor TextColor = &Style == MMDPanelStyle::Primary() ? MMDPanelStyle::PrimaryText : MMDPanelStyle::Text;
+		return SNew(SMMDAnimatedButton, MotionEnabled).ButtonStyle(&Style).OnClicked(Handler).HAlign(HAlign_Center)
+		[SNew(STextBlock).Text(Label).ColorAndOpacity(TextColor).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))];
 	}
 
 	TSharedRef<SWidget> MMDMakeSectionHeader(const FText& Title, const FLinearColor& Color)
 	{
-		return SNew(SVerticalBox)
-			+ SVerticalBox::Slot().AutoHeight()
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(FString(TEXT("◆ ")) + Title.ToString()))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
-				.ColorAndOpacity(FSlateColor(Color))
-				.Margin(FMargin(2.0f, 2.0f))
-			]
-			+ SVerticalBox::Slot().AutoHeight()
-			[
-				SNew(SSeparator)
-				.ColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.08f)))
-			];
+		return SNew(STextBlock).Text(Title).Font(FCoreStyle::GetDefaultFontStyle("Bold", 11))
+			.ColorAndOpacity(Color).Margin(FMargin(2, 4));
 	}
 
-	TSharedRef<SWidget> MMDMakeSolidPanel(const FLinearColor& Color, TSharedRef<SWidget> Content, FMargin Padding = FMargin(8.0f))
+	TSharedRef<SWidget> MMDMakeSolidPanel(const FLinearColor& Color, TSharedRef<SWidget> Content, FMargin Padding = FMargin(10))
 	{
-		return SNew(SBorder)
-			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FSlateColor(Color))
-			.Padding(Padding)
-			[
-				Content
-			];
+		static const FSlateRoundedBoxBrush White(FLinearColor::White, 8.0f);
+		return SNew(SBorder).BorderImage(&White).BorderBackgroundColor(Color).Padding(Padding)[Content];
 	}
 }
 
 void MMDImportSetting::Construct(const FArguments& InArgs)
 {
+	GConfig->GetBool(TEXT("MMDToolPanel"), TEXT("EnableUIAnimations"), bUIAnimationsEnabled, GEditorPerProjectIni);
+	PageTransition.JumpToEnd();
+	StatusTransition.JumpToEnd();
 	ViewPanel = InArgs._ViewPanel;
 	if (!ViewPanel.IsValid())
 	{
 		SAssignNew(ViewPanel, MMDViewPanel);
 	}
 
-	// ================= 左侧边栏 =================
-	TSharedRef<SVerticalBox> Sidebar = SNew(SVerticalBox);
-
-	auto AddSection = [&Sidebar](const FText& Title, const FLinearColor& Color) -> TSharedRef<SVerticalBox>
+	TSharedRef<SVerticalBox> ImportPage = SNew(SVerticalBox);
+	auto AddSection = [&ImportPage](const FText& Title, const FLinearColor& Color) -> TSharedRef<SVerticalBox>
 	{
-		Sidebar->AddSlot()
-			.AutoHeight()
-			.Padding(0.0f, 14.0f, 0.0f, 2.0f)
-			[
-				MMDMakeSectionHeader(Title, Color)
-			];
-
+		ImportPage->AddSlot().AutoHeight().Padding(0, 8, 0, 6)[MMDMakeSectionHeader(Title, Color)];
 		TSharedRef<SVerticalBox> Section = SNew(SVerticalBox);
-		Sidebar->AddSlot()
-			.AutoHeight()
-			.Padding(8.0f, 2.0f, 8.0f, 4.0f)
-			[
-				Section
-			];
+		ImportPage->AddSlot().AutoHeight().Padding(0, 0, 0, 12)[Section];
 		return Section;
 	};
-
-	auto AddButton = [](TSharedRef<SVerticalBox> Section, const FText& Label, const FButtonStyle& Style, FOnClicked Handler)
+	auto AddButton = [this](TSharedRef<SVerticalBox> Section, const FText& Label, const FButtonStyle& Style, FOnClicked Handler)
 	{
-		Section->AddSlot()
-			.AutoHeight()
-			.Padding(0.0f, 2.0f)
-			[
-				MMDMakeButton(Label, Style, Handler)
-			];
+		Section->AddSlot().AutoHeight().Padding(0, 3)[MMDMakeButton(Label, Style, Handler,
+			TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))];
 	};
 
-	// ---- 模型导入 ----
-	{
-		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("模型导入")), GMMDColorPink);
-		AddButton(Sec, FText::FromString(TEXT("导入 PMX 模型")), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportModelClicked));
-		AddButton(Sec, FText::FromString(TEXT("导入 VMD 动作")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDClicked));
-		AddButton(Sec, FText::FromString(TEXT("追加表情 VMD")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnAppendFacialVMDClicked));
-		AddButton(Sec, FText::FromString(TEXT("导入 VMD 相机")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDCameraClicked));
-		Sec->AddSlot()
-			.AutoHeight()
-			.Padding(2.0f, 6.0f, 2.0f, 2.0f)
-			[
-				SNew(SCheckBox)
-				.IsChecked_Lambda([]()
-				{
-					return TMMDMeshBuilder::IsUseStandardMaterials() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-				})
-				.OnCheckStateChanged_Lambda([](ECheckBoxState NewState)
-				{
-					TMMDMeshBuilder::SetUseStandardMaterials(NewState == ECheckBoxState::Checked);
-				})
-				[
-					SNew(STextBlock)
-					.Text(FText::FromString(TEXT("导入时使用 MMD Standard 材质（toon/sphere 全素材）")))
-					.ColorAndOpacity(FSlateColor(GMMDTextDim))
-				]
-			];
-	}
+	TSharedRef<SVerticalBox> ModelSection = AddSection(FText::FromString(TEXT("01  选择角色")), GMMDColorBlue);
+	AddButton(ModelSection, FText::FromString(TEXT("导入 PMX 模型")), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportModelClicked));
+	AddButton(ModelSection, FText::FromString(TEXT("加载已有角色")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateLambda([this]() { LoadSelectedMMDActor(); return FReply::Handled(); }));
 
-	// ---- 工具 ----
-	{
-		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("工具")), GMMDColorBlue);
-		AddButton(Sec, FText::FromString(TEXT("加载 MMD 角色")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateLambda([this]() { LoadSelectedMMDActor(); return FReply::Handled(); }));
-		AddButton(Sec, FText::FromString(TEXT("序列合成")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenSequenceComposerClicked));
-		AddButton(Sec, FText::FromString(TEXT("烘焙物理")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
-	}
+	TSharedRef<SVerticalBox> MotionSection = AddSection(FText::FromString(TEXT("02  姿势与动作")), GMMDColorBlue);
+	MotionSection->AddSlot().AutoHeight()[BuildMotionPresetPanel()];
+	TSharedRef<SVerticalBox> MotionImport = SNew(SVerticalBox);
+	MotionSection->AddSlot().AutoHeight().Padding(0, 6)
+	[
+		SNew(SExpandableArea).InitiallyCollapsed(true).Style(MMDPanelStyle::Expandable())
+		.BorderImage(MMDPanelStyle::CardBrush()).HeaderPadding(FMargin(10, 8)).Padding(FMargin(8))
+		.HeaderContent()[SNew(STextBlock).Text(FText::FromString(TEXT("导入自己的 VMD／表情／相机"))).ColorAndOpacity(GMMDTextDim)]
+		.BodyContent()[MotionImport]
+	];
+	MotionSection = MotionImport;
+	AddButton(MotionSection, FText::FromString(TEXT("导入 VMD 动作")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDClicked));
+	AddButton(MotionSection, FText::FromString(TEXT("追加表情")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnAppendFacialVMDClicked));
+	AddButton(MotionSection, FText::FromString(TEXT("导入 VMD 相机")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDCameraClicked));
 
-	// ---- 着色器预设 ----
-	{
-		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("着色器预设")), GMMDColorPurple);
-		Sec->AddSlot()
-			.AutoHeight()
-			.Padding(2.0f, 1.0f, 2.0f, 5.0f)
-			[
-				SNew(STextBlock)
-					.Text(FText::FromString(TEXT("TMMD Aurora Jewel Toon · R56")))
-					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-					.ColorAndOpacity(FSlateColor(GMMDTextDim))
-			];
-		AddButton(Sec, FText::FromString(TEXT("应用并保存到 Actor 资产")), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnApplyAuroraJewelToonClicked));
-		AddButton(Sec, FText::FromString(TEXT("撤回 Actor 资产材质")), MMDGetWarnButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnUndoShaderPresetClicked));
-	}
+	TSharedRef<SVerticalBox> OutputSection = AddSection(FText::FromString(TEXT("03  制作与输出")), GMMDColorMint);
+	AddButton(OutputSection, FText::FromString(TEXT("合成关卡序列")), MMDGetAccentButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenSequenceComposerClicked));
+	AddButton(OutputSection, FText::FromString(TEXT("烘焙物理动画")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
 
-	// ---- 光照环境（场景切换：每个环境是一个可编辑的 .umap，点"打开"切换到该场景调灯）----
-	auto AddLightingEnvRow = [this](TSharedRef<SVerticalBox> Sec, EMMDLightingEnvironment Env)
-	{
-		const FString Name = UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(Env);
-		const FString EnName = UMMDLightingEnvironmentLibrary::GetEnvironmentAssetName(Env);
-		const bool bSpecial = UMMDLightingEnvironmentLibrary::IsSpecialEnvironment(Env);
-		const FString Label = bSpecial ? (Name + TEXT("（特殊）")) : Name;
+	TSharedRef<SVerticalBox> Advanced = SNew(SVerticalBox);
+	Advanced->AddSlot().AutoHeight().Padding(0, 6)
+	[
+		SNew(SCheckBox)
+		.IsChecked_Lambda([]() { return TMMDMeshBuilder::IsUseStandardMaterials() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+		.OnCheckStateChanged_Lambda([](ECheckBoxState State) { TMMDMeshBuilder::SetUseStandardMaterials(State == ECheckBoxState::Checked); })
+		[SNew(STextBlock).Text(FText::FromString(TEXT("导入时使用 MMD Standard 材质"))).ColorAndOpacity(MMDPanelStyle::Text).AutoWrapText(true)]
+	];
+	Advanced->AddSlot().AutoHeight().Padding(0, 6)
+	[
+		SNew(STextBlock).Text(FText::FromString(TEXT("Aurora Jewel · 旧版资产方案\n以下操作会保存到角色蓝图资产。")))
+		.AutoWrapText(true).ColorAndOpacity(GMMDTextDim)
+	];
+	AddButton(Advanced, FText::FromString(TEXT("Aurora Jewel：应用并保存资产")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnApplyAuroraJewelToonClicked));
+	AddButton(Advanced, FText::FromString(TEXT("撤回 Aurora Jewel 资产修改")), MMDGetWarnButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnUndoShaderPresetClicked));
+	ImportPage->AddSlot().AutoHeight().Padding(0, 12)
+	[
+		SNew(SExpandableArea).InitiallyCollapsed(true).Style(MMDPanelStyle::Expandable())
+		.BorderImage(MMDPanelStyle::CardBrush()).HeaderPadding(FMargin(10, 8)).Padding(FMargin(8))
+		.HeaderContent()[SNew(STextBlock).Text(FText::FromString(TEXT("高级选项与旧版工具"))).ColorAndOpacity(GMMDTextDim)]
+		.BodyContent()[Advanced]
+	];
 
-		Sec->AddSlot()
-			.AutoHeight()
-			.Padding(0.0f, 2.0f)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().FillWidth(2.0f).Padding(0.0f, 0.0f, 2.0f, 0.0f)
-				[
-					MMDMakeButton(FText::FromString(FString::Printf(TEXT("Panel 预览：%s"), *Label)), MMDGetAccentButtonStyle(),
-						FOnClicked::CreateLambda([this, Env, Name]()
-						{
-							if (ViewPanel.IsValid())
-							{
-								ViewPanel->ApplyLightingEnvironment(Env);
-								ViewPanel->ResetPreviewCamera();
-								ShowImportProgress(FString::Printf(TEXT("Panel 已切换：%s"), *Name), EMMDMessageType::Success);
-							}
-							else
-							{
-								ShowImportProgress(TEXT("Panel 预览视口尚未初始化"), EMMDMessageType::Error);
-							}
-							return FReply::Handled();
-						}))
-				]
-				+ SHorizontalBox::Slot().FillWidth(0.85f).Padding(2.0f, 0.0f, 0.0f, 0.0f)
-				[
-					MMDMakeButton(FText::FromString(FString::Printf(TEXT("打开关卡 (%s)"), *EnName)), MMDGetSecondaryButtonStyle(),
-						FOnClicked::CreateLambda([this, Env, Name]()
-						{
-							const bool bOpened = UMMDLightingEnvironmentLibrary::OpenEnvironmentLevel(Env);
-							if (bOpened && ViewPanel.IsValid())
-							{
-								ViewPanel->ApplyLightingEnvironment(Env);
-								ViewPanel->ResetPreviewCamera();
-							}
-							ShowImportProgress(bOpened
-								? FString::Printf(TEXT("已打开光照关卡并同步 Panel：%s"), *Name)
-								: FString::Printf(TEXT("打开光照关卡失败：%s"), *Name),
-								bOpened ? EMMDMessageType::Success : EMMDMessageType::Error);
-							return FReply::Handled();
-						}))
-				]
-			];
+	SAssignNew(WorkflowSwitcher, SWidgetSwitcher);
+	auto AddPage = [this](TSharedRef<SWidget> Content)
+	{
+		WorkflowSwitcher->AddSlot()
+		[SNew(SScrollBox).Style(MMDPanelStyle::ScrollBox()).ScrollBarStyle(MMDPanelStyle::ScrollBar()).ScrollBarThickness(FVector2D(4, 4))
+			+ SScrollBox::Slot().Padding(12)[Content]];
 	};
+	AddPage(ImportPage);
+	AddPage(BuildRenderPresetPanel());
+	AddPage(BuildScenePresetPanel());
 
+	TSharedRef<SHorizontalBox> Navigation = SNew(SHorizontalBox);
+	const TCHAR* TabNames[] = { TEXT("角色"), TEXT("风格"), TEXT("场景") };
+	for (int32 Index = 0; Index < 3; ++Index)
 	{
-		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("光照环境 · 标准")), GMMDColorMint);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::Studio3Point);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::Daylight);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::OvercastSoft);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::IndoorWarm);
+		Navigation->AddSlot().FillWidth(1).Padding(2, 0)
+		[
+			SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))
+			.Tag(FName(*FString::Printf(TEXT("MMDWorkflowTab%d"), Index)))
+			.ButtonStyle(MMDPanelStyle::Tab()).HAlign(HAlign_Fill).ContentPadding(FMargin(0))
+			.OnClicked_Lambda([this, Index]() { return SelectWorkflowPage(Index); })
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(8, 12)
+				[SNew(STextBlock).Text(FText::FromString(TabNames[Index])).ColorAndOpacity_Lambda([this, Index]() { return WorkflowSwitcher->GetActiveWidgetIndex() == Index ? MMDPanelStyle::Accent : MMDPanelStyle::Muted; })
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))]
+			]
+		];
 	}
-
-	{
-		TSharedRef<SVerticalBox> Sec = AddSection(FText::FromString(TEXT("光照环境 · 特殊")), GMMDColorPurple);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::NeonNight);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::RimSilhouette);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::GoldenHour);
-		AddLightingEnvRow(Sec, EMMDLightingEnvironment::HorrorGreen);
-
-		AddButton(Sec, FText::FromString(TEXT("生成全部场景资产")), MMDGetSecondaryButtonStyle(),
-			FOnClicked::CreateLambda([this]()
-			{
-				const int32 Count = UMMDLightingEnvironmentLibrary::CreateAllEnvironmentLevelAssets();
-				ShowImportProgress(FString::Printf(TEXT("已生成 %d 个光照环境关卡资产"), Count),
-					Count > 0 ? EMMDMessageType::Success : EMMDMessageType::Warning);
-				return FReply::Handled();
-			}));
-
-		AddButton(Sec, FText::FromString(TEXT("重建全部 LookDev 场景")), MMDGetPrimaryButtonStyle(),
-			FOnClicked::CreateLambda([this]()
-			{
-				const int32 Count = UMMDLightingEnvironmentLibrary::RebuildAllEnvironmentLevelAssets();
-				ShowImportProgress(FString::Printf(TEXT("已重建 %d/8 个 LookDev 场景（舞台、相机、曝光与灯光）"), Count),
-					Count == 8 ? EMMDMessageType::Success : EMMDMessageType::Warning);
-				return FReply::Handled();
-			}));
-	}
+	TSharedRef<SWidget> Sidebar = SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(10, 4, 10, 0)[Navigation]
+		+ SVerticalBox::Slot().AutoHeight().Padding(10, 0)
+		[SNew(SMMDTabIndicator).Position(this, &MMDImportSetting::GetNavigationPosition)]
+		+ SVerticalBox::Slot().FillHeight(1)
+		[SNew(SBox).Clipping(EWidgetClipping::ClipToBounds)
+			[SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("NoBrush")).Padding(0)
+				.ColorAndOpacity_Lambda([this]() { return FLinearColor(1, 1, 1, FMath::Lerp(0.72f, 1.0f, GetPageTransitionAlpha())); })
+				.RenderTransform_Lambda([this]() { return FSlateRenderTransform(FVector2D(0, 7.0f * (1.0f - GetPageTransitionAlpha()))); })
+				[WorkflowSwitcher.ToSharedRef()]]];
 
 	// ================= 右侧预览区 =================
 	TSharedRef<SWidget> PreviewArea =
 		SNew(SVerticalBox)
-		+ SVerticalBox::Slot().AutoHeight().Padding(8.0f, 6.0f, 8.0f, 2.0f)
+		+ SVerticalBox::Slot().AutoHeight().Padding(10, 10, 10, 6)
+		[SNew(SBorder).BorderImage(MMDPanelStyle::HeaderBrush()).Padding(FMargin(12, 8))
+			[SNew(STextBlock).Text_Lambda([this]() { return ViewPanel->GetLookDevDescription(); }).ColorAndOpacity(MMDPanelStyle::Accent).AutoWrapText(true).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))]]
+		+ SVerticalBox::Slot().AutoHeight().Padding(10, 2)
 		[
 			SAssignNew(SelectedModelText, STextBlock)
 			.Text(FText::FromString(TEXT("模型：未选择")))
+			.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 			.ColorAndOpacity(FSlateColor(GMMDTextDim))
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(8.0f, 0.0f, 8.0f, 6.0f)
 		[
 			SAssignNew(SelectedAnimText, STextBlock)
-			.Text(FText::FromString(TEXT("动画：未选择")))
+			.Text_Lambda([this]() { return FText::FromString(TEXT("动画：") + ViewPanel->GetPreviewAnimationLabel().ToString()); })
+			.AutoWrapText(true)
 			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 			.ColorAndOpacity(FSlateColor(GMMDTextDim))
 		]
 		+ SVerticalBox::Slot().FillHeight(1.0f).Padding(8.0f, 0.0f, 8.0f, 8.0f)
 		[
-			ViewPanel.ToSharedRef()
-		];
+			SNew(SOverlay)
+			+ SOverlay::Slot()[ViewPanel.ToSharedRef()]
+			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+			[SNew(SBorder).BorderImage(MMDPanelStyle::HeaderBrush()).Padding(FMargin(20, 16))
+				.Visibility_Lambda([this]() { return ViewPanel->HasPreviewModel() ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
+				[SNew(STextBlock).Text(FText::FromString(TEXT("从左侧导入 PMX 或加载已有角色\n加载后自动进入待机，可随时换动作与视角")))
+					.Justification(ETextJustify::Center).ColorAndOpacity(MMDPanelStyle::Text)]]
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(8, 0, 8, 8)[BuildPreviewControls()];
 
 	// ================= 头部 =================
 	TSharedRef<SWidget> Header =
-		SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-		.BorderBackgroundColor(FSlateColor(GMMDHeaderBG))
-		.Padding(FMargin(12.0f, 8.0f))
+		SNew(SOverlay)
+		+ SOverlay::Slot()[SNew(SMMDStudioHeaderArt).Visibility(EVisibility::HitTestInvisible)]
+		+ SOverlay::Slot().Padding(FMargin(18.0f, 12.0f))
 		[
 			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)[SNew(SMMDStudioMark)]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
-				SNew(STextBlock)
-					.Text(FText::FromString(TEXT("MMD 工具")))
-					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
-					.ColorAndOpacity(FSlateColor(GMMDColorPink))
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()
+				[SNew(STextBlock).Text(FText::FromString(TEXT("MMD STUDIO")))
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 19)).ColorAndOpacity(MMDPanelStyle::Text)]
+				+ SVerticalBox::Slot().AutoHeight().Padding(1, 3, 0, 0)
+				[SNew(STextBlock).Text(FText::FromString(TEXT("角 色 工 坊")))
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9)).ColorAndOpacity(MMDPanelStyle::Muted)]
 			]
 			+ SHorizontalBox::Slot().FillWidth(1.0f)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)
+			[BuildPreviewMovieControls()]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("Ue5MMDTools · PMX/VMD 导入")))
-				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
-				.ColorAndOpacity(FSlateColor(GMMDTextDim))
+				SNew(SCheckBox).Tag(TEXT("MMDUIAnimations"))
+				.IsChecked_Lambda([this]() { return bUIAnimationsEnabled ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { SetUIAnimationsEnabled(State == ECheckBoxState::Checked); })
+				.ToolTipText(FText::FromString(TEXT("按钮与页签使用短过渡；关闭后即时切换。此偏好会记住，角色动画和物理继续运行。")))
+				[SNew(STextBlock).Text(FText::FromString(TEXT("界面动效"))).Font(FCoreStyle::GetDefaultFontStyle("Regular", 9)).ColorAndOpacity(GMMDTextDim)]
 			]
 		];
 
 	// ================= 状态栏 =================
 	TSharedRef<SWidget> StatusBar =
 		SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-		.BorderBackgroundColor(FSlateColor(FLinearColor(0.20f, 0.14f, 0.32f, 1.0f)))
+		.BorderImage(MMDPanelStyle::HeaderBrush())
 		.Padding(FMargin(12.0f, 6.0f))
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("状态： ")))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+				SAssignNew(StatusTypeText, STextBlock)
+				.Text(FText::FromString(TEXT("提示  ")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 				.ColorAndOpacity(FSlateColor(GMMDTextDim))
 			]
-			+ SHorizontalBox::Slot().FillWidth(1.0f).HAlign(HAlign_Center).VAlign(VAlign_Center)
+			+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 			[
+				SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("NoBrush")).Padding(0)
+				.ColorAndOpacity_Lambda([this]() { return FLinearColor(1, 1, 1, FMath::Lerp(0.8f, 1.0f, GetStatusTransitionAlpha())); })
+				[
 				SAssignNew(StatusText, STextBlock)
-				.Text(FText::FromString(TEXT("就绪")))
+				.Text(FText::FromString(TEXT("先导入或加载角色，再选择风格与场景。")))
+				.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 				.ColorAndOpacity(FSlateColor(GMMDTextDim))
+				]
 			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)
+			[SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))
+				.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(GMMDTextDim)
+				.Text(FText::FromString(TEXT("复制"))).ToolTipText(FText::FromString(TEXT("复制完整操作结果，便于查找资产或反馈问题。")))
+				.IsEnabled_Lambda([this]() { return !CurrentStatusMessage.IsEmpty(); })
+				.OnClicked_Lambda([this]() { FPlatformApplicationMisc::ClipboardCopy(*CurrentStatusMessage); return FReply::Handled(); })]
 		];
 
 	// ================= 整体布局 =================
 	TSharedRef<SSplitter> Splitter =
 		SNew(SSplitter)
+		.Style(MMDPanelStyle::Splitter()).PhysicalSplitterHandleSize(2.0f).HitDetectionSplitterHandleSize(8.0f)
 		.Orientation(Orient_Horizontal)
-		+ SSplitter::Slot().Value(0.36f).MinSize(260.0f)
+		+ SSplitter::Slot().Value(0.34f).MinSize(350.0f)
 		[
-			MMDMakeSolidPanel(GMMDSectionBG,
-				SNew(SScrollBox)
-				+ SScrollBox::Slot()
-				[
-					Sidebar
-				])
+			MMDMakeSolidPanel(GMMDSectionBG, Sidebar, FMargin(0))
 		]
 		+ SSplitter::Slot().Value(0.66f)
 		[
@@ -1555,7 +1478,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 			[
 				Header
 			]
-			+ SVerticalBox::Slot().FillHeight(1.0f).Padding(0.0f, 2.0f, 0.0f, 2.0f)
+			+ SVerticalBox::Slot().FillHeight(1.0f).Padding(8.0f, 6.0f, 6.0f, 6.0f)
 			[
 				Splitter
 			]
@@ -1572,7 +1495,8 @@ void MMDImportSetting::SetSelectedModelTextUI(const FText& Text)
 	if (SelectedModelText.IsValid())
 	{
 		SelectedModelText->SetText(FText::FromString(TEXT("模型：") + Text.ToString()));
-		SelectedModelText->SetColorAndOpacity(FSlateColor(FLinearColor(0.80f, 0.85f, 0.92f, 1.0f)));
+		SelectedModelText->SetToolTipText(Text);
+		SelectedModelText->SetColorAndOpacity(FSlateColor(MMDPanelStyle::Text));
 	}
 }
 
@@ -1580,8 +1504,8 @@ void MMDImportSetting::SetSelectedAnimTextUI(const FText& Text)
 {
 	if (SelectedAnimText.IsValid())
 	{
-		SelectedAnimText->SetText(FText::FromString(TEXT("动画：") + Text.ToString()));
-		SelectedAnimText->SetColorAndOpacity(FSlateColor(FLinearColor(0.80f, 0.85f, 0.92f, 1.0f)));
+		SelectedAnimText->SetToolTipText(Text);
+		SelectedAnimText->SetColorAndOpacity(FSlateColor(MMDPanelStyle::Text));
 	}
 }
 
@@ -1775,8 +1699,7 @@ FReply MMDImportSetting::OnApplyAuroraJewelToonClicked()
 		ShowImportProgress(TEXT("材质已生成，但保存 MMD Actor 蓝图资产失败"), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
-	LastLoadedMMDActorClass = ActorClass;
-	SetPreviewActorClassUI(ActorClass);
+	SetCurrentMMDActorClass(ActorClass, ActorBlueprint->GetName());
 
 	ShowImportProgress(
 		FString::Printf(
@@ -1873,12 +1796,17 @@ bool MMDImportSetting::SetCurrentMMDActorClass(UClass* ActorClass, const FString
 		return false;
 	}
 
+	++ModelSelectionRevision;
 	LastLoadedMMDActorClass = ActorClass;
 	LastImportedMMDActor = nullptr;
 	ComposerActor = nullptr;
 	ComposerSkeletalMeshComponent = nullptr;
 	PhysicsBakeActor = nullptr;
 	PhysicsBakeSkeletalMeshComponent = nullptr;
+	const bool bClearedAnimation = (ComposerAnimSequence.IsValid() && !IsAnimationCompatibleWithCurrentModel(ComposerAnimSequence.Get()))
+		|| (PhysicsBakeAnimSequence.IsValid() && !IsAnimationCompatibleWithCurrentModel(PhysicsBakeAnimSequence.Get()));
+	if (!IsAnimationCompatibleWithCurrentModel(ComposerAnimSequence.Get())) ComposerAnimSequence.Reset();
+	if (!IsAnimationCompatibleWithCurrentModel(PhysicsBakeAnimSequence.Get())) PhysicsBakeAnimSequence.Reset();
 	RefreshSequenceComposerLabels();
 	RefreshPhysicsBakeLabels();
 
@@ -1891,12 +1819,63 @@ bool MMDImportSetting::SetCurrentMMDActorClass(UClass* ActorClass, const FString
 		}
 	}
 
-	ShowImportProgress(FString::Printf(TEXT("Loaded MMD actor asset: %s"), DisplayName.IsEmpty() ? *ActorClass->GetName() : *DisplayName), EMMDMessageType::Success);
+	ShowImportProgress(FString::Printf(TEXT("已加载角色：%s%s"), DisplayName.IsEmpty() ? *ActorClass->GetName() : *DisplayName,
+		bClearedAnimation ? TEXT("。已清除与此角色不兼容的制作动画，请重新选择。") : TEXT("")), EMMDMessageType::Success);
 	return true;
 #else
 	ShowImportProgress(TEXT("Loading AMMDActor is editor-only."), EMMDMessageType::Error);
 	return false;
 #endif
+}
+
+uint64 MMDImportSetting::BeginModelImport(AActor* Actor)
+{
+	LastImportedMMDActor = Actor;
+	return ++ModelSelectionRevision;
+}
+
+bool MMDImportSetting::AdoptImportedActorClass(uint64 RequestRevision, UClass* ActorClass, const FString& DisplayName)
+{
+	// 旧导入仍保存资产，但不能覆盖后来选择的角色。
+	return RequestRevision == ModelSelectionRevision && SetCurrentMMDActorClass(ActorClass, DisplayName);
+}
+
+bool MMDImportSetting::IsAnimationCompatibleWithCurrentModel(const UAnimSequence* Animation) const
+{
+	FMMDSelectedAnimationTarget Target;
+	if (!Animation || !Animation->GetSkeleton() || !TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target)) return false;
+	const USkeleton* Skeleton = Target.SkeletalMesh->GetSkeleton();
+	return Skeleton && (Skeleton == Animation->GetSkeleton() || Skeleton->IsCompatibleForEditor(Animation->GetSkeleton()));
+}
+
+bool MMDImportSetting::ShouldFilterAnimationForCurrentModel(const FAssetData& AssetData) const
+{
+	FMMDSelectedAnimationTarget Target;
+	if (!TryGetAnimationTargetFromActorClass(LastLoadedMMDActorClass.Get(), Target) || !Target.SkeletalMesh->GetSkeleton()) return true;
+	const FString Folder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
+	const FString AssetFolder = AssetData.PackagePath.ToString();
+	if (!Folder.IsEmpty() && AssetFolder != Folder && !AssetFolder.StartsWith(Folder + TEXT("/"))) return true;
+	return !Target.SkeletalMesh->GetSkeleton()->IsCompatibleForEditor(AssetData);
+}
+
+bool MMDImportSetting::SelectProductionAnimation(UAnimSequence* Animation, bool bForPhysicsBake)
+{
+	if (Animation && !IsAnimationCompatibleWithCurrentModel(Animation))
+	{
+		ShowImportProgress(TEXT("动画骨架与当前角色不兼容，请选择此角色的动画或先完成重定向；原选择已保留。"), EMMDMessageType::Warning);
+		return false;
+	}
+	if (bForPhysicsBake) PhysicsBakeAnimSequence = Animation;
+	else ComposerAnimSequence = Animation;
+	RefreshSequenceComposerLabels();
+	RefreshPhysicsBakeLabels();
+	return true;
+}
+
+bool MMDImportSetting::UseBakedAnimationResult(UAnimSequence* Animation, uint64 RequestRevision)
+{
+	// 烘焙期间会泵 Slate 消息；用户若换角色，完成结果不抢新的制作选择。
+	return Animation && RequestRevision == ModelSelectionRevision && SelectProductionAnimation(Animation, false);
 }
 
 UClass* MMDImportSetting::PickMMDActorClassFromContentBrowser()
@@ -1974,7 +1953,6 @@ UAnimSequence* MMDImportSetting::PickAnimSequenceFromContentBrowser()
 {
 #if WITH_EDITOR
 	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
-	const FString AnimationFilterFolder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
 
 	FAssetPickerConfig AssetPickerConfig;
 	AssetPickerConfig.Filter.ClassPaths.Add(UAnimSequence::StaticClass()->GetClassPathName());
@@ -1982,10 +1960,7 @@ UAnimSequence* MMDImportSetting::PickAnimSequenceFromContentBrowser()
 	AssetPickerConfig.InitialAssetViewType = EAssetViewType::List;
 	AssetPickerConfig.bAllowNullSelection = false;
 	AssetPickerConfig.bFocusSearchBoxWhenOpened = true;
-	AssetPickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda([AnimationFilterFolder](const FAssetData& AssetData)
-	{
-		return ShouldFilterAnimationOutsideFolder(AssetData, AnimationFilterFolder);
-	});
+	AssetPickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateSP(this, &MMDImportSetting::ShouldFilterAnimationForCurrentModel);
 
 	FAssetData PickedAsset;
 	TSharedPtr<SWindow> PickerWindow;
@@ -2096,7 +2071,7 @@ void MMDImportSetting::ImportMMDModel()
 					ShowImportProgress(TEXT("生成AMMDActor失败"), EMMDMessageType::Error);
 					return;
 				}
-				LastImportedMMDActor = NewMMDActor;
+				const uint64 RequestRevision = BeginModelImport(NewMMDActor);
 
 				// 异步导入完成（成功/失败）后在游戏线程回调里保存蓝图并刷新预览；
 				// 此时 SkeletalMesh/动画蓝图已装配到 Actor 上，CDO 才能带上网格引用。
@@ -2107,7 +2082,7 @@ void MMDImportSetting::ImportMMDModel()
 					const FString FolderCopy = TEXT("/Game/MMDModels");
 					const FString NameCopy = FPaths::GetBaseFilename(FileName);
 					NewMMDActor->OnSetupFinished().AddLambda(
-						[WeakUI, WeakActor, FileCopy, FolderCopy, NameCopy](AMMDActor* Actor)
+						[WeakUI, WeakActor, FileCopy, FolderCopy, NameCopy, RequestRevision](AMMDActor* Actor)
 						{
 							TSharedPtr<MMDImportSetting> UI = WeakUI.Pin();
 							AMMDActor* MMD = WeakActor.Get();
@@ -2119,12 +2094,13 @@ void MMDImportSetting::ImportMMDModel()
 							USkeletalMeshComponent* MeshComp = MMD->GetMeshComponent();
 							if (!MeshComp || !MeshComp->GetSkeletalMeshAsset())
 							{
-								UI->ShowImportProgress(TEXT("MMD 模型导入失败，跳过蓝图保存"), EMMDMessageType::Error);
+								if (UI->ModelSelectionRevision == RequestRevision)
+									UI->ShowImportProgress(TEXT("MMD 模型导入失败，跳过蓝图保存"), EMMDMessageType::Error);
 								return;
 							}
 
 							// 保存为蓝图资产（文件级函数，同 TU 内可见）
-							if (UBlueprint* NewBP = SaveMMDBlueprintAsset(MMD, FolderCopy + TEXT("/") + NameCopy + TEXT("/BluePrint"), NameCopy, true))
+							if (UBlueprint* NewBP = SaveMMDBlueprintAsset(MMD, FolderCopy + TEXT("/") + NameCopy + TEXT("/BluePrint"), NameCopy, UI->ModelSelectionRevision == RequestRevision))
 							{
 								if (UClass* GenClass = NewBP->GeneratedClass)
 								{
@@ -2142,18 +2118,13 @@ void MMDImportSetting::ImportMMDModel()
 									// 重新编译，使默认值生效
 									FKismetEditorUtilities::CompileBlueprint(NewBP);
 
-									// 预览中生成实例（其 OnConstruction 将基于 CDO 的路径自动初始化）
-									if (UI->ViewPanel.IsValid())
-									{
-										UI->ViewPanel->CreatePreviewActor(GenClass);
-									}
-									UI->SetPreviewActorClassUI(GenClass);
-									UI->LastLoadedMMDActorClass = GenClass;
+									UI->AdoptImportedActorClass(RequestRevision, GenClass, NameCopy);
 								}
 							}
 						});
 				}
 
+				ShowImportProgress(TEXT("正在后台导入 PMX，完成后保存角色蓝图；若切换角色，将保留后来选择的预览。"));
 				NewMMDActor->SetupComponents(SelectedFile);
 
 				GEditor->SelectNone(false, true);
@@ -2161,7 +2132,6 @@ void MMDImportSetting::ImportMMDModel()
 				GEditor->MoveViewportCamerasToActor(*NewMMDActor, false);
 
 
-				ShowImportProgress(TEXT("已在关卡生成 AMMDActor，正在后台导入 PMX（完成后自动保存蓝图并刷新预览）"), EMMDMessageType::Success);
 
 #else
 				ShowImportProgress(TEXT("仅在编辑器中可生成Actor"), EMMDMessageType::Warning);
@@ -2347,6 +2317,8 @@ void MMDImportSetting::ImportVMDAnimation()
 	SetPreviewAnimationUI(AnimSequence);
 	ComposerAnimSequence = AnimSequence;
 	PhysicsBakeAnimSequence = AnimSequence;
+	RefreshSequenceComposerLabels();
+	RefreshPhysicsBakeLabels();
 
 	for (const FString& Warning : ImportReport.Warnings)
 	{
@@ -2529,7 +2501,8 @@ static void CopyMovieSceneBindingTracks(
 	UMovieScene* SourceMovieScene,
 	const FGuid& SourceGuid,
 	UMovieScene* TargetMovieScene,
-	const FGuid& TargetGuid)
+	const FGuid& TargetGuid,
+	FFrameNumber SourceStartFrame)
 {
 	if (!SourceMovieScene || !TargetMovieScene)
 	{
@@ -2553,6 +2526,13 @@ static void CopyMovieSceneBindingTracks(
 		UMovieSceneTrack* NewTrack = DuplicateObject<UMovieSceneTrack>(SourceTrack, TargetMovieScene);
 		if (NewTrack)
 		{
+			for (UMovieSceneSection* Section : NewTrack->GetAllSections())
+			{
+				const bool bWasLocked = Section->IsLocked();
+				Section->SetIsLocked(false);
+				Section->MoveSection(-SourceStartFrame);
+				Section->SetIsLocked(bWasLocked);
+			}
 			if (UMovieSceneSpawnTrack* SpawnTrack = Cast<UMovieSceneSpawnTrack>(NewTrack))
 			{
 				SpawnTrack->SetObjectId(TargetGuid);
@@ -2560,6 +2540,23 @@ static void CopyMovieSceneBindingTracks(
 			TargetBinding->AddTrack(*NewTrack, TargetMovieScene);
 		}
 	}
+}
+
+static int32 GetMMDSequenceDurationFrames(const UMovieScene* MovieScene, FFrameRate TargetRate, int32 FallbackFrames)
+{
+	if (MovieScene)
+	{
+		const TRange<FFrameNumber> Range = MovieScene->GetPlaybackRange();
+		if (Range.HasLowerBound() && Range.HasUpperBound())
+		{
+			const FFrameNumber Start = FFrameRate::TransformTime(UE::MovieScene::DiscreteInclusiveLower(Range),
+				MovieScene->GetTickResolution(), TargetRate).RoundToFrame();
+			const FFrameNumber End = FFrameRate::TransformTime(UE::MovieScene::DiscreteExclusiveUpper(Range),
+				MovieScene->GetTickResolution(), TargetRate).RoundToFrame();
+			return FMath::Max(1, (End - Start).Value);
+		}
+	}
+	return FallbackFrames;
 }
 
 static FMovieSceneDoubleChannel* FindTransformDoubleChannel(UMovieScene3DTransformSection* Section, const TCHAR* ChannelName)
@@ -2673,6 +2670,23 @@ static bool InlineCameraSequenceIntoMaster(ULevelSequence* CameraSequence, ULeve
 		OutError = TEXT("Camera or master sequence has no MovieScene.");
 		return false;
 	}
+	// 在临时副本上由引擎迁移轨道、通道及切线的时间基，源镜头资产保持原样。
+	TStrongObjectPtr<UMovieScene> CameraTimingCopy(DuplicateObject<UMovieScene>(SourceMovieScene, GetTransientPackage(),
+		MakeUniqueObjectName(GetTransientPackage(), UMovieScene::StaticClass(), TEXT("MMDCameraTimingCopy"))));
+	SourceMovieScene = CameraTimingCopy.Get();
+	if (!SourceMovieScene)
+	{
+		OutError = TEXT("Failed to copy camera MovieScene for timing conversion.");
+		return false;
+	}
+	if (SourceMovieScene->GetTickResolution() != TargetMovieScene->GetTickResolution())
+	{
+		UE::MovieScene::TimeHelpers::MigrateFrameTimes(
+			SourceMovieScene->GetTickResolution(), TargetMovieScene->GetTickResolution(), SourceMovieScene);
+	}
+	const TRange<FFrameNumber> SourcePlaybackRange = SourceMovieScene->GetPlaybackRange();
+	const FFrameNumber SourceStartFrame = SourcePlaybackRange.HasLowerBound()
+		? UE::MovieScene::DiscreteInclusiveLower(SourcePlaybackRange) : FFrameNumber(0);
 
 	FGuid SourceCameraGuid;
 	const FMovieSceneSpawnable* SourceCameraSpawnable = nullptr;
@@ -2708,7 +2722,7 @@ static bool InlineCameraSequenceIntoMaster(ULevelSequence* CameraSequence, ULeve
 		return false;
 	}
 
-	CopyMovieSceneBindingTracks(SourceMovieScene, SourceCameraGuid, TargetMovieScene, TargetCameraGuid);
+	CopyMovieSceneBindingTracks(SourceMovieScene, SourceCameraGuid, TargetMovieScene, TargetCameraGuid, SourceStartFrame);
 	ApplyRootTransformToCameraTransformTracks(TargetMovieScene, TargetCameraGuid, RootTransform);
 
 	FMovieSceneSpawnable* TargetCameraSpawnable = TargetMovieScene->FindSpawnable(TargetCameraGuid);
@@ -2740,7 +2754,7 @@ static bool InlineCameraSequenceIntoMaster(ULevelSequence* CameraSequence, ULeve
 				MasterSequence->BindPossessableObject(TargetChildGuid, *CameraTemplateComponent, TargetCameraTemplateActor);
 			}
 
-			CopyMovieSceneBindingTracks(SourceMovieScene, SourceChildGuid, TargetMovieScene, TargetChildGuid);
+			CopyMovieSceneBindingTracks(SourceMovieScene, SourceChildGuid, TargetMovieScene, TargetChildGuid, SourceStartFrame);
 		}
 	}
 
@@ -2773,9 +2787,8 @@ void MMDImportSetting::OpenPhysicsBakeWindow()
 
 	if (UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass())))
 	{
-		PhysicsBakeAnimSequence = SelectedAnim;
+		if (!PhysicsBakeAnimSequence.IsValid()) SelectProductionAnimation(SelectedAnim, true);
 	}
-	const FString AnimationFilterFolder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
 
 	TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(FText::FromString(TEXT("MMD Physics Bake")))
@@ -2826,10 +2839,7 @@ void MMDImportSetting::OpenPhysicsBakeWindow()
 					.AllowedClass(UAnimSequence::StaticClass())
 					.ObjectPath(this, &MMDImportSetting::GetPhysicsBakeAnimationPath)
 					.OnObjectChanged(this, &MMDImportSetting::OnPhysicsBakeAnimationChanged)
-					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateLambda([AnimationFilterFolder](const FAssetData& AssetData)
-					{
-						return ShouldFilterAnimationOutsideFolder(AssetData, AnimationFilterFolder);
-					}))
+					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateSP(this, &MMDImportSetting::ShouldFilterAnimationForCurrentModel))
 				]
 				+ SHorizontalBox::Slot().AutoWidth()
 				[
@@ -2908,13 +2918,12 @@ void MMDImportSetting::OpenSequenceComposerWindow()
 
 	if (UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass())))
 	{
-		ComposerAnimSequence = SelectedAnim;
+		if (!ComposerAnimSequence.IsValid()) SelectProductionAnimation(SelectedAnim, false);
 	}
 	if (ULevelSequence* SelectedCameraSequence = Cast<ULevelSequence>(GetFirstSelectedEditorObjectOfClass(ULevelSequence::StaticClass())))
 	{
-		ComposerCameraSequence = SelectedCameraSequence;
+		if (!ComposerCameraSequence.IsValid()) ComposerCameraSequence = SelectedCameraSequence;
 	}
-	const FString AnimationFilterFolder = GetMMDModelAnimationFolder(LastLoadedMMDActorClass.Get());
 
 	TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(FText::FromString(TEXT("MMD Sequence Composer")))
@@ -2968,10 +2977,7 @@ void MMDImportSetting::OpenSequenceComposerWindow()
 					.AllowedClass(UAnimSequence::StaticClass())
 					.ObjectPath(this, &MMDImportSetting::GetComposerAnimationPath)
 					.OnObjectChanged(this, &MMDImportSetting::OnComposerAnimationChanged)
-					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateLambda([AnimationFilterFolder](const FAssetData& AssetData)
-					{
-						return ShouldFilterAnimationOutsideFolder(AssetData, AnimationFilterFolder);
-					}))
+					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateSP(this, &MMDImportSetting::ShouldFilterAnimationForCurrentModel))
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(6.0f, 0.0f, 0.0f, 0.0f)
 				[
@@ -3034,11 +3040,12 @@ FReply MMDImportSetting::CaptureSequenceComposerActor()
 FReply MMDImportSetting::CaptureSequenceComposerAnimation()
 {
 #if WITH_EDITOR
-	ComposerAnimSequence = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass()));
-	if (!ComposerAnimSequence.IsValid())
+	UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass()));
+	if (!SelectedAnim)
 	{
 		ShowImportProgress(TEXT("Select an AnimSequence asset in the Content Browser first."), EMMDMessageType::Warning);
 	}
+	else SelectProductionAnimation(SelectedAnim, false);
 	RefreshSequenceComposerLabels();
 #endif
 	return FReply::Handled();
@@ -3063,9 +3070,14 @@ void MMDImportSetting::OnComposerActorChanged(const FAssetData& AssetData)
 	UClass* ActorClass = ResolveMMDActorClassFromAssetData(AssetData);
 	if (!SetCurrentMMDActorClass(ActorClass, ActorClass ? ActorClass->GetName() : FString()))
 	{
+		++ModelSelectionRevision;
 		LastLoadedMMDActorClass.Reset();
 		ComposerSkeletalMeshComponent.Reset();
+		PhysicsBakeSkeletalMeshComponent.Reset();
+		ComposerAnimSequence.Reset();
+		PhysicsBakeAnimSequence.Reset();
 		RefreshSequenceComposerLabels();
+		RefreshPhysicsBakeLabels();
 		return;
 	}
 
@@ -3080,8 +3092,7 @@ void MMDImportSetting::OnComposerActorChanged(const FAssetData& AssetData)
 
 void MMDImportSetting::OnComposerAnimationChanged(const FAssetData& AssetData)
 {
-	ComposerAnimSequence = Cast<UAnimSequence>(AssetData.GetAsset());
-	RefreshSequenceComposerLabels();
+	SelectProductionAnimation(Cast<UAnimSequence>(AssetData.GetAsset()), false);
 }
 
 void MMDImportSetting::OnComposerCameraChanged(const FAssetData& AssetData)
@@ -3149,11 +3160,12 @@ FReply MMDImportSetting::CapturePhysicsBakeActor()
 FReply MMDImportSetting::CapturePhysicsBakeAnimation()
 {
 #if WITH_EDITOR
-	PhysicsBakeAnimSequence = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass()));
-	if (!PhysicsBakeAnimSequence.IsValid())
+	UAnimSequence* SelectedAnim = Cast<UAnimSequence>(GetFirstSelectedEditorObjectOfClass(UAnimSequence::StaticClass()));
+	if (!SelectedAnim)
 	{
 		ShowImportProgress(TEXT("Select an AnimSequence asset in the Content Browser first."), EMMDMessageType::Warning);
 	}
+	else SelectProductionAnimation(SelectedAnim, true);
 	RefreshPhysicsBakeLabels();
 #endif
 	return FReply::Handled();
@@ -3161,8 +3173,7 @@ FReply MMDImportSetting::CapturePhysicsBakeAnimation()
 
 void MMDImportSetting::OnPhysicsBakeAnimationChanged(const FAssetData& AssetData)
 {
-	PhysicsBakeAnimSequence = Cast<UAnimSequence>(AssetData.GetAsset());
-	RefreshPhysicsBakeLabels();
+	SelectProductionAnimation(Cast<UAnimSequence>(AssetData.GetAsset()), true);
 }
 
 FString MMDImportSetting::GetPhysicsBakeAnimationPath() const
@@ -3225,26 +3236,19 @@ FReply MMDImportSetting::BakePhysicsAnimation()
 		ShowImportProgress(TEXT("Load the current AMMDActor asset and an AnimSequence before baking."), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
-
-	if (Target.SourcePMXFilePath.IsEmpty() || !FPaths::FileExists(Target.SourcePMXFilePath))
+	if (!IsAnimationCompatibleWithCurrentModel(SourceAnim))
 	{
-		ShowImportProgress(TEXT("The current AMMDActor asset has no valid source PMX path for physics data."), EMMDMessageType::Error);
+		ShowImportProgress(TEXT("无法烘焙：动画骨架与当前角色不兼容，请重新选择或先完成重定向。"), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
-
-	const PMXDatas* ParsedPMX = TMMDMeshBuilder::GetOrParsePMXData(Target.SourcePMXFilePath);
-	if (!ParsedPMX)
-	{
-		ShowImportProgress(TEXT("Failed to parse PMX physics data."), EMMDMessageType::Error);
-		return FReply::Handled();
-	}
+	const uint64 RequestRevision = ModelSelectionRevision;
 
 	TArray<FMMDPhysicsRigidBodyData> Rigids;
 	TArray<FMMDPhysicsJointData> Joints;
-	ConvertPMXPhysicsToAnimNodeData(*ParsedPMX, Rigids, Joints);
-	if (Rigids.Num() == 0 || Joints.Num() == 0)
+	FString PhysicsDataError;
+	if (!GetMMDPhysicsBakeData(Target.SkeletalMesh, Target.SourcePMXFilePath, Rigids, Joints, PhysicsDataError))
 	{
-		ShowImportProgress(TEXT("PMX has no rigid body or joint data to bake."), EMMDMessageType::Error);
+		ShowImportProgress(PhysicsDataError, EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 
@@ -3353,12 +3357,14 @@ FReply MMDImportSetting::BakePhysicsAnimation()
 		return FReply::Handled();
 	}
 
+	const bool bUsingBakedAnimation = UseBakedAnimationResult(BakedAnim, RequestRevision);
 	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 	{
 		AssetEditorSubsystem->OpenEditorForAsset(BakedAnim);
 	}
 
-	ShowImportProgress(FString::Printf(TEXT("Physics baked: %s"), *BakedAnim->GetPathName()), EMMDMessageType::Success);
+	ShowImportProgress(FString::Printf(TEXT("物理已烘焙：%s。%s"), *BakedAnim->GetPathName(),
+		bUsingBakedAnimation ? TEXT("合成器已改用烘焙结果；烘焙输入仍保留原动作。") : TEXT("当前角色已变化，未替换新的制作选择。")), EMMDMessageType::Success);
 #else
 	ShowImportProgress(TEXT("Physics bake is editor-only."), EMMDMessageType::Error);
 #endif
@@ -3381,6 +3387,11 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	if (!SkelComp || !LastLoadedMMDActorClass.IsValid() || !AnimSequence || !CameraSequence)
 	{
 		ShowImportProgress(TEXT("Load an AMMDActor asset, AnimSequence, and camera LevelSequence before composing."), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
+	if (!IsAnimationCompatibleWithCurrentModel(AnimSequence))
+	{
+		ShowImportProgress(TEXT("无法合成：动画骨架与当前角色不兼容，请重新选择或先完成重定向。"), EMMDMessageType::Error);
 		return FReply::Handled();
 	}
 
@@ -3413,15 +3424,7 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	}
 
 	const int32 AnimDurationFrames = FMath::Max(1, FMath::CeilToInt(AnimSequence->GetPlayLength() * 30.0f));
-	int32 CameraDurationFrames = AnimDurationFrames;
-	if (UMovieScene* CameraMovieScene = CameraSequence->GetMovieScene())
-	{
-		const TRange<FFrameNumber> CameraRange = CameraMovieScene->GetPlaybackRange();
-		if (CameraRange.HasLowerBound() && CameraRange.HasUpperBound())
-		{
-			CameraDurationFrames = FMath::Max(1, CameraRange.GetUpperBoundValue().Value - CameraRange.GetLowerBoundValue().Value);
-		}
-	}
+	const int32 CameraDurationFrames = GetMMDSequenceDurationFrames(CameraSequence->GetMovieScene(), FFrameRate(30, 1), AnimDurationFrames);
 	const int32 DurationFrames = FMath::Max(AnimDurationFrames, CameraDurationFrames);
 	ConfigureMMDMovieSceneTiming(MovieScene, DurationFrames);
 
@@ -3496,7 +3499,12 @@ FReply MMDImportSetting::CreateComposedLevelSequence()
 	SaveArgs.SaveFlags = SAVE_None;
 	SaveArgs.Error = GError;
 	SaveArgs.bWarnOfLongFilename = false;
-	UPackage::SavePackage(Package, MasterSequence, *PackageFilePath, SaveArgs);
+	if (!UPackage::SavePackage(Package, MasterSequence, *PackageFilePath, SaveArgs))
+	{
+		ShowImportProgress(FString::Printf(TEXT("Failed to save master LevelSequence: %s. Sequence actor creation was stopped."),
+			*PackageFilePath), EMMDMessageType::Error);
+		return FReply::Handled();
+	}
 
 	FString ActorBlueprintError;
 	UBlueprint* SequenceActorBlueprint = CreateMMDLevelSequenceActorBlueprint(
@@ -3745,7 +3753,12 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 	SaveArgs.SaveFlags = SAVE_None;
 	SaveArgs.Error = GError;
 	SaveArgs.bWarnOfLongFilename = false;
-	UPackage::SavePackage(Package, LevelSequence, *PackageFilePath, SaveArgs);
+	if (!UPackage::SavePackage(Package, LevelSequence, *PackageFilePath, SaveArgs))
+	{
+		ShowImportProgress(FString::Printf(TEXT("Failed to save VMD camera LevelSequence: %s."), *PackageFilePath), EMMDMessageType::Error);
+		return;
+	}
+	OnComposerCameraChanged(FAssetData(LevelSequence));
 
 	if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 	{
@@ -3753,7 +3766,7 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 	}
 
 	ShowImportProgress(
-		FString::Printf(TEXT("VMD camera imported: %s | CameraKeys=%d | MaxFrame=%d"), *LevelSequence->GetPathName(), CameraKeys.Num(), MaxFrame),
+		FString::Printf(TEXT("VMD 相机已导入并用于合成：%s | CameraKeys=%d | MaxFrame=%d"), *LevelSequence->GetPathName(), CameraKeys.Num(), MaxFrame),
 		EMMDMessageType::Success);
 #else
 	ShowImportProgress(TEXT("VMD camera import is editor-only."), EMMDMessageType::Error);
@@ -3761,56 +3774,36 @@ void MMDImportSetting::ImportVMDCameraAnimation()
 }
 void MMDImportSetting::ShowImportProgress(const FString& Message, EMMDMessageType Type)
 {
+	const bool bChanged = CurrentStatusMessage != Message || CurrentStatusType != Type;
+	CurrentStatusMessage = Message;
+	CurrentStatusType = Type;
+	FLinearColor Color = MMDPanelStyle::Accent;
+	const TCHAR* Label = TEXT("提示  ");
+	switch (Type)
+	{
+	case EMMDMessageType::Warning: Color = MMDPanelStyle::Warning; Label = TEXT("注意  "); break;
+	case EMMDMessageType::Error: Color = MMDPanelStyle::Error; Label = TEXT("失败  "); break;
+	case EMMDMessageType::Success: Color = MMDPanelStyle::Success; Label = TEXT("完成  "); break;
+	default: break;
+	}
 	if (UMMDToolPanelWidget* ToolPanel = ToolPanelWidget.Get())
 	{
-		FLinearColor MessageColor = FLinearColor(0.09f, 0.72f, 0.82f, 1.0f);
-		switch (Type)
-		{
-		case EMMDMessageType::Warning:
-			MessageColor = FLinearColor(1.0f, 0.70f, 0.16f, 1.0f);
-			break;
-		case EMMDMessageType::Error:
-			MessageColor = FLinearColor(1.0f, 0.24f, 0.32f, 1.0f);
-			break;
-		case EMMDMessageType::Success:
-			MessageColor = FLinearColor(0.12f, 0.74f, 0.46f, 1.0f);
-			break;
-		case EMMDMessageType::Info:
-		default:
-			break;
-		}
-		ToolPanel->SetStatusText(FText::FromString(Message), MessageColor);
+		ToolPanel->SetStatusText(FText::FromString(Message), Color);
 	}
-
-	if (StatusText.IsValid())
+	if (StatusText)
 	{
-		switch (Type)
-		{
-		case EMMDMessageType::Info:
-			StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Green));
-			StatusText->SetText(FText::FromString(Message));
-			break;
-
-		case EMMDMessageType::Warning:
-			StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Yellow));
-			StatusText->SetText(FText::FromString(Message));
-			break;
-
-		case EMMDMessageType::Error:
-			StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Red));
-			StatusText->SetText(FText::FromString(Message));
-			break;
-
-		case EMMDMessageType::Success:
-			StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::Green));
-			StatusText->SetText(FText::FromString(Message));
-			break;
-		default:
-			StatusText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-			StatusText->SetText(FText::FromString("No Type: " + Message));
-			break;
-		}
+		StatusText->SetText(FText::FromString(Message));
+		StatusText->SetToolTipText(FText::FromString(Message));
+		StatusText->SetColorAndOpacity(Color);
 	}
+	if (StatusTypeText)
+	{
+		StatusTypeText->SetText(FText::FromString(Label));
+		StatusTypeText->SetColorAndOpacity(Color);
+	}
+	// 连续导入日志保持稳定，只给最终结果轻量反馈。
+	if (bChanged && bUIAnimationsEnabled && Type != EMMDMessageType::Info) StatusTransition.Play(AsShared());
+	else StatusTransition.JumpToEnd();
 }
 void MMDImportSetting::ShowGlobalImportProgress(const FString& Message, EMMDMessageType Type)
 {
@@ -3841,5 +3834,128 @@ void MMDImportSetting::ShowGlobalImportProgress(const FString& Message, EMMDMess
 		}
 	}
 }
+
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMMDPhysicsBakeSavedDataTest, "Ue5MMDTools.Creation.PhysicsBakeSavedData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::CommandletContext | EAutomationTestFlags::EngineFilter)
+
+bool FMMDPhysicsBakeSavedDataTest::RunTest(const FString& Parameters)
+{
+	USkeletalMesh* Mesh = NewObject<USkeletalMesh>();
+	UMMDSkeletalMeshUserData* UserData = NewObject<UMMDSkeletalMeshUserData>(Mesh);
+	UMMDModelDataAsset* ModelData = NewObject<UMMDModelDataAsset>();
+	UserData->ModelDataAsset = ModelData;
+	Mesh->AddAssetUserData(UserData);
+	FMMDPhysicsRigidBodyData& Rigid = ModelData->Rigids.AddDefaulted_GetRef();
+	Rigid.Name = TEXT("SavedRigid");
+	Rigid.ShapeType = 0;
+	Rigid.ShapeSize = FVector(1.0f);
+	Rigid.PhysicsMode = 0;
+
+	TArray<FMMDPhysicsRigidBodyData> Rigids;
+	TArray<FMMDPhysicsJointData> Joints;
+	FString Error;
+	TestTrue(TEXT("源文件已丢失时使用资产内刚体"), GetMMDPhysicsBakeData(Mesh, FString(), Rigids, Joints, Error));
+	TestEqual(TEXT("独立刚体无需关节即可烘焙"), Joints.Num(), 0);
+	TestEqual(TEXT("读取保存的刚体数"), Rigids.Num(), 1);
+	if (!Rigids.IsEmpty())
+	{
+		Rigids[0].Mass = 99.0f;
+		TestNotEqual(TEXT("烘焙数据副本不修改资产"), ModelData->Rigids[0].Mass, 99.0f);
+	}
+	ModelData->Rigids.Reset();
+	TestFalse(TEXT("没有保存数据和源文件时拒绝烘焙"), GetMMDPhysicsBakeData(Mesh, FString(), Rigids, Joints, Error));
+	TestFalse(TEXT("缺少数据时返回具体错误"), Error.IsEmpty());
+	TestTrue(TEXT("失败不遗留上次刚体"), Rigids.IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMMDComposerCameraTimingTest, "Ue5MMDTools.Creation.CameraTiming",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::CommandletContext | EAutomationTestFlags::EngineFilter)
+
+bool FMMDComposerCameraTimingTest::RunTest(const FString& Parameters)
+{
+	ULevelSequence* Source = NewObject<ULevelSequence>();
+	ULevelSequence* Target = NewObject<ULevelSequence>();
+	Source->Initialize();
+	Target->Initialize();
+	UMovieScene* SourceScene = Source->GetMovieScene();
+	UMovieScene* TargetScene = Target->GetMovieScene();
+	SourceScene->SetTickResolutionDirectly(FFrameRate(24000, 1));
+	SourceScene->SetDisplayRate(FFrameRate(60, 1));
+	SourceScene->SetPlaybackRange(FFrameNumber(68), 859);
+	TestEqual(TEXT("亚帧边界时片长与引擎迁移后的边界一致"), GetMMDSequenceDurationFrames(SourceScene, FFrameRate(30, 1), 1), 1);
+	SourceScene->SetPlaybackRange(FFrameNumber(24000), 48000);
+	ConfigureMMDMovieSceneTiming(TargetScene, 60);
+	TestEqual(TEXT("24k 时间基的两秒镜头转换为 60 帧"), GetMMDSequenceDurationFrames(SourceScene, FFrameRate(30, 1), 1), 60);
+
+	ACameraActor* Camera = NewObject<ACameraActor>(SourceScene);
+	const FGuid CameraGuid = SourceScene->AddSpawnable(TEXT("TimingCamera"), *Camera);
+	UMovieScene3DTransformTrack* Track = SourceScene->AddTrack<UMovieScene3DTransformTrack>(CameraGuid);
+	Track->SetPropertyNameAndPath(TEXT("Transform"), TEXT("Transform"));
+	UMovieScene3DTransformSection* Section = CastChecked<UMovieScene3DTransformSection>(Track->CreateNewSection());
+	Track->AddSection(*Section);
+	Section->SetRange(TRange<FFrameNumber>(FFrameNumber(24000), FFrameNumber(72000)));
+	AddCameraTransformKey(Section, FFrameNumber(24000), FTransform(FVector(10.0, 0.0, 0.0)));
+	AddCameraTransformKey(Section, FFrameNumber(48000), FTransform(FVector(20.0, 0.0, 0.0)));
+	Section->SetIsLocked(true);
+
+	UCameraComponent* Component = Camera->GetCameraComponent();
+	const FGuid ComponentGuid = SourceScene->AddPossessable(Component->GetName(), Component->GetClass());
+	SourceScene->FindPossessable(ComponentGuid)->SetParent(CameraGuid, SourceScene);
+	SourceScene->FindSpawnable(CameraGuid)->AddChildPossessable(ComponentGuid);
+	Source->BindPossessableObject(ComponentGuid, *Component, Camera);
+	UMovieSceneFloatTrack* FOVTrack = SourceScene->AddTrack<UMovieSceneFloatTrack>(ComponentGuid);
+	FOVTrack->SetPropertyNameAndPath(TEXT("FieldOfView"), TEXT("FieldOfView"));
+	UMovieSceneFloatSection* FOVSection = CastChecked<UMovieSceneFloatSection>(FOVTrack->CreateNewSection());
+	FOVTrack->AddSection(*FOVSection);
+	FOVSection->SetRange(Section->GetRange());
+	FOVSection->GetChannel().AddCubicKey(FFrameNumber(24000), 35.0f);
+	FOVSection->GetChannel().AddCubicKey(FFrameNumber(48000), 55.0f);
+
+	FString Error;
+	if (!TestTrue(TEXT("不同时间基且非零起点的镜头可合成"), InlineCameraSequenceIntoMaster(Source, Target, 60, FTransform::Identity, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	bool bFoundTransform = false;
+	bool bFoundFOV = false;
+	for (const FMovieSceneBinding& Binding : TargetScene->GetBindings())
+	{
+		for (UMovieSceneTrack* CopiedTrack : Binding.GetTracks())
+		{
+			for (UMovieSceneSection* CopiedSection : CopiedTrack->GetAllSections())
+			{
+				TestEqual(TEXT("镜头片段起点归零"), CopiedSection->GetInclusiveStartFrame().Value, 0);
+				TestEqual(TEXT("镜头片段持续两秒"), CopiedSection->GetExclusiveEndFrame().Value, 60);
+				if (UMovieScene3DTransformSection* Transform = Cast<UMovieScene3DTransformSection>(CopiedSection))
+				{
+					bFoundTransform = true;
+					FMovieSceneDoubleChannel* X = FindTransformDoubleChannel(Transform, TEXT("Location.X"));
+					double Value = 0.0;
+					TestTrue(TEXT("转换后的位置通道可求值"), X && X->Evaluate(FFrameTime(30), Value));
+					TestEqual(TEXT("一秒处仍为第二个位置关键帧"), Value, 20.0);
+					TestTrue(TEXT("保留源片段锁定状态"), Transform->IsLocked());
+				}
+				if (UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(CopiedSection))
+				{
+					bFoundFOV = true;
+					float Value = 0.0f;
+					TestTrue(TEXT("转换后的 FOV 通道可求值"), FloatSection->GetChannel().Evaluate(FFrameTime(30), Value));
+					TestEqual(TEXT("一秒处 FOV 与位置同步"), Value, 55.0f);
+				}
+			}
+		}
+	}
+	TestTrue(TEXT("复制相机位置轨道"), bFoundTransform);
+	TestTrue(TEXT("复制相机组件 FOV 轨道"), bFoundFOV);
+	TestEqual(TEXT("源镜头时间基未修改"), SourceScene->GetTickResolution(), FFrameRate(24000, 1));
+	TestEqual(TEXT("源镜头起点未修改"), Section->GetInclusiveStartFrame().Value, 24000);
+	const FMovieSceneDoubleChannel* SourceX = FindTransformDoubleChannel(Section, TEXT("Location.X"));
+	TestEqual(TEXT("源关键帧未修改"), SourceX->GetData().GetTimes()[1].Value, 48000);
+	return true;
+}
+#endif
 
 

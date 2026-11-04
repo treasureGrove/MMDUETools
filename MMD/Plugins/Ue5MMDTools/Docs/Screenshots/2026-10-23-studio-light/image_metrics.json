@@ -1,0 +1,66 @@
+{
+  "before": {
+    "face": {
+      "roi": [
+        845,
+        279,
+        23,
+        22
+      ],
+      "mean_srgb_luma": 113.248,
+      "near_white_fraction": 0.0
+    },
+    "jacket": {
+      "roi": [
+        818,
+        352,
+        24,
+        38
+      ],
+      "mean_srgb_luma": 29.211,
+      "near_white_fraction": 0.0
+    },
+    "boots": {
+      "roi": [
+        842,
+        569,
+        14,
+        22
+      ],
+      "mean_srgb_luma": 111.694,
+      "near_white_fraction": 0.0
+    }
+  },
+  "after": {
+    "face": {
+      "roi": [
+        845,
+        279,
+        23,
+        22
+      ],
+      "mean_srgb_luma": 199.651,
+      "near_white_fraction": 0.0
+    },
+    "jacket": {
+      "roi": [
+        818,
+        352,
+        24,
+        38
+      ],
+      "mean_srgb_luma": 74.758,
+      "near_white_fraction": 0.0
+    },
+    "boots": {
+      "roi": [
+        842,
+        569,
+        14,
+        22
+      ],
+      "mean_srgb_luma": 229.897,
+      "near_white_fraction": 0.0
+    }
+  }
+}

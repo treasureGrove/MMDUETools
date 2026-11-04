@@ -1,0 +1,68 @@
+{
+  "archive": "MMDAgent_Example-1.8.zip",
+  "archive_sha256": "f702f2109a07dca103c7b9a5123a25c6dda038f0d7fcc899ff0281d07e873a63",
+  "source_url": "https://sourceforge.net/projects/mmdagent/files/MMDAgent_Example/MMDAgent_Example-1.8/",
+  "license": "CC-BY-3.0",
+  "files": [
+    {
+      "path": "mei_wait/mei_wait.vmd",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_wait/mei_wait.vmd",
+      "sha256": "b4b3d7381e557703fb742321f1dab4eb32201f516f7722a1271559324d4d7540",
+      "modified": false
+    },
+    {
+      "path": "mei_wait/README.txt",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_wait/README.txt",
+      "sha256": "93c3d99954c3470593eb1d9bc1d7bca147ed272212f64dc8929afc96442a9fba",
+      "modified": false
+    },
+    {
+      "path": "mei_wait/COPYRIGHT.txt",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_wait/COPYRIGHT.txt",
+      "sha256": "3aa38fd6620f5e2c1b314b540422d3fb3d4d4ebee60f778cf9714ee89b9cab2b",
+      "modified": false
+    },
+    {
+      "path": "mei_breath/mei_breath.vmd",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_breath/mei_breath.vmd",
+      "sha256": "39b6cc68807ee72cb6fb4227eb1b4061cef38af4f80d2cbc39d3db4e2b0ea779",
+      "modified": false
+    },
+    {
+      "path": "mei_breath/README.txt",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_breath/README.txt",
+      "sha256": "332f04ffc8a8d9343dc43692bbb5396c48e53e9cbcb094a4919360d5980c8f4c",
+      "modified": false
+    },
+    {
+      "path": "mei_breath/COPYRIGHT.txt",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_breath/COPYRIGHT.txt",
+      "sha256": "053679038d626878c3be086be19110e59fae18a4d52bd649e842c0ebe40be08f",
+      "modified": false
+    },
+    {
+      "path": "mei_idle/mei_idle_think.vmd",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_idle/mei_idle_think.vmd",
+      "sha256": "1206516e610324b2a0ccac8c5ed5db2483db2bd2f5689f22a4af8318ac2dc95f",
+      "modified": false
+    },
+    {
+      "path": "mei_idle/mei_idle_touch_clothes.vmd",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_idle/mei_idle_touch_clothes.vmd",
+      "sha256": "43ef88044181420fe804ca5c4a698bd70c58e3ca4b263dba85d5ebe622c5e799",
+      "modified": false
+    },
+    {
+      "path": "mei_idle/README.txt",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_idle/README.txt",
+      "sha256": "d1d31cd1e464735809f28ff32ece999f64305a9d74aea6c5831cf194ce703f5c",
+      "modified": false
+    },
+    {
+      "path": "mei_idle/COPYRIGHT.txt",
+      "archive_path": "MMDAgent_Example-1.8/Motion/mei_idle/COPYRIGHT.txt",
+      "sha256": "aee3a185d392d2cdba38ed1042649cdc3f97401f9e1a04ea1e0454f49e1ba824",
+      "modified": false
+    }
+  ]
+}

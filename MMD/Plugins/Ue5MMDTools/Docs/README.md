@@ -1,11 +1,16 @@
 # 插件文档入口
 
-整理日期：2026-10-19。
+整理于 2026-11-04。
 
 渲染先读[当前架构](RENDERING_ARCHITECTURE.md)。终末地 V2 已使用 Substrate packed 材质缓冲与原生逐灯后端；Reference／旧材质的 Unlit 兼容路径单独存在。不要把其中一条路径泛化为全插件现状。
 
 ## 当前维护说明
 
+- [工具面板、VMD姿势／动作、镜头与实时物理](TOOL_PANEL_GUIDE.md)
+- [后台制作 MMD、MP4音轨与可重开序列](MMD_PRODUCTION_WORKFLOW.md)
+- [Fab 场景素材候选与官方导入入口](FAB_ENVIRONMENT_OPTIONS.md)
+- [2026-10-25 纯白默认与四套摄影棚预设](Screenshots/2026-10-25-studio-collection/README.md)
+- [2026-10-25 已被否决的云空场景历史](Screenshots/2026-10-25-display-scenes/README.md)、[面板交互动效历史实拍](Screenshots/2026-10-25-ui-experience/README.md)
 - [原生后端与源码入口](ENDFIELD_NATIVE_BACKEND.md)
 - [终末地使用与维护](ENDFIELD_NATIVE_RENDERING_GUIDE.md)
 - [接手状态与未完成目标](ENDFIELD_V2_FOR_GPT.md)

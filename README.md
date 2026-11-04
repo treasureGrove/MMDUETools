@@ -1,148 +1,67 @@
 # Ue5MMDTools
 
-Ue5MMDTools 是一个用于 Unreal Engine 5 的 MMD 导入和播放插件。插件可以把 PMX 模型、VMD 动作和表情数据转换到 UE 的原生资产流程中，方便在 UE 场景里预览、播放和继续制作。
+Ue5MMDTools 是 Unreal Engine 5 的 MMD 导入与制作插件。可以把 PMX 角色和 VMD 动作、表情、相机导入 UE，在 **MMD STUDIO / 角色工坊** 里预览动作、实时物理和渲染风格，再保存动画资产或合成关卡序列。
 
-渲染与开发从[插件文档入口](MMD/Plugins/Ue5MMDTools/Docs/README.md)和[当前渲染架构](MMD/Plugins/Ue5MMDTools/Docs/RENDERING_ARCHITECTURE.md)开始；终末地 V2 已使用原生 Substrate 延迟光照，旧 Unlit 材质是独立的兼容路径。
+![MMD STUDIO 场景页：默认纯白影棚、展示预设与底部播放控制](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/display_Studio.png)
 
-完整展示页和演示视频：
+*2026-10-25 引擎实拍。纯白影棚为默认展示场景，右侧底栏的播放与物理控制不随页签切换。见[截图来源与角色署名](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)。*
 
-https://treasureGrove.github.io/MMDUETools/
+[展示页](https://treasureGrove.github.io/MMDUETools/) · [B 站演示](https://www.bilibili.com/video/BV1M2RXBPExk/) · [完整面板指南](MMD/Plugins/Ue5MMDTools/Docs/TOOL_PANEL_GUIDE.md)
 
-B 站演示视频：
+## 安装
 
-https://www.bilibili.com/video/BV1M2RXBPExk/
+1. 将仓库内的 [`MMD/Plugins/Ue5MMDTools/`](MMD/Plugins/Ue5MMDTools/) 整体复制到自己的 UE 工程 `Plugins/` 下，确认目标为 `YourProject/Plugins/Ue5MMDTools/Ue5MMDTools.uplugin`。仓库根目录下的 `Plugins/` 不是安装来源。
+2. 当前源码面向 **UE 5.8 / Win64**，需要该引擎的 C++ 编译工具链。Bullet 头文件和 Windows 库已随源码提供。启用插件并按 UE 提示编译、重启。
+3. 进入关卡编辑器，打开 **窗口（Window） → Ue5MMDTools**。也可在编辑器控制台运行 `MMD.OpenPanel`。
 
-当前基础流程：
+> 仅安装插件时使用自己的 UE 工程即可。仓库内的 `MMD.uproject` 是开发宿主，还声明了 `ModelContextProtocol`、`AllToolsets` 和 `ToolsetRegistry` 等本仓库未附带的依赖。自定义原生渲染后端另有固定引擎版本要求，见下文。
 
-```text
-PMX 模型 -> UE SkeletalMesh / Skeleton / MorphTarget / Actor
-VMD 动作 -> UE AnimSequence 骨骼动画 + 表情曲线
-AnimSequence 播放 -> 骨骼动作 + 眨眼 + 嘴型 + 表情
-```
+## 快速上手
 
-## 使用教程
+### 1. 载入角色与动作
 
-### 1. 安装插件
+在 **角色** 页点击 **导入 PMX 模型**，选择 `.pmx` 文件，保留模型与贴图的相对路径。等待底部提示完成，右侧显示角色。已经导入过时，使用 **加载已有角色**，选择对应的 MMD Actor 蓝图。普通导入产物可在内容浏览器的 `/Game/MMDModels` 下找到。
 
-下载后，把插件目录放到 UE 项目的 `Plugins` 文件夹下。
+标准 MMD 骨架加载后默认尝试播放 **恬静待机**。也可直接选择 **轻柔呼吸 / 侧头思考 / 整理衣摆**。底部 **实时物理** 需要模型包含刚体数据；可通过播放、定格、时间轴和逐帧按钮检查姿势。
 
-```text
-YourProject/
-  Plugins/
-    Ue5MMDTools/
-```
+![角色页：导入 PMX、加载已有角色、动作卡片和 VMD 折叠入口](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-23-interaction/role_controls.png)
 
-然后打开 UE5，在插件面板中启用该插件。
+*2026-10-23 角色页实拍，用于对照导入和动作入口；当前版本的底栏另有逐帧按钮。内置动作见[MMDAgent / NITech 署名与许可](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)。*
 
-<img width="2556" height="507" alt="Enable plugin" src="https://github.com/user-attachments/assets/34db6af7-8de2-455e-8c66-3fe83762a915" />
+### 2. 选择风格与场景
 
-### 2. 打开插件面板
+1. 切到 **风格**，目标保持 **预览角色**。搜索或找到 **终末地 V2**、**无限暖暖** 等卡片，再点 **预览风格 →**。这次切换是临时的，随时可点 **恢复原材质**。
+2. 切到 **场景**。保留默认 **纯白影棚**，或选择 **樱雾柔光 / 深蓝展厅 / 珍珠回廊 / 薰紫摄影棚**。场景卡会一起切换展示布景和配套光照；三套旧云空场景收在折叠区。
+3. 用视口上方的 **全身 / 半身 / 面部 / 侧面 / 背面** 检查镜头。完整舞台的 **预览舞台** 只影响预览区；需要把舞台加入当前关卡时才点 **放入关卡**。
 
-启用插件后，在 UE5 插件面板中打开 Ue5MMDTools 的导入界面。
+![风格页：以预览角色为目标，点击风格卡片中的预览风格](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-23-mmd-production/tool_panel.png)
 
-<img width="798" height="792" alt="Ue5MMDTools panel" src="https://github.com/user-attachments/assets/1c5c4d43-480d-4a4e-91a9-e905e94f4fc4" />
+*2026-10-23 风格应用实拍，用于对照目标与卡片按钮；当前界面另有搜索，恢复入口的位置也已调整。*
 
-### 3. 导入 PMX 模型
+### 3. 保存动画或合成序列
 
-点击“导入模型”，选择需要导入的 `.pmx` 文件。
+在 **角色 → 导入自己的 VMD／表情／相机** 中使用 **导入 VMD 动作** 生成 `AnimSequence`，按需 **追加表情** 或 **导入 VMD 相机**。内置动作卡可以直接用于预览和后台 MP4。需要单独保存内置动作资产时，从[内置动作目录](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/)导入对应 VMD。
 
-<img width="1626" height="648" alt="Import PMX model" src="https://github.com/user-attachments/assets/078f6b85-bc5c-4959-ae0c-669c37bb0079" />
+打开 **合成关卡序列**，核对 `Model`、`Animation` 和 `Camera` 后点 **Create Master Sequence**。导入 VMD 相机会填入相机槽，**烘焙物理动画**完成后会填入动画槽。需要沿用当前预览机位、风格和展示布景时，使用下一节的后台制作入口。
 
-导入完成后，插件会生成 MMD 角色相关资产，并在面板和蓝图中可以看到对应的 Actor。
+## 后台生成 MP4
 
-<img width="1914" height="1026" alt="Imported MMD actor" src="https://github.com/user-attachments/assets/9ab3b650-4054-4ed4-8882-56c2c63d848c" />
+保存导入的角色后，在面板里选好动作、风格、展示场景和透视机位，点击顶部的 **按当前预览制作**。后台从动作第 0 秒开始输出 30 fps MP4，沿用预览画幅、倍速与物理开关。进度和取消按钮留在面板，文件写入 `Saved/MMDProduction/`。需要 Windows D3D12 SM6 以及可调用的 `ffmpeg` 和 `ffprobe`。
 
-### 4. 查看生成的资产
+![角色工坊右上角的「按当前预览制作」按钮](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-04-preview-production/preview_movie_cta.png)
 
-导入 PMX 后，会生成对应的角色 Actor、骨骼资产和 IK 重定向相关资产。
+*2026-11-04 离屏实拍。图中选择了轻柔呼吸、樱雾柔光、全身机位与 1.5 倍速。[截图来源与角色署名](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-04-preview-production/README.md)*
 
-<img width="1611" height="621" alt="Generated actor and retarget assets" src="https://github.com/user-attachments/assets/a37aea3c-5c72-418b-9920-711de3a3d9f8" />
+需要 VMD 镜头、独立表情或音乐时，可用脚本指定素材。后台会输出 PNG 帧、MP4、动画和序列；在编辑器内执行 `MMD.OpenProduction "作品目录"` 可重开动作和镜头。[后台制作指南](MMD/Plugins/Ue5MMDTools/Docs/MMD_PRODUCTION_WORKFLOW.md)
 
-通常会包含：
+![樱雾柔光预设的实际后台成片画面](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/render_RoseStudio.png)
 
-- `SkeletalMesh` 和 `Skeleton`
-- 材质和材质实例
-- `MorphTarget`
-- MMD Actor 和 `AnimBlueprint`
-- IK Rig / IK Retargeter
-- MMD ModelData 辅助资产
+*2026-10-25 实际 UE 后台成片第 15 帧。插件打包规则会排除测试角色源文件和模型贴图。[五套场景对照与视频](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)*
 
-### 5. 导入 VMD 动作
+## 原生风格与兼容性
 
-选中已经导入的 MMD 角色或对应的 SkeletalMesh，然后点击“导入 VMD 动画”，选择 `.vmd` 文件。
+- 终末地 V2 和无限暖暖的**插件自定义原生后端**依赖 **UE 5.8.3 / CL58210709 / Win64 D3D12 SM6**，并需显式启用 Substrate 和后端。按[配置模板](MMD/Plugins/Ue5MMDTools/Scripts/EndfieldNative.example.ini)与[原生渲染指南](MMD/Plugins/Ue5MMDTools/Docs/ENDFIELD_NATIVE_RENDERING_GUIDE.md)合并相关配置，保留本工程的阴影与其他设置，再重启。仅应用风格卡片不保证进入截图中的原生渲染路径。
+- Reference 和旧风格保留独立的兼容路径。通用发丝、布料和描边的参数见[舞台与 Reference 预设说明](MMD/Plugins/Ue5MMDTools/Docs/STAGE_RENDER_PRESETS.md)。插件的原生适配不修改安装引擎文件。
+- 不同模型的骨骼命名、IK 和特殊 Morph 可能需要适配。材质、骨骼及 UV Morph 尚未完整支持为 UE 动画通道。
 
-导入成功后会生成 UE `AnimSequence`，其中包含：
-
-- 骨骼动画轨道
-- 表情 Morph 曲线
-
-如果当前场景里有对应角色，插件会尝试直接播放该动画。
-
-### 6. 播放 MMD 动画
-
-导入 VMD 后，角色可以在 UE 中播放 MMD 动作。正常情况下应能看到：
-
-- 身体骨骼动作
-- root / center 位移
-- 眨眼
-- 嘴型
-- 眉毛和表情变化
-
-## 插件功能说明
-
-### PMX 模型导入
-
-- 解析 PMX 顶点、索引、法线、UV、材质和骨骼。
-- 生成 UE `SkeletalMesh` 和 `Skeleton`。
-- 创建基础 MMD 材质和材质实例。
-- 保存 MMD ModelData 辅助数据。
-
-### MorphTarget / 表情
-
-- PMX vertex morph 导入为 UE `MorphTarget`。
-- 修正 PMX 顶点到 UE 渲染顶点的映射，避免表情扭曲。
-- VMD 表情写入 `AnimSequence` float curves。
-- 支持 Group / Flip Morph 展开，嘴型和眨眼可以正常播放。
-
-### VMD 动作导入
-
-- 解析 VMD 骨骼关键帧和 Morph 关键帧。
-- 骨骼轨道写入 `AnimSequence`。
-- 表情轨道写入 Morph curves。
-- 支持 MMD 到 UE 坐标系转换和 IK / 追加骨骼烘焙。
-
-### Actor / AnimBlueprint / IK
-
-- 自动创建 MMD Actor。
-- 自动生成 `AnimBlueprint`。
-- 提供 MMD Skeletal Control 动画节点。
-- 生成 IK Rig 和 IK Retargeter。
-
-### 物理模拟
-
-- 读取 PMX 刚体和 Joint 数据。
-- 基于 Bullet 初始化 MMD 风格物理模拟器。
-- 物理功能仍在实验阶段，适合继续调试和扩展。
-
-### 舞台与通用材质细节
-
-- `/Ue5MMDTools/Stages/Presets/DA_Render_SakuraTheater` 提供樱庭水镜舞台、冷暖灯光与角色材质响应；舞台资源位于插件 `Stages` 目录。
-- Reference 角色父材质按皮肤、头发、布料、金属与眼球分别响应真实场景灯光、天空漫反射及天空镜面。原模型只需 BaseColor，插件提供 V2 通用发丝法线、窄折脊与宽谷面布料法线及粗糙度数据，通过物体空间三向投影使用，不要求专用 UV 布局。
-- `HairDetailStrength` / `ClothDetailStrength` 默认 0.20 / 0.40；`HairDetailScale` / `ClothDetailScale` 默认每厘米 0.040 / 0.010。细节强度为 0 时跳过对应细节采样；头发还需将独立的 `HairShiftStrength` 设为 0，才完全退回几何法线与基础 BRDF。
-- V2 使用独立资产 `T_MMD_GenericHairNormalV2`、`T_MMD_GenericClothNormalV2`、`T_MMD_GenericClothDataV2`。生成时保留 V1 资产，只迁移父材质中旧默认贴图的精确链接，保留自选纹理和实例覆盖。
-- 宽褶皱经过低频过滤后塑造布料明暗，细织纹保留在镜面法线中；主着色与天空反射共享细节结果。头发与布料各最多 9 次细节采样，其他材质类别不采样这些贴图。
-- 发丝使用双瓣各向异性高光，布料使用辐射驱动的纤维柔光；眼球单独使用中性低粗糙度响应，睫毛、绘制高光和口腔保持通用类别。
-- 角色预设默认启用 `bCharacterSelfShadow`，让刘海、手臂和衣物进入插件主光阴影深度。关闭选项或恢复原材质会恢复组件原有阴影标签；用户显式排除仍优先。角色 PCF 按接收平面逐采样修正深度，减少倾斜皮肤上的自遮挡条纹。
-- 预设细描边按材质角色选择颜色和宽度，保留 PMX 边线开关、透明度、`EdgeSize` 与顶点 `EdgeScale`。`UMMDOutlineLibrary::ApplyMMDOutlinePreset` 应用、`RefreshMMDOutlinePreset` 更新、`RestoreMMDOutline` 恢复原始全局及分槽 overlay 与 bounds；应用角色预设时会自动设置描边。细描边仅在透视视图生效，正交视图关闭以避开自阴影采集；恢复后仍可通过 `ApplyMMDOutline` 使用原 PMX 世界空间描边。
-- 樱庭近中景包含双檐茶亭、水岸花丛和 13 盏实际场景灯，远景使用生成的素材 `Resources/Garden/sakura_night_backdrop_v3.png`；完整提示词与来源保存在同名 `generation.json`。舞台远景材质的 `BackdropTextureStrength=0` 恢复过程化远景。
-- 头骨位置与朝向可辅助过程化脸部法线，缺少头骨时使用通用皮肤着色。材质仍采用插件内自算光照，未新增引擎 ShadingModel；法线细节不会改变衣物轮廓或产生真实布料形变。
-
-完整用法见[舞台与角色渲染预设说明](MMD/Plugins/Ue5MMDTools/Docs/STAGE_RENDER_PRESETS.md)。后台生成及验证可运行 `MMD/Scripts/BuildStagePresetsBackground.ps1`；实际打包主视图和细节开关对照由 `MMD/Scripts/ValidateRuntimePackageBackground.ps1 -Stage All -IncludeStagePresets -CaptureVisuals -VisualStage SakuraTheater` 生成，均需指定 `-EngineRoot`。验证结果与画廊保存在 `MMD/Saved/BackgroundValidation`，无需开启编辑器前台。
-
-每批改动记录在[修改记录](MMD/Plugins/Ue5MMDTools/Docs/CHANGELOG.md)，一期画面与法线/描边对照见[实际引擎截图](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-09-phase-one/README.md)。
-
-## 当前限制
-
-- Material Morph 尚未完整驱动 UE 材质参数。
-- Bone Morph / UV Morph 还没有作为完整动画通道实现。
-- 不同模型的骨骼命名、IK 结构和特殊 Morph 组合可能需要继续适配。
+更多资料：[文档入口](MMD/Plugins/Ue5MMDTools/Docs/README.md) · [渲染架构](MMD/Plugins/Ue5MMDTools/Docs/RENDERING_ARCHITECTURE.md) · [源码构建与分发验证](MMD/Plugins/Ue5MMDTools/Docs/ENDFIELD_PLUGIN_DISTRIBUTION.md) · [修改记录](MMD/Plugins/Ue5MMDTools/Docs/CHANGELOG.md)

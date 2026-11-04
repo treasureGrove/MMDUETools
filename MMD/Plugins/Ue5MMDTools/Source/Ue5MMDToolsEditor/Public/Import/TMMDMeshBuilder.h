@@ -37,6 +37,8 @@ struct FMMDAnimationImportSettings
 	bool bImportMorphCurves = true;
 	bool bBakeMMDIKToFK = true;
 	bool bSkipUnmatchedTracks = true;
+	// 面板内置动作只驻留内存，不注册或保存资产。
+	bool bTransientPreview = false;
 };
 
 struct FMMDAnimationImportContext

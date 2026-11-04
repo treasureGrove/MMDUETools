@@ -5483,12 +5483,17 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 
 	FString UniquePackageName;
 	FString UniqueAssetName;
+	if (!Settings.bTransientPreview)
 	{
 		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
 		AssetToolsModule.Get().CreateUniqueAssetName(LocalReport.PackagePath / LocalReport.AssetName, TEXT(""), UniquePackageName, UniqueAssetName);
 	}
+	else
+	{
+		UniqueAssetName = MakeUniqueObjectName(GetTransientPackage(), UAnimSequence::StaticClass(), *LocalReport.AssetName).ToString();
+	}
 
-	UPackage* Package = CreatePackage(*UniquePackageName);
+	UPackage* Package = Settings.bTransientPreview ? GetTransientPackage() : CreatePackage(*UniquePackageName);
 	if (Package == nullptr)
 	{
 		AppendUniqueMessage(LocalReport.Errors, FString::Printf(TEXT("Failed to create animation package: %s"), *UniquePackageName));
@@ -5510,7 +5515,8 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 		return nullptr;
 	}
 
-	UAnimSequence* AnimSequence = NewObject<UAnimSequence>(Package, *UniqueAssetName, RF_Public | RF_Standalone);
+	UAnimSequence* AnimSequence = NewObject<UAnimSequence>(Package, *UniqueAssetName,
+		Settings.bTransientPreview ? RF_Transient : RF_Public | RF_Standalone);
 	if (AnimSequence == nullptr)
 	{
 		AppendUniqueMessage(LocalReport.Errors, FString::Printf(TEXT("Failed to create UAnimSequence: %s"), *UniqueAssetName));
@@ -5800,7 +5806,7 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 		{
 			Controller.AddCurve(CurveId, AACF_DefaultCurve | AACF_DriveMorphTarget_DEPRECATED, false);
 		}
-		Context.Skeleton->AccumulateCurveMetaData(MorphName, false, true);
+		if (!Settings.bTransientPreview) Context.Skeleton->AccumulateCurveMetaData(MorphName, false, true);
 
 		Diagnostic.bSetKeysSucceeded = Controller.SetCurveKeys(CurveId, UniqueCurveKeys, false);
 		if (Diagnostic.bSetKeysSucceeded)
@@ -5834,6 +5840,13 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 		FailedMorphCurveCount);
 
 	AnimSequence->PostEditChange();
+	if (Settings.bTransientPreview)
+	{
+		LocalReport.PackagePath = GetTransientPackage()->GetName();
+		LocalReport.AssetName = UniqueAssetName;
+		if (OutReport) *OutReport = LocalReport;
+		return AnimSequence;
+	}
 	AnimSequence->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(AnimSequence);
 

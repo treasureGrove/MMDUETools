@@ -1,0 +1,42 @@
+{
+  "engine": "UE 5.8.3 CL58210709, D3D12 SM6, native mode 2, Substrate enabled",
+  "source_type": "Actual Unreal Slate and viewport screenshots, not generated art",
+  "fixture": "Read-only existing local MMD cache D1A85F1C4A4468A7A9ACECA4A57F0550, 35 material slots, 178 rigid bodies",
+  "build_log": "Saved/UIValidation/interaction-build-final2-stdout.txt",
+  "report": "Saved/UIValidation/interaction-native-final-report/index.json",
+  "report_sha256": "0c355612f84cea68dd79b75ce3c6f198f502a3efe05f200a0dc004adb2a752bb",
+  "tests": [
+    {
+      "test": "Ue5MMDTools.UI.MotionPreview",
+      "state": "Success",
+      "duration_seconds": 6.316157817840576,
+      "warnings": 221,
+      "errors": 0
+    },
+    {
+      "test": "Ue5MMDTools.UI.PresetWorkflow",
+      "state": "Success",
+      "duration_seconds": 0.7555010914802551,
+      "warnings": 74,
+      "errors": 0
+    }
+  ],
+  "ui_input": "Slate pointer move/down/up events routed without platform window or system cursor movement; play/pause and pose-hold changes asserted",
+  "screenshots": {
+    "role_controls.png": {
+      "source": "Saved/UIValidation/interaction_0.png",
+      "captured_at": "2026-10-23T17:12:38.328291+08:00",
+      "sha256": "6dcc7bb2c2ae7795409eaf40b8b9d83c24a13a8f154c215def301650b299d058"
+    },
+    "style_hold_pose.png": {
+      "source": "Saved/UIValidation/interaction_1.png",
+      "captured_at": "2026-10-23T17:12:39.605788+08:00",
+      "sha256": "1a859c198aa991bdc2916df02a946f8242e3dcd9706f4198d709fc08cdf2b05f"
+    },
+    "narrow_paused.png": {
+      "source": "Saved/UIValidation/interaction_3.png",
+      "captured_at": "2026-10-23T17:12:41.555111+08:00",
+      "sha256": "e9eefb15863a9058c0bac1864feaa4a676dd72a105f0638d22e93c7526c73dc8"
+    }
+  }
+}

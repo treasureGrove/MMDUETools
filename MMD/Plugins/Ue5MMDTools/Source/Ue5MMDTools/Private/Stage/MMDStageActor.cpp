@@ -113,6 +113,10 @@ AMMDStageActor::AMMDStageActor()
 	KeyLight->ContactShadowLengthInWS = false;
 	FillLight->SetCastShadows(false);
 	RimLight->SetCastShadows(false);
+	// 透明与前向通道明确使用舞台主光，避免按亮度在三盏方向光间跳选。
+	KeyLight->SetForwardShadingPriority(1);
+	FillLight->SetForwardShadingPriority(0);
+	RimLight->SetForwardShadingPriority(0);
 	GardenSkyLight = CreateDefaultSubobject<USkyLightComponent>(TEXT("GardenSkyLight"));
 	GardenSkyLight->SetupAttachment(StageRoot);
 	GardenSkyLight->SetMobility(EComponentMobility::Movable);

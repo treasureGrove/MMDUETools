@@ -1,0 +1,112 @@
+{
+  "schema": "mmd.production.evidence.v1",
+  "date": "2026-10-23",
+  "timezone": "Asia/Singapore",
+  "engine": "UE 5.8.3 CL58210709",
+  "rhi": "D3D12 SM6",
+  "backend_protocol": 15,
+  "shadow_method": "CSM",
+  "captures": [
+    {
+      "file": "studio_scene.png",
+      "source": "Saved/MMDProduction/2026-10-23-red-horse-showcase/frames/frame_000000.png",
+      "capture_time": "2026-10-23T19:45:25.597996+08:00",
+      "frame": 0,
+      "sha256": "7bf0d6e374dbcfddb053f7a98fde73d5651557b6392b5546f1cab816b2fe50bd"
+    },
+    {
+      "file": "mmd_pose.png",
+      "source": "Saved/MMDProduction/2026-10-23-red-horse-showcase/frames/frame_001050.png",
+      "capture_time": "2026-10-23T19:47:06.259201+08:00",
+      "frame": 1050,
+      "sha256": "5a1fb97482625a012312d726a178f5e8114311692db96c9a94178c7505d2200c"
+    },
+    {
+      "file": "tool_panel.png",
+      "source": "Saved/UIValidation/panel_1.png",
+      "capture_time": "2026-10-23T19:48:57.126893+08:00",
+      "frame": null,
+      "sha256": "b81a2fe5fdcde18385cd9f2364eaedb2da24e4ea1a84204cc5e7787cb2be3660"
+    }
+  ],
+  "movie": {
+    "path": "Saved/MMDProduction/2026-10-23-red-horse-showcase/mmd_movie.mp4",
+    "sha256": "E8DF2C20E4DC47A9FE6D08C2BC407D4D49E3F0C81A072735346ED4FE7674D803",
+    "size_bytes": 56547860,
+    "completed_at": "2026-10-23T19:50:20.1587902+08:00",
+    "elapsed_seconds": 371.1369861,
+    "duration_seconds": 95.5,
+    "frames": 2865,
+    "fps": 30,
+    "width": 1280,
+    "height": 720,
+    "camera_mode": "showcase_follow_pose",
+    "bone_tracks": 498,
+    "rigid_bodies": 314,
+    "joints": 379,
+    "physics_steps": 5788,
+    "physics_step_seconds": 0.016666666666666666,
+    "matched_morph_tracks": 29,
+    "saved_editable_assets": true,
+    "source_asset_dirty_flags_unchanged": true
+  },
+  "tests": [
+    {
+      "name": "Ue5MMDTools.UI.MotionPreview",
+      "state": "Success",
+      "errors": 0,
+      "warnings": 213,
+      "seconds": 11.020977020263672,
+      "source": "Saved/MMDProduction/2026-10-23-ui-studio/report/index.json",
+      "report_created_utc": "2026.10.23-10.52.06"
+    },
+    {
+      "name": "Ue5MMDTools.Creation.CameraTiming",
+      "state": "Success",
+      "errors": 0,
+      "warnings": 0,
+      "seconds": 0.008163399994373322,
+      "source": "Saved/MMDProduction/2026-10-23-creation-final/report/index.json",
+      "report_created_utc": "2026.10.23-11.45.56"
+    },
+    {
+      "name": "Ue5MMDTools.Creation.PhysicsBakeSavedData",
+      "state": "Success",
+      "errors": 0,
+      "warnings": 0,
+      "seconds": 0.008483100682497025,
+      "source": "Saved/MMDProduction/2026-10-23-creation-final/report/index.json",
+      "report_created_utc": "2026.10.23-11.45.56"
+    },
+    {
+      "name": "Ue5MMDTools.Creation.ProductionReload",
+      "state": "Success",
+      "errors": 0,
+      "warnings": 1,
+      "seconds": 2.7129828929901123,
+      "source": "Saved/MMDProduction/2026-10-23-creation-final/report/index.json",
+      "report_created_utc": "2026.10.23-11.45.56"
+    },
+    {
+      "name": "Ue5MMDTools.UI.PresetWorkflow",
+      "state": "Success",
+      "errors": 0,
+      "warnings": 77,
+      "seconds": 42.63447570800781,
+      "source": "Saved/MMDProduction/2026-10-23-ui-final-fixed/report/index.json",
+      "report_created_utc": "2026.10.23-11.49.25"
+    },
+    {
+      "name": "Ue5MMDTools.Creation.ProductionReload",
+      "state": "Success",
+      "errors": 0,
+      "warnings": 0,
+      "seconds": 2.54931902885437,
+      "source": "Saved/MMDProduction/2026-10-23-showcase-reload/report/index.json",
+      "report_created_utc": "2026.10.23-11.54.13"
+    }
+  ],
+  "native_material_compile_report": "Saved/MMDProduction/2026-10-23-nikki-skin/report.json",
+  "saved_studio_rebuild_log": "Saved/MMDProduction/2026-10-23-studio-map-fixed/engine.log",
+  "scope": "Actual engine frames. No generated images. Saved Sequence contains baked physics/facial curves/camera with original model materials; movie stage/material overrides/audio are not saved in that Sequence."
+}
