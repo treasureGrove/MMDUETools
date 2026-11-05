@@ -39,14 +39,17 @@ struct TMMDInfinityNikkiNative
     {
         TMMDInfinityNikkiResponse response;
         float3 normal = context.N;
+        float face_mask = 0.0;
         if (role == 1u && context.BSDF.mmd_payload.valid && !context.BSDF.mmd_payload.has_face_sdf)
         {
             TMMDEndfieldNativePayload payload;
             normal = payload.ToWorldDirection(context.BSDF.mmd_payload);
+            face_mask = context.BSDF.mmd_payload.mask;
         }
         float3 H = SafeNormalize(context.V + context.L, normal);
         float n_dot_v = saturate(dot(normal, context.V));
-        float n_dot_l = saturate(dot(normal, context.L));
+        float signed_n_dot_l = dot(normal, context.L);
+        float n_dot_l = saturate(signed_n_dot_l);
         float n_dot_h = saturate(dot(normal, H));
         float v_dot_h = saturate(dot(context.V, H));
         float roughness = clamp(TOON_ROUGHNESS(context.BSDF), 0.08, 0.95);
@@ -56,8 +59,10 @@ struct TMMDInfinityNikkiNative
         float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - v_dot_h, 5.0);
         float3 energy = (1.0 - fresnel) * (1.0 - metallic);
         float shadow = saturate(shadow_terms.SurfaceShadow);
+        // 轻抬头部几何遮罩内的漫反射暗面，保留正对灯光的亮面与实际投影。
+        float skin_n_dot_l = lerp(signed_n_dot_l, 1.0, 0.12 * face_mask);
         float3 diffuse = role == 1u
-            ? response.SkinDiffuse(albedo, dot(normal, context.L), n_dot_v, v_dot_h, roughness)
+            ? response.SkinDiffuse(albedo, skin_n_dot_l, n_dot_v, v_dot_h, roughness)
             : albedo * response.BurleyDiffuse(n_dot_l, n_dot_v, v_dot_h, roughness);
         float sheen_weight = role == 3u ? 0.16 : 0.0;
         result.DiffuseColor = albedo * energy * (1.0 - sheen_weight);

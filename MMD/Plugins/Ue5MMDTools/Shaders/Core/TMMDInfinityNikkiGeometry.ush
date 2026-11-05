@@ -16,13 +16,20 @@ struct TMMDInfinityNikkiGeometry
             ramp_boundary, shadow_suppress, direction_tex, direction_sampler, direction_enabled,
             direction_version, payload_enabled, specular_sphere_blend, pattern_uv, face_mask,
             shadow_coverage, face_direction, head_quaternion);
-        if (sphere_blend <= 0.0 || head_position_radius.w <= 0.0
+        if ((sphere_blend <= 0.0 && face_direction.w <= 0.0) || head_position_radius.w <= 0.0
             || dot(head_forward, head_forward) < 1e-6) return source_normal;
+
+        float head_mask = 1.0 - smoothstep(1.5, 2.0, length(world_pos - head_position_radius.xyz) / head_position_radius.w);
+        // 关闭球面法线后，正值几何载荷的补光仍限制在头部。
+        if (sphere_blend <= 0.0)
+        {
+            face_direction.w = min(face_direction.w, head_mask);
+            return source_normal;
+        }
 
         float3 forward = geometry.SafeNormalize(head_forward, float3(0.0, 1.0, 0.0));
         float3 right = geometry.SafeNormalize(head_right - forward * dot(head_right, forward), float3(1.0, 0.0, 0.0));
         float3 up = geometry.SafeNormalize(cross(right, forward), float3(0.0, 0.0, 1.0));
-        float head_mask = 1.0 - smoothstep(1.5, 2.0, length(world_pos - head_position_radius.xyz) / head_position_radius.w);
         float3 diffuse_normal = geometry.SphereNormal(world_pos, mesh_normal, head_position_radius, sphere_blend);
         // 主脸与反向法线附层使用同一代理；高光/GI仍保留连续头部曲面。
         float3 surface_normal = geometry.SphereNormal(world_pos, mesh_normal, head_position_radius,
