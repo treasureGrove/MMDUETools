@@ -530,6 +530,27 @@ bool FMMDPreviewMovieTest::RunTest(const FString& Parameters)
 	State->Window = SNew(SWindow).Title(FText::FromString(TEXT("MMD 后台制作快照回归"))).ClientSize(FVector2D(1280, 900))
 		.AutoCenter(EAutoCenter::None).ScreenPosition(FVector2D(0, 0))[State->Panel.ToSharedRef()];
 	FSlateApplication::Get().AddWindow(State->Window.ToSharedRef());
+	const auto CheckResultActions = [this, State](bool bMovieVisible, bool bDirectoryVisible, const FString& Context)
+	{
+		State->RefreshLayout();
+		const auto IsVisible = [State](const SWidget* Widget)
+		{
+			TArray<TSharedRef<SWidget>> Path;
+			if (!FindAuditAncestors(State->Panel.ToSharedRef(), Widget, Path)) return false;
+			for (const auto& Entry : Path)
+				if (!Entry->GetVisibility().IsVisible()) return false;
+			return true;
+		};
+		const auto MovieButton = FindAuditTag(State->Panel.ToSharedRef(), TEXT("MMDOpenPreviewMovie"));
+		const auto DirectoryButton = FindAuditTag(State->Panel.ToSharedRef(), TEXT("MMDOpenPreviewMovieDirectory"));
+		if (TestTrue(Context + TEXT("：成片与目录按钮存在"), MovieButton && DirectoryButton))
+		{
+			TestEqual(Context + TEXT("：成片按钮实际可见"), IsVisible(MovieButton.Get()), bMovieVisible);
+			TestEqual(Context + TEXT("：目录按钮实际可见"), IsVisible(DirectoryButton.Get()), bDirectoryVisible);
+			if (bMovieVisible) TestTrue(Context + TEXT("：成片按钮可用"), MovieButton->IsEnabled());
+			if (bDirectoryVisible) TestTrue(Context + TEXT("：目录按钮可用"), DirectoryButton->IsEnabled());
+		}
+	};
 	FText MotionMessage;
 	TestTrue(TEXT("选择轻柔呼吸"), State->View->PlayBuiltinMotion(TEXT("Breath"), MotionMessage));
 	State->View->SetPreviewPlaying(false);
@@ -539,8 +560,11 @@ bool FMMDPreviewMovieTest::RunTest(const FString& Parameters)
 	const FString NikkiPath(TEXT("/Ue5MMDTools/Stages/Presets/DA_Render_InfinityNikki"));
 	State->Panel->ApplyRenderPreset(NikkiPath);
 	ADD_LATENT_AUTOMATION_COMMAND(FClickAuditWarmup(State));
-	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, State, ModelAsset]()
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, State, ModelAsset, CheckResultActions]()
 	{
+		CheckResultActions(false, false, TEXT("首次制作前"));
+		TestTrue(TEXT("首次制作前没有外部打开目标"), State->Panel->GetPreviewMovieResultPath(true).IsEmpty()
+			&& State->Panel->GetPreviewMovieResultPath(false).IsEmpty());
 		const auto Button = FindAuditTag(State->Panel.ToSharedRef(), TEXT("MMDProducePreviewMovie"));
 		TestTrue(TEXT("真实 Slate 制作按钮存在且已启用"), Button && IsAuditButton(*Button) && Button->IsEnabled());
 		FMMDPreviewMovieRequest Snapshot;
@@ -596,6 +620,58 @@ bool FMMDPreviewMovieTest::RunTest(const FString& Parameters)
 	ADD_LATENT_AUTOMATION_COMMAND(FClickAuditAction(State, TEXT("制作按钮 / 定格校验"), TEXT("production_validation"),
 		[State]() { return FindAuditTag(State->Panel.ToSharedRef(), TEXT("MMDProducePreviewMovie")); }, nullptr,
 		[State]() { return !State->Panel->PreviewMovieJob && State->Panel->CurrentStatusType == EMMDMessageType::Warning && State->Panel->CurrentStatusMessage.Contains(TEXT("解除定格")); }));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, State, CheckResultActions]()
+	{
+		// 仅写独立测试结果目录，不改真实成片；只在目标不存在时调用打开方法。
+		const FString Directory = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Automation/PreviewMovieResult")
+			/ FGuid::NewGuid().ToString(EGuidFormats::Digits));
+		if (!TestTrue(TEXT("创建独立结果状态 fixture"), IFileManager::Get().MakeDirectory(*Directory, true))) return;
+		State->Panel->ShowPreviewMovieResult(Directory, 7);
+		CheckResultActions(false, true, TEXT("失败且缺少报告"));
+		TestTrue(TEXT("缺少失败报告仍有明确兜底提示"), State->Panel->CurrentStatusType == EMMDMessageType::Error
+			&& State->Panel->CurrentStatusMessage.Contains(TEXT("后台进程未提供错误详情")));
+		const FString FailedReport = Directory / TEXT("production_failed.json");
+		if (!TestTrue(TEXT("写入编码失败 fixture"), FFileHelper::SaveStringToFile(
+			TEXT("{\"success\":false,\"phase\":\"encode\",\"error\":\"测试编码器失败\"}"),
+			*FailedReport, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))) return;
+		State->Panel->ShowPreviewMovieResult(Directory, 1);
+		CheckResultActions(false, true, TEXT("编码失败后"));
+		TestTrue(TEXT("编码错误保留明确原因"), State->Panel->CurrentStatusType == EMMDMessageType::Error
+			&& State->Panel->CurrentStatusMessage.Contains(TEXT("测试编码器失败")));
+		TestTrue(TEXT("失败结果只提供实际目录"), State->Panel->GetPreviewMovieResultPath(true).IsEmpty()
+			&& FPaths::IsSamePath(State->Panel->GetPreviewMovieResultPath(false), Directory));
+		if (!TestTrue(TEXT("写入空错误编码阶段 fixture"), FFileHelper::SaveStringToFile(
+			TEXT("{\"success\":false,\"phase\":\"encode\",\"error\":\"\"}"),
+			*FailedReport, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))) return;
+		State->Panel->ShowPreviewMovieResult(Directory, 1);
+		TestTrue(TEXT("空错误仍提供编码阶段提示"), State->Panel->CurrentStatusType == EMMDMessageType::Error
+			&& State->Panel->CurrentStatusMessage.Contains(TEXT("编码")));
+		if (!TestTrue(TEXT("写入缺少成片的成功报告 fixture"), FFileHelper::SaveStringToFile(TEXT("{\"success\":true}"),
+			*(Directory / TEXT("production.json")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))) return;
+		State->Panel->ShowPreviewMovieResult(Directory, 0);
+		CheckResultActions(false, true, TEXT("成功报告但缺少成片"));
+		TestTrue(TEXT("缺少成片不能判定成功"), State->Panel->CurrentStatusType == EMMDMessageType::Error
+			&& State->Panel->GetPreviewMovieResultPath(true).IsEmpty());
+		if (State->Panel->GetPreviewMovieResultPath(true).IsEmpty()) State->Panel->OpenPreviewMovieResult(true);
+		TestTrue(TEXT("无成片时打开请求只给出警告"), State->Panel->CurrentStatusType == EMMDMessageType::Warning);
+		if (!TestTrue(TEXT("写入空成片 fixture"), FFileHelper::SaveStringToFile(TEXT(""),
+			*(Directory / TEXT("mmd_movie.mp4")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))) return;
+		State->Panel->ShowPreviewMovieResult(Directory, 0);
+		CheckResultActions(false, true, TEXT("空成片"));
+		TestTrue(TEXT("零字节成片不能判定成功"), State->Panel->CurrentStatusType == EMMDMessageType::Error
+			&& State->Panel->GetPreviewMovieResultPath(true).IsEmpty());
+		const FString MissingDirectory = Directory / TEXT("missing");
+		State->Panel->ShowPreviewMovieResult(MissingDirectory, 2);
+		CheckResultActions(false, false, TEXT("取消且输出目录不存在"));
+		TestTrue(TEXT("不存在的目录不能成为打开目标"), State->Panel->GetPreviewMovieResultPath(false).IsEmpty());
+		if (State->Panel->GetPreviewMovieResultPath(false).IsEmpty()) State->Panel->OpenPreviewMovieResult(false);
+		TestTrue(TEXT("无目录时打开请求只给出警告"), State->Panel->CurrentStatusType == EMMDMessageType::Warning);
+		State->Panel->ShowPreviewMovieResult(Directory, 2);
+		CheckResultActions(false, true, TEXT("取消后保留目录"));
+		TestTrue(TEXT("取消保持警告且不提供成片"), State->Panel->CurrentStatusType == EMMDMessageType::Warning
+			&& State->Panel->CurrentStatusMessage.Contains(TEXT("取消")) && State->Panel->GetPreviewMovieResultPath(true).IsEmpty());
+		AddInfo(TEXT("Preview movie result fixtures: ") + Directory);
+	}, 0.0f));
 	if (FParse::Param(FCommandLine::Get(), TEXT("MMDPreviewMovieRun")))
 	{
 		ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, State]()
@@ -609,8 +685,8 @@ bool FMMDPreviewMovieTest::RunTest(const FString& Parameters)
 		}, 0.0f));
 		ADD_LATENT_AUTOMATION_COMMAND(FClickAuditAction(State, TEXT("按当前预览制作 / 真实后台输出"), TEXT("production_run"),
 			[State]() { return FindAuditTag(State->Panel.ToSharedRef(), TEXT("MMDProducePreviewMovie")); }, nullptr,
-			[State]() { return State->Panel->PreviewMovieJob.IsValid(); }));
-		ADD_LATENT_AUTOMATION_COMMAND(FPreviewMovieCompletion(this, [this, State]()
+			[State, CheckResultActions]() { CheckResultActions(false, false, TEXT("后台制作中")); return State->Panel->PreviewMovieJob.IsValid(); }));
+		ADD_LATENT_AUTOMATION_COMMAND(FPreviewMovieCompletion(this, [this, State, CheckResultActions]()
 		{
 			if (State->Panel->PreviewMovieJob.IsValid()) return false;
 			if (HasAnyErrors()) return true;
@@ -623,6 +699,32 @@ bool FMMDPreviewMovieTest::RunTest(const FString& Parameters)
 				TestTrue(TEXT("成功状态指向本次制作目录下实际非空 MP4"),
 					FPaths::IsUnderDirectory(Movie, FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("MMDProduction")))
 					&& FPaths::GetCleanFilename(Movie) == TEXT("mmd_movie.mp4") && IFileManager::Get().FileSize(*Movie) > 0);
+				const FString Directory = FPaths::GetPath(Movie);
+				CheckResultActions(true, true, TEXT("真实制作完成"));
+				TestTrue(TEXT("成片与目录按钮目标准确"), FPaths::IsSamePath(State->Panel->GetPreviewMovieResultPath(true), Movie)
+					&& FPaths::IsSamePath(State->Panel->GetPreviewMovieResultPath(false), Directory));
+				State->Panel->ShowImportProgress(TEXT("镜头已更新。"), EMMDMessageType::Info);
+				CheckResultActions(true, true, TEXT("普通状态更新后"));
+				TestTrue(TEXT("普通提示不会覆盖已完成的打开目标"), FPaths::IsSamePath(State->Panel->GetPreviewMovieResultPath(true), Movie)
+					&& FPaths::IsSamePath(State->Panel->GetPreviewMovieResultPath(false), Directory));
+				State->Panel->ShowPreviewMovieResult(Directory, 0);
+				if (FParse::Param(FCommandLine::Get(), TEXT("MMDPreviewMovieCapture")))
+				{
+					State->RefreshLayout();
+					TArray<FColor> Pixels;
+					FIntVector ImageSize;
+					if (TestTrue(TEXT("捕获真实成片操作按钮"), FSlateApplication::Get().TakeScreenshot(State->Panel.ToSharedRef(), Pixels, ImageSize)))
+					{
+						TArray64<uint8> PNG;
+						FImageUtils::PNGCompressImageArray(ImageSize.X, ImageSize.Y, Pixels, PNG);
+						const FString CaptureDirectory = FPaths::ProjectSavedDir() / TEXT("UIExperience")
+							/ (FDateTime::Now().ToString(TEXT("%Y-%m-%d")) + TEXT("-preview-movie"));
+						IFileManager::Get().MakeDirectory(*CaptureDirectory, true);
+						const FString ImagePath = CaptureDirectory / TEXT("preview_movie_result.png");
+						TestTrue(TEXT("保存真实成片操作区实拍"), FFileHelper::SaveArrayToFile(PNG, *ImagePath));
+						AddInfo(TEXT("Preview movie result screenshot: ") + FPaths::ConvertRelativePathToFull(ImagePath));
+					}
+				}
 				AddInfo(TEXT("Preview movie E2E output: ") + Movie);
 			}
 			return true;

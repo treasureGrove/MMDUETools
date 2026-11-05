@@ -44,7 +44,7 @@
 ### 3. 输出 MP4
 
 1. 保存角色资产和自定义动画。确认当前动作、展示场景、风格及透视机位，再点击面板右上角 **按当前预览制作**。
-2. 在面板查看进度。制作完成后，按底部状态提示到工程的 `Saved/MMDProduction/` 找到 `mmd_movie.mp4`。需要中止时可点 **取消**。
+2. 在面板查看进度。制作完成后，点底部 **播放成片**，或点 **打开目录** 查看工程 `Saved/MMDProduction/` 下的 `mmd_movie.mp4`、帧和日志。需要中止时可点 **取消**。
 
 后台从动作第 0 秒开始，输出 30 fps MP4，沿用预览画幅、倍速和物理设置。需要 Windows D3D12 SM6，以及系统可调用的 `ffmpeg` 和 `ffprobe`。[制作按钮位置与 2026-11-04 实拍](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-04-preview-production/README.md)
 

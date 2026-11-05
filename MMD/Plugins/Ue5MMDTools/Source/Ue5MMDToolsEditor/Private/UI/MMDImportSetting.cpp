@@ -1449,6 +1449,8 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				]
 			]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)
+			[BuildPreviewMovieResultControls()]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)
 			[SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))
 				.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(GMMDTextDim)
 				.Text(FText::FromString(TEXT("复制"))).ToolTipText(FText::FromString(TEXT("复制完整操作结果，便于查找资产或反馈问题。")))

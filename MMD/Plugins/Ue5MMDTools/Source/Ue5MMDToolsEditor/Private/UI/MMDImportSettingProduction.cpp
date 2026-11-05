@@ -194,6 +194,94 @@ TSharedRef<SWidget> MMDImportSetting::BuildPreviewMovieControls()
 			.Text(FText::FromString(TEXT("取消"))).OnClicked(this, &MMDImportSetting::CancelPreviewMovie)];
 }
 
+TSharedRef<SWidget> MMDImportSetting::BuildPreviewMovieResultControls()
+{
+	const auto Motion = TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled);
+	return SNew(SHorizontalBox)
+		.Visibility_Lambda([this]() { return !PreviewMovieJob && !LastPreviewMovieDirectory.IsEmpty() ? EVisibility::Visible : EVisibility::Collapsed; })
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
+		[SNew(SMMDAnimatedButton, Motion).Tag(TEXT("MMDOpenPreviewMovie"))
+			.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(MMDPanelStyle::Accent)
+			.Visibility_Lambda([this]() { return !PreviewMovieJob && bLastPreviewMovieSucceeded ? EVisibility::Visible : EVisibility::Collapsed; })
+			.Text(FText::FromString(TEXT("播放成片")))
+			.ToolTipText(FText::FromString(TEXT("用系统默认播放器打开最近生成的 MP4。")))
+			.OnClicked(this, &MMDImportSetting::OpenPreviewMovieResult, true)]
+		+ SHorizontalBox::Slot().AutoWidth()
+		[SNew(SMMDAnimatedButton, Motion).Tag(TEXT("MMDOpenPreviewMovieDirectory"))
+			.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(MMDPanelStyle::Muted)
+			.Visibility_Lambda([this]() { return !PreviewMovieJob && !LastPreviewMovieDirectory.IsEmpty() ? EVisibility::Visible : EVisibility::Collapsed; })
+			.Text(FText::FromString(TEXT("打开目录")))
+			.ToolTipText(FText::FromString(TEXT("打开最近一次制作的输出目录，查看成片、已有帧或日志。")))
+			.OnClicked(this, &MMDImportSetting::OpenPreviewMovieResult, false)];
+}
+
+FString MMDImportSetting::GetPreviewMovieResultPath(bool bOpenMovie) const
+{
+	if (PreviewMovieJob || LastPreviewMovieDirectory.IsEmpty()) return {};
+	if (!bOpenMovie)
+		return IFileManager::Get().DirectoryExists(*LastPreviewMovieDirectory) ? LastPreviewMovieDirectory : FString();
+	const FString Movie = LastPreviewMovieDirectory / TEXT("mmd_movie.mp4");
+	return bLastPreviewMovieSucceeded && IFileManager::Get().FileSize(*Movie) > 0 ? Movie : FString();
+}
+
+FReply MMDImportSetting::OpenPreviewMovieResult(bool bOpenMovie)
+{
+	const FString Path = GetPreviewMovieResultPath(bOpenMovie);
+	if (Path.IsEmpty())
+	{
+		bLastPreviewMovieSucceeded = false;
+		if (!bOpenMovie) LastPreviewMovieDirectory.Reset();
+		ShowImportProgress(bOpenMovie ? TEXT("成片文件已移动、删除或为空。") : TEXT("输出目录已移动或删除。"), EMMDMessageType::Warning);
+	}
+	else if (!bOpenMovie)
+	{
+		FPlatformProcess::ExploreFolder(*Path);
+	}
+	else if (!FPlatformProcess::LaunchFileInDefaultExternalApplication(*Path, nullptr, ELaunchVerb::Open, false))
+	{
+		ShowImportProgress(TEXT("无法启动默认播放器，可从输出目录打开成片。"), EMMDMessageType::Warning);
+	}
+	return FReply::Handled();
+}
+
+void MMDImportSetting::ShowPreviewMovieResult(const FString& Output, int32 ExitCode)
+{
+	LastPreviewMovieDirectory = IFileManager::Get().DirectoryExists(*Output) ? Output : FString();
+	const auto Success = ReadMovieJson(Output / TEXT("production.json"));
+	const FString Movie = Output / TEXT("mmd_movie.mp4");
+	bool bSuccess = false;
+	bLastPreviewMovieSucceeded = ExitCode == 0 && Success && Success->TryGetBoolField(TEXT("success"), bSuccess)
+		&& bSuccess && IFileManager::Get().FileSize(*Movie) > 0;
+	if (bLastPreviewMovieSucceeded)
+	{
+		ShowImportProgress(TEXT("后台制作完成：") + Movie, EMMDMessageType::Success);
+		return;
+	}
+	if (ExitCode == 2)
+	{
+		ShowImportProgress(TEXT("已取消后台制作，保留已有结果：") + Output, EMMDMessageType::Warning);
+		return;
+	}
+
+	const auto Failed = ReadMovieJson(Output / TEXT("production_failed.json"));
+	FString Failure, Phase;
+	if (Failed)
+	{
+		Failed->TryGetStringField(TEXT("error"), Failure);
+		Failed->TryGetStringField(TEXT("phase"), Phase);
+	}
+	if (Failure.IsEmpty())
+		Failure = ExitCode == 0 ? TEXT("没有可用的成片或完成报告。") : TEXT("后台进程未提供错误详情。");
+	static const TMap<FString, FString> PhaseNames = {
+		{TEXT("prepare"), TEXT("准备")}, {TEXT("build"), TEXT("构建")}, {TEXT("render"), TEXT("渲染")},
+		{TEXT("encode"), TEXT("编码")}, {TEXT("verify"), TEXT("校验")}
+	};
+	const FString* PhaseName = PhaseNames.Find(Phase);
+	const FString PhaseLabel = PhaseName ? *PhaseName + TEXT("，") : FString();
+	ShowImportProgress(FString::Printf(TEXT("后台制作失败（%s退出码 %d）：%s · %s"), *PhaseLabel, ExitCode, *Failure, *Output),
+		EMMDMessageType::Error);
+}
+
 FReply MMDImportSetting::StartPreviewMovie()
 {
 	if (PreviewMovieJob) return FReply::Handled();
@@ -264,20 +352,7 @@ FReply MMDImportSetting::StartPreviewMovie()
 		if (Panel && Panel->PreviewMovieJob == Job)
 		{
 			Panel->PreviewMovieJob.Reset();
-			const auto Success = ReadMovieJson(Job->Output / TEXT("production.json"));
-			bool bSuccess = false;
-			const FString Movie = Job->Output / TEXT("mmd_movie.mp4");
-			if (ExitCode == 0 && Success && Success->TryGetBoolField(TEXT("success"), bSuccess) && bSuccess
-				&& IFileManager::Get().FileSize(*Movie) > 0)
-				Panel->ShowImportProgress(TEXT("后台制作完成：") + Movie, EMMDMessageType::Success);
-			else
-			{
-				const auto Failed = ReadMovieJson(Job->Output / TEXT("production_failed.json"));
-				FString Failure;
-				if (Failed) Failed->TryGetStringField(TEXT("error"), Failure);
-				if (ExitCode == 2) Panel->ShowImportProgress(TEXT("已取消后台制作，保留已有结果：") + Job->Output, EMMDMessageType::Warning);
-				else Panel->ShowImportProgress(FString::Printf(TEXT("后台制作失败（%d）：%s · %s"), ExitCode, *Failure, *Job->Output), EMMDMessageType::Error);
-			}
+			Panel->ShowPreviewMovieResult(Job->Output, ExitCode);
 		}
 		return false;
 	}), 0.5f);

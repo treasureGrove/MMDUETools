@@ -91,9 +91,13 @@ private:
     TSharedRef<SWidget> BuildMotionPresetPanel();
     TSharedRef<SWidget> BuildPreviewControls();
     TSharedRef<SWidget> BuildPreviewMovieControls();
+    TSharedRef<SWidget> BuildPreviewMovieResultControls();
     bool BuildPreviewMovieRequest(FMMDPreviewMovieRequest& OutRequest, FString& OutError) const;
     FReply StartPreviewMovie();
     FReply CancelPreviewMovie();
+    void ShowPreviewMovieResult(const FString& Output, int32 ExitCode);
+    FString GetPreviewMovieResultPath(bool bOpenMovie) const;
+    FReply OpenPreviewMovieResult(bool bOpenMovie);
     FReply ApplyRenderPreset(const FString& PresetPath, bool bForceRefresh = false);
     FReply RestoreRenderPreset();
     FReply PlaceStagePreset(const FString& PresetName);
@@ -185,6 +189,8 @@ private:
     /** 关联的视口面板 */
     TSharedPtr<MMDViewPanel> ViewPanel;
     TSharedPtr<FMMDPreviewMovieJob> PreviewMovieJob;
+    FString LastPreviewMovieDirectory;
+    bool bLastPreviewMovieSucceeded = false;
 
     /** 状态文本显示 */
     TSharedPtr<STextBlock> StatusText;
