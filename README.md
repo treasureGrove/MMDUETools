@@ -7,23 +7,17 @@ Ue5MMDTools 把 PMX 角色和 VMD 动作、表情、相机带进 Unreal Engine 5
 ## 待机动作预览
 
 <p align="center">
-  <img src="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-maya-portraits/maya_think.gif" width="560" alt="雛乃木まや在深蓝展厅侧头思考的头肩特写">
+  <img src="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif" width="576" alt="YYB 10 周年初音未来在薰紫摄影棚侧脸待机并眨眼">
 </p>
-<p align="center"><em>侧头思考 · 深蓝展厅 · 头肩特写</em></p>
+<p align="center"><em>10 周年初音未来 · 薰紫摄影棚 · 无限暖暖柔补光</em></p>
 
-<p align="center">
-  <img src="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-maya-portraits/maya_breath.gif" width="42%" alt="雛乃木まや在珍珠回廊轻柔呼吸的胸像">
-  <img src="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-maya-portraits/maya_clothes.gif" width="42%" alt="雛乃木まや在薰紫摄影棚整理衣摆的半身镜头">
-</p>
-<p align="center"><em>轻柔呼吸 · 珍珠回廊　｜　整理衣摆 · 薰紫摄影棚</em></p>
-
-三段由 UE 5.8.3 离屏渲染，制作时启用了 Bullet 物理。[捕获记录](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-maya-portraits/README.md)
+这段 3.2 秒的待机使用 `main` 开发版的暖暖补光，在 UE 5.8.3 中离屏渲染。启用 Bullet 物理并追加 VMD 眨眼表情。[布光对照与捕获记录](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-nikki-face-fill/README.md) · [更多待机演示](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-maya-portraits/README.md)
 
 ### 借物表
 
-- **角色**　公式 MMD 模型「雛乃木まや」Ver1.10，角色原案 KAZUYA（和夜），建模 金子卵黄。[官方配布](https://hinanogimaya.com/mmd-download/) · [模型使用条款](https://hinanogimaya.com/license/)
-- **动作**　MMDAgent 的 Breath of Mei 与 Idle of Mei，由名古屋工业大学计算机科学系 MMDAgent Project Team 发布。[动作原始来源与 CC BY 3.0 署名](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)
-- **场景与布光**　Ue5MMDTools 的深蓝展厅、珍珠回廊和薰紫摄影棚。
+- **角色与模型**　初音未来，Crypton Future Media, INC.。模型为三目YYB（SANMUYYB）的 10 周年版 v1.02，用于非商业演示。[角色许可](https://piapro.jp/license/pcl) · [作者配布](https://bowlroll.net/file/146083)
+- **动作**　Wait of Mei，由名古屋工业大学计算机科学系 MMDAgent Project Team 发布。取身体动作前 3.2 秒，另配眨眼和轻微嘴角变化。[动作原始来源与 CC BY 3.0 署名](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)
+- **场景与着色**　Ue5MMDTools 薰紫摄影棚与无限暖暖材质预设。
 
 ## 安装
 
