@@ -23,6 +23,8 @@
 
 ## 从角色到短片
 
+先看一遍完整操作。视频从角色已载入开始，展示选动作、换布光、定镜头和后台导出。[下载约 19 秒的操作视频（MP4）](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4?raw=true) · [回到首页看动图节选](README.md#操作视频)
+
 ### 1. 导入角色并试动作
 
 1. 在 **角色** 页点击 **导入 PMX 模型**，选择 `.pmx`，保留它与贴图的相对目录。底部提示完成后，在右侧检查模型。已导入过时，点击 **加载已有角色**，选择对应的 MMD Actor 蓝图。

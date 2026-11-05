@@ -6,7 +6,17 @@
 
 [下载 Win64 插件包](https://github.com/treasureGrove/MMDUETools/releases/latest) · [图文操作指南](github.md) · [B 站演示](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
-[待机动图](#待机动作预览) · [镜头与布光](#镜头与布光) · [角色工坊](#角色工坊) · [快速上手](#快速上手) · [借物表](#借物表)
+[操作视频](#操作视频) · [待机动图](#待机动作预览) · [镜头与布光](#镜头与布光) · [角色工坊](#角色工坊) · [快速上手](#快速上手) · [借物表](#借物表)
+
+## 操作视频
+
+<p align="center">
+  <a href="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4?raw=true"><img src="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" width="800" alt="角色工坊操作视频节选，展示点击动作、切换布光、调整镜头和制作成片"></a>
+</p>
+
+**约 19 秒看完角色工坊的制作流程。** 从角色已载入开始，选轻柔呼吸、打开场景页、换薰紫摄影棚、切面部机位，再点击「按当前预览制作」。片尾是本次操作实际生成的成片。
+
+[下载完整操作视频（MP4）](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4?raw=true) · [拍摄记录与借物表](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-workflow-video/README.md) · [逐步操作指南](github.md#从角色到短片)
 
 ## 待机动作预览
 
@@ -73,7 +83,7 @@
 ## 借物表
 
 - **角色**　初音未来，Crypton Future Media, INC.。[角色许可](https://piapro.jp/license/pcl)
-- **待机动图与胸像、侧脸**　三目YYB（SANMUYYB）的初音未来 10 周年版 v1.02，用于非商业演示。[作者配布](https://bowlroll.net/file/146083)
+- **操作视频、待机动图与胸像、侧脸**　三目YYB（SANMUYYB）的初音未来 10 周年版 v1.02，用于非商业演示。[作者配布](https://bowlroll.net/file/146083)
 - **全身对照与面板实拍**　YYB Hatsune Miku 16th NoWing，SANMUYYB／霁行Ralker／Delta幻黑，用于非商业演示。[影棚捕获记录](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)
-- **动作**　Wait of Mei，名古屋工业大学计算机科学系 MMDAgent Project Team。10 周年待机另配眨眼和轻微嘴角变化。[动作来源与 CC BY 3.0 许可](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)
+- **动作**　Wait of Mei、Breath of Mei，名古屋工业大学计算机科学系 MMDAgent Project Team。10 周年待机另配眨眼和轻微嘴角变化。[动作来源与 CC BY 3.0 许可](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)
 - **布景与布光**　Ue5MMDTools 展示场景。
