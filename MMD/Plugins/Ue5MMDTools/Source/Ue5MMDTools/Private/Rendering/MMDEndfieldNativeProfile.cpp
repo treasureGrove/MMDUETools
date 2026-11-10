@@ -1,8 +1,15 @@
 #include "Rendering/MMDEndfieldNativeProfile.h"
 
+#include "Components/MeshComponent.h"
+#include "Engine/Texture.h"
 #include "Engine/ToonProfile.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInstance.h"
+#include "Materials/MaterialInterface.h"
 #include "Rendering/MMDEndfieldNativeBackend.h"
+#include "RenderUtils.h"
 #include "Misc/SecureHash.h"
 #include "Serialization/ObjectWriter.h"
 #include "Stage/MMDStageRenderPreset.h"
@@ -11,6 +18,12 @@
 #include "UObject/UObjectGlobals.h"
 #include "MMDEndfieldNativeRampData.inl"
 #include "MMDEndfieldSkinLutData.inl"
+
+static TAutoConsoleVariable<int32> CVarMMDLegacyLightPipelineAutoSleep(
+    TEXT("r.MMD.LegacyLightPipeline.AutoSleep"),
+    1,
+    TEXT("0: 始终运行旧 LightDataRT/MMDShadowMapRT 管线；1: 当世界仅含原生 Substrate Toon (EndfieldV2/InfinityNikki) 角色且无旧 Unlit MMD 材质/舞台时休眠；2: 只要世界无旧 Unlit MMD 材质即休眠。"),
+    ECVF_Default);
 
 namespace MMDEndfieldNativeProfile
 {
@@ -249,6 +262,83 @@ namespace MMDEndfieldNativeProfile
     {
         return IsInfinityNikkiParent(material) || (IsValid(material)
             && material->GetPathName().StartsWith(TEXT("/Ue5MMDTools/Stages/Materials/EndfieldV2/")));
+    }
+
+    bool IsManagedMaterial(const UMaterialInterface* material)
+    {
+        const UMaterialInterface* current = material;
+        while (const UMaterialInstance* instance = Cast<UMaterialInstance>(current))
+        {
+            if (IsManagedParent(current)) return true;
+            current = instance->Parent.Get();
+        }
+        return IsManagedParent(current);
+    }
+
+    bool IsLegacyMMDMaterial(const UMaterialInterface* material)
+    {
+        if (!IsValid(material) || IsManagedMaterial(material)) return false;
+        const UMaterialInterface* current = material;
+        while (IsValid(current))
+        {
+            const FString path = current->GetPathName();
+            const FString name = current->GetName();
+            if (path.StartsWith(TEXT("/Ue5MMDTools/Rendering/M_MMD_EndfieldOutline"))
+                || path.StartsWith(TEXT("/Ue5MMDTools/Materials/M_MMD_Outline"))
+                || path.StartsWith(TEXT("/Ue5MMDTools/Materials/M_MMD_Skybox")))
+            {
+                return false;
+            }
+            if (path.StartsWith(TEXT("/Ue5MMDTools/"))
+                || name.StartsWith(TEXT("M_TMMD_"))
+                || name.StartsWith(TEXT("MI_TMMD_"))
+                || name.StartsWith(TEXT("M_MMD_"))
+                || name.StartsWith(TEXT("MMDBaseToon")))
+            {
+                return true;
+            }
+            const UMaterialInstance* instance = Cast<UMaterialInstance>(current);
+            current = instance ? instance->Parent.Get() : nullptr;
+        }
+        UTexture* dummy = nullptr;
+        return material->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("light_data_tex")), dummy)
+            || material->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("mmd_shadow_map")), dummy);
+    }
+
+    bool DoesWorldRequireLegacyLightPipeline(UWorld* world)
+    {
+        if (!IsValid(world)) return true;
+        const int32 sleep_mode = CVarMMDLegacyLightPipelineAutoSleep.GetValueOnGameThread();
+        if (sleep_mode <= 0) return true;
+        if (!Substrate::IsToonProfileEnabled()) return true;
+
+        bool has_native_toon = false;
+        for (TActorIterator<AActor> it(world); it; ++it)
+        {
+            AActor* actor = *it;
+            if (!IsValid(actor) || actor->IsHidden()) continue;
+            TInlineComponentArray<UMeshComponent*> components(actor);
+            for (UMeshComponent* component : components)
+            {
+                if (!IsValid(component) || !component->IsRegistered() || !component->IsVisible()) continue;
+                const int32 count = component->GetNumMaterials();
+                for (int32 index = 0; index < count; ++index)
+                {
+                    const UMaterialInterface* material = component->GetMaterial(index);
+                    if (!IsValid(material)) continue;
+                    if (IsManagedMaterial(material))
+                    {
+                        has_native_toon = true;
+                    }
+                    else if (IsLegacyMMDMaterial(material))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        if (sleep_mode >= 2) return false;
+        return !has_native_toon;
     }
 
     bool MarkTransient(UToonProfile* profile, EMMDMaterialRole role, bool apply_client_ramps,

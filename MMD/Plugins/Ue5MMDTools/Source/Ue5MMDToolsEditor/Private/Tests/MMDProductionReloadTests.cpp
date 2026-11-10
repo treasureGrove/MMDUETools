@@ -28,6 +28,8 @@
 #include "Sections/MovieSceneSkeletalAnimationSection.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Stage/MMDStageLibrary.h"
+#include "Stage/MMDStageRenderPreset.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "Tracks/MovieSceneCameraCutTrack.h"
 #include "Tracks/MovieSceneSkeletalAnimationTrack.h"
@@ -255,6 +257,24 @@ bool FMMDProductionReloadTest::RunTest(const FString& Parameters)
 				TestTrue(TEXT("读回镜头位置匹配实际成片记录"), SpawnedCamera->GetActorLocation().Equals(Location, 0.02));
 			if (Shot.IsValid() && Shot->TryGetNumberField(TEXT("horizontal_fov"), Fov))
 				TestTrue(TEXT("读回镜头视角匹配实际成片记录"), FMath::IsNearlyEqual(SpawnedCamera->GetCameraComponent()->FieldOfView, float(Fov), 0.001f));
+		}
+		if (Frame == 0)
+		{
+			FString CharacterPresetPath;
+			if (Report->TryGetStringField(TEXT("character_preset"), CharacterPresetPath)
+				&& !CharacterPresetPath.IsEmpty()
+				&& !CharacterPresetPath.Equals(TEXT("Original"), ESearchCase::IgnoreCase)
+				&& !CharacterPresetPath.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+			{
+				const bool bMeshDirtyBefore = Mesh->GetOutermost()->IsDirty();
+				UMMDStageRenderPreset* CharacterPreset = LoadObject<UMMDStageRenderPreset>(nullptr, *CharacterPresetPath);
+				if (TestNotNull(TEXT("作品报告记录的角色预设可加载"), CharacterPreset))
+				{
+					TestTrue(TEXT("读回序列生成角色可复现记录的风格预设"), UMMDStageLibrary::ApplyCharacterRenderPreset(Component, CharacterPreset));
+					TestTrue(TEXT("读回序列生成角色可无损恢复源材质"), UMMDStageLibrary::RestoreCharacterMaterials(Component));
+					TestEqual(TEXT("复现与恢复风格不污染源模型资产"), Mesh->GetOutermost()->IsDirty(), bMeshDirtyBefore);
+				}
+			}
 		}
 	}
 	return !HasAnyErrors();

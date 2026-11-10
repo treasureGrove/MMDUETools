@@ -11,6 +11,9 @@
 #include "Stage/MMDStageMaterialState.h"
 #include "Rendering/UMMDLightingEnvironmentLibrary.h"
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
+#include "Rendering/UMMDShadowMapSubsystem.h"
+#include "Rendering/MMDEndfieldNativeProfile.h"
+#include "RenderUtils.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -155,6 +158,28 @@ bool FMMDToolPanelPresetTest::RunTest(const FString& Parameters)
 		UMMDStageMaterialState* State = Preview->GetAssetUserData<UMMDStageMaterialState>();
 		TestTrue(TEXT("确实应用所选预设"), State && State->AppliedPreset == Preset);
 		TestTrue(TEXT("预览不改关卡实例"), Selected->GetSkeletalMeshComponent()->OverrideMaterials == LevelOverrides);
+		const bool bNativePreset = FString(Name) == TEXT("EndfieldV2/DA_Render_EndfieldV2") || FString(Name) == TEXT("DA_Render_InfinityNikki");
+		if (bNativePreset && Preset->CharacterToonMaterialOpaque)
+		{
+			TestTrue(TEXT("原生预设 Toon 父材质识别为受管原生材质"), MMDEndfieldNativeProfile::IsManagedMaterial(Preset->CharacterToonMaterialOpaque));
+			TestFalse(TEXT("原生预设 Toon 父材质不计入旧 Unlit 管线"), MMDEndfieldNativeProfile::IsLegacyMMDMaterial(Preset->CharacterToonMaterialOpaque));
+		}
+		if (Preset->CharacterMaterialOpaque)
+		{
+			TestTrue(TEXT("兼容回退父材质识别为旧 Unlit MMD 材质"), MMDEndfieldNativeProfile::IsLegacyMMDMaterial(Preset->CharacterMaterialOpaque));
+		}
+		if (UWorld* PreviewWorld = Panel->ViewPanel->PreviewScene->GetWorld())
+		{
+			const bool bExpectLegacyActive = !(bNativePreset && Substrate::IsToonProfileEnabled());
+			if (UMMDShadowMapSubsystem* ShadowSub = UMMDShadowMapSubsystem::Get())
+			{
+				TestEqual(FString(TEXT("阴影子系统按需休眠状态：")) + Name, ShadowSub->ShouldUpdateShadowForWorld(PreviewWorld), bExpectLegacyActive);
+			}
+			if (UMMDAnimeLightDataSubsystem* LightSub = UMMDAnimeLightDataSubsystem::Get())
+			{
+				TestEqual(FString(TEXT("灯光子系统按需休眠状态：")) + Name, LightSub->ShouldCollectLightsForWorld(PreviewWorld), bExpectLegacyActive);
+			}
+		}
 	}
 	Panel->RestoreRenderPreset();
 	TestTrue(TEXT("跨预设切换后恢复最初覆盖"), Preview->OverrideMaterials == OriginalOverrides);

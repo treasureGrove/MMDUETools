@@ -92,27 +92,35 @@ namespace
 
 FString FMMDPreviewMovieRequest::BuildArguments(const FString& Script, const FString& EngineRoot, const FString& Project, const FString& Output) const
 {
-	for (const FString* Value : { &Script, &EngineRoot, &Project, &Output, &ModelAsset, &AnimationAsset, &Motion, &Preset, &Stage })
+	for (const FString* Value : { &Script, &EngineRoot, &Project, &Output, &ModelAsset, &AnimationAsset, &Motion, &Preset, &Stage, &Camera, &Audio })
 		if (Value->Contains(TEXT("\"")) || Value->Contains(TEXT("\r")) || Value->Contains(TEXT("\n"))) return {};
 	const auto& Backend = MMDEndfieldNativeBackend::GetStatus();
 	const bool bAsset = !AnimationAsset.IsEmpty();
-	return FString::Printf(
+	const FString CameraArgs = !Camera.IsEmpty()
+		? FString::Printf(TEXT("-CameraMode Auto -Camera \"%s\" "), *Camera)
+		: FString::Printf(
+			TEXT("-CameraMode Fixed -CameraLocation \"X=%.9f Y=%.9f Z=%.9f\" -CameraRotation \"P=%.9f Y=%.9f R=%.9f\" -CameraFOV %.9f "),
+			Location.X, Location.Y, Location.Z, Rotation.Pitch, Rotation.Yaw, Rotation.Roll, HorizontalFOV);
+	FString Result = FString::Printf(
 		TEXT("-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"%s\" ")
 		TEXT("-EngineRoot \"%s\" -ProjectFile \"%s\" -OutputDirectory \"%s\" -SkipBuild ")
 		TEXT("-ModelAsset \"%s\" %s \"%s\" -ImportVmdMorphs %d -Preset \"%s\" -Stage \"%s\" ")
-		TEXT("-CameraMode Fixed -CameraLocation \"X=%.9f Y=%.9f Z=%.9f\" -CameraRotation \"P=%.9f Y=%.9f R=%.9f\" ")
-		TEXT("-CameraFOV %.9f -Width %d -Height %d -Fps 30 -Physics %d -PlaybackRate %.6f ")
+		TEXT("%s")
+		TEXT("-Width %d -Height %d -Fps 30 -Physics %d -PlaybackRate %.6f ")
 		TEXT("-MatchPreviewRendering -PreviewSubstrate %d -PreviewNativeMode %d -PreviewUnifiedDiffuse %d ")
 		TEXT("-PreviewGBufferFormat %d -PreviewToonResolution %d -PreviewIndirectDiffuse %.6f -PreviewIndirectSpecular %.6f -PreviewVirtualShadows %d"),
 		*Script, *EngineRoot, *Project, *Output, *ModelAsset, bAsset ? TEXT("-AnimationAsset") : TEXT("-Motion"),
 		*(bAsset ? AnimationAsset : Motion), bAsset ? 1 : 0, *Preset, *Stage,
-		Location.X, Location.Y, Location.Z, Rotation.Pitch, Rotation.Yaw, Rotation.Roll, HorizontalFOV,
+		*CameraArgs,
 		Size.X, Size.Y, bPhysics ? 1 : 0, PlaybackRate,
 		MovieCVar(TEXT("r.Substrate"), 0) != 0, Backend.bActive ? Backend.Mode : -1,
 		MovieCVar(TEXT("r.Substrate.Experimental.ToonUnifiedDiffuse"), 0) != 0,
 		MovieCVar(TEXT("r.Substrate.ProjectGBufferFormat"), 0) != 0,
 		MovieCVar(TEXT("r.Substrate.ToonProfile.Resolution"), 256),
 		Backend.IndirectDiffuseScale, Backend.IndirectSpecularScale, MovieCVar(TEXT("r.Shadow.Virtual.Enable"), 0) != 0);
+	if (!Audio.IsEmpty()) Result += FString::Printf(TEXT(" -Audio \"%s\""), *Audio);
+	if (Duration > 0.0 && FMath::IsFinite(Duration)) Result += FString::Printf(TEXT(" -Duration %.6f"), Duration);
+	return Result;
 }
 
 bool MMDImportSetting::BuildPreviewMovieRequest(FMMDPreviewMovieRequest& OutRequest, FString& OutError) const
@@ -132,12 +140,27 @@ bool MMDImportSetting::BuildPreviewMovieRequest(FMMDPreviewMovieRequest& OutRequ
 		return Reject(TEXT("请选择内置动作或当前角色骨架的已保存动画。"));
 	if (ViewPanel->IsPreviewPoseHeld()) return Reject(TEXT("请先解除定格。制作会从动作第 0 秒开始播放。"));
 	const auto Style = ViewPanel->GetDisplaySceneStyle();
-	if (!Style.IsSet()) return Reject(TEXT("请先选择角色展示场景。完整舞台和独立 LookDev 暂不支持按当前预览制作。"));
+	const UMMDStageRenderPreset* StagePreset = ViewPanel->GetStagePreviewPreset();
+	FString StageId;
+	if (Style.IsSet())
+	{
+		StageId = FMMDStudioDisplayScene::GetId(Style.GetValue());
+	}
+	else if (StagePreset && !StagePreset->GetOutermost()->IsDirty())
+	{
+		const FString Candidate = MoviePresetId(*StagePreset);
+		if (Candidate == TEXT("NeonConcert") || Candidate == TEXT("MoonMirror") || Candidate == TEXT("SakuraTheater"))
+		{
+			StageId = Candidate;
+		}
+	}
+	if (StageId.IsEmpty())
+		return Reject(TEXT("请先选择角色展示场景或内置舞台。独立 LookDev 环境暂不支持按当前预览制作。"));
 
 	FMMDPreviewMovieRequest Request;
 	Request.ModelAsset = Mesh->GetPathName();
 	Request.Preset = TEXT("Original");
-	Request.Stage = FMMDStudioDisplayScene::GetId(Style.GetValue());
+	Request.Stage = MoveTemp(StageId);
 	Request.PlaybackRate = ViewPanel->GetPreviewPlaybackSpeed();
 	Request.bPhysics = ViewPanel->IsPreviewPhysicsEnabled() && ViewPanel->HasPreviewPhysics();
 	if (const auto* Motion = MMDFindPreviewMotionPreset(ViewPanel->GetBuiltinMotion()))
@@ -185,7 +208,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildPreviewMovieControls()
 			.ContentPadding(FMargin(10, 6))
 			.Text_Lambda([this]() { return FText::FromString(PreviewMovieJob ? TEXT("后台制作中…") : TEXT("按当前预览制作")); })
 			.IsEnabled_Lambda([this]() { return !PreviewMovieJob && ViewPanel && ViewPanel->HasPreviewAnimation(); })
-			.ToolTipText(FText::FromString(TEXT("沿用当前角色、动作、风格、展示场景和透视机位，从动作第 0 秒输出 MP4。30 fps，画幅随预览区，文件保存在 Saved/MMDProduction。需要 FFmpeg。")))
+			.ToolTipText(FText::FromString(TEXT("沿用当前角色、动作、风格、展示场景或内置舞台及透视机位，从动作第 0 秒输出 MP4。30 fps，画幅随预览区，文件保存在 Saved/MMDProduction。需要 FFmpeg。")))
 			.OnClicked(this, &MMDImportSetting::StartPreviewMovie)]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(6, 0, 0, 0)
 		[SNew(SMMDAnimatedButton, Motion).ButtonStyle(MMDPanelStyle::Secondary())

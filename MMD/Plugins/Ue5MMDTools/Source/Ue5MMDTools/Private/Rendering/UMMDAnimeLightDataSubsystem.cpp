@@ -13,6 +13,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/RectLightComponent.h"
+#include "Rendering/MMDEndfieldNativeProfile.h"
 #include "MMDAnimeWriteLightsCS.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
@@ -81,7 +82,7 @@ void UMMDAnimeLightDataSubsystem::SetLightDataRenderTarget(UTextureRenderTarget2
 		LightDataRT->bAutoGenerateMips = false;
 		LightDataRT->InitAutoFormat(MaxLights * 4, 2);   // 第 2 行 = 阴影相机基
 		LightDataRT->UpdateResourceImmediate(true);
-		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA32f UAV)"),
+		UE_LOG(LogTemp, Log, TEXT("[MMDAnimeLight] Light data RT set: %s (%dx%d RGBA32f UAV)"),
 			*LightDataRT->GetName(), LightDataRT->SizeX, LightDataRT->SizeY);
 	}
 }
@@ -101,7 +102,7 @@ void UMMDAnimeLightDataSubsystem::SetShadowCameraData(const FVector4f InData[18]
 void UMMDAnimeLightDataSubsystem::SetPreviewLightOverride(const TArray<FVector4f>& InData)
 {
 	PreviewLightOverrideData = InData;
-	UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] 预览灯光覆盖已设置：%d 个 float4（%d 盏灯）"),
+	UE_LOG(LogTemp, Verbose, TEXT("[MMDAnimeLight] 预览灯光覆盖已设置：%d 个 float4（%d 盏灯）"),
 		InData.Num(), InData.Num() / 4);
 }
 
@@ -118,8 +119,14 @@ void UMMDAnimeLightDataSubsystem::ClearPreviewLightOverride()
 	if (PreviewLightOverrideData.Num() > 0)
 	{
 		PreviewLightOverrideData.Reset();
-		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] 预览灯光覆盖已清除，恢复主世界灯光收集"));
+		UE_LOG(LogTemp, Verbose, TEXT("[MMDAnimeLight] 预览灯光覆盖已清除，恢复主世界灯光收集"));
 	}
+}
+
+bool UMMDAnimeLightDataSubsystem::ShouldCollectLightsForWorld(UWorld* World) const
+{
+	if (!bCollectionEnabled) return false;
+	return MMDEndfieldNativeProfile::DoesWorldRequireLegacyLightPipeline(World);
 }
 
 void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
@@ -166,7 +173,7 @@ void UMMDAnimeLightDataSubsystem::AutoSetupLightDataRT()
 				AssetRegistry->AssetCreated(NewRT);
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Auto-created light data RT asset at %s.%s"),
+			UE_LOG(LogTemp, Log, TEXT("[MMDAnimeLight] Auto-created light data RT asset at %s.%s"),
 				*PackagePath, GMMDAnimeLightDataRT_AssetName);
 			SetLightDataRenderTarget(NewRT);
 			return;
@@ -188,8 +195,21 @@ void UMMDAnimeLightDataSubsystem::CollectLightsForFrame(UWorld* InWorld, const F
 
 	if (!bCollectionEnabled)
 	{
+		bLastFrameSkippedForNativeOnly = false;
 		return;
 	}
+
+	if (InWorld && !ShouldCollectLightsForWorld(InWorld))
+	{
+		bLastFrameSkippedForNativeOnly = true;
+		ENQUEUE_RENDER_COMMAND(MMDAnimeSkipLightData)(
+			[this](FRHICommandListImmediate&)
+			{
+				RenderThreadLightData.Reset();
+			});
+		return;
+	}
+	bLastFrameSkippedForNativeOnly = false;
 
 	TArray<FVector4f> Data;
 	if (HasPreviewLightOverride())
@@ -421,7 +441,7 @@ void UMMDAnimeLightDataSubsystem::CollectLights(UWorld* World, TArray<FVector4f>
 	if (Key != LastLoggedKey)
 	{
 		LastLoggedKey = Key;
-		UE_LOG(LogTemp, Warning, TEXT("[MMDAnimeLight] Collected -> Directional=%d Point=%d Spot=%d Rect=%d"),
+		UE_LOG(LogTemp, Verbose, TEXT("[MMDAnimeLight] Collected -> Directional=%d Point=%d Spot=%d Rect=%d"),
 			FMath::Min(Directionals.Num(), MaxLights),
 			FMath::Min(Points.Num(), MaxLights),
 			FMath::Min(Spots.Num(), MaxLights),

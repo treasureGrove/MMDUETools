@@ -12,6 +12,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Rendering/UMMDAnimeLightDataSubsystem.h"
+#include "Rendering/MMDEndfieldNativeProfile.h"
 #include "Rendering/FMMDShadowCustomRenderPass.h"
 #include "Actors/AMMDActor.h"
 #include "Misc/PackageName.h"
@@ -109,6 +110,8 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 	UWorld* World = Scene ? Scene->GetWorld() : nullptr;
 	if (!World || !InView)
 	{
+		LastFrameActiveCascadePasses = 0;
+		bLastFrameSkippedForNativeOnly = false;
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
 	}
@@ -124,13 +127,25 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 
 	if (!bEnabled || !ShadowMapRT)
 	{
+		LastFrameActiveCascadePasses = 0;
+		bLastFrameSkippedForNativeOnly = false;
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
 	}
 
+	if (!ShouldUpdateShadowForWorld(World))
+	{
+		LastFrameActiveCascadePasses = 0;
+		bLastFrameSkippedForNativeOnly = true;
+		LightSubsystem->SetShadowCameraData(Invalid);
+		return;
+	}
+	bLastFrameSkippedForNativeOnly = false;
+
 	FVector LightDir;
 	if (!GetMainLightDirection(World, LightDir))
 	{
+		LastFrameActiveCascadePasses = 0;
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
 	}
@@ -149,6 +164,7 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 	}
 	if (!ShadowMapScratchRT)
 	{
+		LastFrameActiveCascadePasses = 0;
 		LightSubsystem->SetShadowCameraData(Invalid);
 		return;
 	}
@@ -295,6 +311,7 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 			++AddedPassCount;
 		}
 	}
+	LastFrameActiveCascadePasses = AddedPassCount;
 
 	// 周期性诊断输出（每 ~5 秒一次，避免刷屏）。
 	static double LastDiagTime = 0.0;
@@ -336,6 +353,12 @@ void UMMDShadowMapSubsystem::UpdateShadowForFrame(FSceneViewFamily* InViewFamily
 void UMMDShadowMapSubsystem::SetShadowEnabled(bool bInEnabled)
 {
 	bEnabled = bInEnabled;
+}
+
+bool UMMDShadowMapSubsystem::ShouldUpdateShadowForWorld(UWorld* World) const
+{
+	if (!bEnabled) return false;
+	return MMDEndfieldNativeProfile::DoesWorldRequireLegacyLightPipeline(World);
 }
 
 void UMMDShadowMapSubsystem::SetShadowMapRenderTarget(UTextureRenderTarget2D* InRenderTarget)

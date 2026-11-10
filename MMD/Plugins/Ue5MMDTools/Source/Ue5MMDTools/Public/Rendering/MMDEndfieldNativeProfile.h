@@ -4,6 +4,8 @@
 #include "Stage/MMDMaterialRole.h"
 
 class UToonProfile;
+class UMaterialInterface;
+class UWorld;
 struct FMMDStageSkinLightingSettings;
 
 namespace MMDEndfieldNativeProfile
@@ -20,4 +22,7 @@ namespace MMDEndfieldNativeProfile
     // 两个风格共用原生材质／载荷链，配方在瞬态 Profile 中隔离。
     UE5MMDTOOLS_API bool IsManagedParent(const UObject* material);
     UE5MMDTOOLS_API bool IsInfinityNikkiParent(const UObject* material);
+    UE5MMDTOOLS_API bool IsManagedMaterial(const UMaterialInterface* material);
+    UE5MMDTOOLS_API bool IsLegacyMMDMaterial(const UMaterialInterface* material);
+    UE5MMDTOOLS_API bool DoesWorldRequireLegacyLightPipeline(UWorld* world);
 }

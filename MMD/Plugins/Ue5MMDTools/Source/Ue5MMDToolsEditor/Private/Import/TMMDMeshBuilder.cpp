@@ -53,8 +53,9 @@
 #include "Animation/MorphTarget.h"
 //IKRig
 #if WITH_EDITOR
+#include "MMDVersionCompat.h"
 #include "RigEditor/IKRigController.h"
-#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8
+#if MMD_UE_VERSION_AT_LEAST(5, 8)
 #include "Rig/Solvers/IKRigFullBodyIK.h"
 #else
 #include "Rig/Solvers/IKRig_FBIKSolver.h"
@@ -341,9 +342,89 @@ TArray<TPair<FString, int32>> BuildTrackCounts(const TArray<KeyType>& Keys, Name
 	return Result;
 }
 
+static FString NormalizeMMDName(const FString& InName)
+{
+	FString Result;
+	Result.Reserve(InName.Len());
+	for (TCHAR Ch : InName)
+	{
+		if (Ch == 0x3000)
+		{
+			Result.AppendChar(TEXT(' '));
+		}
+		else if (Ch >= 0xFF01 && Ch <= 0xFF5E)
+		{
+			const TCHAR HalfWidth = static_cast<TCHAR>(Ch - 0xFEE0);
+			Result.AppendChar(FChar::ToLower(HalfWidth));
+		}
+		else
+		{
+			Result.AppendChar(FChar::ToLower(Ch));
+		}
+	}
+	Result.TrimStartAndEndInline();
+	Result.ReplaceInline(TEXT("ウインク"), TEXT("ウィンク"), ESearchCase::CaseSensitive);
+	Result.ReplaceInline(TEXT("ｳｨﾝｸ"), TEXT("ウィンク"), ESearchCase::CaseSensitive);
+	return Result;
+}
+
+static void GetMMDMorphSynonymCandidates(const FString& SourceName, TArray<FString>& OutCandidates)
+{
+	OutCandidates.Reset();
+	const FString NormalizedSource = NormalizeMMDName(SourceName);
+	if (NormalizedSource.IsEmpty())
+	{
+		return;
+	}
+
+	static const TArray<TArray<const TCHAR*>> SynonymGroups = {
+		{ TEXT("まばたき"), TEXT("瞬き"), TEXT("blink") },
+		{ TEXT("笑い"), TEXT("笑顔"), TEXT("にこり"), TEXT("にっこり"), TEXT("smile") },
+		{ TEXT("ウィンク"), TEXT("ウインク"), TEXT("wink") },
+		{ TEXT("ウィンク右"), TEXT("ウインク右"), TEXT("wink_r"), TEXT("wink right") },
+		{ TEXT("ウィンク2"), TEXT("ウインク2"), TEXT("ウィンク２"), TEXT("ウインク２") },
+		{ TEXT("ウィンク2右"), TEXT("ウインク2右"), TEXT("ウィンク２右"), TEXT("ウインク２右") },
+		{ TEXT("びっくり"), TEXT("驚き"), TEXT("surprise") },
+		{ TEXT("怒り"), TEXT("怒"), TEXT("真面目"), TEXT("anger"), TEXT("serious") },
+		{ TEXT("困る"), TEXT("困"), TEXT("困り"), TEXT("sad"), TEXT("trouble") },
+		{ TEXT("にやり"), TEXT("ニヤリ"), TEXT("grin") },
+		{ TEXT("じと目"), TEXT("ジト目") },
+		{ TEXT("なごみ"), TEXT("和み") },
+		{ TEXT("あ"), TEXT("a"), TEXT("aa") },
+		{ TEXT("い"), TEXT("i"), TEXT("ii") },
+		{ TEXT("う"), TEXT("u"), TEXT("uu") },
+		{ TEXT("え"), TEXT("e"), TEXT("ee") },
+		{ TEXT("お"), TEXT("o"), TEXT("oo") },
+		{ TEXT("ワ"), TEXT("わ") }
+	};
+
+	for (const TArray<const TCHAR*>& Group : SynonymGroups)
+	{
+		bool bInGroup = false;
+		for (const TCHAR* Term : Group)
+		{
+			if (NormalizeMMDName(Term) == NormalizedSource)
+			{
+				bInGroup = true;
+				break;
+			}
+		}
+		if (bInGroup)
+		{
+			for (const TCHAR* Term : Group)
+			{
+				if (SourceName != Term)
+				{
+					OutCandidates.AddUnique(Term);
+				}
+			}
+		}
+	}
+}
+
 // Morph 目标净化名映射缓存：FixMMDName 开销大（20+ 次字符串替换），
 // VMD 每条轨迹解析都会遍历全部 morph 目标做净化名比较，缓存后每个网格只净化一次。
-// 键为 FixMMDName(目标名)，值取首个命中目标（保持与逐目标匹配一致的顺序语义）。
+// 键为 FixMMDName(目标名) 及 NormalizeMMDName(目标名)，值取首个命中目标（保持与逐目标匹配一致的顺序语义）。
 static const TMap<FString, FName>& GetMorphSanitizedNameMap(const USkeletalMesh* SkeletalMesh)
 {
 	struct FMorphNameCache
@@ -360,7 +441,13 @@ static const TMap<FString, FName>& GetMorphSanitizedNameMap(const USkeletalMesh*
 			if (MorphTarget != nullptr)
 			{
 				const FName TargetName = MorphTarget->GetFName();
-				const FString Key = FixMMDName(TargetName.ToString());
+				const FString TargetStr = TargetName.ToString();
+				const FString NormalizedKey = NormalizeMMDName(TargetStr);
+				if (!NormalizedKey.IsEmpty() && !Map.Contains(NormalizedKey))
+				{
+					Map.Add(NormalizedKey, TargetName);
+				}
+				const FString Key = FixMMDName(TargetStr);
 				if (!Map.Contains(Key))
 				{
 					Map.Add(Key, TargetName);
@@ -400,8 +487,13 @@ bool TryResolveMorphTargetName(const USkeletalMesh* SkeletalMesh, const FString&
 		}
 	}
 
-	// 净化名匹配（走缓存映射，FixMMDName(SourceName) 只算一次）
+	// 全半角规范化名与净化名匹配（走缓存映射）
 	const TMap<FString, FName>& SanitizedMap = GetMorphSanitizedNameMap(SkeletalMesh);
+	if (const FName* FoundNorm = SanitizedMap.Find(NormalizeMMDName(SourceName)))
+	{
+		OutMorphName = *FoundNorm;
+		return true;
+	}
 	if (const FName* Found = SanitizedMap.Find(FixMMDName(SourceName)))
 	{
 		OutMorphName = *Found;
@@ -418,14 +510,48 @@ const FPMXMorph* FindPMXMorphByName(const PMXDatas* PMXData, const FString& Sour
 		return nullptr;
 	}
 
+	const FString NormalizedSource = NormalizeMMDName(SourceName);
+	const FString FixedSource = FixMMDName(SourceName);
 	for (int32 MorphIndex = 0; MorphIndex < PMXData->ModelMorphs.Num(); ++MorphIndex)
 	{
 		const FPMXMorph& Morph = PMXData->ModelMorphs[MorphIndex];
 		const bool bNameMatches =
 			Morph.NameJP == SourceName ||
 			Morph.NameEN == SourceName ||
-			FixMMDName(Morph.NameJP) == FixMMDName(SourceName) ||
-			FixMMDName(Morph.NameEN) == FixMMDName(SourceName);
+			(!NormalizedSource.IsEmpty() && (NormalizeMMDName(Morph.NameJP) == NormalizedSource || NormalizeMMDName(Morph.NameEN) == NormalizedSource)) ||
+			FixMMDName(Morph.NameJP) == FixedSource ||
+			FixMMDName(Morph.NameEN) == FixedSource;
+		if (bNameMatches)
+		{
+			if (OutMorphIndex != nullptr)
+			{
+				*OutMorphIndex = MorphIndex;
+			}
+			return &Morph;
+		}
+	}
+
+	return nullptr;
+}
+
+static const FMMDModelMorphData* FindModelDataMorphByName(const UMMDModelDataAsset* ModelDataAsset, const FString& SourceName, int32* OutMorphIndex = nullptr)
+{
+	if (ModelDataAsset == nullptr || ModelDataAsset->Morphs.Num() == 0)
+	{
+		return nullptr;
+	}
+
+	const FString NormalizedSource = NormalizeMMDName(SourceName);
+	const FString FixedSource = FixMMDName(SourceName);
+	for (int32 MorphIndex = 0; MorphIndex < ModelDataAsset->Morphs.Num(); ++MorphIndex)
+	{
+		const FMMDModelMorphData& Morph = ModelDataAsset->Morphs[MorphIndex];
+		const bool bNameMatches =
+			Morph.NameJP == SourceName ||
+			Morph.NameEN == SourceName ||
+			(!NormalizedSource.IsEmpty() && (NormalizeMMDName(Morph.NameJP) == NormalizedSource || NormalizeMMDName(Morph.NameEN) == NormalizedSource)) ||
+			FixMMDName(Morph.NameJP) == FixedSource ||
+			FixMMDName(Morph.NameEN) == FixedSource;
 		if (bNameMatches)
 		{
 			if (OutMorphIndex != nullptr)
@@ -514,22 +640,108 @@ void ResolvePMXMorphContributionsRecursive(
 	VisitingMorphs.Remove(MorphIndex);
 }
 
-TArray<FMMDMorphTargetContribution> ResolveMorphTargetContributions(const USkeletalMesh* SkeletalMesh, const PMXDatas* PMXData, const FString& SourceName)
+static void ResolveModelDataMorphContributionsRecursive(
+	const USkeletalMesh* SkeletalMesh,
+	const UMMDModelDataAsset* ModelDataAsset,
+	int32 MorphIndex,
+	float WeightScale,
+	TSet<int32>& VisitingMorphs,
+	TArray<FMMDMorphTargetContribution>& OutContributions)
+{
+	if (SkeletalMesh == nullptr || ModelDataAsset == nullptr || !ModelDataAsset->Morphs.IsValidIndex(MorphIndex) || FMath::IsNearlyZero(WeightScale))
+	{
+		return;
+	}
+
+	if (VisitingMorphs.Contains(MorphIndex))
+	{
+		return;
+	}
+	VisitingMorphs.Add(MorphIndex);
+
+	const FMMDModelMorphData& Morph = ModelDataAsset->Morphs[MorphIndex];
+	const FString PreferredName = !Morph.NameJP.IsEmpty() ? Morph.NameJP : Morph.NameEN;
+	if (Morph.MorphType == 1)
+	{
+		FName TargetMorphName = NAME_None;
+		if (TryResolveMorphTargetName(SkeletalMesh, PreferredName, TargetMorphName))
+		{
+			AddMorphTargetContribution(OutContributions, TargetMorphName, WeightScale);
+		}
+	}
+	else if (Morph.MorphType == 0 || Morph.MorphType == 9)
+	{
+		for (const FMMDModelMorphChildData& Child : Morph.Children)
+		{
+			ResolveModelDataMorphContributionsRecursive(SkeletalMesh, ModelDataAsset, Child.MorphIndex, WeightScale * Child.Weight, VisitingMorphs, OutContributions);
+		}
+	}
+
+	VisitingMorphs.Remove(MorphIndex);
+}
+
+static TArray<FMMDMorphTargetContribution> ResolveSingleMorphNameContributions(
+	const USkeletalMesh* SkeletalMesh,
+	const PMXDatas* PMXData,
+	const UMMDModelDataAsset* ModelDataAsset,
+	const FString& CandidateName)
 {
 	TArray<FMMDMorphTargetContribution> Contributions;
 
 	FName DirectMorphName = NAME_None;
-	if (TryResolveMorphTargetName(SkeletalMesh, SourceName, DirectMorphName))
+	if (TryResolveMorphTargetName(SkeletalMesh, CandidateName, DirectMorphName))
 	{
 		AddMorphTargetContribution(Contributions, DirectMorphName, 1.0f);
 		return Contributions;
 	}
 
 	int32 PMXMorphIndex = INDEX_NONE;
-	if (FindPMXMorphByName(PMXData, SourceName, &PMXMorphIndex) != nullptr)
+	if (FindPMXMorphByName(PMXData, CandidateName, &PMXMorphIndex) != nullptr)
 	{
 		TSet<int32> VisitingMorphs;
 		ResolvePMXMorphContributionsRecursive(SkeletalMesh, PMXData, PMXMorphIndex, 1.0f, VisitingMorphs, Contributions);
+		if (Contributions.Num() > 0)
+		{
+			return Contributions;
+		}
+	}
+
+	int32 ModelDataMorphIndex = INDEX_NONE;
+	if (FindModelDataMorphByName(ModelDataAsset, CandidateName, &ModelDataMorphIndex) != nullptr)
+	{
+		TSet<int32> VisitingMorphs;
+		ResolveModelDataMorphContributionsRecursive(SkeletalMesh, ModelDataAsset, ModelDataMorphIndex, 1.0f, VisitingMorphs, Contributions);
+	}
+
+	return Contributions;
+}
+
+TArray<FMMDMorphTargetContribution> ResolveMorphTargetContributions(const USkeletalMesh* SkeletalMesh, const PMXDatas* PMXData, const FString& SourceName, const UMMDModelDataAsset* InModelDataAsset = nullptr)
+{
+	const UMMDModelDataAsset* ModelDataAsset = InModelDataAsset;
+	if (ModelDataAsset == nullptr && SkeletalMesh != nullptr)
+	{
+		if (const UMMDSkeletalMeshUserData* UserData = const_cast<USkeletalMesh*>(SkeletalMesh)->GetAssetUserData<UMMDSkeletalMeshUserData>())
+		{
+			ModelDataAsset = UserData->ModelDataAsset;
+		}
+	}
+
+	TArray<FMMDMorphTargetContribution> Contributions = ResolveSingleMorphNameContributions(SkeletalMesh, PMXData, ModelDataAsset, SourceName);
+	if (Contributions.Num() > 0)
+	{
+		return Contributions;
+	}
+
+	TArray<FString> SynonymCandidates;
+	GetMMDMorphSynonymCandidates(SourceName, SynonymCandidates);
+	for (const FString& Candidate : SynonymCandidates)
+	{
+		Contributions = ResolveSingleMorphNameContributions(SkeletalMesh, PMXData, ModelDataAsset, Candidate);
+		if (Contributions.Num() > 0)
+		{
+			return Contributions;
+		}
 	}
 
 	return Contributions;
@@ -574,7 +786,7 @@ struct FMMDIKDebugLog
 	{
 		if (Remaining > 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[MMD IK Debugger] %s"), *Message);
+			UE_LOG(LogTemp, Verbose, TEXT("[MMD IK Debugger] %s"), *Message);
 			--Remaining;
 		}
 		else
@@ -585,14 +797,14 @@ struct FMMDIKDebugLog
 
 	void LogAlways(const FString& Message)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MMD IK Debugger] %s"), *Message);
+		UE_LOG(LogTemp, Verbose, TEXT("[MMD IK Debugger] %s"), *Message);
 	}
 
 	void FlushSuppressed()
 	{
 		if (Suppressed > 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[MMD IK Debugger] Suppressed %d additional messages."), Suppressed);
+			UE_LOG(LogTemp, Verbose, TEXT("[MMD IK Debugger] Suppressed %d additional messages."), Suppressed);
 		}
 	}
 };
@@ -804,6 +1016,18 @@ static int32 FindBoneInRefSkeletonSkippingImportRoot(const FReferenceSkeleton& R
 		if (RefSkeleton.GetBoneName(BoneIndex) == RigName) return BoneIndex;
 	}
 
+	const FString NormalizedName = NormalizeMMDName(BoneName);
+	if (!NormalizedName.IsEmpty())
+	{
+		for (int32 BoneIndex = StartIndex; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
+		{
+			if (NormalizeMMDName(RefSkeleton.GetBoneName(BoneIndex).ToString()) == NormalizedName)
+			{
+				return BoneIndex;
+			}
+		}
+	}
+
 	const FString SanitizedName = FixMMDName(BoneName);
 	for (int32 BoneIndex = StartIndex; BoneIndex < RefSkeleton.GetNum(); ++BoneIndex)
 	{
@@ -991,6 +1215,36 @@ static void PopulateMMDModelDataAsset(UMMDModelDataAsset* ModelDataAsset, const 
 			LinkData.bHasLimit = PMXLink.HasLimit != 0;
 			LinkData.LowerLimit = PMXLink.LowerLimit;
 			LinkData.UpperLimit = PMXLink.UpperLimit;
+		}
+	}
+
+	ModelDataAsset->Morphs.Reset(PMXInfo.ModelMorphs.Num());
+	for (const FPMXMorph& PMXMorph : PMXInfo.ModelMorphs)
+	{
+		FMMDModelMorphData& MorphData = ModelDataAsset->Morphs.AddDefaulted_GetRef();
+		MorphData.NameJP = PMXMorph.NameJP;
+		MorphData.NameEN = PMXMorph.NameEN;
+		MorphData.Panel = PMXMorph.Panel;
+		MorphData.MorphType = PMXMorph.MorphType;
+		if (PMXMorph.MorphType == 0)
+		{
+			MorphData.Children.Reserve(PMXMorph.Groups.Num());
+			for (const FPMXMorphGroup& Group : PMXMorph.Groups)
+			{
+				FMMDModelMorphChildData& Child = MorphData.Children.AddDefaulted_GetRef();
+				Child.MorphIndex = Group.MorphIndex;
+				Child.Weight = Group.Weight;
+			}
+		}
+		else if (PMXMorph.MorphType == 9)
+		{
+			MorphData.Children.Reserve(PMXMorph.Flips.Num());
+			for (const FPMXMorphFlip& Flip : PMXMorph.Flips)
+			{
+				FMMDModelMorphChildData& Child = MorphData.Children.AddDefaulted_GetRef();
+				Child.MorphIndex = Flip.MorphIndex;
+				Child.Weight = Flip.Weight;
+			}
 		}
 	}
 }
@@ -1951,22 +2205,41 @@ static bool BuildPMXResolvedBoneKeyMap(const VMDData& VmdData, const UMMDModelDa
 	}
 
 	TMap<FString, int32> NameToPMXBoneIndex;
+	TMap<FString, int32> NormalizedNameToPMXBoneIndex;
 	for (int32 PMXBoneIndex = 0; PMXBoneIndex < ModelDataAsset->Bones.Num(); ++PMXBoneIndex)
 	{
 		const FMMDModelBoneData& BoneData = ModelDataAsset->Bones[PMXBoneIndex];
 		if (!BoneData.NameJP.IsEmpty())
 		{
 			NameToPMXBoneIndex.FindOrAdd(BoneData.NameJP, PMXBoneIndex);
+			const FString NormalizedJP = NormalizeMMDName(BoneData.NameJP);
+			if (!NormalizedJP.IsEmpty())
+			{
+				NormalizedNameToPMXBoneIndex.FindOrAdd(NormalizedJP, PMXBoneIndex);
+			}
 		}
 		if (!BoneData.NameEN.IsEmpty())
 		{
 			NameToPMXBoneIndex.FindOrAdd(BoneData.NameEN, PMXBoneIndex);
+			const FString NormalizedEN = NormalizeMMDName(BoneData.NameEN);
+			if (!NormalizedEN.IsEmpty())
+			{
+				NormalizedNameToPMXBoneIndex.FindOrAdd(NormalizedEN, PMXBoneIndex);
+			}
 		}
 	}
 
 	for (const VMDBoneKeyframe& Keyframe : VmdData.BoneKeyframes)
 	{
 		const int32* PMXBoneIndex = NameToPMXBoneIndex.Find(Keyframe.BoneName);
+		if (PMXBoneIndex == nullptr)
+		{
+			const FString NormalizedSource = NormalizeMMDName(Keyframe.BoneName);
+			if (!NormalizedSource.IsEmpty())
+			{
+				PMXBoneIndex = NormalizedNameToPMXBoneIndex.Find(NormalizedSource);
+			}
+		}
 		if (PMXBoneIndex == nullptr)
 		{
 			continue;
@@ -5347,6 +5620,7 @@ bool TMMDMeshBuilder::AnalyzeVMDAnimationImport(const VMDData& VmdData, const FM
 			Track.SourceBoneName = Pair.Key;
 			Track.KeyCount = Pair.Value;
 
+			const FString NormalizedSourceBone = NormalizeMMDName(Pair.Key);
 			if (Context.ModelDataAsset != nullptr)
 			{
 				for (const FMMDModelBoneData& BoneData : Context.ModelDataAsset->Bones)
@@ -5355,6 +5629,18 @@ bool TMMDMeshBuilder::AnalyzeVMDAnimationImport(const VMDData& VmdData, const FM
 					{
 						Track.TargetBoneIndex = ResolveModelDataBoneToSkeletonIndex(BoneData, RefSkeleton);
 						if (Track.TargetBoneIndex != INDEX_NONE) break;
+					}
+				}
+				if (Track.TargetBoneIndex == INDEX_NONE && !NormalizedSourceBone.IsEmpty())
+				{
+					for (const FMMDModelBoneData& BoneData : Context.ModelDataAsset->Bones)
+					{
+						if (NormalizeMMDName(BoneData.NameJP) == NormalizedSourceBone
+							|| (!BoneData.NameEN.IsEmpty() && NormalizeMMDName(BoneData.NameEN) == NormalizedSourceBone))
+						{
+							Track.TargetBoneIndex = ResolveModelDataBoneToSkeletonIndex(BoneData, RefSkeleton);
+							if (Track.TargetBoneIndex != INDEX_NONE) break;
+						}
 					}
 				}
 			}
@@ -5372,6 +5658,23 @@ bool TMMDMeshBuilder::AnalyzeVMDAnimationImport(const VMDData& VmdData, const FM
 							{
 								Track.TargetBoneIndex = BoneIndex;
 								break;
+							}
+						}
+					}
+					if (Track.TargetBoneIndex == INDEX_NONE && !NormalizedSourceBone.IsEmpty())
+					{
+						for (int32 PMXBoneIndex = 0; PMXBoneIndex < Context.PMXData->ModelBones.Num(); ++PMXBoneIndex)
+						{
+							const FPMXBone& Bone = Context.PMXData->ModelBones[PMXBoneIndex];
+							if (NormalizeMMDName(Bone.NameJP) == NormalizedSourceBone
+								|| (!Bone.NameEN.IsEmpty() && NormalizeMMDName(Bone.NameEN) == NormalizedSourceBone))
+							{
+								const int32 BoneIndex = Context.PMXBoneToSkeleton[PMXBoneIndex];
+								if (RefSkeleton.GetRefBoneInfo().IsValidIndex(BoneIndex))
+								{
+									Track.TargetBoneIndex = BoneIndex;
+									break;
+								}
 							}
 						}
 					}
@@ -5422,7 +5725,7 @@ bool TMMDMeshBuilder::AnalyzeVMDAnimationImport(const VMDData& VmdData, const FM
 			FMMDResolvedMorphTrack Track;
 			Track.SourceMorphName = Pair.Key;
 			Track.KeyCount = Pair.Value;
-			const TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Pair.Key);
+			const TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Pair.Key, Context.ModelDataAsset);
 			Track.bMatched = Contributions.Num() > 0;
 			if (Contributions.Num() == 1)
 			{
@@ -5726,7 +6029,7 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 	ResolvedMorphContributions.Reserve(LocalReport.MorphTracks.Num());
 	for (const FMMDResolvedMorphTrack& Track : LocalReport.MorphTracks)
 	{
-		TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Track.SourceMorphName);
+		TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Track.SourceMorphName, Context.ModelDataAsset);
 		if (Contributions.Num() > 0)
 		{
 			ResolvedMorphContributions.Add(Track.SourceMorphName, MoveTemp(Contributions));
@@ -5824,7 +6127,7 @@ UAnimSequence* TMMDMeshBuilder::BuildVMDAnimation(const VMDData& VmdData, const 
 	Controller.NotifyPopulated();
 	Controller.CloseBracket();
 	const IAnimationDataModel* DataModel = AnimSequence->GetDataModel();
-	UE_LOG(LogTemp, Warning, TEXT("VMD AnimSequence data model: Tracks=%d/%d Keys=%d/%d Frames=%d Length=%.3f Written=%d Static=%d Failed=%d MorphCurves=%d/%d MorphExpanded=%d MorphFailed=%d"),
+	UE_LOG(LogTemp, Log, TEXT("VMD AnimSequence data model: Tracks=%d/%d Keys=%d/%d Frames=%d Length=%.3f Written=%d Static=%d Failed=%d MorphCurves=%d/%d MorphExpanded=%d MorphFailed=%d"),
 		DataModel ? DataModel->GetNumBoneTracks() : 0,
 		TracksToWrite.Num(),
 		DataModel ? DataModel->GetNumberOfKeys() : 0,
@@ -5921,7 +6224,7 @@ bool TMMDMeshBuilder::AppendVMDMorphCurvesToAnimSequence(UAnimSequence* AnimSequ
 	ResolvedMorphContributions.Reserve(LocalReport.MorphTracks.Num());
 	for (const FMMDResolvedMorphTrack& Track : LocalReport.MorphTracks)
 	{
-		TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Track.SourceMorphName);
+		TArray<FMMDMorphTargetContribution> Contributions = ResolveMorphTargetContributions(Context.SkeletalMesh, Context.PMXData, Track.SourceMorphName, Context.ModelDataAsset);
 		if (Contributions.Num() > 0)
 		{
 			ResolvedMorphContributions.Add(Track.SourceMorphName, MoveTemp(Contributions));
@@ -6026,7 +6329,7 @@ bool TMMDMeshBuilder::AppendVMDMorphCurvesToAnimSequence(UAnimSequence* AnimSequ
 		AppendUniqueMessage(LocalReport.Warnings, FString::Printf(TEXT("Failed to save updated animation package: %s"), *FilePath));
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[VMD Facial Append] Updated %s | MorphCurves=%d/%d Failed=%d MaxFrame=%d"),
+	UE_LOG(LogTemp, Log, TEXT("[VMD Facial Append] Updated %s | MorphCurves=%d/%d Failed=%d MaxFrame=%d"),
 		*AnimSequence->GetPathName(),
 		WrittenMorphCurveCount,
 		LocalReport.MatchedMorphTrackCount,

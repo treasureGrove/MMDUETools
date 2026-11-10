@@ -192,16 +192,21 @@ public:
         if (!GetWorld())
             return;
 
-        // 使用UE5的原生选择系统
-        USelection *SelectedActors = GEditor->GetSelectedActors();
+        const bool bIsEditorWorldActor = GEditor && Actor && IsValid(Actor)
+            && !Actor->HasAnyFlags(RF_Transient)
+            && GEditor->GetEditorWorldContext().World() == Actor->GetWorld();
+        if (bIsEditorWorldActor)
+        {
+            GEditor->SelectNone(false, true);
+        }
 
-        // 清除当前选择
-        GEditor->SelectNone(false, true);
-
-        // 选择新的Actor
+        // 选择新的Actor（预览世界中的 RF_Transient Actor 只更新预览视口内部状态，避免触发主关卡选择集告警）
         if (Actor && IsValid(Actor))
         {
-            GEditor->SelectActor(Actor, true, true);
+            if (bIsEditorWorldActor)
+            {
+                GEditor->SelectActor(Actor, true, true);
+            }
             SelectedActor = Actor;
             WidgetLocation = Actor->GetActorLocation();
             ShowWidget(true);

@@ -1,6 +1,6 @@
 # 终末地原生着色后端
 
-源码核对日期：2026-10-19。适用引擎：UE 5.8.3 / CL58210709。跨路径总览见[当前渲染架构](RENDERING_ARCHITECTURE.md)。
+源码核对日期：2026-11-10。适用引擎：通过 `MMDEndfieldBackendEngineProfiles` 表校验受支持引擎版本（当前登记 `UE 5.8.3 / CL58210709`）。跨路径总览见[当前渲染架构](RENDERING_ARCHITECTURE.md)。
 
 当前共享后端为 `mmd-native-bsdf-v15-style-profiles`／Cooked协议15，Graph7、终末地Profile布局42、payload5、FaceData5、Frame1保持。暖暖使用独立Profile风格标记和响应，终末地现有分支保留。[v15本日Editor及终末地回归](Screenshots/2026-10-19-infinity-nikki-native/README.md)与下面的v14历史范围分开记录；不以旧结果宣称新版发行验收。
 
@@ -48,6 +48,6 @@ Substrate 不可用或缺少原生父材质时，运行时可选旧 Unlit 兼容
 
 已具备原生阴影、GI 和延迟载荷接入；现有皮肤配方仍是局部外观响应，没有真正空间 SSS、邻域扩散或厚度透射。完整终末地画质、全部头发／眼睛／屏幕效果、动态形变与 LOD、最新版完整 Cook／发行角色 GPU 和性能仍按各功能记录继续验收。
 
-旧 LightDataRT／阴影 RT 子系统仍可能运行，但原生 V2 不依赖它们取光。尚未按材质需求停掉重复工作，也没有本轮性能收益实测。旧阴影 RT 无效不能推导原生 V2 的 VSM／逐灯阴影无效。
+旧 LightDataRT／阴影 RT 子系统已接入 `r.MMD.LegacyLightPipeline.AutoSleep`（默认 `1`）：当 World 内存在受管 MMD 角色材质且全部为原生 Substrate Toon（无兼容 Unlit 材质或旧动态舞台材质）时，自动跳过当帧四级 `MMDShadowMapRT` Custom Render Pass 与 `LightDataRT` 采集；存在任一兼容 Unlit 材质或关闭该 CVar 时继续正常更新。旧阴影 RT 的门控或无效不能推导原生 V2 的 VSM／CSM 逐灯阴影无效。
 
 详细使用见[维护指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)，剩余范围见[接手状态](ENDFIELD_V2_FOR_GPT.md)。

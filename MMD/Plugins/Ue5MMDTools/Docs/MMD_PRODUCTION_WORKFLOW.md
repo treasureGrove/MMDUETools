@@ -1,12 +1,12 @@
 # 后台制作 MMD 与重开编辑
 
-更新日期为 2026-11-05。后台制作使用 UE 离屏渲染、正式 VMD 导入与 Bullet。原生风格的条件见[当前架构](RENDERING_ARCHITECTURE.md)。
+更新日期为 2026-11-10。后台制作使用 UE 离屏渲染、正式 VMD 导入与 Bullet。原生风格的条件见[当前架构](RENDERING_ARCHITECTURE.md)。
 
 ## 从面板制作
 
-保存角色网格、骨架和自选动画后，确认当前动作、内置风格、展示场景和透视机位，点击 **按当前预览制作**。该入口适用于 Windows D3D12 SM6，需要系统能找到 `ffmpeg` 和 `ffprobe`。可直接使用工程 Content 内的模型，内置动作则由插件随附的 VMD 在后台重新导入。
+保存角色网格、骨架和自选动画后，确认当前动作、内置风格、展示场景（或内置三套完整舞台预览）和透视机位，点击 **按当前预览制作**。该入口适用于 Windows D3D12 SM6，需要系统能找到 `ffmpeg` 和 `ffprobe`。可直接使用工程 Content 内的模型，内置动作则由插件随附的 VMD 在后台重新导入。
 
-后台固定为 30 fps，画幅匹配预览区，从动作第 0 秒开始。沿用预览倍速、物理开关，以及 Substrate、原生后端和阴影设置。支持八套角色展示场景，以及使用原材质或已保存的内置风格。定格、烘焙预览、完整舞台、独立 LookDev、自定义材质覆盖需先切换到受支持的状态。
+后台固定为 30 fps，画幅匹配预览区，从动作第 0 秒开始。沿用预览倍速、物理开关，以及 Substrate、原生后端和阴影设置。支持八套角色展示场景与三套内置动态舞台（`NeonConcert`、`MoonMirror`、`SakuraTheater`），以及使用原材质或已保存的内置风格。`FMMDPreviewMovieRequest` 同时支持可选 `-Camera`（切换为 `Vmd` 相机模式）、`-Audio` 与 `-Duration` 参数转发。定格、烘焙预览、独立 LookDev、自定义材质覆盖需先切换到受支持的状态。
 
 制作完成后，在状态栏点 **播放成片** 调用默认播放器，或点 **打开目录** 查看 `Saved/MMDProduction/` 下的帧、序列和日志。面板保留最近一次任务的入口，换场景或镜头后也能继续使用。点击 **取消** 会保留已有文件。任务失败或取消后，有输出目录时可直接打开排查，失败提示会显示可用的阶段和原因。
 
@@ -30,7 +30,7 @@
 
 `-Stage` 提供八套角色展示：默认 `Studio`（纯白影棚）；新增 `RoseStudio`（樱雾柔光：柔粉背景与细边圆台）、`SlateGallery`（深蓝展厅：深蓝哑光空间与两侧柔光板）、`PearlAtrium`（珍珠回廊：珍珠白空间与偏侧弧墙）、`LilacStudio`（薰紫摄影棚：浅紫渐层、宽背板与低矮侧台）。早期 `SkyGlass`、`VioletStage`、`WarmAtelier` 三套云空仍接受显式参数，面板中收进默认关闭的「早期云空场景」；该版外观已被用户否决，不再作为默认。
 
-八套展示与面板共用几何、材质及对应灯光配方，全部固定 EV0；兼容 LightDataRT 与原生场景灯使用同一环境 ID。新增影棚不使用新的生成图片或 Fab 资产；早期天空 PNG 仍仅为艺术背景，来源保留在[天空资源说明](../Resources/DisplayScenes/README.md)。`report.json` 记录实际 `stage_preset`、`lighting`、`exposure`。原有完整舞台 ID 仍可用，但电影中保留既有的「舞台几何＋Studio 灯光覆盖」行为，不能据此视为完整舞台原配光照复现。
+八套展示与面板共用几何、材质及对应灯光配方，全部固定 EV0；兼容 LightDataRT 与原生场景灯使用同一环境 ID。新增影棚不使用新的生成图片或 Fab 资产；早期天空 PNG 仍仅为艺术背景，来源保留在[天空资源说明](../Resources/DisplayScenes/README.md)。`report.json` 记录实际 `stage_preset`、`lighting`、`exposure`。指定三套完整动态舞台 ID（`NeonConcert`、`MoonMirror`、`SakuraTheater`）时，后台默认保留舞台原配动态灯光、天光、后处理与 Bloom，并逐帧更新舞台灯光时间轴（若需退回仅使用舞台几何配 Studio3Point 灯光，可传入 `-StageUseStudioLight`）。
 
 `-CameraMode Vmd` 为默认值，使用配套原相机。`-CameraMode Showcase` 根据当前头、躯干、手臂和脚部骨骼动态构图，每 6 秒在全身、半身与小角度侧视之间过渡。`-CameraMode Fixed` 使用指定的 UE 世界坐标、旋转和水平视角，需同时提供 `-CameraLocation`、`-CameraRotation` 和 `-CameraFOV`。
 
@@ -50,9 +50,9 @@
 MMD.OpenProduction "D:/projectGithub/MMDUETools/MMD/Saved/MMDProduction/MyMovie"
 ```
 
-命令读取 `report.json`，校验源模型、作品目录和序列路径后打开 Sequence。重开时保留原工程资产或原缓存，以及整个作品目录。
+命令读取 `report.json`，校验源模型、作品目录和序列路径后打开 Sequence，并在日志中输出作品记录的 `character_preset` 与 `stage_preset`。当 `character_preset` 非 `Original`／`None` 时，命令默认向 Sequencer 在编辑器世界生成的对应角色组件自动套用该风格预设（不污染源 `USkeletalMesh` 资产）；如需保持原材质可附加 `-NoPreset`。重开时保留原工程资产或原缓存，以及整个作品目录。
 
-重开结果可编辑已保存的物理姿态、表情及透视相机轨道，使用模型原材质；它不包含渲染时的瞬态暖暖 MID、展示舞台关卡或音乐 Sequence 轨道。MP4 音轨由外部编码加入。重开 Sequence 不能据此宣称完整复现最终影片的舞台和风格；正交相机也不在当前保存镜头的重开保证内。
+重开结果可编辑已保存的物理姿态、表情及透视相机轨道；`Ue5MMDTools.Creation.ProductionReload` 额外验证可根据 `report.json` 记录的 `character_preset` 在重开序列生成的角色上无损套用与恢复该风格预设，而不污染源 `USkeletalMesh` 资产。重开序列默认不包含展示舞台关卡或音乐 Sequence 轨道，MP4 音轨由外部编码加入。正交相机不在当前保存镜头的重开保证内。
 
 ## 默认画面与阴影
 

@@ -37,8 +37,19 @@ namespace
 		bool bRequired;
 	};
 
-	// 固定引擎私有接口；源文件不同就保留原生着色，不尝试模糊匹配补丁。
-	const FMMDEndfieldBackendGuard MMDEndfieldBackendGuards[] =
+	struct FMMDEndfieldBackendEngineProfile
+	{
+		uint16 Major;
+		uint16 Minor;
+		uint16 Patch;
+		uint32 Changelist;
+		const TCHAR* Label;
+		const FMMDEndfieldBackendGuard* Guards;
+		int32 GuardCount;
+	};
+
+	// 固定引擎私有接口；按 (Major, Minor, Patch, Changelist) 查表校验，源文件不同就保留原生着色，不尝试模糊匹配补丁。
+	const FMMDEndfieldBackendGuard MMDEndfieldBackendGuards_5_8_3_CL58210709[] =
 	{
 		{ TEXT("Private/Substrate/SubstrateEvaluation.ush"), TEXT("7D6CF09DDE26622376826A4D8D48FDDE6C8A1586"), true },
 		{ TEXT("Private/Substrate/Substrate.ush"), TEXT("4565C2E6522189E3BE54DDB9A4D4AD04BE9D8CD0"), true },
@@ -59,6 +70,32 @@ namespace
 		{ TEXT("Source/Runtime/Engine/Private/Rendering/ToonProfile.cpp"), TEXT("D53A66718C5C09DDB74687FBB8F2D14A49BA07F1"), false },
 		{ TEXT("Source/Runtime/Engine/Private/Materials/SubstrateTranslatorCommon.cpp"), TEXT("1031A237D3C0C97342484DC962987A568A5F4DA8"), false },
 	};
+
+	const FMMDEndfieldBackendEngineProfile MMDEndfieldBackendEngineProfiles[] =
+	{
+		{ 5, 8, 3, 58210709, TEXT("UE 5.8.3 CL58210709"), MMDEndfieldBackendGuards_5_8_3_CL58210709, UE_ARRAY_COUNT(MMDEndfieldBackendGuards_5_8_3_CL58210709) },
+	};
+
+	const FMMDEndfieldBackendEngineProfile* MMDEndfieldBackendActiveProfile = &MMDEndfieldBackendEngineProfiles[0];
+
+	const FMMDEndfieldBackendEngineProfile* MMDEndfieldBackendFindEngineProfile(const FEngineVersion& Version)
+	{
+		for (const auto& Profile : MMDEndfieldBackendEngineProfiles)
+		{
+			if (Version.GetMajor() == Profile.Major && Version.GetMinor() == Profile.Minor
+				&& Version.GetPatch() == Profile.Patch && Version.GetChangelist() == Profile.Changelist)
+			{
+				return &Profile;
+			}
+		}
+		return nullptr;
+	}
+
+	TArrayView<const FMMDEndfieldBackendGuard> MMDEndfieldBackendGetActiveGuards()
+	{
+		const FMMDEndfieldBackendEngineProfile& Profile = MMDEndfieldBackendActiveProfile ? *MMDEndfieldBackendActiveProfile : MMDEndfieldBackendEngineProfiles[0];
+		return TArrayView<const FMMDEndfieldBackendGuard>(Profile.Guards, Profile.GuardCount);
+	}
 
 	FString MMDEndfieldBackendCanonicalPath(const FString& Path)
 	{
@@ -175,9 +212,10 @@ namespace
 			Json += MMDEndfieldBackendQuote(Keys[Index]) + TEXT(": ") + MMDEndfieldBackendQuote(Status.SourceHashes[Keys[Index]]);
 		}
 		Json += TEXT("\n  },\n  \"guards\": [");
-		for (int32 Index = 0; Index < UE_ARRAY_COUNT(MMDEndfieldBackendGuards); ++Index)
+		const TArrayView<const FMMDEndfieldBackendGuard> ActiveGuards = MMDEndfieldBackendGetActiveGuards();
+		for (int32 Index = 0; Index < ActiveGuards.Num(); ++Index)
 		{
-			const auto& Guard = MMDEndfieldBackendGuards[Index];
+			const auto& Guard = ActiveGuards[Index];
 			Json += Index == 0 ? TEXT("\n    {") : TEXT(",\n    {");
 			Json += TEXT("\"path\": ") + MMDEndfieldBackendQuote(Guard.RelativePath);
 			Json += TEXT(", \"expected\": ") + MMDEndfieldBackendQuote(Guard.ExpectedHash);
@@ -520,7 +558,8 @@ namespace
 		}
 		if (IFileManager::Get().DirectoryExists(*FPaths::Combine(SourceDirectory, TEXT("Generated"))))
 			return MMDEndfieldBackendFail(TEXT("Engine Private source contains reserved Generated directory; overlay mapping cannot be installed."));
-		for (const auto& Guard : MMDEndfieldBackendGuards)
+		const TArrayView<const FMMDEndfieldBackendGuard> ActiveGuards = MMDEndfieldBackendGetActiveGuards();
+		for (const auto& Guard : ActiveGuards)
 		{
 			const FString Source = MMDEndfieldBackendResolveSource(Guard.RelativePath, EngineRoot, ShaderRoot);
 			if (Source.IsEmpty() || !FPaths::IsUnderDirectory(Source, EngineRoot)) return MMDEndfieldBackendFail(TEXT("Source guard path escapes engine root."));
@@ -564,7 +603,7 @@ namespace
 			Status.SourceHashes.Add(TEXT("Private/") + Relative, Hash);
 			RelativeFiles.Add(Relative, Canonical);
 		}
-		for (const auto& Guard : MMDEndfieldBackendGuards)
+		for (const auto& Guard : ActiveGuards)
 		{
 			const FString* Hash = Status.SourceHashes.Find(Guard.RelativePath);
 			if ((Guard.bRequired && !Hash) || (Hash && *Hash != Guard.ExpectedHash))
@@ -723,9 +762,11 @@ namespace MMDEndfieldNativeBackend
 			MMDEndfieldBackendFail(TEXT("Endfield mode 2 requires r.Substrate.Experimental.ToonUnifiedDiffuse=0; unified diffuse is not adapted to client RD alpha/tint semantics."));
 			return;
 		}
-		if (Version.GetMajor() != 5 || Version.GetMinor() != 8 || Version.GetPatch() != 3 || Version.GetChangelist() != 58210709)
+		MMDEndfieldBackendActiveProfile = MMDEndfieldBackendFindEngineProfile(Version);
+		if (!MMDEndfieldBackendActiveProfile)
 		{
-			MMDEndfieldBackendFail(FString::Printf(TEXT("Requires UE 5.8.3 CL58210709, found %s."), *Status.EngineVersion));
+			MMDEndfieldBackendActiveProfile = &MMDEndfieldBackendEngineProfiles[0];
+			MMDEndfieldBackendFail(FString::Printf(TEXT("Requires %s, found %s."), MMDEndfieldBackendEngineProfiles[0].Label, *Status.EngineVersion));
 			return;
 		}
 		if (Status.bCookedData)

@@ -83,6 +83,40 @@ struct FMMDModelBoneData
 	TArray<FMMDModelIKLinkData> IKLinks;
 };
 
+USTRUCT(BlueprintType)
+struct FMMDModelMorphChildData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	int32 MorphIndex = INDEX_NONE;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	float Weight = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FMMDModelMorphData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	FString NameJP;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	FString NameEN;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	uint8 Panel = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	uint8 MorphType = 0;
+
+	// Group (0) 或 Flip (9) 变形包含的子变形索引与权重
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	TArray<FMMDModelMorphChildData> Children;
+};
+
 UCLASS(BlueprintType)
 class UE5MMDTOOLS_API UMMDModelDataAsset : public UDataAsset
 {
@@ -100,6 +134,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
 	TArray<FMMDModelBoneData> Bones;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD")
+	TArray<FMMDModelMorphData> Morphs;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MMD|Physics")
 	TArray<FMMDPhysicsRigidBodyData> Rigids;

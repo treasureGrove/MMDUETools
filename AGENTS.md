@@ -85,7 +85,7 @@ Code:
 
 ---
 
-## 当前渲染架构（2026-10-19 按源码核对）
+## 当前渲染架构（2026-11-10 按源码核对）
 
 渲染工作先读 [当前架构](MMD/Plugins/Ue5MMDTools/Docs/RENDERING_ARCHITECTURE.md) 和 [文档入口](MMD/Plugins/Ue5MMDTools/Docs/README.md)。本节替换了旧的“所有着色均为 Unlit + LightDataRT”摘要；旧摘要已失效。
 
@@ -95,13 +95,13 @@ Code:
 - 不透明／Masked 在 BasePass 写入 Substrate packed 材质缓冲，延迟逐灯读取，由 `TMMDEndfieldNativeBSDF.ush` 消费当前灯及原生 `FShadowTerms`。俗称“走 GBuffer”，实际为 Substrate packed 布局，不是新增插件 GBuffer RT。
 - GI／反射接入 `TMMDEndfieldNativeIndirect.ush` 的原生合成阶段。透明 Skin／附脸层走 Surface Forward inline payload，能力不等于不透明 GI，也不称 packed GBuffer 读回。
 - 当前共享 Backend `mmd-native-bsdf-v15-style-profiles`／Cooked协议15；Graph7、终末地Profile布局42、payload5／FaceData5／Frame1保持。终末地与暖暖共享原生入口，风格响应及 Profile 配方独立。
-- 依赖固定 UE 5.8.3 / CL58210709；在工程 Intermediate 的受校验 shader 副本上适配并映射虚拟路径，安装引擎文件不写入。失败须保留原生／兼容回退，不模糊匹配私有接口。
+- `MMDEndfieldNativeBackend.cpp` 通过多版本受支持签名表 `MMDEndfieldBackendEngineProfiles` 校验引擎版本与 11 份私有 shader SHA-1（当前登记 `UE 5.8.3 / CL58210709`）；在工程 Intermediate 的受校验 shader 副本上适配并映射虚拟路径，安装引擎文件不写入。失败须保留原生／兼容回退，不模糊匹配私有接口。
 - Substrate、原生父材质、自定义后端启用和 Profile 标记是不同条件；核对实际选材质路径，不只看预设名称或项目开关。完整说明见 [原生后端](MMD/Plugins/Ue5MMDTools/Docs/ENDFIELD_NATIVE_BACKEND.md)。
 
-### Reference／旧材质：仍保留 Unlit 兼容路径
+### Reference／旧材质：仍保留 Unlit 兼容路径与按需休眠
 
 - `M_MMD_Reference_*`、旧 Endfield 和部分通用材质仍读取 LightDataRT、插件阴影 RT、天空 SH 与环境镜面。旧数据布局与参数以实际 C++／USH 为准，不再使用旧64×2／单级四texel／SceneCapture摘要。
-- 原生 V2 不依赖旧灯光和阴影 RT 取光，但子系统仍可能运行；没有实测就不能声称消除了重复成本。
+- 原生 V2 与原生暖暖不依赖旧灯光和阴影 RT 取光。`r.MMD.LegacyLightPipeline.AutoSleep`（默认 `1`）通过 `MMDEndfieldNativeProfile::DoesWorldRequireLegacyLightPipeline` 检查当前 World：当世界中存在受管 MMD 角色材质且全部为原生 Substrate Toon（无 Legacy Unlit 材质或旧动态舞台材质）时，`UMMDShadowMapSubsystem` 与 `UMMDAnimeLightDataSubsystem` 自动跳过当帧四级 `MMDShadowMapRT` Custom Render Pass 与 `LightDataRT` 采集写入；一旦切回兼容 Unlit 材质或放入旧舞台则立即恢复更新。自动化测试已验证子系统门控状态切换，未做独立 GPU 帧耗时基准测试时不宣称具体帧率收益。
 - 2026-10-19 最初暖暖实验误用旧 Unlit 模板并被用户否决，现已迁移为独立原生父材质／六类 Profile，复用共享后端。暖暖 Profile 不写终末地 RD／RS；旧三份 Unlit 材质仅留兼容回退。实现与验收见 [原生暖暖说明](MMD/Plugins/Ue5MMDTools/Docs/INFINITY_NIKKI_NATIVE_RENDERING.md)，不要把旧实验截图当作迁移后的画面。
 - 后续暖暖等原生风格应先复用或扩展已有原生材质／载荷／逐灯入口，风格响应独立维护；不得因名称不同无意退回旧 Unlit 光照链。
 

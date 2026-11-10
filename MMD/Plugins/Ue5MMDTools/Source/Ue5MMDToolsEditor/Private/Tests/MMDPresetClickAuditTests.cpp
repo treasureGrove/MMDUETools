@@ -4,6 +4,7 @@
 #include "UI/MMDViewPanel.h"
 #include "Editor/MMDStudioDisplayScene.h"
 #include "Editor/MMDPreviewMovieRequest.h"
+#include "Stage/MMDStageRenderPreset.h"
 #include "Animation/MMDPhysicsPlaybackAnimInstance.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
@@ -606,6 +607,25 @@ bool FMMDPreviewMovieTest::RunTest(const FString& Parameters)
 			State->View->SetPreviewPhysicsEnabled(false);
 			TestTrue(TEXT("关闭物理后快照即时更新"), State->Panel->BuildPreviewMovieRequest(Snapshot, Error) && !Snapshot.bPhysics);
 			State->View->SetPreviewPhysicsEnabled(true);
+			if (auto* SakuraPreset = LoadObject<UMMDStageRenderPreset>(nullptr, TEXT("/Ue5MMDTools/Stages/Presets/DA_Render_SakuraTheater")))
+			{
+				State->View->PreviewStageEnvironment(SakuraPreset);
+				State->View->SetPreviewView(EMMDPreviewView::FullBody, true);
+				TestTrue(TEXT("内置完整舞台支持生成后台制作快照"), State->Panel->BuildPreviewMovieRequest(Snapshot, Error) && Snapshot.Stage == TEXT("SakuraTheater"));
+			}
+			State->View->ApplyLightingEnvironment(EMMDLightingEnvironment::GoldenHour);
+			TestTrue(TEXT("独立 LookDev 环境仍明确拒绝制作"), !State->Panel->BuildPreviewMovieRequest(Snapshot, Error) && Error.Contains(TEXT("独立 LookDev")));
+			State->View->PreviewDisplayScene(EMMDStudioDisplayStyle::RoseStudio);
+			State->View->SetPreviewView(EMMDPreviewView::FullBody, true);
+			TestTrue(TEXT("切回展示场景后恢复快照"), State->Panel->BuildPreviewMovieRequest(Snapshot, Error) && Snapshot.Stage == TEXT("RoseStudio"));
+			FMMDPreviewMovieRequest CustomSnapshot = Snapshot;
+			CustomSnapshot.Camera = TEXT("D:/Fixture/camera.vmd");
+			CustomSnapshot.Audio = TEXT("D:/Fixture/song.wav");
+			CustomSnapshot.Duration = 6.5;
+			const FString CustomArgs = CustomSnapshot.BuildArguments(TEXT("D:/Fixture Path/create.ps1"), TEXT("D:/UE"), TEXT("D:/Project/MMD.uproject"), TEXT("D:/Output"));
+			TestTrue(TEXT("可选相机、音频与裁剪时长参数正确构造"), CustomArgs.Contains(TEXT("-CameraMode Auto -Camera \"D:/Fixture/camera.vmd\""))
+				&& CustomArgs.Contains(TEXT("-Audio \"D:/Fixture/song.wav\""))
+				&& CustomArgs.Contains(TEXT("-Duration 6.500000")));
 		}
 		else AddError(Error);
 		// 用实际的 transient 内置动画模拟未保存的外部动画，不改任何源资产。

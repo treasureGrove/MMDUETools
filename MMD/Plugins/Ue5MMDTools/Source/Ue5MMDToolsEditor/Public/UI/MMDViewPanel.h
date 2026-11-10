@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MMDVersionCompat.h"
 #include "SEditorViewport.h"
 #include "PreviewScene.h"
 #include "EditorViewportClient.h"

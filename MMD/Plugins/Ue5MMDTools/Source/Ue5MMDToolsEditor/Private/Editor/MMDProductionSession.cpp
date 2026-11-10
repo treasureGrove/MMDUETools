@@ -1,5 +1,11 @@
+#include "Animation/SkeletalMeshActor.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
 #include "Editor.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "LevelSequence.h"
@@ -8,10 +14,30 @@
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Stage/MMDStageLibrary.h"
+#include "Stage/MMDStageRenderPreset.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 
 namespace
 {
+	int32 ApplyProductionCharacterPresetInWorld(UWorld* World, const FString& TargetMeshPath, UMMDStageRenderPreset* Preset)
+	{
+		if (!World || !Preset) return 0;
+		int32 AppliedCount = 0;
+		for (TActorIterator<ASkeletalMeshActor> It(World); It; ++It)
+		{
+			USkeletalMeshComponent* Component = It->GetSkeletalMeshComponent();
+			USkeletalMesh* MeshAsset = Component ? Component->GetSkeletalMeshAsset() : nullptr;
+			if (!MeshAsset) continue;
+			if (!TargetMeshPath.IsEmpty() && MeshAsset->GetPathName() != TargetMeshPath) continue;
+			if (UMMDStageLibrary::ApplyCharacterRenderPreset(Component, Preset))
+			{
+				++AppliedCount;
+			}
+		}
+		return AppliedCount;
+	}
+
 	bool ReadProductionDirectory(const TSharedPtr<FJsonObject>& Report, const TCHAR* Field, const FString& Output, FString& Directory)
 	{
 		if (!Report->TryGetStringField(Field, Directory) || Directory.IsEmpty()) return false;
@@ -38,16 +64,18 @@ namespace
 
 	void OpenMMDProduction(const TArray<FString>& Args)
 	{
-		if (Args.Num() != 1 || !GEditor || IsRunningCommandlet())
+		if (Args.Num() < 1 || Args.Num() > 2 || !GEditor || IsRunningCommandlet())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("MMD.OpenProduction 用法：在编辑器控制台执行 MMD.OpenProduction \"样片输出目录\"")); return;
+			UE_LOG(LogTemp, Warning, TEXT("MMD.OpenProduction 用法：在编辑器控制台执行 MMD.OpenProduction \"样片输出目录\" [-NoPreset]")); return;
 		}
+		const bool bNoPreset = Args.Num() >= 2 && (Args[1].Equals(TEXT("-NoPreset"), ESearchCase::IgnoreCase)
+			|| Args[1].Equals(TEXT("NoPreset"), ESearchCase::IgnoreCase));
 		FString Output = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Args[0]);
 		FPaths::NormalizeDirectoryName(Output);
 		FPaths::CollapseRelativeDirectories(Output);
 		FString Json;
 		TSharedPtr<FJsonObject> Report;
-		FString ModelDirectory, ModelRoot, ModelSourceType, AssetsDirectory, AssetsRoot, SequencePath;
+		FString ModelDirectory, ModelRoot, ModelSourceType, AssetsDirectory, AssetsRoot, SequencePath, MeshPath;
 		if (!IFileManager::Get().DirectoryExists(*Output)
 			|| !FFileHelper::LoadFileToString(Json, *(Output / TEXT("report.json")))
 			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Report) || !Report.IsValid()
@@ -60,11 +88,11 @@ namespace
 			UE_LOG(LogTemp, Error, TEXT("[MMD.OpenProduction] 报告缺少有效作品信息或目录不存在：%s"), *Output); return;
 		}
 		Report->TryGetStringField(TEXT("model_source_type"), ModelSourceType);
+		Report->TryGetStringField(TEXT("mesh"), MeshPath);
 		const bool bProjectModel = ModelSourceType == TEXT("project_asset");
 		if (bProjectModel)
 		{
-			FString MeshPath, ModelAssetPath, MeshFilename;
-			Report->TryGetStringField(TEXT("mesh"), MeshPath);
+			FString ModelAssetPath, MeshFilename;
 			Report->TryGetStringField(TEXT("model_asset"), ModelAssetPath);
 			const FString MeshPackage = FPackageName::ObjectPathToPackageName(MeshPath);
 			if (MeshPath != ModelAssetPath || !MeshPackage.StartsWith(TEXT("/Game/"))
@@ -107,10 +135,35 @@ namespace
 		{
 			UE_LOG(LogTemp, Error, TEXT("[MMD.OpenProduction] 无法打开作品序列：%s"), *SequencePath); return;
 		}
-		UE_LOG(LogTemp, Display, TEXT("[MMD.OpenProduction] 已打开作品序列：%s；源模型没有复制或保存。"), *SequencePath);
+		FString CharacterPreset = TEXT("Original"), StagePreset = TEXT("Studio");
+		Report->TryGetStringField(TEXT("character_preset"), CharacterPreset);
+		Report->TryGetStringField(TEXT("stage_preset"), StagePreset);
+		if (!bNoPreset && !CharacterPreset.IsEmpty()
+			&& !CharacterPreset.Equals(TEXT("Original"), ESearchCase::IgnoreCase)
+			&& !CharacterPreset.Equals(TEXT("None"), ESearchCase::IgnoreCase))
+		{
+			if (UMMDStageRenderPreset* PresetObj = LoadObject<UMMDStageRenderPreset>(nullptr, *CharacterPreset))
+			{
+				UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+				if (ApplyProductionCharacterPresetInWorld(EditorWorld, MeshPath, PresetObj) == 0)
+				{
+					TWeakObjectPtr<UWorld> WeakWorld(EditorWorld);
+					TWeakObjectPtr<UMMDStageRenderPreset> WeakPreset(PresetObj);
+					TSharedRef<int32> RemainingTries = MakeShared<int32>(12);
+					FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda(
+						[WeakWorld, WeakPreset, MeshPath, RemainingTries](float) -> bool
+						{
+							if (!WeakWorld.IsValid() || !WeakPreset.IsValid() || --(*RemainingTries) < 0) return false;
+							return ApplyProductionCharacterPresetInWorld(WeakWorld.Get(), MeshPath, WeakPreset.Get()) == 0;
+						}), 0.05f);
+				}
+			}
+		}
+		UE_LOG(LogTemp, Display, TEXT("[MMD.OpenProduction] 已打开作品序列：%s（角色预设：%s，舞台/场景：%s）；源模型没有复制或保存。"),
+			*SequencePath, *CharacterPreset, *StagePreset);
 	}
 
 	FAutoConsoleCommand OpenProductionCommand(TEXT("MMD.OpenProduction"),
-		TEXT("MMD.OpenProduction <OutputDir>：挂载本地样片报告并打开可编辑 LevelSequence。"),
+		TEXT("MMD.OpenProduction <OutputDir> [-NoPreset]：挂载本地样片报告并打开可编辑 LevelSequence（默认同步应用报告记录的角色风格预设）。"),
 		FConsoleCommandWithArgsDelegate::CreateStatic(&OpenMMDProduction));
 }

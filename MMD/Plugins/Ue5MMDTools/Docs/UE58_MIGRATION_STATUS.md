@@ -34,9 +34,12 @@ UE5.8 的 `SceneCapturePixelShader.usf` 中：
 - 插件镜像结构遗漏该字段，导致后续 `FIntPoint`、FName 等成员整体错位。
 - 已补齐 `bExcludeFromSceneTextureExtents`，并通过 UE5.8 增量构建。
 
-## 尚未验证
+## 2026-11-10 跨版本兼容层与多版本后端签名表
 
-UE5.8 Editor/Cmd 启动仍被启动前的全平台 SDK 验证阻塞：LinuxArm64 和 VisionOS SDK 缺失。插件运行时投影需要在 Editor 成功启动后用实际场景和 RT 内容继续验收。
+- 新增 [`MMDVersionCompat.h`](../Source/Ue5MMDTools/Public/MMDVersionCompat.h)，统一封装 `MMD_UE_VERSION_AT_LEAST` / `MMD_UE_VERSION_BEFORE` 宏。
+- `FMMDShadowCustomRenderPass.h` 中的 `bExcludeFromSceneTextureExtents` 通过 `#if MMD_UE_VERSION_AT_LEAST(5, 8)` 宏保护，兼顾 UE 5.8 内存对齐与旧版本源码兼容。
+- `MMDEndfieldNativeBackend.cpp` 的硬编码版本校验重构为 `FMMDEndfieldBackendEngineProfile` / `MMDEndfieldBackendEngineProfiles[]` 多版本签名表结构（当前登记 `UE 5.8.3 / CL58210709` 的 11 份私有 shader SHA-1），后续接入新引擎补丁只需追加签名项。
+- `MMD/Scripts/BuildPlugin.ps1` 自动探测工程本地 `Saved/PreviewProduction/2026-11-04/AutoSdk` 并设置 `UE_SDKS_ROOT`，保证无全局 VS2022 环境下的后台一键构建。
 
 ## P0 架构审计结论
 

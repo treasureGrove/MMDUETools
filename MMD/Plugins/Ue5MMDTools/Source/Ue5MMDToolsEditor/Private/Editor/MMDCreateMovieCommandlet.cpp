@@ -276,6 +276,7 @@ namespace
 		int64 PhysicsSteps = 0;
 		int64 SimulationSteps = 0;
 		bool bPhysicsEnabled = true;
+		bool bUseStageLighting = false;
 
 		~FMMDMovieRig()
 		{
@@ -465,11 +466,15 @@ namespace
 			Rig.Stage->bPreviewAnimation = false;
 			Rig.Stage->bUseManualTime = true;
 			Rig.Stage->FinishSpawning(FTransform::Identity);
-			TArray<ULightComponent*> StageLights;
-			Rig.Stage->GetComponents<ULightComponent>(StageLights);
-			for (ULightComponent* Light : StageLights) Light->SetVisibility(false);
-			if (Rig.Stage->GardenSkyLight) Rig.Stage->GardenSkyLight->SetVisibility(false);
-			if (Rig.Stage->PostProcess) Rig.Stage->PostProcess->bEnabled = false;
+			Rig.bUseStageLighting = !FParse::Param(FCommandLine::Get(), TEXT("StageUseStudioLight"));
+			if (!Rig.bUseStageLighting)
+			{
+				TArray<ULightComponent*> StageLights;
+				Rig.Stage->GetComponents<ULightComponent>(StageLights);
+				for (ULightComponent* Light : StageLights) Light->SetVisibility(false);
+				if (Rig.Stage->GardenSkyLight) Rig.Stage->GardenSkyLight->SetVisibility(false);
+				if (Rig.Stage->PostProcess) Rig.Stage->PostProcess->bEnabled = false;
+			}
 			Rig.Stage->EvaluateStageAtTime(0.0f);
 		}
 		else
@@ -477,9 +482,16 @@ namespace
 			Rig.StudioDisplay = MakeUnique<FMMDStudioDisplayScene>(*Rig.Scene, Rig.InitialBounds.GetBox(), DisplayStyle);
 			if (!Rig.StudioDisplay->IsValid()) { Error = TEXT("默认展示场景创建失败。"); return false; }
 		}
-		Rig.LightingEnvironment = FMMDStudioDisplayScene::GetLightingEnvironment(DisplayStyle);
-		UMMDLightingEnvironmentLibrary::ApplyLightingEnvironmentToPreviewScaled(Rig.Scene.Get(),
-			Rig.LightingEnvironment, Rig.InitialBounds.Origin, 1.0f);
+		if (Rig.Stage && Rig.bUseStageLighting)
+		{
+			Rig.LightingEnvironment = EMMDLightingEnvironment::None;
+		}
+		else
+		{
+			Rig.LightingEnvironment = FMMDStudioDisplayScene::GetLightingEnvironment(DisplayStyle);
+			UMMDLightingEnvironmentLibrary::ApplyLightingEnvironmentToPreviewScaled(Rig.Scene.Get(),
+				Rig.LightingEnvironment, Rig.InitialBounds.Origin, 1.0f);
+		}
 		Rig.Target->RenderTargetFormat = RTF_RGBA8;
 		Rig.Target->bForceLinearGamma = true;
 		Rig.Target->TargetGamma = 2.2f;
@@ -492,7 +504,14 @@ namespace
 		Rig.Capture->bCaptureOnMovement = false;
 		Rig.Capture->bAlwaysPersistRenderingState = true;
 		Rig.Capture->PostProcessBlendWeight = 1.0f;
-		UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(Rig.Capture->PostProcessSettings, Rig.LightingEnvironment);
+		if (Rig.Stage && Rig.bUseStageLighting && Rig.Stage->PostProcess)
+		{
+			Rig.Capture->PostProcessSettings = Rig.Stage->PostProcess->Settings;
+		}
+		else
+		{
+			UMMDLightingEnvironmentLibrary::ConfigureLookDevPostProcess(Rig.Capture->PostProcessSettings, Rig.LightingEnvironment);
+		}
 		Rig.Capture->PostProcessSettings.bOverride_DynamicGlobalIlluminationMethod = true;
 		Rig.Capture->PostProcessSettings.DynamicGlobalIlluminationMethod = EDynamicGlobalIlluminationMethod::Lumen;
 		Rig.Capture->PostProcessSettings.bOverride_ReflectionMethod = true;
@@ -508,6 +527,10 @@ namespace
 		// 注册会还原默认 ShowFlags，诊断覆盖必须放在注册后。
 		Rig.Capture->ShowFlags.SetAntiAliasing(true);
 		Rig.Capture->ShowFlags.SetTemporalAA(true);
+		if (Rig.Stage && Rig.bUseStageLighting)
+		{
+			Rig.Capture->ShowFlags.SetBloom(true);
+		}
 		Rig.AntiAliasing = MakeShared<FMMDMovieAntiAliasing, ESPMode::ThreadSafe>();
 		Rig.Capture->SceneViewExtensions.Add(Rig.AntiAliasing);
 		Rig.Capture->HideComponent(Rig.Baseline.Get());
@@ -539,10 +562,17 @@ namespace
 		Rig.World->SendAllEndOfFrameUpdates();
 		if (UMMDAnimeLightDataSubsystem* Lights = UMMDAnimeLightDataSubsystem::Get())
 		{
-			// SceneCapture 不进入普通主视图收集，兼容材质显式使用当前展示配方。
-			Lights->SetPreviewLightOverride(UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled(
-				Rig.LightingEnvironment, Rig.InitialBounds.Origin, 1.0f));
 			const FVector Position = Rig.Capture->GetComponentLocation();
+			if (Rig.Stage && Rig.bUseStageLighting)
+			{
+				Lights->SetPreviewLightOverrideFromWorld(Rig.World, &Position);
+			}
+			else
+			{
+				// SceneCapture 不进入普通主视图收集，兼容材质显式使用当前展示配方。
+				Lights->SetPreviewLightOverride(UMMDLightingEnvironmentLibrary::PackEnvironmentLightDataScaled(
+					Rig.LightingEnvironment, Rig.InitialBounds.Origin, 1.0f));
+			}
 			Lights->CollectLightsForFrame(Rig.World, &Position);
 			ENQUEUE_RENDER_COMMAND(MMDMovieLights)([Lights](FRHICommandListImmediate& RHICmdList)
 			{
@@ -953,13 +983,21 @@ int32 UMMDCreateMovieCommandlet::Main(const FString& Params)
 	Report->SetBoolField(TEXT("native_backend_active"), Backend.bActive);
 	Report->SetBoolField(TEXT("native_profile_marker_allowed"), Backend.bProfileMarkerAllowed);
 	Report->SetStringField(TEXT("native_backend_signature"), Backend.Signature);
+	const bool bStageNativeLighting = StagePreset.IsValid() && !FParse::Param(FCommandLine::Get(), TEXT("StageUseStudioLight"));
 	Report->SetStringField(TEXT("character_preset"), CharacterPreset.IsValid() ? CharacterPreset->GetPathName() : TEXT("Original"));
 	Report->SetStringField(TEXT("stage_preset"), StagePreset.IsValid() ? StagePreset->GetPathName() : FMMDStudioDisplayScene::GetId(DisplayStyle));
-	Report->SetStringField(TEXT("lighting"), StaticEnum<EMMDLightingEnvironment>()->GetNameStringByValue(
-		static_cast<int64>(FMMDStudioDisplayScene::GetLightingEnvironment(DisplayStyle))));
-	Report->SetStringField(TEXT("exposure"), TEXT("Manual EV0; physical camera exposure disabled"));
+	Report->SetStringField(TEXT("lighting"), bStageNativeLighting
+		? (TEXT("StagePreset:") + StagePreset->GetName())
+		: StaticEnum<EMMDLightingEnvironment>()->GetNameStringByValue(
+			static_cast<int64>(FMMDStudioDisplayScene::GetLightingEnvironment(DisplayStyle))));
+	Report->SetStringField(TEXT("exposure"), bStageNativeLighting
+		? TEXT("Stage preset post-process")
+		: TEXT("Manual EV0; physical camera exposure disabled"));
 	Report->SetStringField(TEXT("scene_lighting_scope"), StagePreset.IsValid()
-		? TEXT("Stage geometry with Studio3Point lighting override") : TEXT("Shared display scene and lighting recipe with tool preview"));
+		? (bStageNativeLighting
+			? TEXT("Stage geometry, animated stage lights, sky light and post-process")
+			: TEXT("Stage geometry with Studio3Point lighting override"))
+		: TEXT("Shared display scene and lighting recipe with tool preview"));
 	Report->SetBoolField(TEXT("diagnostic_no_shadows"), FParse::Param(FCommandLine::Get(), TEXT("NoCaptureShadows")));
 	Report->SetBoolField(TEXT("diagnostic_no_indirect"), FParse::Param(FCommandLine::Get(), TEXT("NoCaptureIndirect")));
 	Report->SetBoolField(TEXT("diagnostic_no_outline"), FParse::Param(FCommandLine::Get(), TEXT("NoCaptureOutline")));

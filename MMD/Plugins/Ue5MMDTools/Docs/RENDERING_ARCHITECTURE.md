@@ -1,6 +1,6 @@
 # 当前渲染架构
 
-源码核对日期：2026-10-19。本文是渲染路径的总入口；历史截图与测试结果保留各自实际日期，不代表本日重测。
+源码核对日期：2026-11-10。本文是渲染路径的总入口；历史截图与测试结果保留各自实际日期，不代表本日重测。
 
 ## 终末地 V2：原生材质缓冲与逐灯 BSDF
 
@@ -13,18 +13,20 @@
 核对入口：
 
 - [原生材质生成器](../Source/Ue5MMDToolsEditor/Private/Editor/MMDEndfieldToonPresetsCommandlet.cpp)：`MSM_DefaultLit`、`UMaterialExpressionSubstrateToonBSDF`、`FrontMaterial` 和专用 CustomOutput。
-- [后端适配](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp)：BasePass／packed export/read、延迟与透明灯光、间接光／反射的工程副本适配。
+- [后端适配](../Source/Ue5MMDTools/Private/Rendering/MMDEndfieldNativeBackend.cpp)：多版本引擎签名表（`MMDEndfieldBackendEngineProfiles`）、BasePass／packed export/read、延迟与透明灯光、间接光／反射的工程副本适配。
 - [逐灯 BSDF](../Shaders/Core/TMMDEndfieldNativeBSDF.ush)：消费当前灯和原生 `FShadowTerms`。
 - [间接光合成](../Shaders/Core/TMMDEndfieldNativeIndirect.ush)：在原生合成阶段处理 diffuse/specular 贡献。
 - [运行时选材质](../Source/Ue5MMDTools/Private/Stage/MMDStageLibrary.cpp)：依据 Substrate 能力、预设原生父材质与角色选择实际路径，不能只凭预设名字推断。
 
-使用原生 Toon 需要开启 Substrate，并配置对应父材质；插件自定义 BSDF 还需要原生后端成功启用及匹配的 Profile。固定引擎版本、源 hash、映射和 Cooked 协议不符时拒绝自定义适配或保留原生回退。安装引擎文件不写入，私有 shader 的适配副本在工程 Intermediate 内；这依然是固定版本的私有接口适配。
+使用原生 Toon 需要开启 Substrate，并配置对应父材质；插件自定义 BSDF 还需要原生后端成功启用及匹配的 Profile。受支持引擎版本表、源 hash、映射和 Cooked 协议不符时拒绝自定义适配或保留原生回退。安装引擎文件不写入，私有 shader 的适配副本在工程 Intermediate 内；这依然是固定版本的私有接口适配。
 
 完整用法与限制见[原生后端](ENDFIELD_NATIVE_BACKEND.md)、[维护指南](ENDFIELD_NATIVE_RENDERING_GUIDE.md)、[分发说明](ENDFIELD_PLUGIN_DISTRIBUTION.md)。原生接入不等于终末地完整画质已验收。
 
-## Reference 与旧材质：Unlit 兼容路径
+## Reference 与旧材质：Unlit 兼容路径与按需休眠
 
-`M_MMD_Reference_*`、旧 Endfield 及部分通用材质仍使用 Unlit Custom，读取 `LightDataRT`、插件阴影 RT、天空 SH 和环境镜面。它们是仍存在的兼容路径，不代表终末地 V2 的原生架构。原生 V2 不依赖旧灯光／阴影 RT 取光，但旧子系统仍可能提交重复工作，不能因此声称已消除其成本。
+`M_MMD_Reference_*`、旧 Endfield 及部分通用材质仍使用 Unlit Custom，读取 `LightDataRT`、插件阴影 RT、天空 SH 和环境镜面。它们是仍存在的兼容路径，不代表终末地 V2 的原生架构。
+
+原生 V2 与原生暖暖不依赖旧灯光／阴影 RT 取光。通过 `r.MMD.LegacyLightPipeline.AutoSleep`（默认 `1`）与 `MMDEndfieldNativeProfile::DoesWorldRequireLegacyLightPipeline`，当当前 World 存在受管 MMD 角色材质且全部为原生 Substrate Toon（无 Legacy Unlit 角色材质或旧动态舞台材质）时，`UMMDShadowMapSubsystem` 与 `UMMDAnimeLightDataSubsystem` 会按需跳过该帧的四级 `MMDShadowMapRT` 捕获及 `LightDataRT` 采集；切回兼容 Unlit 材质或放入旧舞台时立即恢复。自动化测试已验证门控与状态切换，但未做独立 GPU 帧耗时基准测试前不宣称具体帧率提升数值。
 
 暖暖最初实验误用了 SilverCity Reference Unlit 模板，视觉被用户否决；[旧实验记录](Screenshots/2026-10-19-infinity-nikki/README.md)保留证据。当前 `DA_Render_InfinityNikki` 已改为配置独立原生父材质和六类 Profile，共用已有材质缓冲、逐灯与 GI／反射入口；旧三份 Unlit 材质仅作非 Substrate 回退。暖暖不写入终末地 RD／RS，使用独立响应，见[原生暖暖说明](INFINITY_NIKKI_NATIVE_RENDERING.md)。迁移和画面验收分别记录。
 

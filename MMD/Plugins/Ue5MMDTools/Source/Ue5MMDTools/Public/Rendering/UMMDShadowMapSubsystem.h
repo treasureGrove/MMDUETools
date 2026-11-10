@@ -48,6 +48,12 @@ public:
 	/** 游戏线程每帧调用（SetupView）：按主相机视锥提交四级方向光深度 pass。 */
 	void UpdateShadowForFrame(FSceneViewFamily* InViewFamily, const FSceneView* InView);
 
+	/** 判断给定世界本帧是否需要执行旧 Unlit 阴影深度 pass（纯原生 Substrate Toon 世界按需休眠）。 */
+	bool ShouldUpdateShadowForWorld(UWorld* World) const;
+
+	int32 GetLastFrameActiveCascadePasses() const { return LastFrameActiveCascadePasses; }
+	bool WasLastFrameSkippedForNativeOnly() const { return bLastFrameSkippedForNativeOnly; }
+
 	UFUNCTION(BlueprintCallable, Category = "MMD Anime|ShadowMap")
 	void SetShadowEnabled(bool bInEnabled);
 
@@ -109,6 +115,8 @@ private:
 
 	bool bEnabled = true;
 	bool bAutoSetupDone = false;
+	bool bLastFrameSkippedForNativeOnly = false;
+	int32 LastFrameActiveCascadePasses = 0;
 	TWeakObjectPtr<UWorld> LastCleanupWorld;
 	double LastCleanupTime = 0.0;
 

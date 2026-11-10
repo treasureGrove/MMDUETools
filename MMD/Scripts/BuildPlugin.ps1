@@ -46,6 +46,12 @@ try {
     }
     $LogPath = [System.IO.Path]::GetFullPath($LogPath)
     New-Item -ItemType Directory -Path (Split-Path -Parent $LogPath) -Force | Out-Null
+    if (-not $env:UE_SDKS_ROOT) {
+        $localAutoSdk = Join-Path (Split-Path -Parent $ProjectFile) 'Saved\PreviewProduction\2026-11-04\AutoSdk'
+        if (Test-Path -LiteralPath $localAutoSdk) {
+            $env:UE_SDKS_ROOT = (Resolve-Path -LiteralPath $localAutoSdk).Path
+        }
+    }
     # UBT 管理规则和增量构建，不禁用 PCH，也不修改引擎项目。
     & $buildBatch $Target $Platform $Configuration "-Project=$ProjectFile" '-WaitMutex' '-NoHotReloadFromIDE' "-Log=$LogPath"
     exit $LASTEXITCODE

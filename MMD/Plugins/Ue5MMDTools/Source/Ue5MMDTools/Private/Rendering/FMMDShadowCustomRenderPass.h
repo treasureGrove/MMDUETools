@@ -10,6 +10,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MMDVersionCompat.h"
 #include "Rendering/CustomRenderPass.h"
 
 class UTextureRenderTarget2D;
@@ -41,7 +42,9 @@ public:
 	bool bMainViewResolution = false;
 	bool bMainViewCamera = false;
 	bool bIgnoreScreenPercentage = false;
+#if MMD_UE_VERSION_AT_LEAST(5, 8)
 	bool bExcludeFromSceneTextureExtents = false;
+#endif
 	FIntPoint SceneTextureDivisor = FIntPoint(1, 1);
 	FName UserSceneTextureBaseColor;
 	FName UserSceneTextureNormal;

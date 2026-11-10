@@ -45,6 +45,11 @@ public:
 	 *  Called from a view extension's SetupView on the game thread. */
 	void CollectLightsForFrame(UWorld* InWorld = nullptr, const FVector* InCameraPosition = nullptr);
 
+	/** 判断给定世界本帧是否需要收集与写入旧 Unlit LightDataRT（纯原生 Substrate Toon 世界按需休眠）。 */
+	bool ShouldCollectLightsForWorld(UWorld* World) const;
+
+	bool WasLastFrameSkippedForNativeOnly() const { return bLastFrameSkippedForNativeOnly; }
+
 	/** 渲染线程在场景渲染开始时写入 LightDataRT，保证阴影 atlas 与相机基来自同一帧。 */
 	void WriteLightData_RenderThread(FRDGBuilder& GraphBuilder);
 
@@ -93,6 +98,7 @@ private:
 	EMMDShadowFilterQuality ShadowFilterQuality = EMMDShadowFilterQuality::High;
 	bool bCollectionEnabled = true;
 	bool bAutoSetupDone = false;
+	bool bLastFrameSkippedForNativeOnly = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> LightDataRT = nullptr;
