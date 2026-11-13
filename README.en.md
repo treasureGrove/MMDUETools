@@ -4,7 +4,7 @@
 
 Ue5MMDTools imports PMX models and VMD animation, previews MMD physics, toon lighting, camera and stage presets, then renders the current preview to MP4. Imported animation, morph curves and cameras can also continue into Sequencer.
 
-[Download Win64 plugin](https://github.com/treasureGrove/MMDUETools/releases/latest) · [Get a demo model](MODEL_SOURCES.md) · [Chinese guide](README.md) · [Watch the demo](https://www.bilibili.com/video/BV1M2RXBPExk/)
+[Download Win64 plugin](https://github.com/treasureGrove/MMDUETools/releases/latest) · [Get a demo model](MODEL_SOURCES.md) · [中文首页](README.md) · [Chinese guide](github.md) · [Watch the demo](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
 <p align="center">
   <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" width="800" alt="Ue5MMDTools workflow preview"></a>

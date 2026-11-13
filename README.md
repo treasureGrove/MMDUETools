@@ -4,7 +4,7 @@
 
 导入 PMX 和 VMD，在 **MMD STUDIO / 角色工坊** 里试动作、看发丝和衣物物理、换布光、定镜头。满意后直接后台生成 MP4，也可把动作、表情和相机带入 Sequencer 继续编辑。
 
-[下载 Win64 插件包](https://github.com/treasureGrove/MMDUETools/releases/latest) · [获取演示模型](MODEL_SOURCES.md) · [图文操作指南](github.md) · [B 站演示](https://www.bilibili.com/video/BV1M2RXBPExk/)
+[下载 Win64 插件包](https://github.com/treasureGrove/MMDUETools/releases/latest) · [获取演示模型](MODEL_SOURCES.md) · [English README](README.en.md) · [图文操作指南](github.md) · [B 站演示](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
 [操作视频](#操作视频) · [待机动图](#待机动作预览) · [镜头与布光](#镜头与布光) · [角色工坊](#角色工坊) · [快速上手](#快速上手) · [借物表](#借物表)
 
