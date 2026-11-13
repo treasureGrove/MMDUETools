@@ -81,6 +81,22 @@
       font-size: 18px;
     }
 
+    .button {
+      display: inline-block;
+      margin: 8px 8px 8px 0;
+      padding: 8px 14px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .button.secondary {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.55);
+    }
+
     .flow {
       display: flex;
       flex-wrap: wrap;
@@ -228,6 +244,7 @@
     <div class="inner">
       <h1>Ue5MMDTools</h1>
       <p class="lead">用于 Unreal Engine 5 的 MMD 导入和播放插件，把 PMX 模型、VMD 动作和表情数据转换到 UE 的原生资产流程中。</p>
+      <p><a class="button" href="https://github.com/treasureGrove/MMDUETools/releases/latest">下载 Win64 插件</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools#readme">查看仓库首页</a></p>
       <div class="flow" aria-label="基础流程">
         <span>PMX -> SkeletalMesh</span>
         <span>VMD -> AnimSequence</span>
@@ -249,6 +266,13 @@
         </iframe>
       </div>
       <p class="note">如果播放器没有显示，可以直接打开 <a href="https://www.bilibili.com/video/BV1M2RXBPExk/" target="_blank" rel="noreferrer">Bilibili 演示视频 BV1M2RXBPExk</a>。</p>
+    </section>
+
+    <section id="showcase">
+      <h2>实际效果预览</h2>
+      <p>从导入角色、切换动作和布光，到后台制作 MP4。点击动图查看完整操作视频。</p>
+      <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" alt="MMD Studio 操作视频预览"></a>
+      <p class="note"><a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4">下载操作视频（MP4）</a> · <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif">查看待机动图</a></p>
     </section>
 
     <section id="guide">
