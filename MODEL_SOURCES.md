@@ -7,11 +7,11 @@
 | 用途 | 来源 | 说明 |
 | --- | --- | --- |
 | 10 周年初音待机、操作视频 | [YYB Hatsune Miku 10th v1.02（BowlRoll）](https://bowlroll.net/file/146083) | 首页截图与视频使用该模型的非商业演示。下载后保持 PMX 与贴图的相对目录。 |
-| 16 周年影棚对照 | [作者配布页与借物记录](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md) | 该记录列出模型作者、改造者和使用限制；仓库不再提供模型文件。 |
+| 16 周年影棚对照 | [作者配布页与借物记录](https://github.com/treasureGrove/MMDUETools/blob/dev/MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md) | 该记录列出模型作者、改造者和使用限制；仓库不再提供模型文件。 |
 
 ## 预览动作
 
-插件包内只保留 [MMDAgent Mei 动作](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)，不包含 Mei 角色模型。动作按 CC BY 3.0 分发，包内保留原始署名和许可文件。
+插件包内只保留 [MMDAgent Mei 动作](Resources/PreviewMotions/README.md)，不包含 Mei 角色模型。动作按 CC BY 3.0 分发，包内保留原始署名和许可文件。
 
 导入你自己的 PMX 后，面板会自动尝试使用这些通用待机动作。动作只是骨骼动画，不会改变角色模型的外观；不同骨架的手指、肩部和衣物接触位置可能需要调整。
 
