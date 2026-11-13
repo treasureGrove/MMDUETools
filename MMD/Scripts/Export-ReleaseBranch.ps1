@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (& git -C $PSScriptRoot rev-parse --show-toplevel).Trim()
 $pluginRoot = 'MMD/Plugins/Ue5MMDTools/'
-$rootPages = @('README.md', 'github.md')
+$rootPages = @('README.md', 'github.md', 'MODEL_SOURCES.md')
 $mediaPattern = '\.(png|jpg|jpeg|gif|webp|mp4)$'
 
 $dirty = & git -C $repo status --porcelain --untracked-files=no -- $pluginRoot @rootPages

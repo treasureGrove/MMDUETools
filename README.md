@@ -4,7 +4,7 @@
 
 导入 PMX 和 VMD，在 **MMD STUDIO / 角色工坊** 里试动作、看发丝和衣物物理、换布光、定镜头。满意后直接后台生成 MP4，也可把动作、表情和相机带入 Sequencer 继续编辑。
 
-[下载 Win64 插件包](https://github.com/treasureGrove/MMDUETools/releases/latest) · [图文操作指南](github.md) · [B 站演示](https://www.bilibili.com/video/BV1M2RXBPExk/)
+[下载 Win64 插件包](https://github.com/treasureGrove/MMDUETools/releases/latest) · [获取演示模型](MODEL_SOURCES.md) · [图文操作指南](github.md) · [B 站演示](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
 [操作视频](#操作视频) · [待机动图](#待机动作预览) · [镜头与布光](#镜头与布光) · [角色工坊](#角色工坊) · [快速上手](#快速上手) · [借物表](#借物表)
 
@@ -75,8 +75,9 @@
 ## 快速上手
 
 1. 解压 UE 5.8.3 Win64 插件包，将 `Ue5MMDTools/` 放进自己工程的 `Plugins/` 目录。启用插件并重启。
-2. 从 **窗口 → Ue5MMDTools** 打开角色工坊，导入 PMX 或加载已有角色，选择动作、场景和镜头。
-3. 保存角色和动画，点 **按当前预览制作**。Windows D3D12 SM6 环境需能调用 `ffmpeg` 和 `ffprobe`，完成后在 `Saved/MMDProduction/` 找到 MP4。
+2. 准备一个自己拥有使用权的 PMX 模型；想复现本页画面，可从[演示模型清单](MODEL_SOURCES.md)打开原作者下载页。下载后保持 PMX 与贴图的相对目录，不需要把模型复制进插件目录。
+3. 从 **窗口 → Ue5MMDTools** 打开角色工坊，点击 **导入 PMX 模型**，选择 `.pmx`；导入一次后，之后直接点 **加载已有角色**，不用重复下载或导入。
+4. 选择动作、场景和镜头，保存角色和动画，点 **按当前预览制作**。Windows D3D12 SM6 环境需能调用 `ffmpeg` 和 `ffprobe`，完成后在 `Saved/MMDProduction/` 找到 MP4。
 
 [完整图文步骤](github.md) · [后台制作指南](MMD/Plugins/Ue5MMDTools/Docs/MMD_PRODUCTION_WORKFLOW.md) · [技术文档](MMD/Plugins/Ue5MMDTools/Docs/README.md) · [修改记录](MMD/Plugins/Ue5MMDTools/Docs/CHANGELOG.md)
 
