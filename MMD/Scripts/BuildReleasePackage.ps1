@@ -62,6 +62,14 @@ function Add-Step {
 }
 
 $OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
+# 守卫只看仓库与引擎：导出树本来就在 OutputRoot 内，不能用插件目录反查。
+foreach ($guard in @($engineRoot, $repoRoot)) {
+    if ($OutputRoot.TrimEnd('\').StartsWith($guard.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        $guard.TrimEnd('\').StartsWith($OutputRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "OutputRoot 必须在仓库与引擎之外：$OutputRoot"
+    }
+}
+if (Test-Path -LiteralPath $OutputRoot) { throw "OutputRoot 必须尚不存在，拒绝覆盖：$OutputRoot" }
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 
 # --- 先从开发分支导出轻量发布树，避免把本机截图和测试资源打进安装包 ---
@@ -91,7 +99,8 @@ else {
 }
 
 foreach ($guard in @($pluginRoot, $engineRoot, $repoRoot)) {
-    if ($OutputRoot.TrimEnd('\').StartsWith($guard.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    if ($OutputRoot.TrimEnd('\').StartsWith($guard.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -and
+        -not $pluginRoot.StartsWith($OutputRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
         throw "OutputRoot 不能位于插件、引擎或仓库内部：$OutputRoot"
     }
 }
