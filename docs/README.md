@@ -7,6 +7,8 @@
 ## 当前维护说明
 
 - [工具面板、VMD姿势／动作、镜头与实时物理](TOOL_PANEL_GUIDE.md)
+- [命令行导入 PMX／VMD 与 JSON 报告](CLI.md)
+- [构建环境与打包（VS 18 / AutoSDK / UBA）](BUILD_ENVIRONMENT.md)
 - [后台制作 MMD、MP4音轨与可重开序列](MMD_PRODUCTION_WORKFLOW.md)
 - [Fab 场景素材候选与官方导入入口](FAB_ENVIRONMENT_OPTIONS.md)
 - [2026-10-25 纯白默认与四套摄影棚预设](https://github.com/treasureGrove/MMDUETools/blob/dev/MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)

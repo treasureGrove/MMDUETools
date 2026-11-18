@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "1.0",
+	"Version": 2,
+	"VersionName": "1.1.2",
 	"FriendlyName": "Ue5MMDTools",
 	"Description": "PMX model and VMD animation importer for Unreal Engine 5. Converts MMD assets into native UE SkeletalMesh, AnimSequence, and LevelSequence.",
 	"Category": "Import",
@@ -46,3 +46,4 @@
 		}
 	]
 }
+

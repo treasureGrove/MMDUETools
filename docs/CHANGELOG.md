@@ -2,6 +2,13 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-11-18 — 发布分支重构、Win64 包验证、命令行导入与构建环境固化
+
+- **仓库形态**：`main` 改为轻量插件发布树（约 98.5 MB，插件根目录即仓库根，可直接复制到 `Plugins/Ue5MMDTools`），完整 Unreal 工程留在 `dev`。新增 `MMD/Scripts/Export-ReleaseBranch.ps1` 按白名单导出发布树，并校验相对链接、禁配文件与超限文件。第三方 PMX、舞蹈动作与音频不进入发布树，改为根目录 [MODEL_SOURCES.md](../MODEL_SOURCES.md) 提供原作者下载入口。
+- **命令行导入（新）**：新增 `MMDImportPmx` 与 `MMDImportVmd` 两个 Commandlet 及 `Scripts/ue5mmd.ps1` 包装脚本，支持 `import-pmx`／`import-vmd`／`render`／`validate` 四个子命令，全部输出 JSON 报告并带覆盖保护。实测：16 周年模型导入得到 351,932 顶点、634,970 三角形、38 个材质、498 骨骼、71 个 Morph、14 个本次资产；`mei_wait.vmd` 导入得到 4 秒动画，骨骼轨道 87/142、表情轨道 11/29 匹配，未匹配项以 warnings 返回。详见 [CLI 说明](CLI.md)。
+- **构建环境与打包（新）**：新增 [构建环境说明](BUILD_ENVIRONMENT.md) 与 `MMD/Scripts/BuildReleasePackage.ps1`，固化两处环境问题——UBT 无法枚举 VS 18 安装时，通过工程本地 AutoSDK 目录联接复用已安装 MSVC 14.50；UBA 默认缓存根目录解析为空导致初始化空引用时，用 `UBA_ROOT` 指向确定目录。脚本一次完成导出、BuildPlugin（Editor/Game Development + Game Shipping）、清理 Intermediate 与 PDB、生成 ZIP 与 SHA-256。
+- **Win64 包验证**：`BuildPlugin` 三配置全部通过，产物 75,550,910 字节，SHA-256 `c3517b04de704b46371d2e67b3a57e26b3772b703feb4099e99665fcc873a532`。另把发布 ZIP 解压进全新空白工程，用 `UnrealEditor-Cmd.exe -nullrhi -unattended -ExecCmds="MMD.OpenPanel;Quit"` 无窗口启动，日志确认两个模块加载、命令被识别执行、`MMDMatEnsure` 正常完成、0 致命错误。该验证覆盖模块加载与启动逻辑，不覆盖面板渲染效果与 Cooked 游戏。
+
 ## 2026-11-10 — 预览制作舞台／参数扩展、VMD 兼容性增强、Legacy 光照按需休眠及跨版本兼容打底
 
 - **预览制作与序列重开闭环（优先级 1A & 第二轮迭代）**：`MMDImportSetting::BuildPreviewMovieRequest` 支持在预览三套内置完整动态舞台（`NeonConcert`、`MoonMirror`、`SakuraTheater`）时直接提交后台制作，沿用对应舞台预设 ID；`FMMDPreviewMovieRequest` 新增可选 `-Camera`（自动切换 `-CameraMode Auto`）、`-Audio` 与 `-Duration` 参数组装，缺省时与原固定镜头快照命令行保持逐字符一致。`MMDCreateMovieCommandlet` 在选中内置动态舞台且未传 `-StageUseStudioLight` 时，保留舞台原配灯光、`GardenSkyLight` 与 `PostProcess` 参数，并在每帧 `EvaluateStageAtTime` 后同步 `SetPreviewLightOverrideFromWorld`（传 `-StageUseStudioLight` 可回退至影棚四点灯）。`MMD.OpenProduction` 读取 `report.json` 中的 `character_preset` 与 `stage_preset`，并在打开序列时自动对生成的角色组件无损应用 `character_preset`（传 `-NoPreset` 可跳过），不污染源 `USkeletalMesh`。
