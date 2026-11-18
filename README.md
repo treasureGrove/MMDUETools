@@ -81,6 +81,18 @@
 
 [完整图文步骤](github.md) · [后台制作指南](MMD/Plugins/Ue5MMDTools/Docs/MMD_PRODUCTION_WORKFLOW.md) · [技术文档](MMD/Plugins/Ue5MMDTools/Docs/README.md) · [修改记录](MMD/Plugins/Ue5MMDTools/Docs/CHANGELOG.md)
 
+## 命令行
+
+不打开编辑器也能导入和出片，结果以 JSON 返回，方便批量处理或交给脚本／AI 调用：
+
+```powershell
+.\Plugins\Ue5MMDTools\Scripts\ue5mmd.ps1 import-pmx -Pmx D:\models\yyb.pmx -Name YYB -Json
+.\Plugins\Ue5MMDTools\Scripts\ue5mmd.ps1 import-vmd -Vmd D:\motions\wait.vmd -Mesh /Game/MMDModels/YYB/Model/YYB -Pmx D:\models\yyb.pmx -Json
+.\Plugins\Ue5MMDTools\Scripts\ue5mmd.ps1 render -ModelAsset /Game/MMDModels/YYB/Model/YYB -Motion D:\motions\wait.vmd -Output D:\out\movie.mp4
+```
+
+[CLI 详细说明](MMD/Plugins/Ue5MMDTools/Docs/CLI.md)
+
 ## 借物表
 
 - **角色**　初音未来，Crypton Future Media, INC.。[角色许可](https://piapro.jp/license/pcl)

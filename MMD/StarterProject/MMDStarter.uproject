@@ -1,0 +1,12 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "Sample",
+	"Description": "Minimal UE 5.8.3 project for Ue5MMDTools. Put the plugin in Plugins/Ue5MMDTools first.",
+	"Plugins": [
+		{
+			"Name": "Ue5MMDTools",
+			"Enabled": true
+		}
+	]
+}
