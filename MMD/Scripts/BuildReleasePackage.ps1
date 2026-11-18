@@ -111,21 +111,6 @@ $pluginVersion = (Get-Content -LiteralPath $pluginFile -Raw | ConvertFrom-Json).
 if (-not $pluginVersion) { $pluginVersion = '0.0.0' }
 
 $script:steps = [System.Collections.Generic.List[object]]::new()
-function Add-Step {
-    param([string]$Name, [string]$Detail)
-    $script:steps.Add([pscustomobject]@{ step = $Name; detail = $Detail; at = (Get-Date).ToString('o') })
-    Write-Host "[$Name] $Detail"
-}
-
-$OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
-foreach ($guard in @($pluginRoot, $engineRoot)) {
-    if ((Test-Path -LiteralPath $OutputRoot) -or
-        $OutputRoot.TrimEnd('\').StartsWith($guard.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -or
-        $guard.TrimEnd('\').StartsWith($OutputRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
-        throw "OutputRoot 必须是插件和引擎之外尚不存在的新目录：$OutputRoot"
-    }
-}
-New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 
 # --- 工程本地 AutoSDK：让 UBT 通过 AutoSDK 路径使用已安装的 MSVC ---
 $msvcDir = Join-Path $VsInstallDir "VC\Tools\MSVC\$MsvcVersion"
