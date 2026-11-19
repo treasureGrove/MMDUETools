@@ -2,6 +2,14 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-11-19 — 导出脚本大小写统一与发布树链接复查
+
+- **问题**：开发分支的插件目录是 `Docs/`，而发布分支的 Pages 目录是 `docs/`。导出脚本把插件 `Docs/` 原样映射成 `Docs/`，与发布分支上的小写目录不一致；GitHub 对路径区分大小写，README 里的相对图片路径因此整片 404（实测 `Docs/...gif` 返回 404、`docs/...gif` 返回 200）。
+- **修复**：`Export-ReleaseBranch.ps1` 新增 `Get-ExportPath`，把插件 `Docs/` 统一映射为 `docs/`；链接重写走同一映射，所以导出的 `README.md` / `github.md` 指向小写路径。
+- **新增校验**：导出完成后按真实目录项逐段比对，复查发布树内所有 Markdown 相对链接（大小写敏感），结果写入报告的 `broken_links_after_export`，非空则 `success=false`。
+- **验证**：在 `dev`（`39be91db`）导出到临时目录，1630 个文件、98.8 MB、相对链接 231 条、指向 dev 的链接 138 条，`broken_links_after_export` 为空、`success=true`；产物顶层目录为 `docs/`，README 图片指向 `docs/Screenshots/...`。把一条路径改回 `Docs/` 后同一检查能报出该链接（注入验证）。本批未涉及引擎编译或画面验收。
+
+
 ## 2026-11-18 — 发布分支重构、Win64 包验证、命令行导入与构建环境固化
 
 - **仓库形态**：`main` 改为轻量插件发布树（约 98.5 MB，插件根目录即仓库根，可直接复制到 `Plugins/Ue5MMDTools`），完整 Unreal 工程留在 `dev`。新增 `MMD/Scripts/Export-ReleaseBranch.ps1` 按白名单导出发布树，并校验相对链接、禁配文件与超限文件。第三方 PMX、舞蹈动作与音频不进入发布树，改为根目录 [MODEL_SOURCES.md](../../../../MODEL_SOURCES.md) 提供原作者下载入口。
