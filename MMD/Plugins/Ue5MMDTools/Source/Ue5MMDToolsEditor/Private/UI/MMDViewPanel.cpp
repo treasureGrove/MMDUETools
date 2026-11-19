@@ -58,6 +58,8 @@
 #include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/Input/SComboButton.h"
 
+#define LOCTEXT_NAMESPACE "Ue5MMDToolsUI"
+
 class FMMDViewportClient : public FEditorViewportClient
 {
 public:
@@ -615,13 +617,13 @@ TSharedPtr<SWidget> MMDViewPanel::MakeViewportToolbar()
 			.OnClicked_Lambda([this, View]() { SetPreviewView(View); return FReply::Handled(); })];
 	}
 	Toolbar->AddSlot().Padding(FMargin(5, 0, 0, 0))
-	[SNew(SButton).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).Text(FText::FromString(TEXT("场景机位")))
+	[SNew(SButton).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).Text(LOCTEXT("ViewPanel_001", "场景机位"))
 		.ButtonColorAndOpacity_Lambda([this]() { return CurrentPreviewView == EMMDPreviewView::Scene ? MMDPanelStyle::AccentSoft : FLinearColor::White; })
-		.ToolTipText(FText::FromString(TEXT("恢复当前场景的默认构图")))
+		.ToolTipText(LOCTEXT("ViewPanel_002", "恢复当前场景的默认构图"))
 		.OnClicked_Lambda([this]() { ResetPreviewCamera(); return FReply::Handled(); })];
 	Toolbar->AddSlot().Padding(FMargin(5, 0, 0, 0))
 	[SNew(SComboButton).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text)
-		.ButtonContent()[SNew(STextBlock).Text(FText::FromString(TEXT("编辑"))).ColorAndOpacity(MMDPanelStyle::Text)]
+		.ButtonContent()[SNew(STextBlock).Text(LOCTEXT("ViewPanel_003", "编辑")).ColorAndOpacity(MMDPanelStyle::Text)]
 		.OnGetMenuContent_Lambda([this]()
 		{
 			FMenuBuilder Menu(true, nullptr);
@@ -636,7 +638,7 @@ TSharedPtr<SWidget> MMDViewPanel::MakeViewportToolbar()
 				})));
 			}
 			Menu.AddMenuSeparator();
-			Menu.AddMenuEntry(FText::FromString(TEXT("恢复原始姿态")), FText::FromString(TEXT("清除预览动作，停止动作和物理。可重新点预设恢复。")),
+			Menu.AddMenuEntry(LOCTEXT("ViewPanel_004", "恢复原始姿态"), LOCTEXT("ViewPanel_005", "清除预览动作，停止动作和物理。可重新点预设恢复。"),
 				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([this]() { ClearPreviewAnimation(); })));
 			return Menu.MakeWidget();
 		})];
@@ -1375,11 +1377,18 @@ bool MMDViewPanel::PreviewDisplayScene(EMMDStudioDisplayStyle Style)
 FText MMDViewPanel::GetLookDevDescription() const
 {
 	if (const UMMDStageRenderPreset* Preset = GetStagePreviewPreset())
-		return FText::FromString(TEXT("LOOKDEV  /  ") + Preset->DisplayName.ToString() + TEXT(" · 舞台原配灯光 / 后处理"));
+	{
+		return FText::Format(LOCTEXT("ViewPanel_006", "LOOKDEV  /  {0} · 舞台原配灯光 / 后处理"), Preset->DisplayName);
+	}
 	if (const TOptional<EMMDStudioDisplayStyle> Style = GetDisplaySceneStyle(); Style.IsSet())
-		return FText::FromString(TEXT("展示场景  /  ") + FMMDStudioDisplayScene::GetDisplayName(Style.GetValue()) + TEXT(" · 配套光照 / 固定曝光"));
-	return FText::FromString(TEXT("LOOKDEV  /  ") + UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(CurrentLightingEnvironment)
-		+ (CurrentLightingEnvironment == EMMDLightingEnvironment::Studio3Point ? TEXT(" · 中性影棚 / 固定曝光") : TEXT(" · 环境布光 / 自动曝光")));
+	{
+		return FText::Format(LOCTEXT("ViewPanel_007", "展示场景  /  {0} · 配套光照 / 固定曝光"), FText::FromString(FMMDStudioDisplayScene::GetDisplayName(Style.GetValue())));
+	}
+	return FText::Format(
+		CurrentLightingEnvironment == EMMDLightingEnvironment::Studio3Point
+			? LOCTEXT("ViewPanel_008", "LOOKDEV  /  {0} · 中性影棚 / 固定曝光")
+			: LOCTEXT("ViewPanel_009", "LOOKDEV  /  {0} · 环境布光 / 自动曝光"),
+		FText::FromString(UMMDLightingEnvironmentLibrary::GetEnvironmentDisplayName(CurrentLightingEnvironment)));
 }
 
 bool MMDViewPanel::PreviewStageEnvironment(UMMDStageRenderPreset* Preset)
@@ -1468,3 +1477,5 @@ void MMDViewPanel::SyncPreviewStageToEnvironment(EMMDLightingEnvironment Environ
 		}
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

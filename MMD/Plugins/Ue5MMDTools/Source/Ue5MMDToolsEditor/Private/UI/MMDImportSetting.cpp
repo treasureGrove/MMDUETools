@@ -106,7 +106,10 @@
 #endif // WITH_EDITOR
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 #include "Misc/AutomationTest.h"
+
 #endif
+
+#define LOCTEXT_NAMESPACE "Ue5MMDToolsUI"
 
 namespace
 {
@@ -1271,28 +1274,28 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 			TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))];
 	};
 
-	TSharedRef<SVerticalBox> ModelSection = AddSection(FText::FromString(TEXT("01  选择角色")), GMMDColorBlue);
-	AddButton(ModelSection, FText::FromString(TEXT("导入 PMX 模型")), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportModelClicked));
-	AddButton(ModelSection, FText::FromString(TEXT("加载已有角色")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateLambda([this]() { LoadSelectedMMDActor(); return FReply::Handled(); }));
+	TSharedRef<SVerticalBox> ModelSection = AddSection(LOCTEXT("ImportSetting_001", "01  选择角色"), GMMDColorBlue);
+	AddButton(ModelSection, LOCTEXT("ImportSetting_002", "导入 PMX 模型"), MMDGetPrimaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportModelClicked));
+	AddButton(ModelSection, LOCTEXT("ImportSetting_003", "加载已有角色"), MMDGetSecondaryButtonStyle(), FOnClicked::CreateLambda([this]() { LoadSelectedMMDActor(); return FReply::Handled(); }));
 
-	TSharedRef<SVerticalBox> MotionSection = AddSection(FText::FromString(TEXT("02  姿势与动作")), GMMDColorBlue);
+	TSharedRef<SVerticalBox> MotionSection = AddSection(LOCTEXT("ImportSetting_004", "02  姿势与动作"), GMMDColorBlue);
 	MotionSection->AddSlot().AutoHeight()[BuildMotionPresetPanel()];
 	TSharedRef<SVerticalBox> MotionImport = SNew(SVerticalBox);
 	MotionSection->AddSlot().AutoHeight().Padding(0, 6)
 	[
 		SNew(SExpandableArea).InitiallyCollapsed(true).Style(MMDPanelStyle::Expandable())
 		.BorderImage(MMDPanelStyle::CardBrush()).HeaderPadding(FMargin(10, 8)).Padding(FMargin(8))
-		.HeaderContent()[SNew(STextBlock).Text(FText::FromString(TEXT("导入自己的 VMD／表情／相机"))).ColorAndOpacity(GMMDTextDim)]
+		.HeaderContent()[SNew(STextBlock).Text(LOCTEXT("ImportSetting_005", "导入自己的 VMD／表情／相机")).ColorAndOpacity(GMMDTextDim)]
 		.BodyContent()[MotionImport]
 	];
 	MotionSection = MotionImport;
-	AddButton(MotionSection, FText::FromString(TEXT("导入 VMD 动作")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDClicked));
-	AddButton(MotionSection, FText::FromString(TEXT("追加表情")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnAppendFacialVMDClicked));
-	AddButton(MotionSection, FText::FromString(TEXT("导入 VMD 相机")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDCameraClicked));
+	AddButton(MotionSection, LOCTEXT("ImportSetting_006", "导入 VMD 动作"), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDClicked));
+	AddButton(MotionSection, LOCTEXT("ImportSetting_007", "追加表情"), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnAppendFacialVMDClicked));
+	AddButton(MotionSection, LOCTEXT("ImportSetting_008", "导入 VMD 相机"), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnImportVMDCameraClicked));
 
-	TSharedRef<SVerticalBox> OutputSection = AddSection(FText::FromString(TEXT("03  制作与输出")), GMMDColorMint);
-	AddButton(OutputSection, FText::FromString(TEXT("合成关卡序列")), MMDGetAccentButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenSequenceComposerClicked));
-	AddButton(OutputSection, FText::FromString(TEXT("烘焙物理动画")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
+	TSharedRef<SVerticalBox> OutputSection = AddSection(LOCTEXT("ImportSetting_009", "03  制作与输出"), GMMDColorMint);
+	AddButton(OutputSection, LOCTEXT("ImportSetting_010", "合成关卡序列"), MMDGetAccentButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenSequenceComposerClicked));
+	AddButton(OutputSection, LOCTEXT("ImportSetting_011", "烘焙物理动画"), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnOpenPhysicsBakeClicked));
 
 	TSharedRef<SVerticalBox> Advanced = SNew(SVerticalBox);
 	Advanced->AddSlot().AutoHeight().Padding(0, 6)
@@ -1300,20 +1303,20 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 		SNew(SCheckBox)
 		.IsChecked_Lambda([]() { return TMMDMeshBuilder::IsUseStandardMaterials() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
 		.OnCheckStateChanged_Lambda([](ECheckBoxState State) { TMMDMeshBuilder::SetUseStandardMaterials(State == ECheckBoxState::Checked); })
-		[SNew(STextBlock).Text(FText::FromString(TEXT("导入时使用 MMD Standard 材质"))).ColorAndOpacity(MMDPanelStyle::Text).AutoWrapText(true)]
+		[SNew(STextBlock).Text(LOCTEXT("ImportSetting_012", "导入时使用 MMD Standard 材质")).ColorAndOpacity(MMDPanelStyle::Text).AutoWrapText(true)]
 	];
 	Advanced->AddSlot().AutoHeight().Padding(0, 6)
 	[
-		SNew(STextBlock).Text(FText::FromString(TEXT("Aurora Jewel · 旧版资产方案\n以下操作会保存到角色蓝图资产。")))
+		SNew(STextBlock).Text(LOCTEXT("ImportSetting_013", "Aurora Jewel · 旧版资产方案\n以下操作会保存到角色蓝图资产。"))
 		.AutoWrapText(true).ColorAndOpacity(GMMDTextDim)
 	];
-	AddButton(Advanced, FText::FromString(TEXT("Aurora Jewel：应用并保存资产")), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnApplyAuroraJewelToonClicked));
-	AddButton(Advanced, FText::FromString(TEXT("撤回 Aurora Jewel 资产修改")), MMDGetWarnButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnUndoShaderPresetClicked));
+	AddButton(Advanced, LOCTEXT("ImportSetting_014", "Aurora Jewel：应用并保存资产"), MMDGetSecondaryButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnApplyAuroraJewelToonClicked));
+	AddButton(Advanced, LOCTEXT("ImportSetting_015", "撤回 Aurora Jewel 资产修改"), MMDGetWarnButtonStyle(), FOnClicked::CreateRaw(this, &MMDImportSetting::OnUndoShaderPresetClicked));
 	ImportPage->AddSlot().AutoHeight().Padding(0, 12)
 	[
 		SNew(SExpandableArea).InitiallyCollapsed(true).Style(MMDPanelStyle::Expandable())
 		.BorderImage(MMDPanelStyle::CardBrush()).HeaderPadding(FMargin(10, 8)).Padding(FMargin(8))
-		.HeaderContent()[SNew(STextBlock).Text(FText::FromString(TEXT("高级选项与旧版工具"))).ColorAndOpacity(GMMDTextDim)]
+		.HeaderContent()[SNew(STextBlock).Text(LOCTEXT("ImportSetting_016", "高级选项与旧版工具")).ColorAndOpacity(GMMDTextDim)]
 		.BodyContent()[Advanced]
 	];
 
@@ -1366,7 +1369,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().AutoHeight().Padding(10, 2)
 		[
 			SAssignNew(SelectedModelText, STextBlock)
-			.Text(FText::FromString(TEXT("模型：未选择")))
+			.Text(LOCTEXT("ImportSetting_017", "模型：未选择"))
 			.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 			.ColorAndOpacity(FSlateColor(GMMDTextDim))
@@ -1374,7 +1377,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().AutoHeight().Padding(8.0f, 0.0f, 8.0f, 6.0f)
 		[
 			SAssignNew(SelectedAnimText, STextBlock)
-			.Text_Lambda([this]() { return FText::FromString(TEXT("动画：") + ViewPanel->GetPreviewAnimationLabel().ToString()); })
+			.Text_Lambda([this]() { return FText::Format(LOCTEXT("ImportSetting_028", "动画：{0}"), ViewPanel->GetPreviewAnimationLabel()); })
 			.AutoWrapText(true)
 			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 			.ColorAndOpacity(FSlateColor(GMMDTextDim))
@@ -1386,7 +1389,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 			[SNew(SBorder).BorderImage(MMDPanelStyle::HeaderBrush()).Padding(FMargin(20, 16))
 				.Visibility_Lambda([this]() { return ViewPanel->HasPreviewModel() ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
-				[SNew(STextBlock).Text(FText::FromString(TEXT("从左侧导入 PMX 或加载已有角色\n加载后自动进入待机，可随时换动作与视角")))
+				[SNew(STextBlock).Text(LOCTEXT("ImportSetting_018", "从左侧导入 PMX 或加载已有角色\n加载后自动进入待机，可随时换动作与视角"))
 					.Justification(ETextJustify::Center).ColorAndOpacity(MMDPanelStyle::Text)]]
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(8, 0, 8, 8)[BuildPreviewControls()];
@@ -1406,7 +1409,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				[SNew(STextBlock).Text(FText::FromString(TEXT("MMD STUDIO")))
 					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 19)).ColorAndOpacity(MMDPanelStyle::Text)]
 				+ SVerticalBox::Slot().AutoHeight().Padding(1, 3, 0, 0)
-				[SNew(STextBlock).Text(FText::FromString(TEXT("角 色 工 坊")))
+				[SNew(STextBlock).Text(LOCTEXT("ImportSetting_019", "角 色 工 坊"))
 					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9)).ColorAndOpacity(MMDPanelStyle::Muted)]
 			]
 			+ SHorizontalBox::Slot().FillWidth(1.0f)
@@ -1417,8 +1420,8 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				SNew(SCheckBox).Tag(TEXT("MMDUIAnimations"))
 				.IsChecked_Lambda([this]() { return bUIAnimationsEnabled ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
 				.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { SetUIAnimationsEnabled(State == ECheckBoxState::Checked); })
-				.ToolTipText(FText::FromString(TEXT("按钮与页签使用短过渡；关闭后即时切换。此偏好会记住，角色动画和物理继续运行。")))
-				[SNew(STextBlock).Text(FText::FromString(TEXT("界面动效"))).Font(FCoreStyle::GetDefaultFontStyle("Regular", 9)).ColorAndOpacity(GMMDTextDim)]
+				.ToolTipText(LOCTEXT("ImportSetting_020", "按钮与页签使用短过渡；关闭后即时切换。此偏好会记住，角色动画和物理继续运行。"))
+				[SNew(STextBlock).Text(LOCTEXT("ImportSetting_021", "界面动效")).Font(FCoreStyle::GetDefaultFontStyle("Regular", 9)).ColorAndOpacity(GMMDTextDim)]
 			]
 		];
 
@@ -1432,7 +1435,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
 				SAssignNew(StatusTypeText, STextBlock)
-				.Text(FText::FromString(TEXT("提示  ")))
+				.Text(LOCTEXT("ImportSetting_022", "提示  "))
 				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 				.ColorAndOpacity(FSlateColor(GMMDTextDim))
 			]
@@ -1442,7 +1445,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 				.ColorAndOpacity_Lambda([this]() { return FLinearColor(1, 1, 1, FMath::Lerp(0.8f, 1.0f, GetStatusTransitionAlpha())); })
 				[
 				SAssignNew(StatusText, STextBlock)
-				.Text(FText::FromString(TEXT("先导入或加载角色，再选择风格与场景。")))
+				.Text(LOCTEXT("ImportSetting_023", "先导入或加载角色，再选择风格与场景。"))
 				.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 				.ColorAndOpacity(FSlateColor(GMMDTextDim))
@@ -1453,7 +1456,7 @@ void MMDImportSetting::Construct(const FArguments& InArgs)
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)
 			[SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))
 				.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(GMMDTextDim)
-				.Text(FText::FromString(TEXT("复制"))).ToolTipText(FText::FromString(TEXT("复制完整操作结果，便于查找资产或反馈问题。")))
+				.Text(LOCTEXT("ImportSetting_024", "复制")).ToolTipText(LOCTEXT("ImportSetting_025", "复制完整操作结果，便于查找资产或反馈问题。"))
 				.IsEnabled_Lambda([this]() { return !CurrentStatusMessage.IsEmpty(); })
 				.OnClicked_Lambda([this]() { FPlatformApplicationMisc::ClipboardCopy(*CurrentStatusMessage); return FReply::Handled(); })]
 		];
@@ -1496,7 +1499,7 @@ void MMDImportSetting::SetSelectedModelTextUI(const FText& Text)
 {
 	if (SelectedModelText.IsValid())
 	{
-		SelectedModelText->SetText(FText::FromString(TEXT("模型：") + Text.ToString()));
+		SelectedModelText->SetText(FText::Format(LOCTEXT("ImportSetting_029", "模型：{0}"), Text));
 		SelectedModelText->SetToolTipText(Text);
 		SelectedModelText->SetColorAndOpacity(FSlateColor(MMDPanelStyle::Text));
 	}
@@ -1676,7 +1679,7 @@ FReply MMDImportSetting::OnApplyAuroraJewelToonClicked()
 		}
 	}
 
-	const FScopedTransaction Transaction(FText::FromString(TEXT("应用 TMMD Aurora Jewel Toon 到 Actor 资产")));
+	const FScopedTransaction Transaction(LOCTEXT("ImportSetting_026", "应用 TMMD Aurora Jewel Toon 到 Actor 资产"));
 	FMMDMaterialPresetUndoEntry UndoEntry;
 	UndoEntry.Component = Component;
 	for (UMaterialInterface* OverrideMaterial : Component->OverrideMaterials)
@@ -1725,7 +1728,7 @@ FReply MMDImportSetting::OnUndoShaderPresetClicked()
 		return FReply::Handled();
 	}
 
-	const FScopedTransaction Transaction(FText::FromString(TEXT("撤回 MMD 着色器预设")));
+	const FScopedTransaction Transaction(LOCTEXT("ImportSetting_027", "撤回 MMD 着色器预设"));
 	int32 RestoredCount = 0;
 	UBlueprint* RestoredBlueprint = nullptr;
 	UClass* RestoredActorClass = nullptr;
@@ -3960,4 +3963,4 @@ bool FMMDComposerCameraTimingTest::RunTest(const FString& Parameters)
 }
 #endif
 
-
+#undef LOCTEXT_NAMESPACE

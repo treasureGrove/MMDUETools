@@ -2,6 +2,14 @@
 
 每批功能、修复和资源调整在这里追加日期、具体变化、验证结果及必要限制。渲染改动同时链接实际引擎截图；截图捕获日期和文档归档日期分别记录。
 
+## 2026-11-19 — 本地化与站点文案回植（main → dev）
+
+- **面板本地化**：`MMDImportSetting*`、`MMDViewPanel*` 六个文件里的 79 处硬编码中文改为 `LOCTEXT`（命名空间 `Ue5MMDToolsUI`），三处字符串拼接改为 `FText::Format` + `{0}`。新增 `Config/Localization/Ue5MMDTools.ini`（源语言 `zh-Hans`，生成 `en`、`ja`）与 [本地化说明](LOCALIZATION.md)。
+- **翻译资源**：`Content/Localization/Ue5MMDTools/en` 与 `ja` 各含 `Ue5MMDTools.locres`（8297／8410 字节）与 `.po` 翻译源，84 条中文全部有译文；三份 README 与英日落地页的措辞同步为「英日文本已随包，跟随编辑器语言」。
+- **发布树文案**：`README.md`、`github.md` 以及新增的 `README.en.md`、`README.ja.md`、`github.en.md` 从发布分支回植，按开发树路径改写（`docs/` → `MMD/Plugins/Ue5MMDTools/Docs/`，`Resources/` → `MMD/Plugins/Ue5MMDTools/Resources/`）。
+- **工具与规范**：新增 `Scripts/Test-MarkdownLinks.ps1`（大小写敏感的相对链接检查）、`Scripts/CreateShareCard.ps1`、`Scripts/PreviewReadme.ps1`、`Scripts/Install-GitHooks.ps1`、`.githooks/pre-push`、`CONTRIBUTING.md` 与 issue／PR 模板；`pre-push` 同时支持发布树与开发树的脚本位置。
+- **验证**：`Test-MarkdownLinks.ps1 -Root .` 在开发树检查 699 个相对链接，全部通过；六个 UI 文件与已验证发布版逐字节一致；本地化目标配置与 `.locres` 与发布分支一致。本批未做面板英文／日文的实际渲染目检。
+
 ## 2026-11-19 — 导出脚本大小写统一与发布树链接复查
 
 - **问题**：开发分支的插件目录是 `Docs/`，而发布分支的 Pages 目录是 `docs/`。导出脚本把插件 `Docs/` 原样映射成 `Docs/`，与发布分支上的小写目录不一致；GitHub 对路径区分大小写，README 里的相对图片路径因此整片 404（实测 `Docs/...gif` 返回 404、`docs/...gif` 返回 200）。
