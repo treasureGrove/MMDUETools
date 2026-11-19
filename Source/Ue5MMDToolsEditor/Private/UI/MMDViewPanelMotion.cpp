@@ -11,6 +11,8 @@
 #include "UI/MMDPreviewMotionPresets.h"
 #include "UI/MMDPreviewFrameTime.h"
 
+#define LOCTEXT_NAMESPACE "Ue5MMDToolsUI"
+
 USkeletalMeshComponent* MMDViewPanel::GetPreviewMeshComponent() const
 {
 	return IsValid(PreviewActor) ? PreviewActor->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
@@ -32,7 +34,7 @@ bool MMDViewPanel::PlayBuiltinMotion(FName Preset, FText& OutMessage)
 	USkeletalMesh* Mesh = Component ? Component->GetSkeletalMeshAsset() : nullptr;
 	if (!Motion || !Mesh || !Mesh->GetSkeleton())
 	{
-		OutMessage = FText::FromString(TEXT("请先加载带骨架的 MMD 角色。"));
+		OutMessage = LOCTEXT("ViewMotion_001", "请先加载带骨架的 MMD 角色。");
 		return false;
 	}
 	if (CurrentBuiltinMotion == Preset && HasPreviewAnimation())
@@ -49,7 +51,7 @@ bool MMDViewPanel::PlayBuiltinMotion(FName Preset, FText& OutMessage)
 		TVMDParser Parser;
 		if (Path.IsEmpty() || !Parser.ParseVMDFile(Path))
 		{
-			OutMessage = FText::FromString(TEXT("内置 VMD 文件缺失或无法读取。"));
+			OutMessage = LOCTEXT("ViewMotion_002", "内置 VMD 文件缺失或无法读取。");
 			return false;
 		}
 		FMMDAnimationImportContext Context;
@@ -61,20 +63,20 @@ bool MMDViewPanel::PlayBuiltinMotion(FName Preset, FText& OutMessage)
 		if (!TMMDMeshBuilder::AnalyzeVMDAnimationImport(Parser.VMDInfo, Context, Settings, Report)
 			|| Report.MatchedBoneTrackCount < 6)
 		{
-			OutMessage = FText::FromString(TEXT("此骨架缺少标准 MMD 躯干／手臂骨骼，请使用适配它的动画。"));
+			OutMessage = LOCTEXT("ViewMotion_003", "此骨架缺少标准 MMD 躯干／手臂骨骼，请使用适配它的动画。");
 			return false;
 		}
 		Animation = TMMDMeshBuilder::BuildVMDAnimation(Parser.VMDInfo, Context, Settings, &Report);
 		if (!Animation)
 		{
-			OutMessage = FText::FromString(TEXT("未能生成当前骨架的预览动作，原动作保留。"));
+			OutMessage = LOCTEXT("ViewMotion_004", "未能生成当前骨架的预览动作，原动作保留。");
 			return false;
 		}
 		BuiltinMotions.Add(Preset, TStrongObjectPtr<UAnimSequence>(Animation));
 	}
 	if (!SetPreviewAnimation(Animation))
 	{
-		OutMessage = FText::FromString(TEXT("预览播放未能启动。"));
+		OutMessage = LOCTEXT("ViewMotion_005", "预览播放未能启动。");
 		return false;
 	}
 	CurrentBuiltinMotion = Preset;
@@ -153,8 +155,8 @@ void MMDViewPanel::EndPreviewScrub()
 FText MMDViewPanel::GetPreviewPlaybackStatus() const
 {
 	if (!HasPreviewAnimation()) return FText::FromString(HasPreviewModel() ? TEXT("选择动作开始预览") : TEXT("先加载角色"));
-	if (bPreviewScrubbing) return FText::FromString(TEXT("正在定位姿势"));
-	if (!IsPreviewPlaying()) return FText::FromString(TEXT("已暂停"));
+	if (bPreviewScrubbing) return LOCTEXT("ViewMotion_006", "正在定位姿势");
+	if (!IsPreviewPlaying()) return LOCTEXT("ViewMotion_007", "已暂停");
 	return FText::FromString(bPreviewPoseHeld ? TEXT("姿势已定格") : TEXT("循环播放中"));
 }
 
@@ -250,7 +252,7 @@ FText MMDViewPanel::GetPreviewPhysicsStatus() const
 
 FText MMDViewPanel::GetPreviewAnimationLabel() const
 {
-	if (!HasPreviewModel()) return FText::FromString(TEXT("未加载角色"));
+	if (!HasPreviewModel()) return LOCTEXT("ViewMotion_008", "未加载角色");
 	if (const auto* Motion = MMDFindPreviewMotionPreset(CurrentBuiltinMotion))
 		return FText::FromString(FString(TEXT("Mei · ")) + Motion->Label);
 	const auto* Component = GetPreviewMeshComponent();
@@ -258,3 +260,5 @@ FText MMDViewPanel::GetPreviewAnimationLabel() const
 	UAnimationAsset* Animation = Instance ? Instance->GetCurrentAsset() : nullptr;
 	return FText::FromString(Animation ? Animation->GetName() : TEXT("原始姿态"));
 }
+
+#undef LOCTEXT_NAMESPACE
