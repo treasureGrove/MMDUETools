@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ue5MMDTools · MMD shorts in Unreal Engine 5</title>
+  <meta name="description" content="Import PMX and VMD into UE5, preview Bullet hair and cloth physics, switch studios and lighting, then render the current preview to a 30 fps MP4. Also scriptable from the command line. MIT licensed.">
+  <meta name="theme-color" content="#101820">
+  <link rel="canonical" href="https://treasuregrove.github.io/MMDUETools/en/">
+  <link rel="alternate" hreflang="zh-CN" href="https://treasuregrove.github.io/MMDUETools/">
+  <link rel="alternate" hreflang="en" href="https://treasuregrove.github.io/MMDUETools/en/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Ue5MMDTools">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="Ue5MMDTools · MMD shorts in Unreal Engine 5">
+  <meta property="og:description" content="PMX / VMD import, Bullet physics, eight studios and lighting presets, one-button MP4. Open source, MIT, UE 5.8.3 Win64.">
+  <meta property="og:url" content="https://treasuregrove.github.io/MMDUETools/en/">
+  <meta property="og:image" content="https://treasuregrove.github.io/MMDUETools/Screenshots/2026-11-19-share/share-card-1200x630.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Ue5MMDTools: an MMD studio inside Unreal Engine 5">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ue5MMDTools · MMD shorts in Unreal Engine 5">
+  <meta name="twitter:description" content="PMX / VMD import, Bullet physics, eight studios and lighting presets, one-button MP4. Open source, MIT, UE 5.8.3 Win64.">
+  <meta name="twitter:image" content="https://treasuregrove.github.io/MMDUETools/Screenshots/2026-11-19-share/share-card-1200x630.png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Ue5MMDTools</h1>
+      <p class="lead">Make MMD shorts inside Unreal Engine 5. Import PMX and VMD, try motions in the studio, watch hair and cloth physics, switch lighting, frame the camera, then render the current preview to an MP4.</p>
+      <p>
+        <a class="button" href="https://github.com/treasureGrove/MMDUETools/releases/latest">Download Win64 plugin</a>
+        <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.en.md">Illustrated guide</a>
+      </p>
+      <p class="lang">This page: English · <a href="../">中文</a> · <a href="https://github.com/treasureGrove/MMDUETools/blob/main/README.ja.md">日本語</a></p>
+      <div class="flow" aria-label="Pipeline">
+        <span>PMX / VMD</span>
+        <span>MMD Studio</span>
+        <span>Bullet physics · studio lighting</span>
+        <span>30 fps MP4</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="demo">
+      <h2>Demo</h2>
+      <p>The original walkthrough is on Bilibili; the panel is Chinese-only today, and the illustrated guide labels every control in English.</p>
+      <div class="video-frame">
+        <iframe
+          src="https://player.bilibili.com/player.html?isOutside=true&aid=116544877107416&bvid=BV1M2RXBPExk&cid=38217778776&p=1"
+          scrolling="no"
+          allowfullscreen="true">
+        </iframe>
+      </div>
+      <p class="note">If the player does not load, open <a href="https://www.bilibili.com/video/BV1M2RXBPExk/" target="_blank" rel="noopener">the demo on Bilibili (BV1M2RXBPExk)</a>.</p>
+    </section>
+
+    <section id="showcase">
+      <h2>What it looks like</h2>
+      <p>From a loaded character to a finished MP4: pick a motion, change the studio, frame the shot, press produce. Click the clip for the full workflow video.</p>
+      <a href="../Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="../Screenshots/2026-11-05-workflow-video/workflow_preview.gif" alt="Ue5MMDTools workflow preview"></a>
+      <p class="note"><a href="../Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4">Download the workflow clip (MP4)</a> · <a href="../Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif">See the idle clip</a></p>
+    </section>
+
+    <section id="guide">
+      <h2>Quick start</h2>
+      <p>The full illustrated steps live in the repository, with real panel screenshots and the button location for each step:</p>
+      <p><a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.en.md">English guide</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.md">中文图文指南</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/README.ja.md">日本語</a></p>
+      <div class="steps">
+        <div class="step">
+          <h3>1. Install</h3>
+          <p>Unpack the release and place <code>Ue5MMDTools/</code> in your project's <code>Plugins/</code> folder, enable the plugin and restart the editor. You can also run <code>MMD.OpenPanel</code> from the editor console.</p>
+          <pre><code>YourProject/
+  Plugins/
+    Ue5MMDTools/</code></pre>
+        </div>
+
+        <div class="step">
+          <h3>2. Import a character and try motions</h3>
+          <p>Open the studio from <strong>Window → Ue5MMDTools</strong>, press <strong>导入 PMX 模型</strong> (Import PMX Model) and keep the PMX next to its textures. After the first import, <strong>加载已有角色</strong> (Load Existing Character) is enough. Pick a built-in motion, then turn on <strong>实时物理</strong> (real-time physics) at the bottom of the panel to inspect hair and cloth.</p>
+        </div>
+
+        <div class="step">
+          <h3>3. Lighting and camera</h3>
+          <p>On the <strong>场景</strong> (Stage) page each studio card swaps the set together with its lighting. Above the viewport choose full, half, face, side or back. The <strong>风格</strong> (Style) page previews materials and can restore the originals at any time.</p>
+        </div>
+
+        <div class="step">
+          <h3>4. Produce the MP4</h3>
+          <p>Confirm motion, stage, style and a perspective camera, then press <strong>按当前预览制作</strong> (produce from current preview). The result lands in <code>Saved/MMDProduction/</code>. Needs Windows D3D12 SM6 and <code>ffmpeg</code> plus <code>ffprobe</code> on PATH.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>What the plugin does</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <h3>PMX import</h3>
+          <ul>
+            <li>Parses PMX vertices, indices, normals, UVs, materials and bones.</li>
+            <li>Builds native <code>SkeletalMesh</code> and <code>Skeleton</code> assets.</li>
+            <li>Creates base MMD materials and material instances.</li>
+            <li>Keeps the PMX model data for later reimports and tooling.</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Morphs and expressions</h3>
+          <ul>
+            <li>PMX vertex morphs become UE <code>MorphTarget</code> assets.</li>
+            <li>Vertex mapping is corrected so expressions do not distort.</li>
+            <li>VMD expressions become float curves on the animation.</li>
+            <li>Group and flip morphs are expanded, so blinks and mouth shapes work.</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>VMD motion</h3>
+          <ul>
+            <li>Parses VMD bone and morph keyframes.</li>
+            <li>Bone tracks are written into an <code>AnimSequence</code>.</li>
+            <li>Expression tracks become morph curves.</li>
+            <li>Handles MMD-to-UE axis conversion and IK / append bone baking.</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Actor, animation blueprint and IK</h3>
+          <ul>
+            <li>Creates the MMD Actor automatically.</li>
+            <li>Generates an <code>AnimBlueprint</code> for the imported character.</li>
+            <li>Ships an MMD skeletal control animation node.</li>
+            <li>Builds IK Rig and IK Retargeter assets.</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Physics</h3>
+          <ul>
+            <li>Reads PMX rigid bodies and joints.</li>
+            <li>Runs an MMD-style Bullet solver.</li>
+            <li>Simulates hair and cloth while playing; freezing a pose keeps physics running.</li>
+            <li>Advances physics per frame during production and bakes into Sequencer.</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Studios, lighting and delivery</h3>
+          <ul>
+            <li>Eight studio presets; switching a stage swaps its set and matching lights.</li>
+            <li>Style presets preview materials and restore the originals in one click.</li>
+            <li>Renders the current preview to a 30 fps MP4 with frames and logs.</li>
+            <li>Command line: <code>import-pmx</code>, <code>import-vmd</code>, <code>render</code>, each returning JSON.</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Current limits</h3>
+          <ul>
+            <li>Material morphs are not fully driving UE material parameters yet.</li>
+            <li>Bone and UV morphs are not complete animation channels.</li>
+            <li>Unusual skeletons, IK setups and morph combinations may need per-model adaptation.</li>
+            <li>The panel is Chinese-only; English and Japanese UI are planned.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <h2>Pipeline</h2>
+      <p>MMD data becomes native UE assets, and lighting, camera and delivery happen in the same panel.</p>
+      <pre><code>PMX model
+  -> SkeletalMesh
+  -> Skeleton
+  -> MorphTarget
+  -> Materials
+  -> MMD Actor
+
+VMD motion
+  -> AnimSequence bone tracks
+  -> AnimSequence morph curves
+
+MMD Studio
+  -> built-in motions / your own VMD
+  -> Bullet physics (freeze a pose and keep simulating)
+  -> studio and lighting presets
+  -> full / half / face / side / back cameras
+
+Delivery
+  -> 30 fps MP4 (Saved/MMDProduction/)
+  -> frames and logs
+  -> keep refining in Sequencer</code></pre>
+    </section>
+  </main>
+
+  <footer>
+    Ue5MMDTools - PMX / VMD MMD production for Unreal Engine 5 · MIT · <a href="../">中文</a>
+  </footer>
+</body>
+</html>
