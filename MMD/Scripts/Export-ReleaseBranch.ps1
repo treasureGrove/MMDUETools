@@ -72,6 +72,48 @@ function Split-LinkTarget([string]$Target) {
     return [pscustomobject]@{ Path = $pathPart; Suffix = $m.Groups[2].Value }
 }
 
+# 开发分支的插件目录是 Docs/，发布树统一用 docs/。
+# GitHub 对路径区分大小写，两边大小写不一致时首页图片会全部 404。
+function Get-ExportPath([string]$PluginRelative) {
+    if ($PluginRelative -eq 'Docs') { return 'docs' }
+    if ($PluginRelative.StartsWith('Docs/')) { return 'docs/' + $PluginRelative.Substring(5) }
+    return $PluginRelative
+}
+
+# 按真实目录项逐段比对，实现大小写敏感的存在性检查。
+function Test-CaseExactPath([string]$Root, [string]$Relative) {
+    $current = $Root
+    foreach ($segment in $Relative.Split('/')) {
+        if ($segment -eq '' -or $segment -eq '.') { continue }
+        if ($segment -eq '..') { $current = Split-Path -Parent $current; continue }
+        $entries = Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue
+        $exact = $entries | Where-Object { $_.Name -ceq $segment } | Select-Object -First 1
+        if (-not $exact) { return $false }
+        $current = Join-Path $current $exact.Name
+    }
+    return $true
+}
+
+# 导出后复查：写进发布树的相对链接必须能按大小写精确解析。
+function Test-ExportedLinks([string]$Root) {
+    $problems = [System.Collections.Generic.List[string]]::new()
+    foreach ($md in Get-ChildItem -LiteralPath $Root -Recurse -File -Filter *.md) {
+        $rel = [System.IO.Path]::GetRelativePath($Root, $md.FullName).Replace('\', '/')
+        $dir = Get-ParentDir $rel
+        $text = [System.IO.File]::ReadAllText($md.FullName)
+        foreach ($target in (Get-LinkTargets $text)) {
+            $link = Split-LinkTarget $target
+            if (-not $link) { continue }
+            $joined = Resolve-DevPath $dir $link.Path
+            if ($null -eq $joined) { continue }
+            if (-not (Test-CaseExactPath $Root $joined)) { $problems.Add("$rel -> $($link.Path)") }
+        }
+    }
+    return $problems
+}
+
+
+
 # 开发分支路径 -> 发布树路径
 $export = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
 foreach ($path in $tracked) {
@@ -82,7 +124,7 @@ foreach ($path in $tracked) {
         $p -match '^Resources/(Icon128\.png|PlaceholderButtonIcon\.svg)$' -or
         $p -match '^Resources/(Garden|PreviewMotions|DisplayScenes)/' -or
         ($p -match '^Docs/[^/]+\.md$' -and $p -notmatch '^Docs/(PHASE_TWO_|MMDTOOLS_ROADMAP|ENDFIELD_V2_HANDOFF|MOBILE_MMD_EDITOR)')
-    if ($keep) { $export[$path] = $p }
+    if ($keep) { $export[$path] = Get-ExportPath $p }
 }
 foreach ($page in $rootPages) {
     if (-not $tracked.Contains($page)) { throw "缺少首页文件：$page" }
@@ -94,7 +136,7 @@ foreach ($page in $rootPages) {
         if (-not $link -or $link.Path -notmatch $mediaPattern) { continue }
         $devTarget = Resolve-DevPath (Get-ParentDir $page) $link.Path
         if ($devTarget -and $devTarget.StartsWith($pluginRoot) -and $tracked.Contains($devTarget)) {
-            $export[$devTarget] = $devTarget.Substring($pluginRoot.Length)
+            $export[$devTarget] = Get-ExportPath $devTarget.Substring($pluginRoot.Length)
         }
     }
 }
@@ -130,7 +172,7 @@ function Convert-Link([string]$DevFile, [string]$OutFile, [string]$Target) {
     if ($devTarget -eq '' -or $trackedDirs.Contains($devTarget)) {
         $asPlugin = ($devTarget + '/')
         if ($asPlugin.StartsWith($pluginRoot)) {
-            $outTarget = $asPlugin.Substring($pluginRoot.Length).TrimEnd('/')
+            $outTarget = (Get-ExportPath $asPlugin.Substring($pluginRoot.Length)).TrimEnd('/')
             $hasContent = $outTarget -eq '' -or ($exportedOut | Where-Object { $_.StartsWith($outTarget + '/') } | Select-Object -First 1)
             if ($hasContent) {
                 $stats.relative++
@@ -186,6 +228,8 @@ foreach ($entry in $export.GetEnumerator()) {
     if ($length -gt $MaxFileMB * 1MB) { $oversized.Add(('{0} ({1:N1} MB)' -f $entry.Value, ($length / 1MB))) }
 }
 
+$postBroken = Test-ExportedLinks $OutputDir
+
 $report = [ordered]@{
     source_commit       = $sourceCommit
     dev_branch          = $DevBranch
@@ -195,12 +239,13 @@ $report = [ordered]@{
     links_relative      = $stats.relative
     links_to_dev_branch = $stats.to_dev_branch
     broken_links        = @($broken)
+    broken_links_after_export = @($postBroken)
     forbidden_files     = @($forbidden)
     oversized_files     = @($oversized)
     uplugin_at_root     = Test-Path -LiteralPath (Join-Path $OutputDir 'Ue5MMDTools.uplugin')
 }
-$report.success = $report.uplugin_at_root -and $broken.Count -eq 0 -and $forbidden.Count -eq 0 -and
-    $oversized.Count -eq 0 -and $report.total_mb -le $MaxTotalMB
+$report.success = $report.uplugin_at_root -and $broken.Count -eq 0 -and $postBroken.Count -eq 0 -and
+    $forbidden.Count -eq 0 -and $oversized.Count -eq 0 -and $report.total_mb -le $MaxTotalMB
 $reportPath = $OutputDir.TrimEnd('\', '/') + '.report.json'
 [System.IO.File]::WriteAllText($reportPath, ($report | ConvertTo-Json -Depth 4), $utf8)
 $report | ConvertTo-Json -Depth 4
