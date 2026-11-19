@@ -39,6 +39,8 @@ Ue5MMDTools imports PMX models and VMD animation, previews MMD physics, toon lig
 4. Enable the plugin, restart Unreal Editor, then open **Window → Ue5MMDTools**.
 5. Click **Import PMX Model**. After the first import, use **Load Existing Character** for later sessions.
 
+The panel defaults to Chinese. English panel text ships with the plugin under `Content/Localization/` and is used when the editor language is English; a visual pass is still in progress, and the Japanese translation is planned.
+
 The prebuilt package targets **UE 5.8.3 / Win64**. Native toon profiles require D3D12 SM6 and the matching documented project configuration. MP4 production requires `ffmpeg` and `ffprobe` available on Windows PATH.
 
 ## Build from source

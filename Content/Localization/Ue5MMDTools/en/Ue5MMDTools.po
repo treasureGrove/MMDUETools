@@ -1,0 +1,638 @@
+# Ue5MMDTools English translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: Ue5MMDTools\n"
+"POT-Creation-Date: 2026-11-19 05:10\n"
+"PO-Revision-Date: 2026-11-19 05:10\n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Key:	NodeTitle
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/Animation/AGN_MMDSkeletalControlEditor.cpp(14)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/Animation/AGN_MMDSkeletalControlEditor.cpp(14)
+msgctxt "MMDSkeletalControl,NodeTitle"
+msgid "MMD Skeletal Control"
+msgstr ""
+
+#. Key:	NodeTooltip
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/Animation/AGN_MMDSkeletalControlEditor.cpp(19)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/Animation/AGN_MMDSkeletalControlEditor.cpp(19)
+msgctxt "MMDSkeletalControl,NodeTooltip"
+msgid "MMD风格的骨骼控制节点"
+msgstr "MMD-style skeletal control node"
+
+#. Key:	OpenPluginWindow
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/Ue5MMDToolsCommands.cpp(9)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/Ue5MMDToolsCommands.cpp(9)
+msgctxt "UICommands.FUe5MMDToolsModule,OpenPluginWindow"
+msgid "Ue5MMDTools"
+msgstr ""
+
+#. Key:	OpenPluginWindow_ToolTip
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/Ue5MMDToolsCommands.cpp(9)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/Ue5MMDToolsCommands.cpp(9)
+msgctxt "UICommands.FUe5MMDToolsModule,OpenPluginWindow_ToolTip"
+msgid "Bring up Ue5MMDTools window"
+msgstr ""
+
+#. Key:	FUe5MMDToolsTabTitle
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/Ue5MMDToolsEditor.cpp(91)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/Ue5MMDToolsEditor.cpp(91)
+msgctxt "FUe5MMDToolsEditorModule,FUe5MMDToolsTabTitle"
+msgid "Ue5MMDTools"
+msgstr ""
+
+#. Key:	ImportSetting_001
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1277)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1277)
+msgctxt "Ue5MMDToolsUI,ImportSetting_001"
+msgid "01  选择角色"
+msgstr "01  Choose character"
+
+#. Key:	ImportSetting_002
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1278)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1278)
+msgctxt "Ue5MMDToolsUI,ImportSetting_002"
+msgid "导入 PMX 模型"
+msgstr "Import PMX Model"
+
+#. Key:	ImportSetting_003
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1279)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1279)
+msgctxt "Ue5MMDToolsUI,ImportSetting_003"
+msgid "加载已有角色"
+msgstr "Load Existing Character"
+
+#. Key:	ImportSetting_004
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1281)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1281)
+msgctxt "Ue5MMDToolsUI,ImportSetting_004"
+msgid "02  姿势与动作"
+msgstr "02  Pose and motion"
+
+#. Key:	ImportSetting_005
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1288)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1288)
+msgctxt "Ue5MMDToolsUI,ImportSetting_005"
+msgid "导入自己的 VMD／表情／相机"
+msgstr "Import your own VMD / morphs / camera"
+
+#. Key:	ImportSetting_006
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1292)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1292)
+msgctxt "Ue5MMDToolsUI,ImportSetting_006"
+msgid "导入 VMD 动作"
+msgstr "Import VMD Motion"
+
+#. Key:	ImportSetting_007
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1293)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1293)
+msgctxt "Ue5MMDToolsUI,ImportSetting_007"
+msgid "追加表情"
+msgstr "Add Morphs"
+
+#. Key:	ImportSetting_008
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1294)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1294)
+msgctxt "Ue5MMDToolsUI,ImportSetting_008"
+msgid "导入 VMD 相机"
+msgstr "Import VMD Camera"
+
+#. Key:	ImportSetting_009
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1296)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1296)
+msgctxt "Ue5MMDToolsUI,ImportSetting_009"
+msgid "03  制作与输出"
+msgstr "03  Produce and export"
+
+#. Key:	ImportSetting_010
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1297)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1297)
+msgctxt "Ue5MMDToolsUI,ImportSetting_010"
+msgid "合成关卡序列"
+msgstr "Compose Level Sequence"
+
+#. Key:	ImportSetting_011
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1298)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1298)
+msgctxt "Ue5MMDToolsUI,ImportSetting_011"
+msgid "烘焙物理动画"
+msgstr "Bake Physics Animation"
+
+#. Key:	ImportSetting_012
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1306)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1306)
+msgctxt "Ue5MMDToolsUI,ImportSetting_012"
+msgid "导入时使用 MMD Standard 材质"
+msgstr "Use MMD Standard materials on import"
+
+#. Key:	ImportSetting_013
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1310)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1310)
+msgctxt "Ue5MMDToolsUI,ImportSetting_013"
+msgid "Aurora Jewel · 旧版资产方案\n以下操作会保存到角色蓝图资产。"
+msgstr "Aurora Jewel · legacy asset path\nThese operations are saved into the character blueprint asset."
+
+#. Key:	ImportSetting_014
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1313)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1313)
+msgctxt "Ue5MMDToolsUI,ImportSetting_014"
+msgid "Aurora Jewel：应用并保存资产"
+msgstr "Aurora Jewel: apply and save assets"
+
+#. Key:	ImportSetting_015
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1314)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1314)
+msgctxt "Ue5MMDToolsUI,ImportSetting_015"
+msgid "撤回 Aurora Jewel 资产修改"
+msgstr "Revert Aurora Jewel asset changes"
+
+#. Key:	ImportSetting_016
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1319)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1319)
+msgctxt "Ue5MMDToolsUI,ImportSetting_016"
+msgid "高级选项与旧版工具"
+msgstr "Advanced options and legacy tools"
+
+#. Key:	ImportSetting_017
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1372)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1372)
+msgctxt "Ue5MMDToolsUI,ImportSetting_017"
+msgid "模型：未选择"
+msgstr "Model: none selected"
+
+#. Key:	ImportSetting_028
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1380)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1380)
+msgctxt "Ue5MMDToolsUI,ImportSetting_028"
+msgid "动画：{0}"
+msgstr "Motion: {0}"
+
+#. Key:	ImportSetting_018
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1392)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1392)
+msgctxt "Ue5MMDToolsUI,ImportSetting_018"
+msgid "从左侧导入 PMX 或加载已有角色\n加载后自动进入待机，可随时换动作与视角"
+msgstr "Import a PMX or load an existing character on the left\nLoading starts the idle motion; change motion and camera at any time"
+
+#. Key:	ImportSetting_019
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1412)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1412)
+msgctxt "Ue5MMDToolsUI,ImportSetting_019"
+msgid "角 色 工 坊"
+msgstr "C H A R A C T E R   S T U D I O"
+
+#. Key:	ImportSetting_020
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1423)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1423)
+msgctxt "Ue5MMDToolsUI,ImportSetting_020"
+msgid "按钮与页签使用短过渡；关闭后即时切换。此偏好会记住，角色动画和物理继续运行。"
+msgstr "Buttons and tabs use short transitions; turn this off for instant switching. The preference is remembered; character animation and physics keep running."
+
+#. Key:	ImportSetting_021
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1424)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1424)
+msgctxt "Ue5MMDToolsUI,ImportSetting_021"
+msgid "界面动效"
+msgstr "UI transitions"
+
+#. Key:	ImportSetting_022
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1438)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1438)
+msgctxt "Ue5MMDToolsUI,ImportSetting_022"
+msgid "提示  "
+msgstr "Notice  "
+
+#. Key:	ImportSetting_023
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1448)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1448)
+msgctxt "Ue5MMDToolsUI,ImportSetting_023"
+msgid "先导入或加载角色，再选择风格与场景。"
+msgstr "Import or load a character, then pick a style and a stage."
+
+#. Key:	ImportSetting_024
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1459)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1459)
+msgctxt "Ue5MMDToolsUI,ImportSetting_024"
+msgid "复制"
+msgstr "Copy"
+
+#. Key:	ImportSetting_025
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1459)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1459)
+msgctxt "Ue5MMDToolsUI,ImportSetting_025"
+msgid "复制完整操作结果，便于查找资产或反馈问题。"
+msgstr "Copy the full operation result, to help locate assets or report an issue."
+
+#. Key:	ImportSetting_029
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1502)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSetting.cpp(1502)
+msgctxt "Ue5MMDToolsUI,ImportSetting_029"
+msgid "模型：{0}"
+msgstr "Model: {0}"
+
+#. Key:	ImportMotion_010
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(108)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(108)
+msgctxt "Ue5MMDToolsUI,ImportMotion_010"
+msgid "本栏只控制右侧角色预览。"
+msgstr "This panel only controls the character preview on the right."
+
+#. Key:	ImportMotion_011
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(115)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(115)
+msgctxt "Ue5MMDToolsUI,ImportMotion_011"
+msgid "‹ 帧"
+msgstr "< Frame"
+
+#. Key:	ImportMotion_012
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(117)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(117)
+msgctxt "Ue5MMDToolsUI,ImportMotion_012"
+msgid "上一采样帧：暂停动作与物理，精确检查姿势。到达开头后保持首帧。"
+msgstr "Previous sampled frame: pauses motion and physics to inspect the pose. Stops at the first frame."
+
+#. Key:	ImportMotion_013
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(122)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(122)
+msgctxt "Ue5MMDToolsUI,ImportMotion_013"
+msgid "拖动定位动作，松开后恢复此前的播放状态。键盘选中时间轴后按 Enter 开始微调，方向键每次移动一采样帧，再按 Enter 结束。"
+msgstr "Drag to seek; releasing restores the previous playback state. Focus the timeline and press Enter to fine-tune, arrow keys step one sampled frame, Enter again to finish."
+
+#. Key:	ImportMotion_014
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(133)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(133)
+msgctxt "Ue5MMDToolsUI,ImportMotion_014"
+msgid "帧 ›"
+msgstr "Frame >"
+
+#. Key:	ImportMotion_015
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(135)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(135)
+msgctxt "Ue5MMDToolsUI,ImportMotion_015"
+msgid "下一采样帧：暂停动作与物理，精确检查姿势。到达结尾后保持末帧，不循环回零。"
+msgstr "Next sampled frame: pauses motion and physics to inspect the pose. Stops at the last frame without looping."
+
+#. Key:	ImportMotion_016
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(146)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(146)
+msgctxt "Ue5MMDToolsUI,ImportMotion_016"
+msgid "只切换模型的 MMD 物理，不切换动作。无刚体模型仅播放骨骼动画。"
+msgstr "Toggles MMD physics on the model only, not the motion. Models without rigid bodies play skeleton animation only."
+
+#. Key:	ImportMotion_017
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(149)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(149)
+msgctxt "Ue5MMDToolsUI,ImportMotion_017"
+msgid "实时物理"
+msgstr "Real-time physics"
+
+#. Key:	ImportMotion_018
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(151)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(151)
+msgctxt "Ue5MMDToolsUI,ImportMotion_018"
+msgid "重置物理"
+msgstr "Reset physics"
+
+#. Key:	ImportMotion_019
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(152)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(152)
+msgctxt "Ue5MMDToolsUI,ImportMotion_019"
+msgid "重建头发／衣物物理，保留当前动作时间和机位。"
+msgstr "Rebuild hair and cloth physics, keeping the current motion time and camera."
+
+#. Key:	ImportMotion_001
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(31)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(31)
+msgctxt "Ue5MMDToolsUI,ImportMotion_001"
+msgid "替换右侧预览动作，保留暂停、倍速与定格状态。重复点击不会从头开始。"
+msgstr "Replaces the preview motion on the right, keeping the pause, speed and freeze state. Clicking again does not restart it."
+
+#. Key:	ImportMotion_002
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(47)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(47)
+msgctxt "Ue5MMDToolsUI,ImportMotion_002"
+msgid "当前"
+msgstr "Current"
+
+#. Key:	ImportMotion_003
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(58)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(58)
+msgctxt "Ue5MMDToolsUI,ImportMotion_003"
+msgid "播放、定格与物理控制在预览区底部。"
+msgstr "Playback, freeze and physics controls sit at the bottom of the preview."
+
+#. Key:	ImportMotion_004
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(61)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(61)
+msgctxt "Ue5MMDToolsUI,ImportMotion_004"
+msgid "动作：MMDAgent / NITech · CC BY 3.0"
+msgstr "Motion: MMDAgent / NITech · CC BY 3.0"
+
+#. Key:	ImportMotion_005
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(76)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(76)
+msgctxt "Ue5MMDToolsUI,ImportMotion_005"
+msgid "暂停／继续动作和物理。视口内可按空格。"
+msgstr "Pause or resume motion and physics. Press Space in the viewport."
+
+#. Key:	ImportMotion_006
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(81)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(81)
+msgctxt "Ue5MMDToolsUI,ImportMotion_006"
+msgid "重播"
+msgstr "Replay"
+
+#. Key:	ImportMotion_007
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(82)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(82)
+msgctxt "Ue5MMDToolsUI,ImportMotion_007"
+msgid "回到起点并正常播放，退出定格。视口内可按 Home。"
+msgstr "Jump to the start and play normally, leaving freeze. Press Home in the viewport."
+
+#. Key:	ImportMotion_008
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(89)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(89)
+msgctxt "Ue5MMDToolsUI,ImportMotion_008"
+msgid "固定当前动作时间，播放状态下头发、衣物仍实时运算。再次点击恢复动作。"
+msgstr "Freeze the current motion time; hair and cloth keep simulating while playing. Click again to resume."
+
+#. Key:	ImportMotion_009
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(95)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingMotion.cpp(95)
+msgctxt "Ue5MMDToolsUI,ImportMotion_009"
+msgid "动作播放速度；定格时保留所选速度，解除定格后生效。"
+msgstr "Playback speed; the chosen speed is kept while frozen and applies after unfreezing."
+
+#. Key:	ImportPresets_001
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(154)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(154)
+msgctxt "Ue5MMDToolsUI,ImportPresets_001"
+msgid "临时预览"
+msgstr "Temporary preview"
+
+#. Key:	ImportPresets_002
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(164)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(164)
+msgctxt "Ue5MMDToolsUI,ImportPresets_002"
+msgid "预览角色"
+msgstr "Preview character"
+
+#. Key:	ImportPresets_003
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(171)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(171)
+msgctxt "Ue5MMDToolsUI,ImportPresets_003"
+msgid "关卡所选"
+msgstr "Level selection"
+
+#. Key:	ImportPresets_004
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(183)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(183)
+msgctxt "Ue5MMDToolsUI,ImportPresets_004"
+msgid "恢复原材质"
+msgstr "Restore original materials"
+
+#. Key:	ImportPresets_005
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(191)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(191)
+msgctxt "Ue5MMDToolsUI,ImportPresets_005"
+msgid "搜索风格，如：暖暖 / 霓虹 / Nikki"
+msgstr "Search styles, e.g. Nikki / neon"
+
+#. Key:	ImportPresets_006
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(192)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(192)
+msgctxt "Ue5MMDToolsUI,ImportPresets_006"
+msgid "按名称、效果描述或英文名称筛选；多个关键词用空格分隔。"
+msgstr "Filter by name, effect description or English name; separate keywords with spaces."
+
+#. Key:	ImportPresets_007
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(211)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(211)
+msgctxt "Ue5MMDToolsUI,ImportPresets_007"
+msgid "清空搜索"
+msgstr "Clear search"
+
+#. Key:	ImportPresets_008
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(263)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(263)
+msgctxt "Ue5MMDToolsUI,ImportPresets_008"
+msgid "应用到上方指定的角色。重复选择保留当前预览；按住 Shift 点击可重新应用修改后的配方。"
+msgstr "Applies to the character selected above. Re-selecting keeps the current preview; Shift-click re-applies the edited recipe."
+
+#. Key:	ImportPresets_009
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(461)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(461)
+msgctxt "Ue5MMDToolsUI,ImportPresets_009"
+msgid "切换右侧展示场景及配套光照。当前关卡、角色材质与动作保持不变。"
+msgstr "Switches the showcase stage on the right together with its lighting. The current level, materials and motion stay unchanged."
+
+#. Key:	ImportPresets_010
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(511)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(511)
+msgctxt "Ue5MMDToolsUI,ImportPresets_010"
+msgid "早期云空场景"
+msgstr "Early sky stage"
+
+#. Key:	ImportPresets_011
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(553)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(553)
+msgctxt "Ue5MMDToolsUI,ImportPresets_011"
+msgid "放入关卡"
+msgstr "Add to level"
+
+#. Key:	ImportPresets_012
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(616)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(616)
+msgctxt "Ue5MMDToolsUI,ImportPresets_012"
+msgid "浏览 Fab 场景素材"
+msgstr "Browse Fab environments"
+
+#. Key:	ImportPresets_013
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(617)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(617)
+msgctxt "Ue5MMDToolsUI,ImportPresets_013"
+msgid "在浏览器中打开 Fab 的 Unreal Engine 素材页。资源加入库后，可从 UE 的「窗口 > Fab」添加到项目。"
+msgstr "Opens the Fab Unreal Engine asset page in a browser. Once added to the library, use Window > Fab in UE to add it to the project."
+
+#. Key:	ImportPresets_014
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(644)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingPresets.cpp(644)
+msgctxt "Ue5MMDToolsUI,ImportPresets_014"
+msgid "切换 MMD 预设舞台"
+msgstr "Switch MMD preset stage"
+
+#. Key:	ImportProduction_001
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(213)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(213)
+msgctxt "Ue5MMDToolsUI,ImportProduction_001"
+msgid "沿用当前角色、动作、风格、展示场景或内置舞台及透视机位，从动作第 0 秒输出 MP4。30 fps，画幅随预览区，文件保存在 Saved/MMDProduction。需要 FFmpeg。"
+msgstr "Uses the current character, motion, style, showcase stage or built-in stage and perspective camera, and renders an MP4 from motion time 0. 30 fps, preview resolution, saved under Saved/MMDProduction. Requires FFmpeg."
+
+#. Key:	ImportProduction_002
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(219)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(219)
+msgctxt "Ue5MMDToolsUI,ImportProduction_002"
+msgid "取消"
+msgstr "Cancel"
+
+#. Key:	ImportProduction_003
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(231)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(231)
+msgctxt "Ue5MMDToolsUI,ImportProduction_003"
+msgid "播放成片"
+msgstr "Play result"
+
+#. Key:	ImportProduction_004
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(232)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(232)
+msgctxt "Ue5MMDToolsUI,ImportProduction_004"
+msgid "用系统默认播放器打开最近生成的 MP4。"
+msgstr "Open the most recent MP4 in the system default player."
+
+#. Key:	ImportProduction_005
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(238)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(238)
+msgctxt "Ue5MMDToolsUI,ImportProduction_005"
+msgid "打开目录"
+msgstr "Open folder"
+
+#. Key:	ImportProduction_006
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(239)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDImportSettingProduction.cpp(239)
+msgctxt "Ue5MMDToolsUI,ImportProduction_006"
+msgid "打开最近一次制作的输出目录，查看成片、已有帧或日志。"
+msgstr "Open the output folder of the last production to inspect the movie, existing frames or logs."
+
+#. Key:	ViewPanel_006
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1381)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1381)
+msgctxt "Ue5MMDToolsUI,ViewPanel_006"
+msgid "LOOKDEV  /  {0} · 舞台原配灯光 / 后处理"
+msgstr "LOOKDEV  /  {0} · stage lighting / post process"
+
+#. Key:	ViewPanel_007
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1385)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1385)
+msgctxt "Ue5MMDToolsUI,ViewPanel_007"
+msgid "展示场景  /  {0} · 配套光照 / 固定曝光"
+msgstr "Showcase  /  {0} · matched lighting / fixed exposure"
+
+#. Key:	ViewPanel_008
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1389)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1389)
+msgctxt "Ue5MMDToolsUI,ViewPanel_008"
+msgid "LOOKDEV  /  {0} · 中性影棚 / 固定曝光"
+msgstr "LOOKDEV  /  {0} · neutral studio / fixed exposure"
+
+#. Key:	ViewPanel_009
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1390)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(1390)
+msgctxt "Ue5MMDToolsUI,ViewPanel_009"
+msgid "LOOKDEV  /  {0} · 环境布光 / 自动曝光"
+msgstr "LOOKDEV  /  {0} · ambient lighting / auto exposure"
+
+#. Key:	ViewPanel_001
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(620)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(620)
+msgctxt "Ue5MMDToolsUI,ViewPanel_001"
+msgid "场景机位"
+msgstr "Scene camera"
+
+#. Key:	ViewPanel_002
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(622)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(622)
+msgctxt "Ue5MMDToolsUI,ViewPanel_002"
+msgid "恢复当前场景的默认构图"
+msgstr "Restore the default framing of the current stage"
+
+#. Key:	ViewPanel_003
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(626)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(626)
+msgctxt "Ue5MMDToolsUI,ViewPanel_003"
+msgid "编辑"
+msgstr "Edit"
+
+#. Key:	ViewPanel_004
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(641)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(641)
+msgctxt "Ue5MMDToolsUI,ViewPanel_004"
+msgid "恢复原始姿态"
+msgstr "Restore original pose"
+
+#. Key:	ViewPanel_005
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(641)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanel.cpp(641)
+msgctxt "Ue5MMDToolsUI,ViewPanel_005"
+msgid "清除预览动作，停止动作和物理。可重新点预设恢复。"
+msgstr "Clears the preview motion and stops motion and physics. Pick a preset to restore."
+
+#. Key:	ViewMotion_006
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(158)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(158)
+msgctxt "Ue5MMDToolsUI,ViewMotion_006"
+msgid "正在定位姿势"
+msgstr "Seeking pose"
+
+#. Key:	ViewMotion_007
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(159)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(159)
+msgctxt "Ue5MMDToolsUI,ViewMotion_007"
+msgid "已暂停"
+msgstr "Paused"
+
+#. Key:	ViewMotion_008
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(255)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(255)
+msgctxt "Ue5MMDToolsUI,ViewMotion_008"
+msgid "未加载角色"
+msgstr "No character loaded"
+
+#. Key:	ViewMotion_001
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(37)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(37)
+msgctxt "Ue5MMDToolsUI,ViewMotion_001"
+msgid "请先加载带骨架的 MMD 角色。"
+msgstr "Load an MMD character with a skeleton first."
+
+#. Key:	ViewMotion_002
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(54)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(54)
+msgctxt "Ue5MMDToolsUI,ViewMotion_002"
+msgid "内置 VMD 文件缺失或无法读取。"
+msgstr "The built-in VMD file is missing or unreadable."
+
+#. Key:	ViewMotion_003
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(66)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(66)
+msgctxt "Ue5MMDToolsUI,ViewMotion_003"
+msgid "此骨架缺少标准 MMD 躯干／手臂骨骼，请使用适配它的动画。"
+msgstr "This skeleton lacks the standard MMD torso and arm bones. Use a motion adapted to it."
+
+#. Key:	ViewMotion_004
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(72)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(72)
+msgctxt "Ue5MMDToolsUI,ViewMotion_004"
+msgid "未能生成当前骨架的预览动作，原动作保留。"
+msgstr "Could not build a preview motion for this skeleton; the previous motion is kept."
+
+#. Key:	ViewMotion_005
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(79)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Private/UI/MMDViewPanelMotion.cpp(79)
+msgctxt "Ue5MMDToolsUI,ViewMotion_005"
+msgid "预览播放未能启动。"
+msgstr "The preview could not start."
+
+#. Key:	Ue5MMDTools
+#. SourceLocation:	PluginSrc/Source/Ue5MMDToolsEditor/Public/Ue5MMDToolsCommands.h(13)
+#: PluginSrc/Source/Ue5MMDToolsEditor/Public/Ue5MMDToolsCommands.h(13)
+msgctxt "Contexts,Ue5MMDTools"
+msgid "Ue5MMDTools Plugin"
+msgstr ""
+

@@ -5,8 +5,11 @@
 ## 现状
 
 - 面板里的 79 处硬编码中文已改成 `LOCTEXT`，命名空间 `Ue5MMDToolsUI`，源语言简体中文。
-- 本地化目标配置在 [`Config/Localization/Ue5MMDTools.ini`](../Config/Localization/Ue5MMDTools.ini)，目标语言 `en`、`ja`。
-- **英文 / 日文资源尚未生成**，所以面板目前仍显示中文。README 与落地页写的 "UI planned" 仍然成立，改这一行之前请先把 `.locres` 生成并验证。
+- 本地化目标配置在 [`Config/Localization/Ue5MMDTools.ini`](../Config/Localization/Ue5MMDTools.ini)，目标语言 `en`。
+- 英文资源已生成并随插件分发：`Content/Localization/Ue5MMDTools/en/Ue5MMDTools.locres`，翻译源文件是对应的 `Ue5MMDTools.po`。
+- 日文**尚未翻译**，所以 `ja` 暂时不在生成列表里；文件名里的 `{0}` 占位符需要在译文里保留。
+
+编辑器语言是英文时，面板走英文资源；中文环境仍显示中文原文。
 
 ## 涉及文件
 
@@ -49,11 +52,28 @@ Content/Localization/Ue5MMDTools/ja/Ue5MMDTools.locres
 - `BuildPlugin` 只把 `Config/FilterPlugin.ini` 打进包，`Config/Localization/Ue5MMDTools.ini` **不随插件包分发**。这是工具链配置，留在开发仓库给维护者用即可。
 - 真正要随包走的是 `Content/Localization/Ue5MMDTools/<Culture>/*.locres`，它在 `Content/` 下，会正常被打包。
 
+## 生成记录（2026-11-19）
+
+用最小宿主工程 + 源文件副本跑通，命令与产物：
+
+```text
+GatherTextFromSource: Submit = 89        （共 89 条文本，其中 84 条含中文）
+生成：Ue5MMDTools.manifest / .archive / .po / .locres
+英文 .po：84 条 msgid 全部填写 msgstr，0 条遗漏
+```
+
+首次尝试直接把插件放进宿主工程的 `Plugins/` 并启用，引擎会尝试加载插件模块（没有二进制）并中止；改成「把 `Source/` 复制到宿主工程的普通目录，配置里指向该目录」即可，收集阶段本来就不需要编译。
+
 ## 验证
 
-1. 生成 `.locres` 后，用 `-culture=en` 启动编辑器（或把编辑器语言切到英文），打开 **Window → Ue5MMDTools**，逐页检查按钮、标题、状态行。
+已做：英文 `.locres` 随包分发（`BuildPlugin` 产物里确认存在）；把发布包放进空白工程、`-culture=en` 无窗口启动，插件挂载两个模块、`MMD.OpenPanel` 被识别执行、`MMDMatEnsure` 正常完成，0 fatal error。
+
+还要做：
+
+1. 前台或离屏打开面板，逐页确认文字确实是英文（`.locres` 能被解析不等于面板已按英文渲染）。
 2. 重点看带参数的两处：状态栏的 `动画：{0}` / `模型：{0}`，以及风格页的 `LOOKDEV / {0} · …`，确认占位符顺序在翻译后仍正确。
 3. 窄窗口下检查英文是否溢出按钮（英文普遍比中文长 40% 左右）。
+4. 面板截图目检通过之前，README 里不要写「英文界面已完成」。
 
 ## 已知限制
 
