@@ -6,3 +6,7 @@ DerivedDataCache/
 .vs/
 *.sln
 *.suo
+
+# Local preview scratch (README rendering, badges) — not part of the plugin
+_preview/
+

@@ -1,10 +1,17 @@
 # Ue5MMDTools
 
+[![Release](https://img.shields.io/github/v/release/treasureGrove/MMDUETools?style=flat-square&label=release)](https://github.com/treasureGrove/MMDUETools/releases/latest)
+[![Unreal](https://img.shields.io/badge/UE-5.8.3%20%2F%20Win64-0b6fcb?style=flat-square)](docs/BUILD_ENVIRONMENT.md)
+[![License](https://img.shields.io/badge/license-MIT-2f855a?style=flat-square)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/treasureGrove/MMDUETools?style=flat-square&color=f5b301)](https://github.com/treasureGrove/MMDUETools/stargazers)
+
 **Import MMD characters into Unreal Engine 5 and turn PMX + VMD data into a finished short video.**
 
 Ue5MMDTools imports PMX models and VMD animation, previews MMD physics, toon lighting, camera and stage presets, then renders the current preview to MP4. Imported animation, morph curves and cameras can also continue into Sequencer.
 
-[Download Win64 plugin](https://github.com/treasureGrove/MMDUETools/releases/latest) · [Get a demo model](MODEL_SOURCES.md) · [中文首页](README.md) · [Chinese guide](github.md) · [Watch the demo](https://www.bilibili.com/video/BV1M2RXBPExk/)
+> **It removes the middle of the pipeline.** Physics, lighting, framing and encoding happen inside the plugin: MMD data goes in, a finished frame goes out, and you only drop into Sequencer when you want to refine. No round trips through Blender, MMD and UE for a single shot.
+
+[Download Win64 plugin](https://github.com/treasureGrove/MMDUETools/releases/latest) · [中文首页](README.md) · [Get a demo model](MODEL_SOURCES.md) · [Chinese guide](github.md) · [Watch the demo](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
 <p align="center">
   <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" width="800" alt="Ue5MMDTools workflow preview"></a>
@@ -43,6 +50,14 @@ YourProject/
       Ue5MMDTools.uplugin
 ```
 
+## Who this is for
+
+- **MMD creators** who want UE-quality lighting on an existing PMX/VMD pipeline and a finished MP4, not another importer to babysit.
+- **Technical artists** who need hair and cloth physics, stage presets and camera blocking inside the engine, without rebuilding a lighting rig per shot.
+- **Pipeline engineers** who want the same thing from a script: `import-pmx`, `import-vmd`, `render`, each returning JSON.
+
+If what you actually need is maximum import fidelity (SDEF, live IK evaluation, VMD write-back), [MMD2Unreal](https://github.com/JDui/MMD2Unreal) and [IM4U](https://github.com/tekifuta/IM4U) go deeper on that. They solve "does the character look right in UE"; this project solves "can I ship this short today". They can be installed side by side.
+
 ## Current support matrix
 
 | Capability | Status |
@@ -51,10 +66,27 @@ YourProject/
 | VMD bone animation | Available |
 | VMD morph curves | Available |
 | Bullet physics preview | Available |
+| Studio, lighting and style presets | Available |
 | Sequencer camera and animation workflow | Available |
 | MP4 production | Available |
+| Command-line import and render | Available |
 | UE 5.8.3 Win64 | Verified target |
 | UE 5.6 / 5.7 | Not verified |
+
+## How it compares
+
+| | Ue5MMDTools | Blender MMD Tools → FBX → UE | MMD2Unreal / IM4U |
+| --- | --- | --- | --- |
+| PMX / VMD into UE | Directly in the plugin | Round trip, materials and morphs often rebuilt | Directly in the plugin |
+| Hair and cloth physics | Built-in Bullet, freezes to keep simulating | Pre-baked in Blender | KawaiiPhysics / custom solver |
+| Lighting and stage | Eight studios and style presets, one click | Build it yourself | No built-in stage |
+| Delivery | Preview is the shot, background MP4 and frames | Configure Movie Render Queue | Configure it yourself |
+| Batch work | CLI with JSON reports | None | None |
+| License | MIT, commercial use allowed | Per project | Check each repository |
+
+## If it saved you time
+
+Building a stage, lighting it, getting physics to behave and encoding the MP4 by hand is half a day to two days of work. This plugin collapses that into one button. If it saved you that time, a star helps other MMD creators find it — that is the single most useful thing you can do for the project right now.
 
 ## Contributing and support
 
