@@ -114,6 +114,18 @@
       border: 1px solid rgba(255,255,255,.55);
     }
 
+    /* 正文是浅色底，按钮需要反过来的配色，否则白字白底看不见 */
+    main .button {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    main .button.secondary {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--accent);
+    }
+
     .flow {
       display: flex;
       flex-wrap: wrap;
@@ -260,13 +272,13 @@
   <header>
     <div class="inner">
       <h1>Ue5MMDTools</h1>
-      <p class="lead">用于 Unreal Engine 5 的 MMD 导入和播放插件，把 PMX 模型、VMD 动作和表情数据转换到 UE 的原生资产流程中。</p>
-      <p><a class="button" href="https://github.com/treasureGrove/MMDUETools/releases/latest">下载 Win64 插件</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools#readme">查看仓库首页</a></p>
+      <p class="lead">在 Unreal Engine 5 里，从 PMX 角色做到 MMD 短片。导入 PMX 与 VMD，在角色工坊里试动作、看发丝与衣物物理、换布光、定机位，再把当前预览渲染成 MP4。</p>
+      <p><a class="button" href="https://github.com/treasureGrove/MMDUETools/releases/latest">下载 Win64 插件</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.md">中文图文指南</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.en.md">English guide</a></p>
       <div class="flow" aria-label="基础流程">
-        <span>PMX -> SkeletalMesh</span>
-        <span>VMD -> AnimSequence</span>
-        <span>Morph -> MorphTarget</span>
-        <span>UE 视口播放</span>
+        <span>PMX / VMD</span>
+        <span>角色工坊</span>
+        <span>Bullet 物理 · 影棚布光</span>
+        <span>30 fps MP4</span>
       </div>
     </div>
   </header>
@@ -288,60 +300,36 @@
     <section id="showcase">
       <h2>实际效果预览</h2>
       <p>从导入角色、切换动作和布光，到后台制作 MP4。点击动图查看完整操作视频。</p>
-      <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" alt="MMD Studio 操作视频预览"></a>
-      <p class="note"><a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4">下载操作视频（MP4）</a> · <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif">查看待机动图</a></p>
+      <a href="Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="Screenshots/2026-11-05-workflow-video/workflow_preview.gif" alt="MMD Studio 操作视频预览"></a>
+      <p class="note"><a href="Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4">下载操作视频（MP4）</a> · <a href="Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif">查看待机动图</a></p>
     </section>
 
-    <section id="guide">
+        <section id="guide">
       <h2>使用教程</h2>
+      <p>完整图文步骤在仓库里维护，含实际面板截图和每一步的按钮位置：</p>
+      <p><a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.md">中文图文指南</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.en.md">English guide</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/README.ja.md">日本語</a></p>
       <div class="steps">
         <div class="step">
-          <h3>1. 安装插件</h3>
-          <p>下载后，把插件目录放到 UE 项目的 <code>Plugins</code> 文件夹下。</p>
+          <h3>1. 安装</h3>
+          <p>解压发布包，把 <code>Ue5MMDTools/</code> 放进工程的 <code>Plugins/</code> 目录，启用插件并重启编辑器。也可以从编辑器控制台输入 <code>MMD.OpenPanel</code>。</p>
           <pre><code>YourProject/
   Plugins/
     Ue5MMDTools/</code></pre>
-          <p>然后打开 UE5，在插件面板中启用该插件。</p>
-          <img width="2556" height="507" alt="Enable plugin" src="https://github.com/user-attachments/assets/34db6af7-8de2-455e-8c66-3fe83762a915">
         </div>
 
         <div class="step">
-          <h3>2. 打开插件面板</h3>
-          <p>启用插件后，在 UE5 插件面板中打开 Ue5MMDTools 的导入界面。</p>
-          <img width="798" height="792" alt="Ue5MMDTools panel" src="https://github.com/user-attachments/assets/1c5c4d43-480d-4a4e-91a9-e905e94f4fc4">
+          <h3>2. 导入角色并试动作</h3>
+          <p>从 <strong>窗口 → Ue5MMDTools</strong> 打开角色工坊，点「导入 PMX 模型」，保留 PMX 与贴图的相对目录。导入一次后，之后点「加载已有角色」即可。选一个内置动作，再在面板底部开启 <strong>实时物理</strong> 检查发丝和衣物。</p>
         </div>
 
         <div class="step">
-          <h3>3. 导入 PMX 模型</h3>
-          <p>点击“导入模型”，选择需要导入的 <code>.pmx</code> 文件。</p>
-          <img width="1626" height="648" alt="Import PMX model" src="https://github.com/user-attachments/assets/078f6b85-bc5c-4959-ae0c-669c37bb0079">
-          <p>导入完成后，插件会生成 MMD 角色相关资产，并在面板和蓝图中可以看到对应的 Actor。</p>
-          <img width="1914" height="1026" alt="Imported MMD actor" src="https://github.com/user-attachments/assets/9ab3b650-4054-4ed4-8882-56c2c63d848c">
+          <h3>3. 换布光、定机位</h3>
+          <p>切到 <strong>场景</strong> 选影棚，布景和配套光照一起切换；视口上方可选全身 / 半身 / 面部 / 侧面 / 背面。想试材质时切到 <strong>风格</strong>，随时可以恢复原材质。</p>
         </div>
 
         <div class="step">
-          <h3>4. 查看生成的资产</h3>
-          <p>导入 PMX 后，会生成对应的角色 Actor、骨骼资产和 IK 重定向相关资产。</p>
-          <img width="1611" height="621" alt="Generated actor and retarget assets" src="https://github.com/user-attachments/assets/a37aea3c-5c72-418b-9920-711de3a3d9f8">
-          <ul>
-            <li><code>SkeletalMesh</code> 和 <code>Skeleton</code></li>
-            <li>材质和材质实例</li>
-            <li><code>MorphTarget</code></li>
-            <li>MMD Actor 和 <code>AnimBlueprint</code></li>
-            <li>IK Rig / IK Retargeter</li>
-            <li>MMD ModelData 辅助资产</li>
-          </ul>
-        </div>
-
-        <div class="step">
-          <h3>5. 导入 VMD 动作</h3>
-          <p>选中已经导入的 MMD 角色或对应的 SkeletalMesh，然后点击“导入 VMD 动画”，选择 <code>.vmd</code> 文件。</p>
-          <p>导入成功后会生成 UE <code>AnimSequence</code>，其中包含骨骼动画轨道和表情 Morph 曲线。如果当前场景里有对应角色，插件会尝试直接播放该动画。</p>
-        </div>
-
-        <div class="step">
-          <h3>6. 播放 MMD 动画</h3>
-          <p>导入 VMD 后，角色可以在 UE 中播放 MMD 动作。正常情况下应能看到身体骨骼动作、root / center 位移、眨眼、嘴型、眉毛和表情变化。</p>
+          <h3>4. 出片</h3>
+          <p>确认动作、场景、风格和透视机位后，点右上角 <strong>按当前预览制作</strong>。成片在 <code>Saved/MMDProduction/</code>，需要 Windows D3D12 SM6，并能在 PATH 调用 <code>ffmpeg</code> 与 <code>ffprobe</code>。</p>
         </div>
       </div>
     </section>
@@ -394,7 +382,18 @@
           <ul>
             <li>读取 PMX 刚体和 Joint 数据。</li>
             <li>基于 Bullet 初始化 MMD 风格物理模拟器。</li>
-            <li>物理功能仍在实验阶段，适合继续调试和扩展。</li>
+            <li>播放时实时模拟发丝与衣物；定格姿势后物理继续推进。</li>
+            <li>出片时物理结果按帧推进，并可烘焙进 Sequencer。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>影棚、布光与出片</h3>
+          <ul>
+            <li>八套影棚预设，切换场景时布景与配套光照一起更换。</li>
+            <li>风格预设可预览、可恢复原材质；视口提供五种机位。</li>
+            <li>按当前预览后台渲染 30 fps MP4，输出帧序列与日志。</li>
+            <li>命令行支持 <code>import-pmx</code> / <code>import-vmd</code> / <code>render</code>，结果以 JSON 返回。</li>
           </ul>
         </div>
 
@@ -411,7 +410,7 @@
 
     <section id="workflow">
       <h2>工作流总结</h2>
-      <p>Ue5MMDTools 会把 MMD 资源尽量转换为 UE 原生资产，便于在编辑器里检查、播放和继续制作。</p>
+      <p>Ue5MMDTools 会把 MMD 资源尽量转换为 UE 原生资产，并在同一个面板里完成布光、机位和出片。</p>
       <pre><code>PMX 模型
   -> SkeletalMesh
   -> Skeleton
@@ -423,17 +422,21 @@ VMD 动作
   -> AnimSequence bone tracks
   -> AnimSequence morph curves
 
-播放结果
-  -> 骨骼动作
-  -> root / center 位移
-  -> 眨眼
-  -> 嘴型
-  -> 表情变化</code></pre>
+角色工坊
+  -> 内置动作 / 自定义 VMD
+  -> Bullet 物理（可定格继续模拟）
+  -> 影棚与布光预设
+  -> 全身 / 半身 / 面部 / 侧面 / 背面
+
+出片
+  -> 30 fps MP4（Saved/MMDProduction/）
+  -> 帧序列与日志
+  -> 可继续在 Sequencer 精修</code></pre>
     </section>
   </main>
 
   <footer>
-    Ue5MMDTools - PMX / VMD import and playback for Unreal Engine 5
+    Ue5MMDTools - PMX / VMD MMD production for Unreal Engine 5
   </footer>
 </body>
 </html>
