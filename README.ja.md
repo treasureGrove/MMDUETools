@@ -46,7 +46,7 @@ PMX と VMD を読み込み、**MMD STUDIO（キャラクター工房）** で�
 
 `main` はプラグイン配布用のツリーです。`Ue5MMDTools/` をプロジェクトの `Plugins/` に置くだけで使えます。開発用のホストプロジェクトは [`dev` ブランチ](https://github.com/treasureGrove/MMDUETools/tree/dev) にあります。ネイティブの Toon スタイルには D3D12 SM6 と Substrate／バックエンドの設定が必要です（[ビルドと互換性](docs/BUILD_ENVIRONMENT.md)）。
 
-**UI は現在中国語のみです。** 英語・日本語 UI はこれからの対応です。ボタンの位置は[操作ガイドのスクリーンショット](github.md)で確認できます。
+**UI は既定で中国語です。** 英語のテキストは同梱済み（`Content/Localization/`）で、エディタの言語が英語のときに使われます。日本語 UI はこれからの対応です。ボタンの位置は[操作ガイドのスクリーンショット](github.md)で確認できます。
 
 ## インストール
 
