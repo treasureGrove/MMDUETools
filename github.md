@@ -10,16 +10,16 @@
   <img src="MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif" width="576" alt="10 周年初音未来在薰紫摄影棚侧脸待机并眨眼">
 </p>
 
-**10 周年初音未来 · 薰紫摄影棚 · 侧脸待机。** 2026-11-05 使用 `main` 开发版在 UE 5.8.3 中离屏捕获，3.2 秒，启用 Bullet 物理并追加 VMD 眨眼表情。[画面与捕获记录](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-nikki-face-fill/README.md)
+**10 周年初音未来 · 薰紫摄影棚 · 侧脸待机。** 2026-11-05 使用 `main` 开发版在 UE 5.8.3 中离屏捕获，3.2 秒，启用 Bullet 物理并追加 VMD 眨眼表情。[画面与捕获记录](https://github.com/treasureGrove/MMDUETools/blob/dev/MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-05-nikki-face-fill/README.md)
 
-想比较同一角色在不同光照下的效果，可以查看纯白影棚、樱雾柔光、深蓝展厅、珍珠回廊和薰紫摄影棚的实际成片。每套场景各展示 1 秒，捕获于 2026-10-25。[五套影棚短片](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/studio-collection.mp4) · [逐套画面对照](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)
+想比较同一角色在不同光照下的效果，可以查看纯白影棚、樱雾柔光、深蓝展厅、珍珠回廊和薰紫摄影棚的实际成片。每套场景各展示 1 秒，捕获于 2026-10-25。[五套影棚短片](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/studio-collection.mp4) · [逐套画面对照](https://github.com/treasureGrove/MMDUETools/blob/dev/MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)
 
 ## 安装插件
 
 1. 下载 UE 5.8.3 Win64 插件包并解压。将 `Ue5MMDTools/` 放到自己的 UE 工程中，使插件文件位于 `YourProject/Plugins/Ue5MMDTools/Ue5MMDTools.uplugin`。[下载插件](https://github.com/treasureGrove/MMDUETools/releases/latest)
 2. 打开工程，启用插件并按提示重启。进入关卡编辑器，选择 **窗口（Window） → Ue5MMDTools**。也可在编辑器控制台输入 `MMD.OpenPanel`。
 
-使用发布包时直接打开自己的 UE 工程。仓库内的 `MMD.uproject` 是开发宿主，还声明了额外的插件依赖。需要从源码构建时，使用仓库里的插件目录和 UE 5.8 Win64 C++ 工具链。[插件源码](MMD/Plugins/Ue5MMDTools/) · [源码构建与兼容说明](MMD/Plugins/Ue5MMDTools/Docs/ENDFIELD_PLUGIN_DISTRIBUTION.md)
+使用发布包时直接打开自己的 UE 工程。完整开发宿主是 [`dev` 分支](https://github.com/treasureGrove/MMDUETools/tree/dev) 上的 `MMD.uproject`，它还声明了额外的插件依赖；`main` 只保留插件本身。需要从源码构建时，使用本仓库的插件目录和 UE 5.8 Win64 C++ 工具链。[插件源码](./) · [源码构建与兼容说明](MMD/Plugins/Ue5MMDTools/Docs/ENDFIELD_PLUGIN_DISTRIBUTION.md) · [English guide](github.en.md)
 
 ## 准备演示模型
 
@@ -50,7 +50,7 @@
 1. 保存角色资产和自定义动画。确认当前动作、展示场景、风格及透视机位，再点击面板右上角 **按当前预览制作**。
 2. 在面板查看进度。制作完成后，点底部 **播放成片**，或点 **打开目录** 查看工程 `Saved/MMDProduction/` 下的 `mmd_movie.mp4`、帧和日志。需要中止时可点 **取消**。
 
-后台从动作第 0 秒开始，输出 30 fps MP4，沿用预览画幅、倍速和物理设置。需要 Windows D3D12 SM6，以及系统可调用的 `ffmpeg` 和 `ffprobe`。[制作按钮位置与 2026-11-04 实拍](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-04-preview-production/README.md)
+后台从动作第 0 秒开始，输出 30 fps MP4，沿用预览画幅、倍速和物理设置。需要 Windows D3D12 SM6，以及系统可调用的 `ffmpeg` 和 `ffprobe`。[制作按钮位置与 2026-11-04 实拍](https://github.com/treasureGrove/MMDUETools/blob/dev/MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-11-04-preview-production/README.md)
 
 如果按钮不可用，先保存角色和动画、解除定格，再检查是否用了受支持的内置展示场景、原材质或内置风格，以及透视机位。使用独立 VMD 镜头、音频或重新打开成片序列的方法见 [后台制作指南](MMD/Plugins/Ue5MMDTools/Docs/MMD_PRODUCTION_WORKFLOW.md)。
 
@@ -66,7 +66,7 @@
 
 - **角色**　初音未来，Crypton Future Media, INC.。[角色许可](https://piapro.jp/license/pcl)
 - **成片模型**　三目YYB（SANMUYYB）的初音未来 10 周年版 v1.02。[作者配布](https://bowlroll.net/file/146083)
-- **操作图与影棚对照模型**　YYB Hatsune Miku 16th NoWing，SANMUYYB／霁行Ralker／Delta幻黑。[捕获记录](MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)
+- **操作图与影棚对照模型**　YYB Hatsune Miku 16th NoWing，SANMUYYB／霁行Ralker／Delta幻黑。[捕获记录](https://github.com/treasureGrove/MMDUETools/blob/dev/MMD/Plugins/Ue5MMDTools/Docs/Screenshots/2026-10-25-studio-collection/README.md)
 - **动作**　Wait of Mei、Breath of Mei，名古屋工业大学计算机科学系 MMDAgent Project Team。侧脸成片截取 Wait of Mei 的前 3.2 秒，另配表情。[来源与 CC BY 3.0 许可](MMD/Plugins/Ue5MMDTools/Resources/PreviewMotions/README.md)
 
 [返回仓库首页](README.md)

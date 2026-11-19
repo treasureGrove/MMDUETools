@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible import, animation, physics, rendering, or production problem.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not upload third-party PMX models, textures, motions, songs, or other files you do not have permission to redistribute. Link to the original source instead.
+  - type: input
+    id: ue-version
+    attributes:
+      label: Unreal Engine version
+      placeholder: UE 5.8.3 / CL58210709
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Ue5MMDTools version
+      placeholder: v1.1.0 or dev commit
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and rendering API
+      placeholder: RTX 4070 / D3D12 SM6
+  - type: textarea
+    id: model
+    attributes:
+      label: Model and asset context
+      description: Describe the model type and how it was imported. Do not attach the model itself.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: 1. Open... 2. Click... 3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Log, screenshot, or video
+      description: Remove private paths and personal information before posting.
