@@ -13,7 +13,7 @@ Ue5MMDTools imports PMX models and VMD animation, previews MMD physics, toon lig
 
 > **It removes the middle of the pipeline.** Physics, lighting, framing and encoding happen inside the plugin: MMD data goes in, a finished frame goes out, and you only drop into Sequencer when you want to refine. No round trips through Blender, MMD and UE for a single shot.
 
-[Download Win64 plugin](https://github.com/treasureGrove/MMDUETools/releases/latest) · [中文首页](README.md) · [Illustrated guide](github.en.md) · [Get a demo model](MODEL_SOURCES.md) · [Watch the demo](https://www.bilibili.com/video/BV1M2RXBPExk/)
+[Download Win64 plugin](https://github.com/treasureGrove/MMDUETools/releases/latest) · [Project site](https://treasuregrove.github.io/MMDUETools/en/) · [中文首页](README.md) · [Illustrated guide](github.en.md) · [Get a demo model](MODEL_SOURCES.md) · [Watch the demo](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
 <p align="center">
   <a href="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="https://github.com/treasureGrove/MMDUETools/raw/main/docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" width="800" alt="Ue5MMDTools workflow preview"></a>
