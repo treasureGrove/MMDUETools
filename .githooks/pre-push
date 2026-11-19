@@ -1,0 +1,14 @@
+#!/bin/sh
+# 推送前拦截：Markdown 里的相对链接必须能解析，且大小写与仓库一致。
+# 起因：README 写 Docs/ 而目录是 docs/ 时，Windows 本地完全看不出来，
+# 推到线上后首页所有图片 404。
+#
+# 启用：pwsh -File Scripts/Install-GitHooks.ps1
+# 临时跳过：git push --no-verify
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "跳过 Markdown 链接检查：未找到 pwsh"
+    exit 0
+fi
+
+pwsh -NoProfile -File Scripts/Test-MarkdownLinks.ps1

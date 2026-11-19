@@ -29,6 +29,8 @@ Use the bug template and include:
 5. Run the narrowest relevant validation and report what could not be run because of local UE/toolchain limits.
 6. Update the relevant documentation and changelog for user-visible changes.
 
+For documentation changes, run `pwsh -File Scripts/Test-MarkdownLinks.ps1`. GitHub resolves relative paths case-sensitively while Windows does not, so `Docs/` in a README next to a `docs/` directory passes locally and breaks every image on the homepage. `pwsh -File Scripts/Install-GitHooks.ps1` wires the same check into a pre-push hook.
+
 The `main` branch is a release distribution branch. Changes normally land through `dev` and are exported into `main` for a release. Exporting checks link targets and rewrites them for the flat release tree; relative links in `README.md` are case-sensitive on GitHub, so `docs/` must stay lowercase.
 
 Release notes, channel checklist and the numbers we watch live in [docs/RELEASE_PLAYBOOK.md](docs/RELEASE_PLAYBOOK.md).
