@@ -5,6 +5,8 @@
 [![License](https://img.shields.io/badge/license-MIT-2f855a?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/treasureGrove/MMDUETools?style=flat-square&color=f5b301)](https://github.com/treasureGrove/MMDUETools/stargazers)
 
+**简体中文** · [English](README.en.md) · [日本語](README.ja.md)
+
 **在 Unreal Engine 5 里，从 PMX 角色做到 MMD 短片。**
 
 导入 PMX 和 VMD，在 **MMD STUDIO / 角色工坊** 里试动作、看发丝和衣物物理、换布光、定镜头。满意后直接后台生成 MP4，也可把动作、表情和相机带入 Sequencer 继续编辑。
