@@ -36,6 +36,8 @@
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
+#define LOCTEXT_NAMESPACE "Ue5MMDToolsUI"
+
 namespace
 {
 	const FLinearColor MutedText = MMDPanelStyle::Muted;
@@ -149,7 +151,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildRenderPresetPanel()
 		+ SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)[SectionTitle(TEXT("应用目标"))]
 		+ SHorizontalBox::Slot().AutoWidth()
 		[SNew(SBorder).BorderImage(MMDPanelStyle::BadgeBrush()).Padding(FMargin(8, 4))
-			[SNew(STextBlock).Text(FText::FromString(TEXT("临时预览"))).ColorAndOpacity(MMDPanelStyle::Accent).Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))]]
+			[SNew(STextBlock).Text(LOCTEXT("ImportPresets_001", "临时预览")).ColorAndOpacity(MMDPanelStyle::Accent).Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))]]
 	];
 	Panel->AddSlot().AutoHeight().Padding(0, 0, 0, 8)
 	[
@@ -159,14 +161,14 @@ TSharedRef<SWidget> MMDImportSetting::BuildRenderPresetPanel()
 			SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled)).ButtonStyle(MMDPanelStyle::Toggle()).HAlign(HAlign_Center)
 			.ButtonColorAndOpacity_Lambda([this]() { return !bApplyPresetToLevelSelection ? MMDPanelStyle::Accent : FLinearColor::White; })
 			.OnClicked_Lambda([this]() { bApplyPresetToLevelSelection = false; return FReply::Handled(); })
-			[SNew(STextBlock).Text(FText::FromString(TEXT("预览角色"))).ColorAndOpacity_Lambda([this]() { return !bApplyPresetToLevelSelection ? MMDPanelStyle::PrimaryText : MMDPanelStyle::Text; })]
+			[SNew(STextBlock).Text(LOCTEXT("ImportPresets_002", "预览角色")).ColorAndOpacity_Lambda([this]() { return !bApplyPresetToLevelSelection ? MMDPanelStyle::PrimaryText : MMDPanelStyle::Text; })]
 		]
 		+ SHorizontalBox::Slot().FillWidth(1)
 		[
 			SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled)).ButtonStyle(MMDPanelStyle::Toggle()).HAlign(HAlign_Center)
 			.ButtonColorAndOpacity_Lambda([this]() { return bApplyPresetToLevelSelection ? MMDPanelStyle::Accent : FLinearColor::White; })
 			.OnClicked_Lambda([this]() { bApplyPresetToLevelSelection = true; return FReply::Handled(); })
-			[SNew(STextBlock).Text(FText::FromString(TEXT("关卡所选"))).ColorAndOpacity_Lambda([this]() { return bApplyPresetToLevelSelection ? MMDPanelStyle::PrimaryText : MMDPanelStyle::Text; })]
+			[SNew(STextBlock).Text(LOCTEXT("ImportPresets_003", "关卡所选")).ColorAndOpacity_Lambda([this]() { return bApplyPresetToLevelSelection ? MMDPanelStyle::PrimaryText : MMDPanelStyle::Text; })]
 		]
 	];
 	Panel->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
@@ -178,7 +180,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildRenderPresetPanel()
 	Panel->AddSlot().AutoHeight().Padding(0, 0, 0, 12)
 	[
 		SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled)).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).HAlign(HAlign_Center).ContentPadding(FMargin(10, 6))
-		.Text(FText::FromString(TEXT("恢复原材质")))
+		.Text(LOCTEXT("ImportPresets_004", "恢复原材质"))
 		.IsEnabled_Lambda([this]() { return !GetRenderPresetTargets().IsEmpty(); })
 		.OnClicked_Raw(this, &MMDImportSetting::RestoreRenderPreset)
 	];
@@ -186,8 +188,8 @@ TSharedRef<SWidget> MMDImportSetting::BuildRenderPresetPanel()
 	Panel->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
 	[
 		SAssignNew(SearchBox, SSearchBox).Style(&SearchStyle).Tag(TEXT("MMD.StyleSearch"))
-		.HintText(FText::FromString(TEXT("搜索风格，如：暖暖 / 霓虹 / Nikki")))
-		.ToolTipText(FText::FromString(TEXT("按名称、效果描述或英文名称筛选；多个关键词用空格分隔。")))
+		.HintText(LOCTEXT("ImportPresets_005", "搜索风格，如：暖暖 / 霓虹 / Nikki"))
+		.ToolTipText(LOCTEXT("ImportPresets_006", "按名称、效果描述或英文名称筛选；多个关键词用空格分隔。"))
 		.DelayChangeNotificationsWhileTyping(false)
 		.OnTextChanged_Lambda(UpdateSearch)
 	];
@@ -206,7 +208,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildRenderPresetPanel()
 			})]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(6, 0, 0, 0)
 		[SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled)).Tag(TEXT("MMD.StyleSearchClear")).ButtonStyle(MMDPanelStyle::Tab()).ForegroundColor(MMDPanelStyle::Accent).ContentPadding(FMargin(6, 3))
-			.Text(FText::FromString(TEXT("清空搜索")))
+			.Text(LOCTEXT("ImportPresets_007", "清空搜索"))
 			.Visibility_Lambda([SearchState]() { return SearchState->Query.IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
 			.OnClicked_Lambda([SearchState]()
 			{
@@ -258,7 +260,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildRenderPresetPanel()
 				.HAlign(HAlign_Center).ContentPadding(FMargin(12, 7))
 				.Text_Lambda([this, Path]() { return FText::FromString(IsRenderPresetApplied(Path) ? TEXT("✓ 已应用") : bApplyPresetToLevelSelection ? TEXT("预览到关卡所选 →") : TEXT("预览风格 →")); })
 				.IsEnabled_Lambda([this, bAssetExists]() { return bAssetExists && !GetRenderPresetTargets().IsEmpty(); })
-				.ToolTipText(FText::FromString(TEXT("应用到上方指定的角色。重复选择保留当前预览；按住 Shift 点击可重新应用修改后的配方。")))
+				.ToolTipText(LOCTEXT("ImportPresets_008", "应用到上方指定的角色。重复选择保留当前预览；按住 Shift 点击可重新应用修改后的配方。"))
 				.OnClicked_Lambda([this, Path]() { return ApplyRenderPreset(Path, FSlateApplication::Get().GetModifierKeys().IsShiftDown()); })
 			]
 		];
@@ -456,7 +458,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildScenePresetPanel()
 			.Tag(FName(*(TEXT("MMDDisplayScene.") + FMMDStudioDisplayScene::GetId(Style))))
 			.ButtonStyle(MMDPanelStyle::Secondary()).HAlign(HAlign_Fill).ContentPadding(FMargin(10, 8))
 			.ButtonColorAndOpacity_Lambda([this, Style]() { return ViewPanel->GetDisplaySceneStyle() == Style ? MMDPanelStyle::AccentSoft : FLinearColor::White; })
-			.ToolTipText(FText::FromString(TEXT("切换右侧展示场景及配套光照。当前关卡、角色材质与动作保持不变。")))
+			.ToolTipText(LOCTEXT("ImportPresets_009", "切换右侧展示场景及配套光照。当前关卡、角色材质与动作保持不变。"))
 			.OnClicked_Lambda([this, Style]()
 			{
 				const bool bReady = ViewPanel->PreviewDisplayScene(Style);
@@ -506,7 +508,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildScenePresetPanel()
 	[
 		SNew(SExpandableArea).Tag(TEXT("MMDLegacyDisplayScenes")).InitiallyCollapsed(true).Style(MMDPanelStyle::Expandable())
 		.BorderImage(MMDPanelStyle::CardBrush()).HeaderPadding(FMargin(10, 8)).Padding(FMargin(8))
-		.HeaderContent()[SNew(STextBlock).Text(FText::FromString(TEXT("早期云空场景"))).ColorAndOpacity(MMDPanelStyle::Muted)]
+		.HeaderContent()[SNew(STextBlock).Text(LOCTEXT("ImportPresets_010", "早期云空场景")).ColorAndOpacity(MMDPanelStyle::Muted)]
 		.BodyContent()[MakeDisplayGrid(EarlyDisplays)]
 	];
 	Panel->AddSlot().AutoHeight().Padding(0, 10, 0, 6)[SectionTitle(TEXT("完整舞台"))];
@@ -548,7 +550,7 @@ TSharedRef<SWidget> MMDImportSetting::BuildScenePresetPanel()
 							return FReply::Handled();
 						})]
 					+ SHorizontalBox::Slot().FillWidth(1)
-					[SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled)).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).HAlign(HAlign_Center).Text(FText::FromString(TEXT("放入关卡")))
+					[SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled)).ButtonStyle(MMDPanelStyle::Secondary()).ForegroundColor(MMDPanelStyle::Text).HAlign(HAlign_Center).Text(LOCTEXT("ImportPresets_011", "放入关卡"))
 						.IsEnabled_Lambda([]() { return GEditor && !GEditor->PlayWorld; })
 						.OnClicked_Lambda([this, Name]() { return PlaceStagePreset(Name); })]
 				]
@@ -611,8 +613,8 @@ TSharedRef<SWidget> MMDImportSetting::BuildScenePresetPanel()
 	[
 		SNew(SMMDAnimatedButton, TAttribute<bool>::CreateSP(this, &MMDImportSetting::AreUIAnimationsEnabled))
 		.Tag(TEXT("MMDOpenFabLibrary")).ButtonStyle(MMDPanelStyle::Tab()).ForegroundColor(MMDPanelStyle::Accent)
-		.ContentPadding(FMargin(8, 5)).Text(FText::FromString(TEXT("浏览 Fab 场景素材")))
-		.ToolTipText(FText::FromString(TEXT("在浏览器中打开 Fab 的 Unreal Engine 素材页。资源加入库后，可从 UE 的「窗口 > Fab」添加到项目。")))
+		.ContentPadding(FMargin(8, 5)).Text(LOCTEXT("ImportPresets_012", "浏览 Fab 场景素材"))
+		.ToolTipText(LOCTEXT("ImportPresets_013", "在浏览器中打开 Fab 的 Unreal Engine 素材页。资源加入库后，可从 UE 的「窗口 > Fab」添加到项目。"))
 		.OnClicked_Lambda([this]()
 		{
 			FString Error;
@@ -639,7 +641,7 @@ FReply MMDImportSetting::PlaceStagePreset(const FString& PresetName)
 	{
 		if (It->GetLevel() == World->GetCurrentLevel() && It->ActorHasTag(ToolStageTag)) { Stage = *It; break; }
 	}
-	const FScopedTransaction Transaction(FText::FromString(TEXT("切换 MMD 预设舞台")));
+	const FScopedTransaction Transaction(LOCTEXT("ImportPresets_014", "切换 MMD 预设舞台"));
 	World->Modify();
 	if (!Stage)
 	{
@@ -685,3 +687,5 @@ FReply MMDImportSetting::OpenPresetMap(const FString& PackagePath)
 	ShowImportProgress(Opened ? TEXT("已打开预设场景。") : TEXT("打开预设场景失败。"), Opened ? EMMDMessageType::Success : EMMDMessageType::Error);
 	return FReply::Handled();
 }
+
+#undef LOCTEXT_NAMESPACE

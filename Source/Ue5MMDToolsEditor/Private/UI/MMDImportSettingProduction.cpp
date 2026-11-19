@@ -28,6 +28,8 @@
 #include "UObject/Package.h"
 #include "Widgets/SBoxPanel.h"
 
+#define LOCTEXT_NAMESPACE "Ue5MMDToolsUI"
+
 struct FMMDPreviewMovieJob
 {
 	FProcHandle Process;
@@ -208,13 +210,13 @@ TSharedRef<SWidget> MMDImportSetting::BuildPreviewMovieControls()
 			.ContentPadding(FMargin(10, 6))
 			.Text_Lambda([this]() { return FText::FromString(PreviewMovieJob ? TEXT("后台制作中…") : TEXT("按当前预览制作")); })
 			.IsEnabled_Lambda([this]() { return !PreviewMovieJob && ViewPanel && ViewPanel->HasPreviewAnimation(); })
-			.ToolTipText(FText::FromString(TEXT("沿用当前角色、动作、风格、展示场景或内置舞台及透视机位，从动作第 0 秒输出 MP4。30 fps，画幅随预览区，文件保存在 Saved/MMDProduction。需要 FFmpeg。")))
+			.ToolTipText(LOCTEXT("ImportProduction_001", "沿用当前角色、动作、风格、展示场景或内置舞台及透视机位，从动作第 0 秒输出 MP4。30 fps，画幅随预览区，文件保存在 Saved/MMDProduction。需要 FFmpeg。"))
 			.OnClicked(this, &MMDImportSetting::StartPreviewMovie)]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(6, 0, 0, 0)
 		[SNew(SMMDAnimatedButton, Motion).ButtonStyle(MMDPanelStyle::Secondary())
 			.Visibility_Lambda([this]() { return PreviewMovieJob ? EVisibility::Visible : EVisibility::Collapsed; })
 			.IsEnabled_Lambda([this]() { return PreviewMovieJob && !PreviewMovieJob->bCancelRequested; })
-			.Text(FText::FromString(TEXT("取消"))).OnClicked(this, &MMDImportSetting::CancelPreviewMovie)];
+			.Text(LOCTEXT("ImportProduction_002", "取消")).OnClicked(this, &MMDImportSetting::CancelPreviewMovie)];
 }
 
 TSharedRef<SWidget> MMDImportSetting::BuildPreviewMovieResultControls()
@@ -226,15 +228,15 @@ TSharedRef<SWidget> MMDImportSetting::BuildPreviewMovieResultControls()
 		[SNew(SMMDAnimatedButton, Motion).Tag(TEXT("MMDOpenPreviewMovie"))
 			.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(MMDPanelStyle::Accent)
 			.Visibility_Lambda([this]() { return !PreviewMovieJob && bLastPreviewMovieSucceeded ? EVisibility::Visible : EVisibility::Collapsed; })
-			.Text(FText::FromString(TEXT("播放成片")))
-			.ToolTipText(FText::FromString(TEXT("用系统默认播放器打开最近生成的 MP4。")))
+			.Text(LOCTEXT("ImportProduction_003", "播放成片"))
+			.ToolTipText(LOCTEXT("ImportProduction_004", "用系统默认播放器打开最近生成的 MP4。"))
 			.OnClicked(this, &MMDImportSetting::OpenPreviewMovieResult, true)]
 		+ SHorizontalBox::Slot().AutoWidth()
 		[SNew(SMMDAnimatedButton, Motion).Tag(TEXT("MMDOpenPreviewMovieDirectory"))
 			.ButtonStyle(MMDPanelStyle::Tab()).ContentPadding(FMargin(6, 3)).ForegroundColor(MMDPanelStyle::Muted)
 			.Visibility_Lambda([this]() { return !PreviewMovieJob && !LastPreviewMovieDirectory.IsEmpty() ? EVisibility::Visible : EVisibility::Collapsed; })
-			.Text(FText::FromString(TEXT("打开目录")))
-			.ToolTipText(FText::FromString(TEXT("打开最近一次制作的输出目录，查看成片、已有帧或日志。")))
+			.Text(LOCTEXT("ImportProduction_005", "打开目录"))
+			.ToolTipText(LOCTEXT("ImportProduction_006", "打开最近一次制作的输出目录，查看成片、已有帧或日志。"))
 			.OnClicked(this, &MMDImportSetting::OpenPreviewMovieResult, false)];
 }
 
@@ -391,3 +393,5 @@ FReply MMDImportSetting::CancelPreviewMovie()
 	}
 	return FReply::Handled();
 }
+
+#undef LOCTEXT_NAMESPACE
