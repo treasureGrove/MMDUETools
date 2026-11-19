@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ue5MMDTools · Unreal Engine 5 で MMD のショート動画を作る</title>
+  <meta name="description" content="PMX と VMD を UE5 に読み込み、髪と服の物理、照明、カメラを確認して、そのまま 30 fps の MP4 に書き出せます。コマンドラインからも実行可能。MIT ライセンス。">
+  <meta name="theme-color" content="#101820">
+  <link rel="canonical" href="https://treasuregrove.github.io/MMDUETools/ja/">
+  <link rel="alternate" hreflang="zh-CN" href="https://treasuregrove.github.io/MMDUETools/">
+  <link rel="alternate" hreflang="en" href="https://treasuregrove.github.io/MMDUETools/en/">
+  <link rel="alternate" hreflang="ja" href="https://treasuregrove.github.io/MMDUETools/ja/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Ue5MMDTools">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:title" content="Ue5MMDTools · Unreal Engine 5 で MMD のショート動画を作る">
+  <meta property="og:description" content="PMX / VMD の読み込み、Bullet 物理、8 種類のスタジオと照明プリセット、ワンボタンで MP4 書き出し。オープンソース、MIT、UE 5.8.3 Win64。">
+  <meta property="og:url" content="https://treasuregrove.github.io/MMDUETools/ja/">
+  <meta property="og:image" content="https://treasuregrove.github.io/MMDUETools/Screenshots/2026-11-19-share/share-card-1200x630.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Ue5MMDTools: Unreal Engine 5 の中の MMD スタジオ">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ue5MMDTools · Unreal Engine 5 で MMD のショート動画を作る">
+  <meta name="twitter:description" content="PMX / VMD の読み込み、Bullet 物理、8 種類のスタジオと照明プリセット、ワンボタンで MP4 書き出し。">
+  <meta name="twitter:image" content="https://treasuregrove.github.io/MMDUETools/Screenshots/2026-11-19-share/share-card-1200x630.png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Ue5MMDTools</h1>
+      <p class="lead">Unreal Engine 5 の中で MMD のショート動画を作る。PMX と VMD を読み込み、スタジオでモーションを試し、髪と服の物理、照明、カメラを確認して、そのまま MP4 に書き出せます。</p>
+      <p>
+        <a class="button" href="https://github.com/treasureGrove/MMDUETools/releases/latest">Win64 プラグインをダウンロード</a>
+        <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/README.ja.md">README（日本語）</a>
+      </p>
+      <p class="lang">このページ：日本語 · <a href="../">中文</a> · <a href="../en/">English</a></p>
+      <div class="flow" aria-label="パイプライン">
+        <span>PMX / VMD</span>
+        <span>MMD スタジオ</span>
+        <span>Bullet 物理 · スタジオ照明</span>
+        <span>30 fps MP4</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="demo">
+      <h2>デモ</h2>
+      <p>操作の流れは Bilibili の動画で確認できます。パネルは既定で中国語、英語テキストは同梱済み（エディタの言語が英語のときに使われます）。</p>
+      <div class="video-frame">
+        <iframe
+          src="https://player.bilibili.com/player.html?isOutside=true&aid=116544877107416&bvid=BV1M2RXBPExk&cid=38217778776&p=1"
+          scrolling="no"
+          allowfullscreen="true">
+        </iframe>
+      </div>
+      <p class="note">プレイヤーが表示されない場合は <a href="https://www.bilibili.com/video/BV1M2RXBPExk/" target="_blank" rel="noopener">Bilibili のデモ（BV1M2RXBPExk）</a> を直接開いてください。</p>
+    </section>
+
+    <section id="showcase">
+      <h2>仕上がりの例</h2>
+      <p>キャラクターを読み込んでから完成 MP4 まで：モーションを選び、スタジオを切り替え、カメラを決めて制作ボタンを押す。動画をクリックすると全工程が再生されます。</p>
+      <a href="../Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4"><img src="../Screenshots/2026-11-05-workflow-video/workflow_preview.gif" alt="Ue5MMDTools の操作プレビュー"></a>
+      <p class="note"><a href="../Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4">操作動画（MP4）をダウンロード</a> · <a href="../Screenshots/2026-11-05-nikki-face-fill/yyb_10th_idle.gif">待機モーションのクリップを見る</a></p>
+    </section>
+
+    <section id="guide">
+      <h2>クイックスタート</h2>
+      <p>スクリーンショット付きの手順はリポジトリにあります。各ステップのボタン位置まで載せています。</p>
+      <p><a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/README.ja.md">日本語 README</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.en.md">英語ガイド</a> <a class="button secondary" href="https://github.com/treasureGrove/MMDUETools/blob/main/github.md">中文ガイド</a></p>
+      <div class="steps">
+        <div class="step">
+          <h3>1. インストール</h3>
+          <p>配布 ZIP を展開し、中の <code>Ue5MMDTools/</code> をプロジェクトの <code>Plugins/</code> に置いて、プラグインを有効化してエディタを再起動します。エディタのコンソールから <code>MMD.OpenPanel</code> でも開けます。</p>
+          <pre><code>YourProject/
+  Plugins/
+    Ue5MMDTools/</code></pre>
+        </div>
+
+        <div class="step">
+          <h3>2. キャラクターを読み込んでモーションを試す</h3>
+          <p><strong>ウィンドウ → Ue5MMDTools</strong> でスタジオを開き、<strong>导入 PMX 模型</strong>（Import PMX Model）で PMX を選びます。テクスチャは PMX と同じ階層に置いたままにしてください。2 回目以降は <strong>加载已有角色</strong>（Load Existing Character）だけで読み込めます。内蔵モーションを選び、パネル下部の <strong>实时物理</strong>（Real-time physics）をオンにすると髪と服の動きを確認できます。</p>
+        </div>
+
+        <div class="step">
+          <h3>3. 照明とカメラ</h3>
+          <p><strong>场景</strong>（Stage）でスタジオカードを選ぶと、セットと照明が一緒に切り替わります。ビューポート上部で全身／半身／顔／横／後ろを選べます。<strong>风格</strong>（Style）ではマテリアルを試せて、いつでも元に戻せます。</p>
+        </div>
+
+        <div class="step">
+          <h3>4. MP4 を書き出す</h3>
+          <p>モーション、スタジオ、スタイル、パースカメラを確認して、右上の <strong>按当前预览制作</strong>（Produce from current preview）を押します。出力は <code>Saved/MMDProduction/</code>。Windows の D3D12 SM6 と、PATH の通った <code>ffmpeg</code> / <code>ffprobe</code> が必要です。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>できること</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <h3>PMX の読み込み</h3>
+          <ul>
+            <li>頂点、インデックス、法線、UV、マテリアル、ボーンを解析。</li>
+            <li>UE ネイティブの <code>SkeletalMesh</code> と <code>Skeleton</code> を生成。</li>
+            <li>MMD の基本マテリアルとマテリアルインスタンスを作成。</li>
+            <li>再読み込みやツール用に PMX の情報を保持。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>モーフと表情</h3>
+          <ul>
+            <li>PMX の頂点モーフを UE の <code>MorphTarget</code> に変換。</li>
+            <li>頂点マッピングを補正し、表情の歪みを抑える。</li>
+            <li>VMD の表情をアニメーションの float カーブに。</li>
+            <li>グループ／フリップモーフを展開し、まばたきと口パクが動く。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>VMD モーション</h3>
+          <ul>
+            <li>ボーンとモーフのキーフレームを解析。</li>
+            <li>ボーントラックを <code>AnimSequence</code> に書き込み。</li>
+            <li>表情トラックをモーフカーブに。</li>
+            <li>MMD と UE の座標変換、IK／付与ボーンのベイクに対応。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>Actor・アニメーションブループリント・IK</h3>
+          <ul>
+            <li>MMD Actor を自動で作成。</li>
+            <li>読み込んだキャラクター用の <code>AnimBlueprint</code> を生成。</li>
+            <li>MMD スケルタルコントロールのアニメーションノードを同梱。</li>
+            <li>IK Rig と IK Retargeter を生成。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>物理</h3>
+          <ul>
+            <li>PMX の剛体とジョイントを読み込む。</li>
+            <li>MMD 互換の Bullet ソルバで計算。</li>
+            <li>再生中に髪と服をシミュレーション。ポーズを固定しても物理は継続。</li>
+            <li>書き出し時はフレームごとに進め、Sequencer へベイクも可能。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>スタジオ・照明・書き出し</h3>
+          <ul>
+            <li>8 種類のスタジオプリセット。切り替えるとセットと照明が一緒に変わる。</li>
+            <li>スタイルプリセットは試着感覚で、元のマテリアルにすぐ戻せる。</li>
+            <li>現在のプレビューを 30 fps の MP4 に。連番とログも出力。</li>
+            <li>コマンドライン：<code>import-pmx</code> / <code>import-vmd</code> / <code>render</code>、結果は JSON。</li>
+          </ul>
+        </div>
+
+        <div class="feature">
+          <h3>現在の制限</h3>
+          <ul>
+            <li>マテリアルモーフは UE のマテリアルパラメータを完全には駆動していません。</li>
+            <li>ボーン／UV モーフはアニメーションチャネルとして未実装。</li>
+            <li>特殊な骨格、IK 構成、モーフの組み合わせはモデルごとの調整が必要です。</li>
+            <li>UI は既定で中国語。英語テキストは同梱済みで、日本語 UI はこれからの対応です。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <h2>パイプライン</h2>
+      <p>MMD のデータは UE のネイティブアセットになり、照明・カメラ・書き出しまで同じパネルで完結します。</p>
+      <pre><code>PMX モデル
+  -> SkeletalMesh
+  -> Skeleton
+  -> MorphTarget
+  -> Materials
+  -> MMD Actor
+
+VMD モーション
+  -> AnimSequence ボーントラック
+  -> AnimSequence モーフカーブ
+
+MMD スタジオ
+  -> 内蔵モーション / 手持ちの VMD
+  -> Bullet 物理（ポーズ固定で継続）
+  -> スタジオと照明のプリセット
+  -> 全身 / 半身 / 顔 / 横 / 後ろ
+
+書き出し
+  -> 30 fps MP4（Saved/MMDProduction/）
+  -> 連番とログ
+  -> Sequencer でさらに編集</code></pre>
+    </section>
+  </main>
+
+  <footer>
+    Ue5MMDTools - Unreal Engine 5 向け PMX / VMD 制作ツール · MIT · <a href="../">中文</a> · <a href="../en/">English</a>
+  </footer>
+</body>
+</html>

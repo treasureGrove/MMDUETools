@@ -13,7 +13,7 @@ PMX と VMD を読み込み、**MMD STUDIO（キャラクター工房）** で�
 
 > **省けるのは真ん中の工程です。** 物理、照明、カメラ、エンコードまでプラグインの中で完結します。MMD のデータをそのまま持ち込み、絵が決まったら書き出すだけ。1 カットのために Blender、MMD、UE を行き来する必要はありません。
 
-[Win64 プラグインをダウンロード](https://github.com/treasureGrove/MMDUETools/releases/latest) · [5 分で導入](#インストール) · [操作ガイド（英語）](github.en.md) · [操作ガイド（中国語）](github.md) · [デモ動画](https://www.bilibili.com/video/BV1M2RXBPExk/)
+[Win64 プラグインをダウンロード](https://github.com/treasureGrove/MMDUETools/releases/latest) · [プロジェクトサイト](https://treasuregrove.github.io/MMDUETools/ja/) · [5 分で導入](#インストール) · [操作ガイド（英語）](github.en.md) · [操作ガイド（中国語）](github.md) · [デモ動画](https://www.bilibili.com/video/BV1M2RXBPExk/)
 
 <p align="center">
   <a href="docs/Screenshots/2026-11-05-workflow-video/mmd_studio_workflow.mp4?raw=true"><img src="docs/Screenshots/2026-11-05-workflow-video/workflow_preview.gif" width="800" alt="キャラクター工房の操作手順（モーション選択、スタジオ切替、カメラ、MP4 書き出し）"></a>
