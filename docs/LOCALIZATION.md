@@ -5,11 +5,11 @@
 ## 现状
 
 - 面板里的 79 处硬编码中文已改成 `LOCTEXT`，命名空间 `Ue5MMDToolsUI`，源语言简体中文。
-- 本地化目标配置在 [`Config/Localization/Ue5MMDTools.ini`](../Config/Localization/Ue5MMDTools.ini)，目标语言 `en`。
-- 英文资源已生成并随插件分发：`Content/Localization/Ue5MMDTools/en/Ue5MMDTools.locres`，翻译源文件是对应的 `Ue5MMDTools.po`。
-- 日文**尚未翻译**，所以 `ja` 暂时不在生成列表里；文件名里的 `{0}` 占位符需要在译文里保留。
+- 本地化目标配置在 [`Config/Localization/Ue5MMDTools.ini`](../Config/Localization/Ue5MMDTools.ini)，目标语言 `en`、`ja`。
+- 英文与日文资源已生成并随插件分发：`Content/Localization/Ue5MMDTools/<Culture>/Ue5MMDTools.locres`，翻译源是对应的 `Ue5MMDTools.po`。
+- 文件名里的 `{0}` 占位符在两种译文里都已保留。
 
-编辑器语言是英文时，面板走英文资源；中文环境仍显示中文原文。
+编辑器语言是英文或日文时，面板走对应资源；中文环境显示中文原文。
 
 ## 涉及文件
 
@@ -60,9 +60,12 @@ Content/Localization/Ue5MMDTools/ja/Ue5MMDTools.locres
 GatherTextFromSource: Submit = 89        （共 89 条文本，其中 84 条含中文）
 生成：Ue5MMDTools.manifest / .archive / .po / .locres
 英文 .po：84 条 msgid 全部填写 msgstr，0 条遗漏
+日文 .po：84 条 msgid 全部填写 msgstr，0 条遗漏
 ```
 
 首次尝试直接把插件放进宿主工程的 `Plugins/` 并启用，引擎会尝试加载插件模块（没有二进制）并中止；改成「把 `Source/` 复制到宿主工程的普通目录，配置里指向该目录」即可，收集阶段本来就不需要编译。
+
+**坑：`CulturesToGenerate` 不能重复。** 同一个语言写两次时，`GenerateGatherArchive` 会在 `Localization/<Culture>/Ue5MMDTools.archive.tmp` 上保存失败并让整轮 `exit code 0` 但其实没更新 `.locres`。检查方法：看 `.locres` 的修改时间是否更新、以及日志里有没有 `Failed to save archive`。
 
 ## 验证
 
