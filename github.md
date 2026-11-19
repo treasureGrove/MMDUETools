@@ -19,7 +19,7 @@
 1. 下载 UE 5.8.3 Win64 插件包并解压。将 `Ue5MMDTools/` 放到自己的 UE 工程中，使插件文件位于 `YourProject/Plugins/Ue5MMDTools/Ue5MMDTools.uplugin`。[下载插件](https://github.com/treasureGrove/MMDUETools/releases/latest)
 2. 打开工程，启用插件并按提示重启。进入关卡编辑器，选择 **窗口（Window） → Ue5MMDTools**。也可在编辑器控制台输入 `MMD.OpenPanel`。
 
-使用发布包时直接打开自己的 UE 工程。仓库内的 `MMD.uproject` 是开发宿主，还声明了额外的插件依赖。需要从源码构建时，使用仓库里的插件目录和 UE 5.8 Win64 C++ 工具链。[插件源码](./) · [源码构建与兼容说明](docs/ENDFIELD_PLUGIN_DISTRIBUTION.md)
+使用发布包时直接打开自己的 UE 工程。完整开发宿主是 [`dev` 分支](https://github.com/treasureGrove/MMDUETools/tree/dev) 上的 `MMD.uproject`，它还声明了额外的插件依赖；`main` 只保留插件本身。需要从源码构建时，使用本仓库的插件目录和 UE 5.8 Win64 C++ 工具链。[插件源码](./) · [源码构建与兼容说明](docs/ENDFIELD_PLUGIN_DISTRIBUTION.md) · [English guide](github.en.md)
 
 ## 准备演示模型
 

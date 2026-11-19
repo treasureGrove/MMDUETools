@@ -88,7 +88,7 @@
 3. 从 **窗口 → Ue5MMDTools** 打开角色工坊，点击 **导入 PMX 模型**，选择 `.pmx`；导入一次后，之后直接点 **加载已有角色**，不用重复下载或导入。
 4. 选择动作、场景和镜头，保存角色和动画，点 **按当前预览制作**。Windows D3D12 SM6 环境需能调用 `ffmpeg` 和 `ffprobe`，完成后在 `Saved/MMDProduction/` 找到 MP4。
 
-[完整图文步骤](github.md) · [后台制作指南](docs/MMD_PRODUCTION_WORKFLOW.md) · [技术文档](docs/README.md) · [修改记录](docs/CHANGELOG.md)
+[完整图文步骤](github.md) · [English guide](github.en.md) · [后台制作指南](docs/MMD_PRODUCTION_WORKFLOW.md) · [技术文档](docs/README.md) · [修改记录](docs/CHANGELOG.md)
 
 **适合**：想把 MMD 画质提到 UE 水准、又不想在三个软件之间倒数据的人；要固定机位和统一布光的系列短片；想把导入和出片写进脚本的管线。**不适合**：只想要最高导入保真度（SDEF、IK 实时求值、VMD 回写）的深度改造，那类需求见下面的对照。
 
